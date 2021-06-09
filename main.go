@@ -13,7 +13,7 @@ func main() {
 
 	flag.Uint64Var(&slabSize, "size", 1024, "slab size in bytes")
 	flag.Uint64Var(&numElements, "count", 500, "number of elements in array")
-	flag.BoolVar(&verbose, "v", false, "")
+	flag.BoolVar(&verbose, "verbose", false, "verbose output")
 
 	flag.Parse()
 

@@ -315,17 +315,22 @@ func (array *Array) Append(v uint64) error {
 	}
 
 	if array.root.IsFull() {
-		left, right, err := array.root.Split()
+		// Shallow copy root node with a new StorageID
+		copiedRoot := newArrayMetaDataSlab(array.storage)
+		copiedRoot.header.size = array.root.header.size
+		copiedRoot.header.count = array.root.header.count
+		copiedRoot.orderedHeaders = array.root.orderedHeaders
+
+		// Split copied root node
+		left, right, err := copiedRoot.Split()
 		if err != nil {
 			return err
 		}
 
-		newRoot := newArrayMetaDataSlab(array.storage)
-		newRoot.orderedHeaders = []*SlabHeader{left.Header(), right.Header()}
-		newRoot.header.count = left.Header().count + right.Header().count
-		newRoot.header.size = headerSize * 2
-
-		array.root = newRoot
+		// Reset root with new nodes (StorageID is unchanged).
+		array.root.orderedHeaders = []*SlabHeader{left.Header(), right.Header()}
+		array.root.header.count = left.Header().count + right.Header().count
+		array.root.header.size = headerSize * 2
 	}
 
 	return nil
@@ -334,7 +339,7 @@ func (array *Array) Append(v uint64) error {
 func (array *Array) Iterate(fn func(uint64)) error {
 	id := array.dataSlabStorageID
 
-	for id != storageIDUndefined {
+	for id != StorageIDUndefined {
 
 		slab, found, err := array.storage.Retrieve(id)
 		if err != nil {
@@ -354,6 +359,13 @@ func (array *Array) Iterate(fn func(uint64)) error {
 	}
 
 	return nil
+}
+
+func (array *Array) StorageID() StorageID {
+	if array.root == nil {
+		return StorageIDUndefined
+	}
+	return array.root.header.id
 }
 
 type Stats struct {

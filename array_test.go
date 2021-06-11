@@ -80,3 +80,34 @@ func TestIterate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, i, n)
 }
+
+func TestConstRootStorageID(t *testing.T) {
+	setThreshold(50)
+	defer func() {
+		setThreshold(1024)
+	}()
+
+	storage := NewBasicStorage()
+
+	array := NewArray(storage)
+	err := array.Append(0)
+	require.NoError(t, err)
+
+	savedRootID := array.StorageID()
+	require.NotEqual(t, StorageIDUndefined, savedRootID)
+
+	n := uint64(256 * 256)
+	for i := uint64(1); i < n; i++ {
+		err := array.Append(i)
+		require.NoError(t, err)
+	}
+
+	rootID := array.StorageID()
+	require.Equal(t, savedRootID, rootID)
+
+	for i := uint64(0); i < n; i++ {
+		e, err := array.Get(i)
+		require.NoError(t, err)
+		require.Equal(t, i, e)
+	}
+}

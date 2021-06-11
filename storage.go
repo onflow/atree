@@ -2,7 +2,7 @@ package main
 
 type StorageID uint64
 
-const storageIDUndefined = StorageID(0)
+const StorageIDUndefined = StorageID(0)
 
 var storageIDCounter uint64
 

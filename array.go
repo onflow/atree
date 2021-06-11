@@ -24,21 +24,22 @@ type SlabHeader struct {
 	count uint32    // count is used to lookup element; leaf: number of elements; internal: number of elements in all its headers
 }
 
-// ArrayDataSlab is leaf node
+// ArrayDataSlab is leaf node, implementing ArrayNode
 type ArrayDataSlab struct {
 	storage  Storage
 	header   *SlabHeader
 	elements []uint64
+	prev     StorageID
+	next     StorageID
 }
 
-// ArrayMetaDataSlab is internal node
+// ArrayMetaDataSlab is internal node, implementing ArrayNode
 type ArrayMetaDataSlab struct {
 	storage        Storage
 	header         *SlabHeader
 	orderedHeaders []*SlabHeader
 }
 
-// ArrayMetaDataSlab and ArrayDataSlab implements ArrayNode
 type ArrayNode interface {
 	Get(index uint64) (uint64, error)
 	Append(v uint64) error
@@ -48,8 +49,9 @@ type ArrayNode interface {
 
 // Array is tree
 type Array struct {
-	storage Storage
-	root    *ArrayMetaDataSlab
+	storage           Storage
+	root              *ArrayMetaDataSlab
+	dataSlabStorageID StorageID
 }
 
 func newArrayDataSlab(storage Storage) *ArrayDataSlab {
@@ -116,10 +118,13 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 	rightSlab.elements = a.elements[rightSlabStartIndex:]
 	rightSlab.header.size = a.header.size - leftSlabSize
 	rightSlab.header.count = uint32(len(rightSlab.elements))
+	rightSlab.prev = a.header.id
+	rightSlab.next = a.next
 
 	a.elements = a.elements[:rightSlabStartIndex]
 	a.header.size = leftSlabSize
 	a.header.count = uint32(len(a.elements))
+	a.next = rightSlab.header.id
 
 	return a, rightSlab, nil
 }
@@ -296,6 +301,12 @@ func (array *Array) Get(i uint64) (uint64, error) {
 func (array *Array) Append(v uint64) error {
 	if array.root == nil {
 		array.root = newArrayMetaDataSlab(array.storage)
+		err := array.root.Append(v)
+		if err != nil {
+			return err
+		}
+		array.dataSlabStorageID = array.root.orderedHeaders[0].id
+		return nil
 	}
 
 	err := array.root.Append(v)
@@ -315,6 +326,31 @@ func (array *Array) Append(v uint64) error {
 		newRoot.header.size = headerSize * 2
 
 		array.root = newRoot
+	}
+
+	return nil
+}
+
+func (array *Array) Iterate(fn func(uint64)) error {
+	id := array.dataSlabStorageID
+
+	for id != storageIDUndefined {
+
+		slab, found, err := array.storage.Retrieve(id)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("slab %d not found", id)
+		}
+
+		dataSlab := slab.(*ArrayDataSlab)
+
+		for i := 0; i < len(dataSlab.elements); i++ {
+			fn(dataSlab.elements[i])
+		}
+
+		id = dataSlab.next
 	}
 
 	return nil

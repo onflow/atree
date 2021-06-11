@@ -2,7 +2,9 @@ package main
 
 type StorageID uint64
 
-var storageIDCounter uint64 = 0
+const storageIDUndefined = StorageID(0)
+
+var storageIDCounter uint64
 
 func generateStorageID() StorageID {
 	storageIDCounter++

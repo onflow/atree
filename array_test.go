@@ -55,3 +55,28 @@ func TestSplit(t *testing.T) {
 		require.False(t, slab.IsLeaf())
 	}
 }
+
+func TestIterate(t *testing.T) {
+	setThreshold(50)
+	defer func() {
+		setThreshold(1024)
+	}()
+
+	storage := NewBasicStorage()
+
+	array := NewArray(storage)
+
+	n := uint64(256 * 256)
+	for i := uint64(0); i < n; i++ {
+		err := array.Append(i)
+		require.NoError(t, err)
+	}
+
+	i := uint64(0)
+	err := array.Iterate(func(v uint64) {
+		require.Equal(t, i, v)
+		i++
+	})
+	require.NoError(t, err)
+	require.Equal(t, i, n)
+}

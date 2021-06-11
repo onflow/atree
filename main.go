@@ -5,6 +5,20 @@ import (
 	"fmt"
 )
 
+var (
+	// Default slab size
+	targetThreshold = uint64(1024) // 1kb
+
+	minThreshold = targetThreshold / 4
+	maxThreshold = uint64(float64(targetThreshold) * 1.5)
+)
+
+func setThreshold(threshold uint64) {
+	targetThreshold = threshold
+	minThreshold = targetThreshold / 4
+	maxThreshold = uint64(float64(targetThreshold) * 1.5)
+}
+
 // TODO: implement different slab size for internal node and leaf node.
 func main() {
 	var slabSize uint64

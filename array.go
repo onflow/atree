@@ -8,31 +8,14 @@ import (
 
 const headerSize = 16
 
-var (
-	// Default slab size
-	targetThreshold = uint64(1024) // 1kb
-
-	minThreshold = targetThreshold / 4
-	maxThreshold = uint64(float64(targetThreshold) * 1.5)
-)
-
-func setThreshold(threshold uint64) {
-	targetThreshold = threshold
-	minThreshold = targetThreshold / 4
-	maxThreshold = uint64(float64(targetThreshold) * 1.5)
-}
-
-type Segmentable interface {
-	Split() (Segmentable, Segmentable, error)
-	Merge(Segmentable) error
-	// ByteSize() uint32
-}
-
 type Slab interface {
-	IsLeaf() bool
+	IsLeaf() bool // Currently, only used for debugging and stats
 	IsFull() bool
 
-	Segmentable
+	Header() *SlabHeader
+
+	Split() (Slab, Slab, error)
+	Merge(Slab) error
 }
 
 type SlabHeader struct {
@@ -41,28 +24,36 @@ type SlabHeader struct {
 	count uint32    // count is used to lookup element; leaf: number of elements; internal: number of elements in all its headers
 }
 
-// ArraySlab is leaf node
-type ArraySlab struct {
+// ArrayDataSlab is leaf node
+type ArrayDataSlab struct {
 	storage  Storage
 	header   *SlabHeader
 	elements []uint64
 }
 
-// ArrayMetaSlab is internal node
-type ArrayMetaSlab struct {
+// ArrayMetaDataSlab is internal node
+type ArrayMetaDataSlab struct {
 	storage        Storage
 	header         *SlabHeader
 	orderedHeaders []*SlabHeader
 }
 
+// ArrayMetaDataSlab and ArrayDataSlab implements ArrayNode
+type ArrayNode interface {
+	Get(index uint64) (uint64, error)
+	Append(v uint64) error
+
+	Slab
+}
+
 // Array is tree
 type Array struct {
 	storage Storage
-	root    *ArrayMetaSlab
+	root    *ArrayMetaDataSlab
 }
 
-func newArraySlab(storage Storage) *ArraySlab {
-	slab := &ArraySlab{
+func newArrayDataSlab(storage Storage) *ArrayDataSlab {
+	slab := &ArrayDataSlab{
 		storage: storage,
 		header: &SlabHeader{
 			id: generateStorageID(),
@@ -74,71 +65,75 @@ func newArraySlab(storage Storage) *ArraySlab {
 	return slab
 }
 
-func (a *ArraySlab) get(index uint64) (uint64, error) {
+func (a *ArrayDataSlab) Get(index uint64) (uint64, error) {
 	if index >= uint64(len(a.elements)) {
 		return 0, fmt.Errorf("out of bounds")
 	}
 	return a.elements[index], nil
 }
 
-func (a *ArraySlab) append(v uint64) error {
+func (a *ArrayDataSlab) Append(v uint64) error {
 	a.elements = append(a.elements, v)
 	a.header.count++
 	a.header.size += 8 // size of uint64
 	return nil
 }
 
-func (a *ArraySlab) IsFull() bool {
+func (a *ArrayDataSlab) Header() *SlabHeader {
+	return a.header
+}
+
+func (a *ArrayDataSlab) IsFull() bool {
 	return a.header.size > uint32(maxThreshold)
 }
 
-func (a *ArraySlab) IsLeaf() bool {
+func (a *ArrayDataSlab) IsLeaf() bool {
 	return true
 }
 
-func (a *ArraySlab) Split() (Segmentable, Segmentable, error) {
+func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 	if len(a.elements) < 2 {
 		// Can't split slab with less than two elements
 		return nil, nil, fmt.Errorf("can't split array slab with less than 2 elements")
 	}
 
-	// this compute the ceil of split keep the first part with more members (optimized for append operations)
+	// This computes the ceil of split keep the first part with more members (optimized for append operations)
 	size := a.header.size
 	d := float64(size) / float64(2)
-	breakPoint := int(math.Ceil(d))
+	breakPoint := uint32(math.Ceil(d))
 
-	newSlabStartIndex := 0
-	slab1Size := 0
+	rightSlabStartIndex := 0
+	leftSlabSize := uint32(0)
 	for i := range a.elements {
-		slab1Size += 8 // size of uint64
-		if slab1Size >= breakPoint {
-			newSlabStartIndex = i + 1
+		leftSlabSize += 8 // size of uint64
+		if leftSlabSize >= breakPoint {
+			rightSlabStartIndex = i + 1
 			break
 		}
 	}
 
-	newSlab := newArraySlab(a.storage)
-	newSlab.elements = a.elements[newSlabStartIndex:]
-	newSlab.header.size = a.header.size - uint32(slab1Size)
-	newSlab.header.count = a.header.count - uint32(newSlabStartIndex)
+	rightSlab := newArrayDataSlab(a.storage)
+	rightSlab.elements = a.elements[rightSlabStartIndex:]
+	rightSlab.header.size = a.header.size - leftSlabSize
+	rightSlab.header.count = uint32(len(rightSlab.elements))
 
-	a.elements = a.elements[:newSlabStartIndex]
-	a.header.size = uint32(slab1Size)
-	a.header.count = uint32(newSlabStartIndex)
+	a.elements = a.elements[:rightSlabStartIndex]
+	a.header.size = leftSlabSize
+	a.header.count = uint32(len(a.elements))
 
-	return a, newSlab, nil
+	return a, rightSlab, nil
 }
 
-func (a *ArraySlab) Merge(seg Segmentable) error {
-	slab2 := seg.(*ArraySlab)
+func (a *ArrayDataSlab) Merge(slab Slab) error {
+	slab2 := slab.(*ArrayDataSlab)
 	a.elements = append(a.elements, slab2.elements...)
 	a.header.size += slab2.header.size
 	a.header.count += slab2.header.count
 	return nil
 }
 
-func newArrayMetaSlab(storage Storage) *ArrayMetaSlab {
-	slab := &ArrayMetaSlab{
+func newArrayMetaDataSlab(storage Storage) *ArrayMetaDataSlab {
+	slab := &ArrayMetaDataSlab{
 		storage: storage,
 		header: &SlabHeader{
 			id: generateStorageID(),
@@ -150,10 +145,10 @@ func newArrayMetaSlab(storage Storage) *ArrayMetaSlab {
 	return slab
 }
 
-func (a *ArrayMetaSlab) get(index uint64) (uint64, error) {
+func (a *ArrayMetaDataSlab) Get(index uint64) (uint64, error) {
 
 	if index >= uint64(a.header.count) {
-		return 0, fmt.Errorf("index %d out of bounds for %d", index, a.header.count)
+		return 0, fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
 	}
 
 	var id StorageID
@@ -170,7 +165,7 @@ func (a *ArrayMetaSlab) get(index uint64) (uint64, error) {
 	}
 
 	if !found {
-		return 0, fmt.Errorf("out of bounds")
+		return 0, fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
 	}
 
 	slab, found, err := a.storage.Retrieve(id)
@@ -183,30 +178,26 @@ func (a *ArrayMetaSlab) get(index uint64) (uint64, error) {
 
 	adjustedIndex := index - startIndex
 
-	if slab.IsLeaf() {
-		leaf := slab.(*ArraySlab)
-		return leaf.get(adjustedIndex)
+	node, ok := slab.(ArrayNode)
+	if !ok {
+		return 0, fmt.Errorf("slab %d is not ArrayNode", id)
 	}
-
-	// slab is an internal node
-	meta := slab.(*ArrayMetaSlab)
-	return meta.get(adjustedIndex)
+	return node.Get(adjustedIndex)
 }
 
-func (a *ArrayMetaSlab) append(v uint64) error {
+func (a *ArrayMetaDataSlab) Append(v uint64) error {
 
 	if len(a.orderedHeaders) == 0 {
 
-		slab := newArraySlab(a.storage)
+		slab := newArrayDataSlab(a.storage)
 		a.orderedHeaders = append(a.orderedHeaders, slab.header)
 		a.header.count = 1
 		a.header.size = headerSize
 
-		return slab.append(v)
+		return slab.Append(v)
 	}
 
-	headerIdx := len(a.orderedHeaders) - 1
-	header := a.orderedHeaders[headerIdx]
+	header := a.orderedHeaders[len(a.orderedHeaders)-1]
 
 	slab, found, err := a.storage.Retrieve(header.id)
 	if err != nil {
@@ -216,103 +207,77 @@ func (a *ArrayMetaSlab) append(v uint64) error {
 		return fmt.Errorf("slab %d not found", header.id)
 	}
 
-	if slab.IsLeaf() {
-		leaf := slab.(*ArraySlab)
-		err := leaf.append(v)
-		if err != nil {
-			return err
-		}
-		a.header.count++
-
-		if leaf.IsFull() {
-			leftSeg, rightSeg, err := leaf.Split()
-			if err != nil {
-				return err
-			}
-
-			leftLeaf := leftSeg.(*ArraySlab)
-			rightLeaf := rightSeg.(*ArraySlab)
-
-			a.orderedHeaders = a.orderedHeaders[:headerIdx]
-			a.orderedHeaders = append(a.orderedHeaders, leftLeaf.header, rightLeaf.header)
-			a.header.size += headerSize
-		}
-
-		return nil
+	node, ok := slab.(ArrayNode)
+	if !ok {
+		return fmt.Errorf("slab %d is not ArrayNode", header.id)
 	}
 
-	meta := slab.(*ArrayMetaSlab)
-	err = meta.append(v)
+	err = node.Append(v)
 	if err != nil {
 		return err
 	}
+
 	a.header.count++
 
-	if meta.IsFull() {
-		leftSeg, rightSeg, err := meta.Split()
+	if node.IsFull() {
+		left, right, err := node.Split()
 		if err != nil {
 			return err
 		}
 
-		leftMeta := leftSeg.(*ArrayMetaSlab)
-		rightMeta := rightSeg.(*ArrayMetaSlab)
+		a.orderedHeaders = append(a.orderedHeaders, nil)
+		a.orderedHeaders[len(a.orderedHeaders)-2] = left.Header()
+		a.orderedHeaders[len(a.orderedHeaders)-1] = right.Header()
 
-		a.orderedHeaders = a.orderedHeaders[:headerIdx]
-		a.orderedHeaders = append(a.orderedHeaders, leftMeta.header, rightMeta.header)
 		a.header.size += headerSize
 	}
 
 	return nil
 }
 
-func (a ArrayMetaSlab) IsFull() bool {
+func (a *ArrayMetaDataSlab) Header() *SlabHeader {
+	return a.header
+}
+
+func (a ArrayMetaDataSlab) IsFull() bool {
 	return a.header.size > uint32(maxThreshold)
 }
 
-func (a ArrayMetaSlab) IsLeaf() bool {
+func (a ArrayMetaDataSlab) IsLeaf() bool {
 	return false
 }
 
-func (a *ArrayMetaSlab) Merge(seg Segmentable) error {
-	meta2 := seg.(*ArrayMetaSlab)
+func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
+	meta2 := slab.(*ArrayMetaDataSlab)
 	a.orderedHeaders = append(a.orderedHeaders, meta2.orderedHeaders...)
 	a.header.size += meta2.header.size
 	a.header.count += meta2.header.count
 	return nil
 }
 
-func (a *ArrayMetaSlab) Split() (Segmentable, Segmentable, error) {
+func (a *ArrayMetaDataSlab) Split() (Slab, Slab, error) {
 
 	if len(a.orderedHeaders) < 2 {
 		// Can't split meta slab with less than 2 headers
-		return a, nil, fmt.Errorf("can't split meta slab with less than 2 headers")
+		return nil, nil, fmt.Errorf("can't split meta slab with less than 2 headers")
 	}
 
-	// this compute the ceil of split keep the first part with more members (optimized for append operations)
-	size := a.header.size
-	d := float64(size) / float64(2)
-	breakPoint := int(math.Ceil(d))
+	rightSlabStartIndex := int(math.Ceil(float64(len(a.orderedHeaders)) / float64(2)))
+	leftSlabSize := rightSlabStartIndex * headerSize
 
-	slab1Size := uint32(0)
-	slab1Count := uint32(0)
-	newSlabStartIndex := 0
-	for i, h := range a.orderedHeaders {
-		slab1Size += headerSize
-		slab1Count += h.count
-		if slab1Size >= uint32(breakPoint) {
-			newSlabStartIndex = i + 1
-			break
-		}
+	leftSlabCount := uint32(0)
+	for i := 0; i < rightSlabStartIndex; i++ {
+		leftSlabCount += a.orderedHeaders[i].count
 	}
 
-	right := newArrayMetaSlab(a.storage)
-	right.orderedHeaders = a.orderedHeaders[newSlabStartIndex:]
-	right.header.count = a.header.count - slab1Count
-	right.header.size = a.header.size - slab1Size
+	right := newArrayMetaDataSlab(a.storage)
+	right.orderedHeaders = a.orderedHeaders[rightSlabStartIndex:]
+	right.header.count = a.header.count - leftSlabCount
+	right.header.size = a.header.size - uint32(leftSlabSize)
 
-	a.orderedHeaders = a.orderedHeaders[:newSlabStartIndex]
-	a.header.count = slab1Count
-	a.header.size = slab1Size
+	a.orderedHeaders = a.orderedHeaders[:rightSlabStartIndex]
+	a.header.count = leftSlabCount
+	a.header.size = uint32(leftSlabSize)
 
 	return a, right, nil
 }
@@ -325,15 +290,15 @@ func (array *Array) Get(i uint64) (uint64, error) {
 	if array.root == nil {
 		return 0, fmt.Errorf("out of bounds")
 	}
-	return array.root.get(i)
+	return array.root.Get(i)
 }
 
 func (array *Array) Append(v uint64) error {
 	if array.root == nil {
-		array.root = newArrayMetaSlab(array.storage)
+		array.root = newArrayMetaDataSlab(array.storage)
 	}
 
-	err := array.root.append(v)
+	err := array.root.Append(v)
 	if err != nil {
 		return err
 	}
@@ -344,12 +309,9 @@ func (array *Array) Append(v uint64) error {
 			return err
 		}
 
-		leftSlab := left.(*ArrayMetaSlab)
-		rightSlab := right.(*ArrayMetaSlab)
-
-		newRoot := newArrayMetaSlab(array.storage)
-		newRoot.orderedHeaders = []*SlabHeader{leftSlab.header, rightSlab.header}
-		newRoot.header.count = leftSlab.header.count + rightSlab.header.count
+		newRoot := newArrayMetaDataSlab(array.storage)
+		newRoot.orderedHeaders = []*SlabHeader{left.Header(), right.Header()}
+		newRoot.header.count = left.Header().count + right.Header().count
 		newRoot.header.size = headerSize * 2
 
 		array.root = newRoot
@@ -401,12 +363,12 @@ func (array *Array) Stats() (Stats, error) {
 
 			if slab.IsLeaf() {
 				// leaf node
-				leaf := slab.(*ArraySlab)
+				leaf := slab.(*ArrayDataSlab)
 				leafNodeCount++
 				leafNodeSize += uint64(leaf.header.size)
 			} else {
 				// internal node
-				node := slab.(*ArrayMetaSlab)
+				node := slab.(*ArrayMetaDataSlab)
 				internalNodeCount++
 				internalNodeSize += uint64(node.header.size)
 
@@ -463,7 +425,7 @@ func (array *Array) Print() {
 
 			if slab.IsLeaf() {
 				// leaf node
-				leaf := slab.(*ArraySlab)
+				leaf := slab.(*ArrayDataSlab)
 				fmt.Printf("level %d, leaf (%+v): ", level+1, *(leaf.header))
 				if len(leaf.elements) <= 6 {
 					fmt.Printf("%+v\n", leaf.elements)
@@ -474,7 +436,7 @@ func (array *Array) Print() {
 				}
 			} else {
 				// internal node
-				node := slab.(*ArrayMetaSlab)
+				node := slab.(*ArrayMetaDataSlab)
 				fmt.Printf("level %d, meta (%+v) headers: [", level+1, *(node.header))
 				for _, h := range node.orderedHeaders {
 					fmt.Printf("%+v ", *h)

@@ -24,6 +24,84 @@ func TestAppendAndGet(t *testing.T) {
 	}
 }
 
+func TestInsertAndGet(t *testing.T) {
+	t.Parallel()
+
+	t.Run("insert-first", func(t *testing.T) {
+		setThreshold(50)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		storage := NewBasicStorage()
+
+		array := NewArray(storage)
+
+		n := uint64(256 * 256)
+		for i := uint64(0); i < n; i++ {
+			err := array.Insert(0, n-i-1)
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < n; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+			require.Equal(t, i, e)
+		}
+	})
+
+	t.Run("insert-last", func(t *testing.T) {
+		setThreshold(50)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		storage := NewBasicStorage()
+
+		array := NewArray(storage)
+
+		n := uint64(256 * 256)
+		for i := uint64(0); i < n; i++ {
+			err := array.Insert(i, i)
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < n; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+			require.Equal(t, i, e)
+		}
+	})
+
+	t.Run("insert", func(t *testing.T) {
+		setThreshold(50)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		storage := NewBasicStorage()
+
+		array := NewArray(storage)
+
+		n := uint64(256 * 256)
+		for i := uint64(0); i < n; i += 2 {
+			err := array.Append(i)
+			require.NoError(t, err)
+		}
+
+		for i := uint64(1); i < n; i += 2 {
+			err := array.Insert(i, i)
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < n; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+			require.Equal(t, i, e)
+		}
+	})
+}
+
 func TestSplit(t *testing.T) {
 	setThreshold(50)
 	defer func() {

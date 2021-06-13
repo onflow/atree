@@ -1,7 +1,6 @@
 package main
 
 import (
-	"container/list"
 	"fmt"
 	"math"
 )
@@ -42,7 +41,6 @@ type ArrayMetaDataSlab struct {
 
 type ArrayNode interface {
 	Get(index uint64) (uint64, error)
-	Append(v uint64) error
 	Insert(index uint64, v uint64) error
 
 	Slab
@@ -75,17 +73,14 @@ func (a *ArrayDataSlab) Get(index uint64) (uint64, error) {
 	return a.elements[index], nil
 }
 
-func (a *ArrayDataSlab) Append(v uint64) error {
-	a.elements = append(a.elements, v)
-	a.header.count++
-	a.header.size += 8 // size of uint64
-	return nil
-}
-
 func (a *ArrayDataSlab) Insert(index uint64, v uint64) error {
-	a.elements = append(a.elements, 0)
-	copy(a.elements[index+1:], a.elements[index:])
-	a.elements[index] = v
+	if index == uint64(len(a.elements)) {
+		a.elements = append(a.elements, v)
+	} else {
+		a.elements = append(a.elements, 0)
+		copy(a.elements[index+1:], a.elements[index:])
+		a.elements[index] = v
+	}
 
 	a.header.count++
 	a.header.size += 8 // size of uint64
@@ -200,81 +195,43 @@ func (a *ArrayMetaDataSlab) Get(index uint64) (uint64, error) {
 	return node.Get(adjustedIndex)
 }
 
-func (a *ArrayMetaDataSlab) Append(v uint64) error {
-
-	if len(a.orderedHeaders) == 0 {
-
-		slab := newArrayDataSlab(a.storage)
-		a.orderedHeaders = append(a.orderedHeaders, slab.header)
-		a.header.count = 1
-		a.header.size = headerSize
-
-		return slab.Append(v)
-	}
-
-	header := a.orderedHeaders[len(a.orderedHeaders)-1]
-
-	slab, found, err := a.storage.Retrieve(header.id)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return fmt.Errorf("slab %d not found", header.id)
-	}
-
-	node, ok := slab.(ArrayNode)
-	if !ok {
-		return fmt.Errorf("slab %d is not ArrayNode", header.id)
-	}
-
-	err = node.Append(v)
-	if err != nil {
-		return err
-	}
-
-	a.header.count++
-
-	if node.IsFull() {
-		left, right, err := node.Split()
-		if err != nil {
-			return err
-		}
-
-		a.orderedHeaders = append(a.orderedHeaders, nil)
-		a.orderedHeaders[len(a.orderedHeaders)-2] = left.Header()
-		a.orderedHeaders[len(a.orderedHeaders)-1] = right.Header()
-
-		a.header.size += headerSize
-	}
-
-	return nil
-}
-
 // Insert inserts v into correct ArrayDataSlab.
 // index must be >=0 and <= a.header.count.
-// If index == a.header.count, this operation is the same as Append().
+// If index == a.header.count, Insert appends v to the end of underlying data slab.
 func (a *ArrayMetaDataSlab) Insert(index uint64, v uint64) error {
 	if index > uint64(a.header.count) {
 		return fmt.Errorf("insert at index %d out of bounds", index)
 	}
 
-	if index == uint64(a.header.count) {
-		return a.Append(v)
+	if len(a.orderedHeaders) == 0 {
+		slab := newArrayDataSlab(a.storage)
+		a.orderedHeaders = append(a.orderedHeaders, slab.header)
+		a.header.count = 1
+		a.header.size = headerSize
+
+		return slab.Insert(0, v)
 	}
 
 	var id StorageID
 	var adjustedIndex uint64
-
 	i := 0
-	var h *SlabHeader
-	startIndex := uint64(0)
-	for i, h = range a.orderedHeaders {
-		if index >= startIndex && index < startIndex+uint64(h.count) {
-			id = h.id
-			adjustedIndex = index - startIndex
-			break
+
+	if index == uint64(a.header.count) {
+		i = len(a.orderedHeaders) - 1
+		header := a.orderedHeaders[i]
+		id = header.id
+		adjustedIndex = uint64(header.count)
+	} else {
+		var h *SlabHeader
+		startIndex := uint64(0)
+		for i, h = range a.orderedHeaders {
+			if index >= startIndex && index < startIndex+uint64(h.count) {
+				id = h.id
+				adjustedIndex = index - startIndex
+				break
+			}
+			startIndex += uint64(h.count)
 		}
-		startIndex += uint64(h.count)
 	}
 
 	slab, found, err := a.storage.Retrieve(id)
@@ -304,7 +261,9 @@ func (a *ArrayMetaDataSlab) Insert(index uint64, v uint64) error {
 		}
 
 		a.orderedHeaders = append(a.orderedHeaders, nil)
-		copy(a.orderedHeaders[i+2:], a.orderedHeaders[i+1:])
+		if i < len(a.orderedHeaders)-2 {
+			copy(a.orderedHeaders[i+2:], a.orderedHeaders[i+1:])
+		}
 		a.orderedHeaders[i] = left.Header()
 		a.orderedHeaders[i+1] = right.Header()
 
@@ -375,40 +334,9 @@ func (array *Array) Get(i uint64) (uint64, error) {
 
 func (array *Array) Append(v uint64) error {
 	if array.root == nil {
-		array.root = newArrayMetaDataSlab(array.storage)
-		err := array.root.Append(v)
-		if err != nil {
-			return err
-		}
-		array.dataSlabStorageID = array.root.orderedHeaders[0].id
-		return nil
+		return array.Insert(0, v)
 	}
-
-	err := array.root.Append(v)
-	if err != nil {
-		return err
-	}
-
-	if array.root.IsFull() {
-		// Shallow copy root node with a new StorageID
-		copiedRoot := newArrayMetaDataSlab(array.storage)
-		copiedRoot.header.size = array.root.header.size
-		copiedRoot.header.count = array.root.header.count
-		copiedRoot.orderedHeaders = array.root.orderedHeaders
-
-		// Split copied root node
-		left, right, err := copiedRoot.Split()
-		if err != nil {
-			return err
-		}
-
-		// Reset root with new nodes (StorageID is unchanged).
-		array.root.orderedHeaders = []*SlabHeader{left.Header(), right.Header()}
-		array.root.header.count = left.Header().count + right.Header().count
-		array.root.header.size = headerSize * 2
-	}
-
-	return nil
+	return array.Insert(uint64(array.root.header.count), v)
 }
 
 func (array *Array) Insert(index uint64, v uint64) error {
@@ -416,7 +344,14 @@ func (array *Array) Insert(index uint64, v uint64) error {
 		if index != 0 {
 			return fmt.Errorf("out of bounds")
 		}
-		return array.Append(v)
+
+		array.root = newArrayMetaDataSlab(array.storage)
+		err := array.root.Insert(0, v)
+		if err != nil {
+			return err
+		}
+		array.dataSlabStorageID = array.root.orderedHeaders[0].id
+		return nil
 	}
 
 	err := array.root.Insert(index, v)
@@ -476,134 +411,4 @@ func (array *Array) StorageID() StorageID {
 		return StorageIDUndefined
 	}
 	return array.root.header.id
-}
-
-type Stats struct {
-	Levels                uint64
-	ElementCount          uint64
-	InternalNodeCount     uint64
-	LeafNodeCount         uint64
-	InternalNodeOccupancy float64
-	LeafNodeOccupancy     float64 // sum(leaf node size)/(num of leaf node * threshold size)
-}
-
-// Stats returns stats about the array slabs.
-func (array *Array) Stats() (Stats, error) {
-	if array.root == nil {
-		return Stats{}, nil
-	}
-
-	level := uint64(0)
-	internalNodeCount := uint64(0)
-	internalNodeSize := uint64(0)
-	leafNodeCount := uint64(0)
-	leafNodeSize := uint64(0)
-
-	nextLevelIDs := list.New()
-	nextLevelIDs.PushBack(array.root.header.id)
-
-	for nextLevelIDs.Len() > 0 {
-
-		ids := nextLevelIDs
-
-		nextLevelIDs = list.New()
-
-		for e := ids.Front(); e != nil; e = e.Next() {
-			id := e.Value.(StorageID)
-
-			slab, found, err := array.storage.Retrieve(id)
-			if err != nil {
-				return Stats{}, err
-			}
-			if !found {
-				return Stats{}, fmt.Errorf("slab %d not found", id)
-			}
-
-			if slab.IsLeaf() {
-				// leaf node
-				leaf := slab.(*ArrayDataSlab)
-				leafNodeCount++
-				leafNodeSize += uint64(leaf.header.size)
-			} else {
-				// internal node
-				node := slab.(*ArrayMetaDataSlab)
-				internalNodeCount++
-				internalNodeSize += uint64(node.header.size)
-
-				for _, h := range node.orderedHeaders {
-					nextLevelIDs.PushBack(h.id)
-				}
-			}
-		}
-
-		level++
-	}
-
-	leafNodeOccupancy := float64(leafNodeSize) / float64(targetThreshold*leafNodeCount)
-	internalNodeNodeOccupancy := float64(internalNodeSize) / float64(targetThreshold*internalNodeCount)
-
-	return Stats{
-		Levels:                level,
-		ElementCount:          uint64(array.root.header.count),
-		InternalNodeCount:     internalNodeCount,
-		LeafNodeCount:         leafNodeCount,
-		InternalNodeOccupancy: internalNodeNodeOccupancy,
-		LeafNodeOccupancy:     leafNodeOccupancy,
-	}, nil
-}
-
-func (array *Array) Print() {
-	if array.root == nil {
-		fmt.Printf("empty tree\n")
-		return
-	}
-
-	nextLevelIDs := list.New()
-	nextLevelIDs.PushBack(array.root.header.id)
-
-	level := 0
-	for nextLevelIDs.Len() > 0 {
-
-		ids := nextLevelIDs
-
-		nextLevelIDs = list.New()
-
-		for e := ids.Front(); e != nil; e = e.Next() {
-			id := e.Value.(StorageID)
-
-			slab, found, err := array.storage.Retrieve(id)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			if !found {
-				fmt.Printf("slab %d not found", id)
-				return
-			}
-
-			if slab.IsLeaf() {
-				// leaf node
-				leaf := slab.(*ArrayDataSlab)
-				fmt.Printf("level %d, leaf (%+v): ", level+1, *(leaf.header))
-				if len(leaf.elements) <= 6 {
-					fmt.Printf("%+v\n", leaf.elements)
-				} else {
-					es := leaf.elements
-					lastIdx := len(leaf.elements) - 1
-					fmt.Printf("[%d %d %d ... %d %d %d]\n", es[0], es[1], es[2], es[lastIdx-2], es[lastIdx-1], es[lastIdx])
-				}
-			} else {
-				// internal node
-				node := slab.(*ArrayMetaDataSlab)
-				fmt.Printf("level %d, meta (%+v) headers: [", level+1, *(node.header))
-				for _, h := range node.orderedHeaders {
-					fmt.Printf("%+v ", *h)
-					nextLevelIDs.PushBack(h.id)
-				}
-				fmt.Println("]")
-			}
-		}
-
-		level++
-	}
 }

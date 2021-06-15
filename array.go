@@ -42,6 +42,7 @@ type ArrayMetaDataSlab struct {
 type ArrayNode interface {
 	Get(index uint64) (uint64, error)
 	Insert(index uint64, v uint64) error
+	Remove(index uint64) (uint64, error)
 
 	Slab
 }
@@ -85,6 +86,22 @@ func (a *ArrayDataSlab) Insert(index uint64, v uint64) error {
 	a.header.count++
 	a.header.size += 8 // size of uint64
 	return nil
+}
+
+func (a *ArrayDataSlab) Remove(index uint64) (uint64, error) {
+	v := a.elements[index]
+	if index == 0 {
+		a.elements = a.elements[1:]
+	} else if index == uint64(len(a.elements)) {
+		a.elements = a.elements[:len(a.elements)-1]
+	} else {
+		copy(a.elements[index:], a.elements[index+1:])
+		a.elements = a.elements[:len(a.elements)-1]
+	}
+
+	a.header.count--
+	a.header.size -= 8 // size of uint64
+	return v, nil
 }
 
 func (a *ArrayDataSlab) Header() *SlabHeader {
@@ -273,6 +290,65 @@ func (a *ArrayMetaDataSlab) Insert(index uint64, v uint64) error {
 	return nil
 }
 
+// TODO: implement merging
+func (a *ArrayMetaDataSlab) Remove(index uint64) (uint64, error) {
+	if index > uint64(a.header.count) {
+		return 0, fmt.Errorf("remove at index %d out of bounds", index)
+	}
+
+	var id StorageID
+	var adjustedIndex uint64
+	//i := 0
+
+	var h *SlabHeader
+	startIndex := uint64(0)
+	for _, h = range a.orderedHeaders {
+		if index >= startIndex && index < startIndex+uint64(h.count) {
+			id = h.id
+			adjustedIndex = index - startIndex
+			break
+		}
+		startIndex += uint64(h.count)
+	}
+
+	slab, found, err := a.storage.Retrieve(id)
+	if err != nil {
+		return 0, err
+	}
+	if !found {
+		return 0, fmt.Errorf("remove(%d): slab %d not found", index, id)
+	}
+
+	node, ok := slab.(ArrayNode)
+	if !ok {
+		return 0, fmt.Errorf("slab %d is not ArrayNode", id)
+	}
+
+	v, err := node.Remove(adjustedIndex)
+	if err != nil {
+		return 0, err
+	}
+
+	a.header.count--
+	/*
+		if node.IsFull() {
+			left, right, err := node.Split()
+			if err != nil {
+				return err
+			}
+
+			a.orderedHeaders = append(a.orderedHeaders, nil)
+			if i < len(a.orderedHeaders)-2 {
+				copy(a.orderedHeaders[i+2:], a.orderedHeaders[i+1:])
+			}
+			a.orderedHeaders[i] = left.Header()
+			a.orderedHeaders[i+1] = right.Header()
+
+			a.header.size += headerSize
+		}
+	*/
+	return v, nil
+}
 func (a *ArrayMetaDataSlab) Header() *SlabHeader {
 	return a.header
 }
@@ -381,6 +457,38 @@ func (array *Array) Insert(index uint64, v uint64) error {
 	return nil
 }
 
+// TODO: implement merging and reducing tree height by 1
+func (array *Array) Remove(index uint64) (uint64, error) {
+	if array.root == nil {
+		return 0, fmt.Errorf("out of bounds")
+	}
+
+	v, err := array.root.Remove(index)
+	if err != nil {
+		return 0, err
+	}
+	/*
+		if array.root.IsFull() {
+			// Shallow copy root node with a new StorageID
+			copiedRoot := newArrayMetaDataSlab(array.storage)
+			copiedRoot.header.size = array.root.header.size
+			copiedRoot.header.count = array.root.header.count
+			copiedRoot.orderedHeaders = array.root.orderedHeaders
+
+			// Split copied root node
+			left, right, err := copiedRoot.Split()
+			if err != nil {
+				return err
+			}
+
+			// Reset root with new nodes (StorageID is unchanged).
+			array.root.orderedHeaders = []*SlabHeader{left.Header(), right.Header()}
+			array.root.header.count = left.Header().count + right.Header().count
+			array.root.header.size = headerSize * 2
+		}
+	*/
+	return v, nil
+}
 func (array *Array) Iterate(fn func(uint64)) error {
 	id := array.dataSlabStorageID
 
@@ -411,4 +519,11 @@ func (array *Array) StorageID() StorageID {
 		return StorageIDUndefined
 	}
 	return array.root.header.id
+}
+
+func (array *Array) Count() uint64 {
+	if array.root == nil {
+		return 0
+	}
+	return uint64(array.root.header.count)
 }

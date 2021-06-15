@@ -102,6 +102,101 @@ func TestInsertAndGet(t *testing.T) {
 	})
 }
 
+func TestRemove(t *testing.T) {
+	t.Parallel()
+
+	t.Run("remove-first", func(t *testing.T) {
+		setThreshold(50)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		storage := NewBasicStorage()
+
+		array := NewArray(storage)
+
+		n := uint64(256 * 256)
+		for i := uint64(0); i < n; i++ {
+			err := array.Append(i)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, n, array.Count())
+
+		for i := uint64(0); i < n; i++ {
+			v, err := array.Remove(0)
+			require.NoError(t, err)
+			require.Equal(t, i, v)
+			require.Equal(t, n-i-1, array.Count())
+		}
+
+		require.Equal(t, uint64(0), array.Count())
+	})
+
+	t.Run("remove-last", func(t *testing.T) {
+		setThreshold(50)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		storage := NewBasicStorage()
+
+		array := NewArray(storage)
+
+		n := uint64(256 * 256)
+		for i := uint64(0); i < n; i++ {
+			err := array.Append(i)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, n, array.Count())
+
+		for i := int(n) - 1; i >= 0; i-- {
+			v, err := array.Remove(uint64(i))
+			require.NoError(t, err)
+			require.Equal(t, uint64(i), v)
+			require.Equal(t, uint64(i), array.Count())
+		}
+
+		require.Equal(t, uint64(0), array.Count())
+	})
+
+	t.Run("remove", func(t *testing.T) {
+		setThreshold(50)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		storage := NewBasicStorage()
+
+		array := NewArray(storage)
+
+		n := uint64(256 * 256)
+		for i := uint64(0); i < n; i++ {
+			err := array.Append(i)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, n, array.Count())
+
+		// Remove every other elements
+		for i := uint64(0); i < array.Count(); i++ {
+			expected, err := array.Get(i)
+			require.NoError(t, err)
+
+			v, err := array.Remove(i)
+			require.NoError(t, err)
+			require.Equal(t, expected, v)
+		}
+
+		for i, j := uint64(0), uint64(1); i < array.Count(); i, j = i+1, j+2 {
+			v, err := array.Get(i)
+			require.NoError(t, err)
+			require.Equal(t, j, v)
+		}
+	})
+}
+
 func TestSplit(t *testing.T) {
 	setThreshold(50)
 	defer func() {

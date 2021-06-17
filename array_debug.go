@@ -71,7 +71,7 @@ func (array *Array) Stats() (Stats, error) {
 
 	return Stats{
 		Levels:                level,
-		ElementCount:          uint64(array.Count()),
+		ElementCount:          array.Count(),
 		InternalNodeCount:     internalNodeCount,
 		LeafNodeCount:         leafNodeCount,
 		InternalNodeOccupancy: internalNodeNodeOccupancy,

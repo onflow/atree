@@ -461,7 +461,7 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 			// Rebalance between node and rightSib
 			err := node.Rebalance(rightSib)
 			if err != nil {
-				return 0, nil
+				return 0, err
 			}
 
 			// No need to update MetaDataSlab.
@@ -469,7 +469,7 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 			// Merge node with rightSib
 			err := node.Merge(rightSib)
 			if err != nil {
-				return 0, nil
+				return 0, err
 			}
 
 			// Update MetaDataSlab info
@@ -487,7 +487,7 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 			// Rebalance between node and leftSib
 			err := leftSib.Rebalance(node)
 			if err != nil {
-				return 0, nil
+				return 0, err
 			}
 
 			// No need to update MetaDataSlab.
@@ -495,7 +495,7 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 			// Merge node with leftSib
 			err := leftSib.Merge(node)
 			if err != nil {
-				return 0, nil
+				return 0, err
 			}
 
 			// Update MetaDataSlab info
@@ -537,7 +537,7 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 	if !leftSib.CanRebalance() {
 		err := node.Rebalance(rightSib)
 		if err != nil {
-			return 0, nil
+			return 0, err
 		}
 		return v, nil
 	}
@@ -546,7 +546,7 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 	if !rightSib.CanRebalance() {
 		err := leftSib.Rebalance(node)
 		if err != nil {
-			return 0, nil
+			return 0, err
 		}
 		return v, nil
 	}
@@ -755,38 +755,39 @@ func (array *Array) Remove(index uint64) (uint64, error) {
 			array.dataSlabStorageID = StorageIDUndefined
 		}
 		return v, nil
-	} else {
-		// Set root to its child node if there is only one child node left.
-		root := array.root.(*ArrayMetaDataSlab)
-		if len(root.orderedHeaders) == 1 {
+	}
 
-			childID := root.orderedHeaders[0].id
+	// Set root to its child node if there is only one child node left.
+	root := array.root.(*ArrayMetaDataSlab)
+	if len(root.orderedHeaders) == 1 {
 
-			slab, found, err := array.storage.Retrieve(childID)
-			if err != nil {
-				return 0, err
-			}
-			if !found {
-				return 0, fmt.Errorf("slab %d not found", childID)
-			}
-			node, ok := slab.(ArrayNode)
-			if !ok {
-				return 0, fmt.Errorf("slab %d isn't ArrayNode", childID)
-			}
+		childID := root.orderedHeaders[0].id
 
-			oldRootID := root.header.id
+		slab, found, err := array.storage.Retrieve(childID)
+		if err != nil {
+			return 0, err
+		}
+		if !found {
+			return 0, fmt.Errorf("slab %d not found", childID)
+		}
+		node, ok := slab.(ArrayNode)
+		if !ok {
+			return 0, fmt.Errorf("slab %d isn't ArrayNode", childID)
+		}
 
-			node.Header().id = oldRootID
+		oldRootID := root.header.id
 
-			array.storage.Store(oldRootID, slab)
+		node.Header().id = oldRootID
 
-			array.root = node
+		array.storage.Store(oldRootID, slab)
 
-			if _, ok := array.root.(*ArrayDataSlab); ok {
-				array.dataSlabStorageID = oldRootID
-			}
+		array.root = node
+
+		if _, ok := array.root.(*ArrayDataSlab); ok {
+			array.dataSlabStorageID = oldRootID
 		}
 	}
+
 	return v, nil
 }
 

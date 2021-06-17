@@ -27,7 +27,7 @@ func (array *Array) Stats() (Stats, error) {
 	leafNodeSize := uint64(0)
 
 	nextLevelIDs := list.New()
-	nextLevelIDs.PushBack(array.root.header.id)
+	nextLevelIDs.PushBack(array.root.Header().id)
 
 	for nextLevelIDs.Len() > 0 {
 
@@ -71,7 +71,7 @@ func (array *Array) Stats() (Stats, error) {
 
 	return Stats{
 		Levels:                level,
-		ElementCount:          uint64(array.root.header.count),
+		ElementCount:          uint64(array.Count()),
 		InternalNodeCount:     internalNodeCount,
 		LeafNodeCount:         leafNodeCount,
 		InternalNodeOccupancy: internalNodeNodeOccupancy,
@@ -86,7 +86,7 @@ func (array *Array) Print() {
 	}
 
 	nextLevelIDs := list.New()
-	nextLevelIDs.PushBack(array.root.header.id)
+	nextLevelIDs.PushBack(array.root.Header().id)
 
 	level := 0
 	for nextLevelIDs.Len() > 0 {
@@ -133,4 +133,46 @@ func (array *Array) Print() {
 
 		level++
 	}
+}
+
+func (array *Array) valid() (bool, error) {
+	if array.root == nil {
+		return true, nil
+	}
+	verified, _, err := array._valid(array.root.Header().id)
+	return verified, err
+}
+
+func (array *Array) _valid(id StorageID) (bool, uint32, error) {
+	slab, found, err := array.storage.Retrieve(id)
+	if err != nil {
+		return false, 0, err
+	}
+	if !found {
+		return false, 0, fmt.Errorf("slab %d not found", id)
+	}
+	if slab.IsLeaf() {
+		node, ok := slab.(*ArrayDataSlab)
+		if !ok {
+			return false, 0, fmt.Errorf("slab %d is not ArrayDataSlab", id)
+		}
+		count := uint32(len(node.elements))
+		t := count == node.header.count && count*8 == node.header.size
+		return t, count, nil
+	}
+
+	node, ok := slab.(*ArrayMetaDataSlab)
+	if !ok {
+		return false, 0, fmt.Errorf("slab %d is not ArrayMetaDataSlab", id)
+	}
+	sum := uint32(0)
+	for _, h := range node.orderedHeaders {
+		verified, count, err := array._valid(h.id)
+		if !verified || err != nil {
+			return false, 0, err
+		}
+		sum += count
+	}
+	t := sum == node.header.count && uint32(len(node.orderedHeaders)*headerSize) == node.header.size
+	return t, sum, nil
 }

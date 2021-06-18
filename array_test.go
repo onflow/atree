@@ -1,7 +1,9 @@
 package main
 
 import (
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -336,4 +338,157 @@ func TestConstRootStorageID(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, i, e)
 	}
+}
+
+func TestSetRandomValue(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+
+	t.Parallel()
+
+	t.Run("insert-first", func(t *testing.T) {
+
+		setThreshold(50)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		storage := NewBasicStorage()
+
+		array := NewArray(storage)
+
+		n := uint64(256 * 256)
+		values := make([]uint64, n)
+
+		for i := uint64(0); i < n; i++ {
+			v := rand.Uint64()
+			values[n-i-1] = v
+
+			err := array.Insert(0, v)
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < n; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+			require.Equal(t, values[i], e)
+		}
+
+		verified, err := array.valid()
+		require.NoError(t, err)
+		require.True(t, verified)
+	})
+
+	t.Run("insert-last", func(t *testing.T) {
+		setThreshold(50)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		storage := NewBasicStorage()
+
+		array := NewArray(storage)
+
+		n := uint64(256 * 256)
+		values := make([]uint64, n)
+
+		for i := uint64(0); i < n; i++ {
+			v := rand.Uint64()
+			values[i] = v
+
+			err := array.Insert(i, v)
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < n; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+			require.Equal(t, values[i], e)
+		}
+
+		verified, err := array.valid()
+		require.NoError(t, err)
+		require.True(t, verified)
+	})
+
+	t.Run("insert-random", func(t *testing.T) {
+		setThreshold(50)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		storage := NewBasicStorage()
+
+		array := NewArray(storage)
+
+		n := uint64(256 * 256)
+		values := make([]uint64, n)
+
+		for i := uint64(0); i < n; i++ {
+			k := rand.Intn(int(i) + 1)
+			v := rand.Uint64()
+
+			copy(values[k+1:], values[k:])
+			values[k] = v
+
+			err := array.Insert(uint64(k), v)
+			require.NoError(t, err)
+		}
+
+		for k, v := range values {
+			e, err := array.Get(uint64(k))
+			require.NoError(t, err)
+			require.Equal(t, v, e)
+		}
+
+		verified, err := array.valid()
+		require.NoError(t, err)
+		require.True(t, verified)
+	})
+
+}
+
+func TestRemoveRandomElement(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+
+	setThreshold(50)
+	defer func() {
+		setThreshold(1024)
+	}()
+
+	storage := NewBasicStorage()
+
+	array := NewArray(storage)
+
+	n := uint64(256 * 256)
+	values := make([]uint64, n)
+
+	// Insert n random values into array
+	for i := uint64(0); i < n; i++ {
+		v := rand.Uint64()
+		values[i] = v
+
+		err := array.Insert(i, v)
+		require.NoError(t, err)
+	}
+
+	require.Equal(t, n, array.Count())
+
+	// Remove n elements at random index
+	for i := uint64(0); i < n; i++ {
+		k := rand.Intn(int(array.Count()))
+
+		v, err := array.Remove(uint64(k))
+		require.NoError(t, err)
+		require.Equal(t, values[k], v)
+
+		copy(values[k:], values[k+1:])
+		values = values[:len(values)-1]
+	}
+
+	require.Equal(t, uint64(0), array.Count())
+	require.Equal(t, uint64(0), uint64(len(values)))
+
+	verified, err := array.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
 }

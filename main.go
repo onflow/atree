@@ -21,6 +21,24 @@ func setThreshold(threshold uint64) {
 	maxThreshold = uint64(float64(targetThreshold) * 1.5)
 }
 
+type Uint8Value uint8
+
+func (v Uint8Value) ByteSize() uint32 {
+	return 1
+}
+
+type Uint32Value uint32
+
+func (v Uint32Value) ByteSize() uint32 {
+	return 4
+}
+
+type Uint64Value uint64
+
+func (v Uint64Value) ByteSize() uint32 {
+	return 8
+}
+
 // TODO: implement different slab size for internal node and leaf node.
 func main() {
 	var slabSize uint64
@@ -42,7 +60,7 @@ func main() {
 	array := NewArray(storage)
 
 	for i := uint64(0); i < numElements; i++ {
-		array.Append(i)
+		array.Append(Uint64Value(i))
 	}
 
 	stats, err := array.Stats()

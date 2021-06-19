@@ -11,14 +11,19 @@ type Slab interface {
 	IsLeaf() bool
 
 	IsFull() bool
-	IsUnderflow() bool
-	CanRebalance() bool
+	IsUnderflow() (uint32, bool)
+	CanLendToLeft(size uint32) bool
+	CanLendToRight(size uint32) bool
 
 	Header() *SlabHeader
 
 	Split() (Slab, Slab, error)
 	Merge(Slab) error
 	Rebalance(Slab) error
+}
+
+type Item interface {
+	ByteSize() uint32
 }
 
 type SlabHeader struct {
@@ -35,7 +40,7 @@ type ArrayDataSlab struct {
 	next     StorageID
 	header   *SlabHeader
 	storage  Storage
-	elements []uint64
+	elements []Item
 }
 
 // ArrayMetaDataSlab is internal node, implementing ArrayNode
@@ -46,9 +51,9 @@ type ArrayMetaDataSlab struct {
 }
 
 type ArrayNode interface {
-	Get(index uint64) (uint64, error)
-	Insert(index uint64, v uint64) error
-	Remove(index uint64, left StorageID, right StorageID) (uint64, error)
+	Get(index uint64) (Item, error)
+	Insert(index uint64, v Item) error
+	Remove(index uint64, left StorageID, right StorageID) (Item, error)
 
 	ShallowCloneWithNewID(storage Storage) ArrayNode
 
@@ -85,28 +90,28 @@ func (a *ArrayDataSlab) ShallowCloneWithNewID(storage Storage) ArrayNode {
 	return copied
 }
 
-func (a *ArrayDataSlab) Get(index uint64) (uint64, error) {
+func (a *ArrayDataSlab) Get(index uint64) (Item, error) {
 	if index >= uint64(len(a.elements)) {
-		return 0, fmt.Errorf("out of bounds")
+		return nil, fmt.Errorf("out of bounds")
 	}
 	return a.elements[index], nil
 }
 
-func (a *ArrayDataSlab) Insert(index uint64, v uint64) error {
+func (a *ArrayDataSlab) Insert(index uint64, v Item) error {
 	if index == uint64(len(a.elements)) {
 		a.elements = append(a.elements, v)
 	} else {
-		a.elements = append(a.elements, 0)
+		a.elements = append(a.elements, nil)
 		copy(a.elements[index+1:], a.elements[index:])
 		a.elements[index] = v
 	}
 
 	a.header.count++
-	a.header.size += 8 // size of uint64
+	a.header.size += v.ByteSize()
 	return nil
 }
 
-func (a *ArrayDataSlab) Remove(index uint64, left StorageID, right StorageID) (uint64, error) {
+func (a *ArrayDataSlab) Remove(index uint64, left StorageID, right StorageID) (Item, error) {
 	v := a.elements[index]
 	if index == 0 {
 		a.elements = a.elements[1:]
@@ -118,7 +123,7 @@ func (a *ArrayDataSlab) Remove(index uint64, left StorageID, right StorageID) (u
 	}
 
 	a.header.count--
-	a.header.size -= 8 // size of uint64
+	a.header.size -= v.ByteSize()
 	return v, nil
 }
 
@@ -130,12 +135,51 @@ func (a *ArrayDataSlab) IsFull() bool {
 	return a.header.size > uint32(maxThreshold)
 }
 
-func (a *ArrayDataSlab) IsUnderflow() bool {
-	return a.header.size < uint32(minThreshold)
+func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
+	if uint32(minThreshold) > a.header.size {
+		return uint32(minThreshold) - a.header.size, true
+	}
+	return 0, false
 }
 
-func (a *ArrayDataSlab) CanRebalance() bool {
-	return a.header.size-8 > uint32(minThreshold)
+func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
+	if len(a.elements) == 0 {
+		panic(fmt.Sprintf("empty data slab %d", a.header.id))
+	}
+	if len(a.elements) < 2 {
+		return false
+	}
+	if a.header.size-a.elements[0].ByteSize() < uint32(minThreshold) {
+		return false
+	}
+	lendSize := uint32(0)
+	for i := 0; i < len(a.elements); i++ {
+		lendSize += a.elements[i].ByteSize()
+		if lendSize >= size {
+			break
+		}
+	}
+	return a.header.size-lendSize > uint32(minThreshold)
+}
+
+func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
+	if len(a.elements) == 0 {
+		panic(fmt.Sprintf("empty data slab %d", a.header.id))
+	}
+	if len(a.elements) < 2 {
+		return false
+	}
+	if a.header.size-a.elements[len(a.elements)-1].ByteSize() < uint32(minThreshold) {
+		return false
+	}
+	lendSize := uint32(0)
+	for i := len(a.elements) - 1; i >= 0; i-- {
+		lendSize += a.elements[i].ByteSize()
+		if lendSize >= size {
+			break
+		}
+	}
+	return a.header.size-lendSize > uint32(minThreshold)
 }
 
 func (a *ArrayDataSlab) IsLeaf() bool {
@@ -155,8 +199,8 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 
 	rightSlabStartIndex := 0
 	leftSlabSize := uint32(0)
-	for i := range a.elements {
-		leftSlabSize += 8 // size of uint64
+	for i, e := range a.elements {
+		leftSlabSize += e.ByteSize()
 		if leftSlabSize >= breakPoint {
 			rightSlabStartIndex = i + 1
 			break
@@ -164,7 +208,7 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 	}
 
 	rightSlab := newArrayDataSlab(a.storage)
-	rightSlab.elements = make([]uint64, len(a.elements)-rightSlabStartIndex)
+	rightSlab.elements = make([]Item, len(a.elements)-rightSlabStartIndex)
 	copy(rightSlab.elements, a.elements[rightSlabStartIndex:])
 	rightSlab.header.size = a.header.size - leftSlabSize
 	rightSlab.header.count = uint32(len(rightSlab.elements))
@@ -191,41 +235,108 @@ func (a *ArrayDataSlab) Rebalance(slab Slab) error {
 	b := slab.(*ArrayDataSlab)
 
 	count := a.header.count + b.header.count
-
 	size := a.header.size + b.header.size
-	breakPoint := float64(size) / 2
 
-	leftSlabCount := uint32(math.Ceil(breakPoint / 8))
-	leftSlabSize := leftSlabCount * 8
-	rightSlabCount := count - leftSlabCount
-	rightSlabSize := size - leftSlabSize
+	breakPoint := uint32(math.Ceil(float64(size) / 2))
 
-	if uint32(len(a.elements)) > leftSlabCount {
-		// shift some elements from left to right
+	if a.header.size <= breakPoint {
+		// shift elements from right to left
 
-		elements := make([]uint64, rightSlabCount)
-		n := copy(elements, a.elements[leftSlabCount:])
-		copy(elements[n:], b.elements)
+		leftSlabCount := uint32(len(a.elements))
+		leftSlabSize := a.header.size
 
-		b.elements = elements
+		for _, e := range b.elements {
+			leftSlabSize += e.ByteSize()
+			leftSlabCount++
 
-		a.elements = a.elements[:leftSlabCount]
-	} else {
-		// shift some elements from right to left
-		rightStartIndex := len(b.elements) - int(rightSlabCount)
+			if leftSlabSize >= breakPoint {
+				break
+			}
+		}
 
+		if size-leftSlabSize < uint32(minThreshold) {
+			i := leftSlabCount - a.header.count
+			for i > 0 {
+				leftSlabSize -= b.elements[i-1].ByteSize()
+				leftSlabCount--
+				i--
+
+				if leftSlabSize >= uint32(minThreshold) && size-leftSlabSize >= uint32(minThreshold) {
+					break
+				}
+			}
+		}
+
+		rightStartIndex := leftSlabCount - a.header.count
+
+		if leftSlabCount == a.header.count {
+			panic(fmt.Sprintf("computed left slab %v remains unchanged after rebalancing", *a.header))
+		}
+
+		// Update left slab elements
 		a.elements = append(a.elements, b.elements[:rightStartIndex]...)
 
+		// Update right slab elements
 		b.elements = b.elements[rightStartIndex:]
+
+		// Update left slab header
+		a.header.size = leftSlabSize
+		a.header.count = leftSlabCount
+
+		// Update right slab header
+		b.header.size = size - leftSlabSize
+		b.header.count = count - leftSlabCount
+
+		return nil
 	}
+
+	// shift elements from left to right
+
+	leftSlabCount := uint32(0)
+	leftSlabSize := uint32(0)
+
+	for _, e := range a.elements {
+		leftSlabSize += e.ByteSize()
+		leftSlabCount++
+		if leftSlabSize >= breakPoint {
+			break
+		}
+	}
+
+	if size-leftSlabSize < uint32(minThreshold) {
+		i := leftSlabCount
+		for i > 0 {
+			leftSlabSize -= a.elements[i-1].ByteSize()
+			leftSlabCount--
+			i--
+
+			if leftSlabSize >= uint32(minThreshold) && size-leftSlabSize >= uint32(minThreshold) {
+				break
+			}
+		}
+	}
+
+	if leftSlabCount == a.header.count {
+		panic(fmt.Sprintf("computed left slab %v remains unchanged after rebalancing", *a.header))
+	}
+
+	// Update right slab elements
+	elements := make([]Item, count-leftSlabCount)
+	n := copy(elements, a.elements[leftSlabCount:])
+	copy(elements[n:], b.elements)
+
+	b.elements = elements
+
+	// Update left slab elements
+	a.elements = a.elements[:leftSlabCount]
 
 	// Update left slab header
 	a.header.size = leftSlabSize
 	a.header.count = leftSlabCount
 
 	// Update right slab header
-	b.header.size = rightSlabSize
-	b.header.count = rightSlabCount
+	b.header.size = size - leftSlabSize
+	b.header.count = count - leftSlabCount
 
 	return nil
 }
@@ -251,10 +362,10 @@ func (a *ArrayMetaDataSlab) ShallowCloneWithNewID(storage Storage) ArrayNode {
 	return copied
 }
 
-func (a *ArrayMetaDataSlab) Get(index uint64) (uint64, error) {
+func (a *ArrayMetaDataSlab) Get(index uint64) (Item, error) {
 
 	if index >= uint64(a.header.count) {
-		return 0, fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
+		return nil, fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
 	}
 
 	var id StorageID
@@ -269,22 +380,22 @@ func (a *ArrayMetaDataSlab) Get(index uint64) (uint64, error) {
 	}
 
 	if id == StorageIDUndefined {
-		return 0, fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
+		return nil, fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
 	}
 
 	slab, found, err := a.storage.Retrieve(id)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if !found {
-		return 0, fmt.Errorf("slab %d not found", id)
+		return nil, fmt.Errorf("slab %d not found", id)
 	}
 
 	adjustedIndex := index - startIndex
 
 	node, ok := slab.(ArrayNode)
 	if !ok {
-		return 0, fmt.Errorf("slab %d is not ArrayNode", id)
+		return nil, fmt.Errorf("slab %d is not ArrayNode", id)
 	}
 	return node.Get(adjustedIndex)
 }
@@ -292,7 +403,7 @@ func (a *ArrayMetaDataSlab) Get(index uint64) (uint64, error) {
 // Insert inserts v into correct ArrayDataSlab.
 // index must be >=0 and <= a.header.count.
 // If index == a.header.count, Insert appends v to the end of underlying data slab.
-func (a *ArrayMetaDataSlab) Insert(index uint64, v uint64) error {
+func (a *ArrayMetaDataSlab) Insert(index uint64, v Item) error {
 	if index > uint64(a.header.count) {
 		return fmt.Errorf("insert at index %d out of bounds", index)
 	}
@@ -367,10 +478,10 @@ func (a *ArrayMetaDataSlab) Insert(index uint64, v uint64) error {
 	return nil
 }
 
-func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID) (uint64, error) {
+func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID) (Item, error) {
 
 	if index > uint64(a.header.count) {
-		return 0, fmt.Errorf("remove at index %d out of bounds", index)
+		return nil, fmt.Errorf("remove at index %d out of bounds", index)
 	}
 
 	var id StorageID
@@ -390,15 +501,15 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 
 	slab, found, err := a.storage.Retrieve(id)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if !found {
-		return 0, fmt.Errorf("remove(%d): slab %d not found", index, id)
+		return nil, fmt.Errorf("remove(%d): slab %d not found", index, id)
 	}
 
 	node, ok := slab.(ArrayNode)
 	if !ok {
-		return 0, fmt.Errorf("slab %d is not ArrayNode", id)
+		return nil, fmt.Errorf("slab %d is not ArrayNode", id)
 	}
 
 	// Storage IDs of left and right sibling of the same parent.
@@ -416,12 +527,13 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 
 	v, err := node.Remove(adjustedIndex, leftSibID, rightSibID)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	a.header.count--
 
-	if !node.IsUnderflow() {
+	underflowSize, isUnderflow := node.IsUnderflow()
+	if !isUnderflow {
 		return v, nil
 	}
 
@@ -430,38 +542,38 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 	if leftSibID != StorageIDUndefined {
 		aSlab, found, err := a.storage.Retrieve(leftSibID)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		if !found {
-			return 0, fmt.Errorf("remove(%d): slab %d not found", index, id)
+			return nil, fmt.Errorf("remove(%d): slab %d not found", index, id)
 		}
 		leftSib, ok = aSlab.(ArrayNode)
 		if !ok {
-			return 0, fmt.Errorf("slab %d is not ArrayNode", id)
+			return nil, fmt.Errorf("slab %d is not ArrayNode", id)
 		}
 	}
 
 	if rightSibID != StorageIDUndefined {
 		aSlab, found, err := a.storage.Retrieve(rightSibID)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		if !found {
-			return 0, fmt.Errorf("remove(%d): slab %d not found", index, id)
+			return nil, fmt.Errorf("remove(%d): slab %d not found", index, id)
 		}
 		rightSib, ok = aSlab.(ArrayNode)
 		if !ok {
-			return 0, fmt.Errorf("slab %d is not ArrayNode", id)
+			return nil, fmt.Errorf("slab %d is not ArrayNode", id)
 		}
 	}
 
 	// Node is the leftmost node in subtree.
 	if leftSib == nil {
-		if rightSib.CanRebalance() {
+		if rightSib.CanLendToLeft(underflowSize) {
 			// Rebalance between node and rightSib
 			err := node.Rebalance(rightSib)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
 
 			// No need to update MetaDataSlab.
@@ -469,7 +581,7 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 			// Merge node with rightSib
 			err := node.Merge(rightSib)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
 
 			// Update MetaDataSlab info
@@ -483,11 +595,11 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 
 	// Node is the rightmost node in subtree.
 	if rightSib == nil {
-		if leftSib.CanRebalance() {
+		if leftSib.CanLendToRight(underflowSize) {
 			// Rebalance between node and leftSib
 			err := leftSib.Rebalance(node)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
 
 			// No need to update MetaDataSlab.
@@ -495,7 +607,7 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 			// Merge node with leftSib
 			err := leftSib.Merge(node)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
 
 			// Update MetaDataSlab info
@@ -508,11 +620,11 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 	}
 
 	// If both left and right siblings are underflow, merge with smaller sib.
-	if !leftSib.CanRebalance() && !rightSib.CanRebalance() {
+	if !leftSib.CanLendToRight(underflowSize) && !rightSib.CanLendToLeft(underflowSize) {
 		if leftSib.Header().size < rightSib.Header().size {
 			err := leftSib.Merge(node)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
 
 			// Update MetaDataSlab info
@@ -521,7 +633,7 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 		} else {
 			err := node.Merge(rightSib)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
 
 			// Update MetaDataSlab info
@@ -534,19 +646,19 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 	}
 
 	// Only right sib can be rebalanced with node.
-	if !leftSib.CanRebalance() {
+	if !leftSib.CanLendToRight(underflowSize) {
 		err := node.Rebalance(rightSib)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		return v, nil
 	}
 
 	// Only left sib can be rebalanced with node.
-	if !rightSib.CanRebalance() {
+	if !rightSib.CanLendToLeft(underflowSize) {
 		err := leftSib.Rebalance(node)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		return v, nil
 	}
@@ -555,12 +667,12 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 	if leftSib.Header().size > rightSib.Header().size {
 		err := leftSib.Rebalance(node)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 	} else {
 		err := node.Rebalance(rightSib)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 	}
 
@@ -575,12 +687,21 @@ func (a ArrayMetaDataSlab) IsFull() bool {
 	return a.header.size > uint32(maxThreshold)
 }
 
-func (a ArrayMetaDataSlab) IsUnderflow() bool {
-	return a.header.size < uint32(minThreshold)
+func (a ArrayMetaDataSlab) IsUnderflow() (uint32, bool) {
+	if uint32(minThreshold) > a.header.size {
+		return uint32(minThreshold) - a.header.size, true
+	}
+	return 0, false
 }
 
-func (a *ArrayMetaDataSlab) CanRebalance() bool {
-	return a.header.size-headerSize > uint32(minThreshold)
+func (a *ArrayMetaDataSlab) CanLendToLeft(size uint32) bool {
+	n := uint32(math.Ceil(float64(size) / headerSize))
+	return a.header.size-headerSize*n > uint32(minThreshold)
+}
+
+func (a *ArrayMetaDataSlab) CanLendToRight(size uint32) bool {
+	n := uint32(math.Ceil(float64(size) / headerSize))
+	return a.header.size-headerSize*n > uint32(minThreshold)
 }
 
 func (a ArrayMetaDataSlab) IsLeaf() bool {
@@ -673,18 +794,18 @@ func NewArray(storage Storage) *Array {
 	return &Array{storage: storage}
 }
 
-func (array *Array) Get(i uint64) (uint64, error) {
+func (array *Array) Get(i uint64) (Item, error) {
 	if array.root == nil {
-		return 0, fmt.Errorf("out of bounds")
+		return nil, fmt.Errorf("out of bounds")
 	}
 	return array.root.Get(i)
 }
 
-func (array *Array) Append(v uint64) error {
+func (array *Array) Append(v Item) error {
 	return array.Insert(array.Count(), v)
 }
 
-func (array *Array) Insert(index uint64, v uint64) error {
+func (array *Array) Insert(index uint64, v Item) error {
 	if array.root == nil {
 		if index != 0 {
 			return fmt.Errorf("out of bounds")
@@ -737,14 +858,14 @@ func (array *Array) Insert(index uint64, v uint64) error {
 	return nil
 }
 
-func (array *Array) Remove(index uint64) (uint64, error) {
+func (array *Array) Remove(index uint64) (Item, error) {
 	if array.root == nil {
-		return 0, fmt.Errorf("out of bounds")
+		return nil, fmt.Errorf("out of bounds")
 	}
 
 	v, err := array.root.Remove(index, StorageIDUndefined, StorageIDUndefined)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	if array.root.IsLeaf() {
@@ -765,14 +886,14 @@ func (array *Array) Remove(index uint64) (uint64, error) {
 
 		slab, found, err := array.storage.Retrieve(childID)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		if !found {
-			return 0, fmt.Errorf("slab %d not found", childID)
+			return nil, fmt.Errorf("slab %d not found", childID)
 		}
 		node, ok := slab.(ArrayNode)
 		if !ok {
-			return 0, fmt.Errorf("slab %d isn't ArrayNode", childID)
+			return nil, fmt.Errorf("slab %d isn't ArrayNode", childID)
 		}
 
 		oldRootID := root.header.id
@@ -791,7 +912,7 @@ func (array *Array) Remove(index uint64) (uint64, error) {
 	return v, nil
 }
 
-func (array *Array) Iterate(fn func(uint64)) error {
+func (array *Array) Iterate(fn func(Item)) error {
 	id := array.dataSlabStorageID
 
 	for id != StorageIDUndefined {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -25,14 +26,17 @@ func TestAppendAndGet(t *testing.T) {
 	array := NewArray(storage)
 
 	for i := uint64(0); i < arraySize; i++ {
-		err := array.Append(i)
+		err := array.Append(Uint64Value(i))
 		require.NoError(t, err)
 	}
 
 	for i := uint64(0); i < arraySize; i++ {
 		e, err := array.Get(i)
 		require.NoError(t, err)
-		require.Equal(t, i, e)
+
+		v, ok := e.(Uint64Value)
+		require.True(t, ok)
+		require.Equal(t, i, uint64(v))
 	}
 
 	verified, err := array.valid()
@@ -55,14 +59,17 @@ func TestInsertAndGet(t *testing.T) {
 		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i++ {
-			err := array.Insert(0, arraySize-i-1)
+			err := array.Insert(0, Uint64Value(arraySize-i-1))
 			require.NoError(t, err)
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
 			e, err := array.Get(i)
 			require.NoError(t, err)
-			require.Equal(t, i, e)
+
+			v, ok := e.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, i, uint64(v))
 		}
 
 		verified, err := array.valid()
@@ -79,14 +86,17 @@ func TestInsertAndGet(t *testing.T) {
 		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i++ {
-			err := array.Insert(i, i)
+			err := array.Insert(i, Uint64Value(i))
 			require.NoError(t, err)
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
 			e, err := array.Get(i)
 			require.NoError(t, err)
-			require.Equal(t, i, e)
+
+			v, ok := e.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, i, uint64(v))
 		}
 
 		verified, err := array.valid()
@@ -103,19 +113,22 @@ func TestInsertAndGet(t *testing.T) {
 		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i += 2 {
-			err := array.Append(i)
+			err := array.Append(Uint64Value(i))
 			require.NoError(t, err)
 		}
 
 		for i := uint64(1); i < arraySize; i += 2 {
-			err := array.Insert(i, i)
+			err := array.Insert(i, Uint64Value(i))
 			require.NoError(t, err)
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
 			e, err := array.Get(i)
 			require.NoError(t, err)
-			require.Equal(t, i, e)
+
+			v, ok := e.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, i, uint64(v))
 		}
 
 		verified, err := array.valid()
@@ -138,7 +151,7 @@ func TestRemove(t *testing.T) {
 		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i++ {
-			err := array.Append(i)
+			err := array.Append(Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -147,7 +160,11 @@ func TestRemove(t *testing.T) {
 		for i := uint64(0); i < arraySize; i++ {
 			v, err := array.Remove(0)
 			require.NoError(t, err)
-			require.Equal(t, i, v)
+
+			e, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, i, uint64(e))
+
 			require.Equal(t, arraySize-i-1, array.Count())
 
 			if i%8 == 0 {
@@ -169,7 +186,7 @@ func TestRemove(t *testing.T) {
 		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i++ {
-			err := array.Append(i)
+			err := array.Append(Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -178,7 +195,11 @@ func TestRemove(t *testing.T) {
 		for i := arraySize - 1; i >= 0; i-- {
 			v, err := array.Remove(uint64(i))
 			require.NoError(t, err)
-			require.Equal(t, uint64(i), v)
+
+			e, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, uint64(i), uint64(e))
+
 			require.Equal(t, uint64(i), array.Count())
 
 			if i%8 == 0 {
@@ -200,7 +221,7 @@ func TestRemove(t *testing.T) {
 		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i++ {
-			err := array.Append(i)
+			err := array.Append(Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -208,12 +229,13 @@ func TestRemove(t *testing.T) {
 
 		// Remove every other elements
 		for i := uint64(0); i < array.Count(); i++ {
-			expected, err := array.Get(i)
+			e, err := array.Get(i)
 			require.NoError(t, err)
 
 			v, err := array.Remove(i)
 			require.NoError(t, err)
-			require.Equal(t, expected, v)
+
+			require.Equal(t, e, v)
 
 			if i%8 == 0 {
 				verified, err := array.valid()
@@ -225,7 +247,10 @@ func TestRemove(t *testing.T) {
 		for i, j := uint64(0), uint64(1); i < array.Count(); i, j = i+1, j+2 {
 			v, err := array.Get(i)
 			require.NoError(t, err)
-			require.Equal(t, j, v)
+
+			e, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, j, uint64(e))
 		}
 	})
 }
@@ -239,7 +264,7 @@ func TestSplit(t *testing.T) {
 		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i++ {
-			err := array.Append(i)
+			err := array.Append(Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -263,7 +288,7 @@ func TestSplit(t *testing.T) {
 		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i++ {
-			err := array.Append(i)
+			err := array.Append(Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -297,13 +322,15 @@ func TestIterate(t *testing.T) {
 	array := NewArray(storage)
 
 	for i := uint64(0); i < arraySize; i++ {
-		err := array.Append(i)
+		err := array.Append(Uint64Value(i))
 		require.NoError(t, err)
 	}
 
 	i := uint64(0)
-	err := array.Iterate(func(v uint64) {
-		require.Equal(t, i, v)
+	err := array.Iterate(func(v Item) {
+		e, ok := v.(Uint64Value)
+		require.True(t, ok)
+		require.Equal(t, i, uint64(e))
 		i++
 	})
 	require.NoError(t, err)
@@ -321,14 +348,14 @@ func TestConstRootStorageID(t *testing.T) {
 	storage := NewBasicStorage()
 
 	array := NewArray(storage)
-	err := array.Append(0)
+	err := array.Append(Uint64Value(0))
 	require.NoError(t, err)
 
 	savedRootID := array.StorageID()
 	require.NotEqual(t, StorageIDUndefined, savedRootID)
 
 	for i := uint64(1); i < arraySize; i++ {
-		err := array.Append(i)
+		err := array.Append(Uint64Value(i))
 		require.NoError(t, err)
 	}
 
@@ -338,7 +365,10 @@ func TestConstRootStorageID(t *testing.T) {
 	for i := uint64(0); i < arraySize; i++ {
 		e, err := array.Get(i)
 		require.NoError(t, err)
-		require.Equal(t, i, e)
+
+		v, ok := e.(Uint64Value)
+		require.True(t, ok)
+		require.Equal(t, i, uint64(v))
 	}
 }
 
@@ -363,14 +393,17 @@ func TestSetRandomValue(t *testing.T) {
 			v := rand.Uint64()
 			values[arraySize-i-1] = v
 
-			err := array.Insert(0, v)
+			err := array.Insert(0, Uint64Value(v))
 			require.NoError(t, err)
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
 			e, err := array.Get(i)
 			require.NoError(t, err)
-			require.Equal(t, values[i], e)
+
+			v, ok := e.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, values[i], uint64(v))
 		}
 
 		verified, err := array.valid()
@@ -392,14 +425,17 @@ func TestSetRandomValue(t *testing.T) {
 			v := rand.Uint64()
 			values[i] = v
 
-			err := array.Insert(i, v)
+			err := array.Insert(i, Uint64Value(v))
 			require.NoError(t, err)
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
 			e, err := array.Get(i)
 			require.NoError(t, err)
-			require.Equal(t, values[i], e)
+
+			v, ok := e.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, values[i], uint64(v))
 		}
 
 		verified, err := array.valid()
@@ -424,14 +460,17 @@ func TestSetRandomValue(t *testing.T) {
 			copy(values[k+1:], values[k:])
 			values[k] = v
 
-			err := array.Insert(uint64(k), v)
+			err := array.Insert(uint64(k), Uint64Value(v))
 			require.NoError(t, err)
 		}
 
 		for k, v := range values {
 			e, err := array.Get(uint64(k))
 			require.NoError(t, err)
-			require.Equal(t, v, e)
+
+			ev, ok := e.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, v, uint64(ev))
 		}
 
 		verified, err := array.valid()
@@ -461,7 +500,7 @@ func TestRemoveRandomElement(t *testing.T) {
 		v := rand.Uint64()
 		values[i] = v
 
-		err := array.Insert(i, v)
+		err := array.Insert(i, Uint64Value(v))
 		require.NoError(t, err)
 	}
 
@@ -473,7 +512,10 @@ func TestRemoveRandomElement(t *testing.T) {
 
 		v, err := array.Remove(uint64(k))
 		require.NoError(t, err)
-		require.Equal(t, values[k], v)
+
+		ev, ok := v.(Uint64Value)
+		require.True(t, ok)
+		require.Equal(t, values[k], uint64(ev))
 
 		copy(values[k:], values[k+1:])
 		values = values[:len(values)-1]
@@ -520,7 +562,7 @@ func TestRandomInsertRemove(t *testing.T) {
 
 			values = append(values, v)
 
-			err := array.Append(v)
+			err := array.Append(Uint64Value(v))
 			require.NoError(t, err)
 
 		case InsertAction:
@@ -535,6 +577,187 @@ func TestRandomInsertRemove(t *testing.T) {
 				values[k] = v
 			}
 
+			err := array.Insert(uint64(k), Uint64Value(v))
+			require.NoError(t, err)
+
+		case RemoveAction:
+			if array.Count() > 0 {
+				k := rand.Intn(int(array.Count()))
+
+				v, err := array.Remove(uint64(k))
+				require.NoError(t, err)
+
+				ev, ok := v.(Uint64Value)
+				require.True(t, ok)
+				require.Equal(t, values[k], uint64(ev))
+
+				copy(values[k:], values[k+1:])
+				values = values[:len(values)-1]
+			}
+		}
+
+		require.Equal(t, array.Count(), uint64(len(values)))
+	}
+
+	for k, v := range values {
+		e, err := array.Get(uint64(k))
+		require.NoError(t, err)
+
+		ev, ok := e.(Uint64Value)
+		require.True(t, ok)
+		require.Equal(t, v, uint64(ev))
+	}
+
+	verified, err := array.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
+}
+
+func TestRandomInsertRemoveUint8(t *testing.T) {
+
+	const (
+		AppendAction = iota
+		InsertAction
+		RemoveAction
+		MaxAction
+	)
+
+	setThreshold(50)
+	defer func() {
+		setThreshold(1024)
+	}()
+
+	const actionCount = 256 * 256
+
+	storage := NewBasicStorage()
+
+	array := NewArray(storage)
+
+	values := make([]uint8, 0, actionCount)
+
+	for i := uint64(0); i < actionCount; i++ {
+
+		nextAction := rand.Intn(MaxAction)
+
+		switch nextAction {
+
+		case AppendAction:
+			v := rand.Intn(math.MaxUint8 + 1)
+
+			values = append(values, uint8(v))
+
+			err := array.Append(Uint8Value(v))
+			require.NoError(t, err)
+
+		case InsertAction:
+			k := rand.Intn(int(array.Count() + 1))
+			v := rand.Intn(math.MaxUint8 + 1)
+
+			if k == int(array.Count()) {
+				values = append(values, uint8(v))
+			} else {
+				values = append(values, 0)
+				copy(values[k+1:], values[k:])
+				values[k] = uint8(v)
+			}
+
+			err := array.Insert(uint64(k), Uint8Value(v))
+			require.NoError(t, err)
+
+		case RemoveAction:
+			if array.Count() > 0 {
+				k := rand.Intn(int(array.Count()))
+
+				v, err := array.Remove(uint64(k))
+				require.NoError(t, err)
+
+				ev, ok := v.(Uint8Value)
+				require.True(t, ok)
+				require.Equal(t, values[k], uint8(ev))
+
+				copy(values[k:], values[k+1:])
+				values = values[:len(values)-1]
+			}
+		}
+
+		require.Equal(t, array.Count(), uint64(len(values)))
+	}
+
+	for k, v := range values {
+		e, err := array.Get(uint64(k))
+		require.NoError(t, err)
+
+		ev, ok := e.(Uint8Value)
+		require.True(t, ok)
+		require.Equal(t, v, uint8(ev))
+	}
+
+	verified, err := array.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
+}
+
+func TestRandomInsertRemoveMixedTypes(t *testing.T) {
+
+	const (
+		AppendAction = iota
+		InsertAction
+		RemoveAction
+		MaxAction
+	)
+
+	const (
+		Uint8Type = iota
+		Uint32Type
+		Uint64Type
+		MaxType
+	)
+
+	setThreshold(50)
+	defer func() {
+		setThreshold(1024)
+	}()
+
+	const actionCount = 256 * 256
+
+	storage := NewBasicStorage()
+
+	array := NewArray(storage)
+
+	values := make([]Item, 0, actionCount)
+
+	for i := uint64(0); i < actionCount; i++ {
+
+		var v Item
+
+		switch rand.Intn(MaxType) {
+		case Uint8Type:
+			n := rand.Intn(math.MaxUint8 + 1)
+			v = Uint8Value(n)
+		case Uint32Type:
+			v = Uint32Value(rand.Uint32())
+		case Uint64Type:
+			v = Uint64Value(rand.Uint64())
+		}
+
+		switch rand.Intn(MaxAction) {
+
+		case AppendAction:
+			values = append(values, v)
+			err := array.Append(v)
+			require.NoError(t, err)
+
+		case InsertAction:
+			k := rand.Intn(int(array.Count() + 1))
+
+			if k == int(array.Count()) {
+				values = append(values, v)
+			} else {
+				values = append(values, nil)
+				copy(values[k+1:], values[k:])
+				values[k] = v
+			}
+
 			err := array.Insert(uint64(k), v)
 			require.NoError(t, err)
 
@@ -544,6 +767,7 @@ func TestRandomInsertRemove(t *testing.T) {
 
 				v, err := array.Remove(uint64(k))
 				require.NoError(t, err)
+
 				require.Equal(t, values[k], v)
 
 				copy(values[k:], values[k+1:])
@@ -552,6 +776,13 @@ func TestRandomInsertRemove(t *testing.T) {
 		}
 
 		require.Equal(t, array.Count(), uint64(len(values)))
+
+		verified, err := array.valid()
+		if !verified {
+			array.Print()
+		}
+		require.NoError(t, err)
+		require.True(t, verified)
 	}
 
 	for k, v := range values {

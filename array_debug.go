@@ -139,11 +139,11 @@ func (array *Array) valid() (bool, error) {
 	if array.root == nil {
 		return true, nil
 	}
-	verified, _, err := array._valid(array.root.Header().id)
+	verified, _, err := array._valid(array.root.Header().id, 0)
 	return verified, err
 }
 
-func (array *Array) _valid(id StorageID) (bool, uint32, error) {
+func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 	slab, found, err := array.storage.Retrieve(id)
 	if err != nil {
 		return false, 0, err
@@ -156,8 +156,20 @@ func (array *Array) _valid(id StorageID) (bool, uint32, error) {
 		if !ok {
 			return false, 0, fmt.Errorf("slab %d is not ArrayDataSlab", id)
 		}
+
 		count := uint32(len(node.elements))
-		t := count == node.header.count && count*8 == node.header.size
+
+		computedSize := uint32(0)
+		for _, e := range node.elements {
+			computedSize += e.ByteSize()
+		}
+
+		_, underflow := slab.IsUnderflow()
+		sizeValid := (level == 0) || (!slab.IsFull() && !underflow)
+
+		t := count == node.header.count &&
+			computedSize == node.header.size &&
+			sizeValid
 		return t, count, nil
 	}
 
@@ -167,12 +179,18 @@ func (array *Array) _valid(id StorageID) (bool, uint32, error) {
 	}
 	sum := uint32(0)
 	for _, h := range node.orderedHeaders {
-		verified, count, err := array._valid(h.id)
+		verified, count, err := array._valid(h.id, level+1)
 		if !verified || err != nil {
 			return false, 0, err
 		}
 		sum += count
 	}
-	t := sum == node.header.count && uint32(len(node.orderedHeaders)*headerSize) == node.header.size
+
+	_, underflow := slab.IsUnderflow()
+	sizeValid := (level == 0) || (!slab.IsFull() && !underflow)
+
+	t := sum == node.header.count &&
+		uint32(len(node.orderedHeaders)*headerSize) == node.header.size &&
+		sizeValid
 	return t, sum, nil
 }

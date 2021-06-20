@@ -10,16 +10,19 @@ const headerSize = 16
 type Slab interface {
 	IsLeaf() bool
 
+	Header() *SlabHeader
+
 	IsFull() bool
 	IsUnderflow() (uint32, bool)
 	CanLendToLeft(size uint32) bool
 	CanLendToRight(size uint32) bool
 
-	Header() *SlabHeader
-
 	Split() (Slab, Slab, error)
 	Merge(Slab) error
-	Rebalance(Slab) error
+	// LendToRight rebalances nodes by moving elements from left to right
+	LendToRight(Slab) error
+	// BorrowFromRight rebalances nodes by moving elements from right to left
+	BorrowFromRight(Slab) error
 }
 
 type Item interface {
@@ -195,13 +198,13 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 	// This computes the ceil of split keep the first part with more members (optimized for append operations)
 	size := a.header.size
 	d := float64(size) / float64(2)
-	breakPoint := uint32(math.Ceil(d))
+	midPoint := uint32(math.Ceil(d))
 
 	rightSlabStartIndex := 0
 	leftSlabSize := uint32(0)
 	for i, e := range a.elements {
 		leftSlabSize += e.ByteSize()
-		if leftSlabSize >= breakPoint {
+		if leftSlabSize >= midPoint {
 			rightSlabStartIndex = i + 1
 			break
 		}
@@ -231,89 +234,26 @@ func (a *ArrayDataSlab) Merge(slab Slab) error {
 	return nil
 }
 
-func (a *ArrayDataSlab) Rebalance(slab Slab) error {
+// LendToRight rebalances nodes by moving elements from left to right
+func (a *ArrayDataSlab) LendToRight(slab Slab) error {
+
 	b := slab.(*ArrayDataSlab)
 
 	count := a.header.count + b.header.count
 	size := a.header.size + b.header.size
 
-	breakPoint := uint32(math.Ceil(float64(size) / 2))
+	midPoint := uint32(math.Ceil(float64(size) / 2))
 
-	if a.header.size <= breakPoint {
-		// shift elements from right to left
+	leftSlabCount := a.header.count
+	leftSlabSize := a.header.size
 
-		leftSlabCount := uint32(len(a.elements))
-		leftSlabSize := a.header.size
-
-		for _, e := range b.elements {
-			leftSlabSize += e.ByteSize()
-			leftSlabCount++
-
-			if leftSlabSize >= breakPoint {
-				break
-			}
-		}
-
-		if size-leftSlabSize < uint32(minThreshold) {
-			i := leftSlabCount - a.header.count
-			for i > 0 {
-				leftSlabSize -= b.elements[i-1].ByteSize()
-				leftSlabCount--
-				i--
-
-				if leftSlabSize >= uint32(minThreshold) && size-leftSlabSize >= uint32(minThreshold) {
-					break
-				}
-			}
-		}
-
-		rightStartIndex := leftSlabCount - a.header.count
-
-		if leftSlabCount == a.header.count {
-			panic(fmt.Sprintf("computed left slab %v remains unchanged after rebalancing", *a.header))
-		}
-
-		// Update left slab elements
-		a.elements = append(a.elements, b.elements[:rightStartIndex]...)
-
-		// Update right slab elements
-		b.elements = b.elements[rightStartIndex:]
-
-		// Update left slab header
-		a.header.size = leftSlabSize
-		a.header.count = leftSlabCount
-
-		// Update right slab header
-		b.header.size = size - leftSlabSize
-		b.header.count = count - leftSlabCount
-
-		return nil
-	}
-
-	// shift elements from left to right
-
-	leftSlabCount := uint32(0)
-	leftSlabSize := uint32(0)
-
-	for _, e := range a.elements {
-		leftSlabSize += e.ByteSize()
-		leftSlabCount++
-		if leftSlabSize >= breakPoint {
+	// Left node size is as close to midPoint as possible while right node size >= minThreshold
+	for i := len(a.elements) - 1; i >= 0; i-- {
+		if leftSlabSize-a.elements[i].ByteSize() < midPoint && size-leftSlabSize >= uint32(minThreshold) {
 			break
 		}
-	}
-
-	if size-leftSlabSize < uint32(minThreshold) {
-		i := leftSlabCount
-		for i > 0 {
-			leftSlabSize -= a.elements[i-1].ByteSize()
-			leftSlabCount--
-			i--
-
-			if leftSlabSize >= uint32(minThreshold) && size-leftSlabSize >= uint32(minThreshold) {
-				break
-			}
-		}
+		leftSlabSize -= a.elements[i].ByteSize()
+		leftSlabCount--
 	}
 
 	if leftSlabCount == a.header.count {
@@ -329,6 +269,54 @@ func (a *ArrayDataSlab) Rebalance(slab Slab) error {
 
 	// Update left slab elements
 	a.elements = a.elements[:leftSlabCount]
+
+	// Update left slab header
+	a.header.size = leftSlabSize
+	a.header.count = leftSlabCount
+
+	// Update right slab header
+	b.header.size = size - leftSlabSize
+	b.header.count = count - leftSlabCount
+
+	return nil
+}
+
+// BorrowFromRight rebalances nodes by moving elements from right to left
+func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
+	b := slab.(*ArrayDataSlab)
+
+	count := a.header.count + b.header.count
+	size := a.header.size + b.header.size
+
+	midPoint := uint32(math.Ceil(float64(size) / 2))
+
+	leftSlabCount := uint32(len(a.elements))
+	leftSlabSize := a.header.size
+
+	for _, e := range b.elements {
+		if leftSlabSize+e.ByteSize() > midPoint {
+			if size-leftSlabSize-e.ByteSize() >= uint32(minThreshold) {
+				// Include this element in left node
+				leftSlabSize += e.ByteSize()
+				leftSlabCount++
+			}
+			break
+		}
+		leftSlabSize += e.ByteSize()
+		leftSlabCount++
+	}
+
+	if leftSlabCount == a.header.count {
+		panic(fmt.Sprintf("computed left slab %v remains unchanged after rebalancing", *a.header))
+	}
+
+	rightStartIndex := leftSlabCount - a.header.count
+
+	// Update left slab elements
+	a.elements = append(a.elements, b.elements[:rightStartIndex]...)
+
+	// Update right slab elements
+	b.elements = b.elements[rightStartIndex:]
 
 	// Update left slab header
 	a.header.size = leftSlabSize
@@ -567,60 +555,78 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 		}
 	}
 
-	// Node is the leftmost node in subtree.
+	/*
+					| no left sib           | left sib can't lend  | left sib can lend
+		-------------------------------------------------------------------------------------------
+		no right sib            | panic                 | merge with left      | rebalance with left
+		right sib can't lend    | merge with right      | merge with smaller   | rebalance with left
+		right sib can lend      | rebalance with right  | rebalance with right | rebalance with bigger
+	*/
+
+	leftCanGive := leftSib != nil && leftSib.CanLendToRight(underflowSize)
+	rightCanGive := rightSib != nil && rightSib.CanLendToLeft(underflowSize)
+
+	// Node can rebalance elements with at least one sibling
+	// Node header doesn't need to be modified for rebalancing.
+	if leftCanGive || rightCanGive {
+
+		if !leftCanGive {
+
+			// Rebalance with right sib
+			err = node.BorrowFromRight(rightSib)
+
+		} else if !rightCanGive {
+
+			// Rebalance with left sib
+			err = leftSib.LendToRight(node)
+
+		} else {
+			// Rebalance with bigger sib
+			if leftSib.Header().size > rightSib.Header().size {
+				err = leftSib.LendToRight(node)
+			} else {
+				err = node.BorrowFromRight(rightSib)
+			}
+		}
+
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	}
+
+	// Node can't rebalance with any sibling.  It must merge with one sibling.
+	// Node header needs to be modified for merging.
 	if leftSib == nil {
-		if rightSib.CanLendToLeft(underflowSize) {
-			// Rebalance between node and rightSib
-			err := node.Rebalance(rightSib)
-			if err != nil {
-				return nil, err
-			}
 
-			// No need to update MetaDataSlab.
-		} else {
-			// Merge node with rightSib
-			err := node.Merge(rightSib)
-			if err != nil {
-				return nil, err
-			}
-
-			// Update MetaDataSlab info
-			copy(a.orderedHeaders[i+1:], a.orderedHeaders[i+2:])
-			a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
-
-			a.header.size -= headerSize
+		// Merge with right
+		err := node.Merge(rightSib)
+		if err != nil {
+			return nil, err
 		}
-		return v, nil
-	}
 
-	// Node is the rightmost node in subtree.
-	if rightSib == nil {
-		if leftSib.CanLendToRight(underflowSize) {
-			// Rebalance between node and leftSib
-			err := leftSib.Rebalance(node)
-			if err != nil {
-				return nil, err
-			}
+		// Update MetaDataSlab info
+		copy(a.orderedHeaders[i+1:], a.orderedHeaders[i+2:])
+		a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
 
-			// No need to update MetaDataSlab.
-		} else {
-			// Merge node with leftSib
-			err := leftSib.Merge(node)
-			if err != nil {
-				return nil, err
-			}
+		a.header.size -= headerSize
 
-			// Update MetaDataSlab info
-			copy(a.orderedHeaders[i:], a.orderedHeaders[i+1:])
-			a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
+	} else if rightSib == nil {
 
-			a.header.size -= headerSize
+		// Merge with left
+		err := leftSib.Merge(node)
+		if err != nil {
+			return nil, err
 		}
-		return v, nil
-	}
 
-	// If both left and right siblings are underflow, merge with smaller sib.
-	if !leftSib.CanLendToRight(underflowSize) && !rightSib.CanLendToLeft(underflowSize) {
+		// Update MetaDataSlab info
+		copy(a.orderedHeaders[i:], a.orderedHeaders[i+1:])
+		a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
+
+		a.header.size -= headerSize
+
+	} else {
+		// Merge with smaller sib
 		if leftSib.Header().size < rightSib.Header().size {
 			err := leftSib.Merge(node)
 			if err != nil {
@@ -642,38 +648,6 @@ func (a *ArrayMetaDataSlab) Remove(index uint64, left StorageID, right StorageID
 		}
 
 		a.header.size -= headerSize
-		return v, nil
-	}
-
-	// Only right sib can be rebalanced with node.
-	if !leftSib.CanLendToRight(underflowSize) {
-		err := node.Rebalance(rightSib)
-		if err != nil {
-			return nil, err
-		}
-		return v, nil
-	}
-
-	// Only left sib can be rebalanced with node.
-	if !rightSib.CanLendToLeft(underflowSize) {
-		err := leftSib.Rebalance(node)
-		if err != nil {
-			return nil, err
-		}
-		return v, nil
-	}
-
-	// Both left and right sibs can be rebalanced with node, rebalance with bigger sib.
-	if leftSib.Header().size > rightSib.Header().size {
-		err := leftSib.Rebalance(node)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		err := node.Rebalance(rightSib)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return v, nil
@@ -744,34 +718,55 @@ func (a *ArrayMetaDataSlab) Split() (Slab, Slab, error) {
 	return a, right, nil
 }
 
-func (a *ArrayMetaDataSlab) Rebalance(slab Slab) error {
+func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 	b := slab.(*ArrayMetaDataSlab)
 
 	headerLen := len(a.orderedHeaders) + len(b.orderedHeaders)
 	leftSlabHeaderLen := headerLen / 2
 	rightSlabHeaderLen := headerLen - leftSlabHeaderLen
 
-	if len(a.orderedHeaders) > leftSlabHeaderLen {
-		// Prepend some headers to right (b) from left (a)
+	// Prepend some headers to right (b) from left (a)
 
-		// Update slab b elements
-		rElements := make([]*SlabHeader, rightSlabHeaderLen)
-		n := copy(rElements, a.orderedHeaders[leftSlabHeaderLen:])
-		copy(rElements[n:], b.orderedHeaders)
-		b.orderedHeaders = rElements
+	// Update slab b elements
+	rElements := make([]*SlabHeader, rightSlabHeaderLen)
+	n := copy(rElements, a.orderedHeaders[leftSlabHeaderLen:])
+	copy(rElements[n:], b.orderedHeaders)
+	b.orderedHeaders = rElements
 
-		// Update slab a elements
-		a.orderedHeaders = a.orderedHeaders[:leftSlabHeaderLen]
+	// Update slab a elements
+	a.orderedHeaders = a.orderedHeaders[:leftSlabHeaderLen]
 
-	} else {
-		// Append some headers to left (a) from right (b)
-
-		// Update slab a elements
-		a.orderedHeaders = append(a.orderedHeaders, b.orderedHeaders[:leftSlabHeaderLen-len(a.orderedHeaders)]...)
-
-		// Update slab b elements
-		b.orderedHeaders = b.orderedHeaders[len(b.orderedHeaders)-rightSlabHeaderLen:]
+	// Update slab a header
+	a.header.count = 0
+	for i := 0; i < len(a.orderedHeaders); i++ {
+		a.header.count += a.orderedHeaders[i].count
 	}
+	a.header.size = uint32(leftSlabHeaderLen) * headerSize
+
+	// Update slab b header
+	b.header.count = 0
+	for i := 0; i < len(b.orderedHeaders); i++ {
+		b.header.count += b.orderedHeaders[i].count
+	}
+	b.header.size = uint32(rightSlabHeaderLen) * headerSize
+
+	return nil
+}
+
+func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab) error {
+	b := slab.(*ArrayMetaDataSlab)
+
+	headerLen := len(a.orderedHeaders) + len(b.orderedHeaders)
+	leftSlabHeaderLen := headerLen / 2
+	rightSlabHeaderLen := headerLen - leftSlabHeaderLen
+
+	// Append some headers to left (a) from right (b)
+
+	// Update slab a elements
+	a.orderedHeaders = append(a.orderedHeaders, b.orderedHeaders[:leftSlabHeaderLen-len(a.orderedHeaders)]...)
+
+	// Update slab b elements
+	b.orderedHeaders = b.orderedHeaders[len(b.orderedHeaders)-rightSlabHeaderLen:]
 
 	// Update slab a header
 	a.header.count = 0

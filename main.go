@@ -27,6 +27,12 @@ func (v Uint8Value) ByteSize() uint32 {
 	return 1
 }
 
+type Uint16Value uint8
+
+func (v Uint16Value) ByteSize() uint32 {
+	return 2
+}
+
 type Uint32Value uint32
 
 func (v Uint32Value) ByteSize() uint32 {

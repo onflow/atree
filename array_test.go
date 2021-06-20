@@ -44,6 +44,37 @@ func TestAppendAndGet(t *testing.T) {
 	require.True(t, verified)
 }
 
+func TestSetAndGet(t *testing.T) {
+
+	const arraySize = 256 * 256
+
+	storage := NewBasicStorage()
+
+	array := NewArray(storage)
+
+	for i := uint64(0); i < arraySize; i++ {
+		err := array.Append(Uint64Value(i))
+		require.NoError(t, err)
+	}
+
+	for i := uint64(0); i < arraySize; i++ {
+		err := array.Set(i, Uint64Value(i*10))
+		require.NoError(t, err)
+	}
+
+	for i := uint64(0); i < arraySize; i++ {
+		e, err := array.Get(i)
+		require.NoError(t, err)
+
+		v, ok := e.(Uint64Value)
+		require.True(t, ok)
+		require.Equal(t, i*10, uint64(v))
+	}
+
+	verified, err := array.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
+}
 func TestInsertAndGet(t *testing.T) {
 	setThreshold(50)
 	defer func() {
@@ -379,6 +410,56 @@ func TestSetRandomValue(t *testing.T) {
 		setThreshold(1024)
 	}()
 
+	const arraySize = 256 * 256
+
+	storage := NewBasicStorage()
+
+	array := NewArray(storage)
+
+	values := make([]uint64, arraySize)
+
+	for i := uint64(0); i < arraySize; i++ {
+		k := rand.Intn(int(i) + 1)
+		v := rand.Uint64()
+
+		copy(values[k+1:], values[k:])
+		values[k] = v
+
+		err := array.Insert(uint64(k), Uint64Value(v))
+		require.NoError(t, err)
+	}
+
+	for i := uint64(0); i < arraySize; i++ {
+		k := rand.Intn(arraySize)
+		v := rand.Uint64()
+
+		values[k] = v
+
+		err := array.Set(uint64(k), Uint64Value(v))
+		require.NoError(t, err)
+	}
+
+	for k, v := range values {
+		e, err := array.Get(uint64(k))
+		require.NoError(t, err)
+
+		ev, ok := e.(Uint64Value)
+		require.True(t, ok)
+		require.Equal(t, v, uint64(ev))
+	}
+
+	verified, err := array.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
+}
+
+func TestInsertRandomValue(t *testing.T) {
+
+	setThreshold(50)
+	defer func() {
+		setThreshold(1024)
+	}()
+
 	t.Run("insert-first", func(t *testing.T) {
 
 		const arraySize = 256 * 256
@@ -529,10 +610,11 @@ func TestRemoveRandomElement(t *testing.T) {
 	require.True(t, verified)
 }
 
-func TestRandomInsertRemove(t *testing.T) {
+func TestRandomAppendSetInsertRemove(t *testing.T) {
 
 	const (
 		AppendAction = iota
+		SetAction
 		InsertAction
 		RemoveAction
 		MaxAction
@@ -563,6 +645,18 @@ func TestRandomInsertRemove(t *testing.T) {
 			values = append(values, v)
 
 			err := array.Append(Uint64Value(v))
+			require.NoError(t, err)
+
+		case SetAction:
+			if array.Count() == 0 {
+				continue
+			}
+			k := rand.Intn(int(array.Count()))
+			v := rand.Uint64()
+
+			values[k] = v
+
+			err := array.Set(uint64(k), Uint64Value(v))
 			require.NoError(t, err)
 
 		case InsertAction:
@@ -613,10 +707,11 @@ func TestRandomInsertRemove(t *testing.T) {
 	require.True(t, verified)
 }
 
-func TestRandomInsertRemoveUint8(t *testing.T) {
+func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 
 	const (
 		AppendAction = iota
+		SetAction
 		InsertAction
 		RemoveAction
 		MaxAction
@@ -647,6 +742,18 @@ func TestRandomInsertRemoveUint8(t *testing.T) {
 			values = append(values, uint8(v))
 
 			err := array.Append(Uint8Value(v))
+			require.NoError(t, err)
+
+		case SetAction:
+			if array.Count() == 0 {
+				continue
+			}
+			k := rand.Intn(int(array.Count()))
+			v := rand.Intn(math.MaxUint8 + 1)
+
+			values[k] = uint8(v)
+
+			err := array.Set(uint64(k), Uint8Value(v))
 			require.NoError(t, err)
 
 		case InsertAction:
@@ -697,10 +804,11 @@ func TestRandomInsertRemoveUint8(t *testing.T) {
 	require.True(t, verified)
 }
 
-func TestRandomInsertRemoveMixedTypes(t *testing.T) {
+func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	const (
 		AppendAction = iota
+		SetAction
 		InsertAction
 		RemoveAction
 		MaxAction
@@ -708,6 +816,7 @@ func TestRandomInsertRemoveMixedTypes(t *testing.T) {
 
 	const (
 		Uint8Type = iota
+		Uint16Type
 		Uint32Type
 		Uint64Type
 		MaxType
@@ -734,6 +843,9 @@ func TestRandomInsertRemoveMixedTypes(t *testing.T) {
 		case Uint8Type:
 			n := rand.Intn(math.MaxUint8 + 1)
 			v = Uint8Value(n)
+		case Uint16Type:
+			n := rand.Intn(math.MaxUint16 + 1)
+			v = Uint16Value(n)
 		case Uint32Type:
 			v = Uint32Value(rand.Uint32())
 		case Uint64Type:
@@ -745,6 +857,17 @@ func TestRandomInsertRemoveMixedTypes(t *testing.T) {
 		case AppendAction:
 			values = append(values, v)
 			err := array.Append(v)
+			require.NoError(t, err)
+
+		case SetAction:
+			if array.Count() == 0 {
+				continue
+			}
+			k := rand.Intn(int(array.Count()))
+
+			values[k] = v
+
+			err := array.Set(uint64(k), v)
 			require.NoError(t, err)
 
 		case InsertAction:

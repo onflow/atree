@@ -3,19 +3,15 @@ package main
 import (
 	"fmt"
 	"math"
+	"strings"
 )
 
 const headerSize = 16
 
 type Slab interface {
-	IsLeaf() bool
+	Storable
 
 	Header() *SlabHeader
-
-	IsFull() bool
-	IsUnderflow() (uint32, bool)
-	CanLendToLeft(size uint32) bool
-	CanLendToRight(size uint32) bool
 
 	Split() (Slab, Slab, error)
 	Merge(Slab) error
@@ -25,53 +21,56 @@ type Slab interface {
 	BorrowFromRight(Slab) error
 }
 
-type Item interface {
-	ByteSize() uint32
-}
-
 type SlabHeader struct {
 	id    StorageID // id is used to retrieve slab from storage
 	size  uint32    // size is used to split and merge; leaf: size of all element; internal: size of all headers
 	count uint32    // count is used to lookup element; leaf: number of elements; internal: number of elements in all its headers
 }
 
-// ArrayDataSlab is leaf node, implementing ArrayNode
+// ArrayDataSlab is leaf node, implementing Slab, ArrayNode
 // TODO: clarify if design doc wants leaf to hold user data in fixed size array + overflow leaf
 // (cache friendly) or in a variable size slice (not cache friendly).
 type ArrayDataSlab struct {
 	prev     StorageID
 	next     StorageID
 	header   *SlabHeader
-	storage  Storage
-	elements []Item
+	storage  SlabStorage
+	elements []Storable
 }
 
-// ArrayMetaDataSlab is internal node, implementing ArrayNode
+// ArrayMetaDataSlab is internal node, implementing Slab, ArrayNode
 type ArrayMetaDataSlab struct {
-	storage        Storage
+	storage        SlabStorage
 	header         *SlabHeader
 	orderedHeaders []*SlabHeader
 }
 
 type ArrayNode interface {
-	Get(index uint64) (Item, error)
-	Set(index uint64, v Item) error
-	Insert(index uint64, v Item) error
-	Remove(index uint64) (Item, error)
+	Get(index uint64) (Storable, error)
+	Set(index uint64, v Storable) error
+	Insert(index uint64, v Storable) error
+	Remove(index uint64) (Storable, error)
 
-	ShallowCloneWithNewID(storage Storage) ArrayNode
+	ShallowCloneWithNewID(storage SlabStorage) ArrayNode
+
+	IsLeaf() bool
+
+	IsFull() bool
+	IsUnderflow() (uint32, bool)
+	CanLendToLeft(size uint32) bool
+	CanLendToRight(size uint32) bool
 
 	Slab
 }
 
 // Array is tree
 type Array struct {
-	storage           Storage
+	storage           SlabStorage
 	root              ArrayNode
 	dataSlabStorageID StorageID
 }
 
-func newArrayDataSlab(storage Storage) *ArrayDataSlab {
+func newArrayDataSlab(storage SlabStorage) *ArrayDataSlab {
 	slab := &ArrayDataSlab{
 		storage: storage,
 		header: &SlabHeader{
@@ -84,7 +83,7 @@ func newArrayDataSlab(storage Storage) *ArrayDataSlab {
 	return slab
 }
 
-func (a *ArrayDataSlab) ShallowCloneWithNewID(storage Storage) ArrayNode {
+func (a *ArrayDataSlab) ShallowCloneWithNewID(storage SlabStorage) ArrayNode {
 	copied := newArrayDataSlab(storage)
 	copied.header.size = a.header.size
 	copied.header.count = a.header.count
@@ -94,14 +93,14 @@ func (a *ArrayDataSlab) ShallowCloneWithNewID(storage Storage) ArrayNode {
 	return copied
 }
 
-func (a *ArrayDataSlab) Get(index uint64) (Item, error) {
+func (a *ArrayDataSlab) Get(index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
 		return nil, fmt.Errorf("out of bounds")
 	}
 	return a.elements[index], nil
 }
 
-func (a *ArrayDataSlab) Set(index uint64, v Item) error {
+func (a *ArrayDataSlab) Set(index uint64, v Storable) error {
 	if index >= uint64(len(a.elements)) {
 		return fmt.Errorf("out of bounds")
 	}
@@ -111,7 +110,7 @@ func (a *ArrayDataSlab) Set(index uint64, v Item) error {
 	return nil
 }
 
-func (a *ArrayDataSlab) Insert(index uint64, v Item) error {
+func (a *ArrayDataSlab) Insert(index uint64, v Storable) error {
 	if index == uint64(len(a.elements)) {
 		a.elements = append(a.elements, v)
 	} else {
@@ -125,7 +124,7 @@ func (a *ArrayDataSlab) Insert(index uint64, v Item) error {
 	return nil
 }
 
-func (a *ArrayDataSlab) Remove(index uint64) (Item, error) {
+func (a *ArrayDataSlab) Remove(index uint64) (Storable, error) {
 	v := a.elements[index]
 
 	switch index {
@@ -141,71 +140,6 @@ func (a *ArrayDataSlab) Remove(index uint64) (Item, error) {
 	a.header.count--
 	a.header.size -= v.ByteSize()
 	return v, nil
-}
-
-func (a *ArrayDataSlab) Header() *SlabHeader {
-	return a.header
-}
-
-func (a *ArrayDataSlab) IsFull() bool {
-	return a.header.size > uint32(maxThreshold)
-}
-
-func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
-	if uint32(minThreshold) > a.header.size {
-		return uint32(minThreshold) - a.header.size, true
-	}
-	return 0, false
-}
-
-func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
-	if len(a.elements) == 0 {
-		panic(fmt.Sprintf("empty data slab %d", a.header.id))
-	}
-	if len(a.elements) < 2 {
-		return false
-	}
-	if a.header.size-size < uint32(minThreshold) {
-		return false
-	}
-	lendSize := uint32(0)
-	for i := 0; i < len(a.elements); i++ {
-		lendSize += a.elements[i].ByteSize()
-		if a.header.size-lendSize < uint32(minThreshold) {
-			return false
-		}
-		if lendSize >= size {
-			return true
-		}
-	}
-	return false
-}
-
-func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
-	if len(a.elements) == 0 {
-		panic(fmt.Sprintf("empty data slab %d", a.header.id))
-	}
-	if len(a.elements) < 2 {
-		return false
-	}
-	if a.header.size-size < uint32(minThreshold) {
-		return false
-	}
-	lendSize := uint32(0)
-	for i := len(a.elements) - 1; i >= 0; i-- {
-		lendSize += a.elements[i].ByteSize()
-		if a.header.size-lendSize < uint32(minThreshold) {
-			return false
-		}
-		if lendSize >= size {
-			return true
-		}
-	}
-	return false
-}
-
-func (a *ArrayDataSlab) IsLeaf() bool {
-	return true
 }
 
 func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
@@ -230,7 +164,7 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 	}
 
 	rightSlab := newArrayDataSlab(a.storage)
-	rightSlab.elements = make([]Item, len(a.elements)-rightSlabStartIndex)
+	rightSlab.elements = make([]Storable, len(a.elements)-rightSlabStartIndex)
 	copy(rightSlab.elements, a.elements[rightSlabStartIndex:])
 	rightSlab.header.size = a.header.size - leftSlabSize
 	rightSlab.header.count = uint32(len(rightSlab.elements))
@@ -280,7 +214,7 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 	}
 
 	// Update right slab elements
-	elements := make([]Item, count-leftSlabCount)
+	elements := make([]Storable, count-leftSlabCount)
 	n := copy(elements, a.elements[leftSlabCount:])
 	copy(elements[n:], b.elements)
 
@@ -348,7 +282,102 @@ func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 	return nil
 }
 
-func newArrayMetaDataSlab(storage Storage) *ArrayMetaDataSlab {
+func (a *ArrayDataSlab) IsFull() bool {
+	return a.header.size > uint32(maxThreshold)
+}
+
+func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
+	if uint32(minThreshold) > a.header.size {
+		return uint32(minThreshold) - a.header.size, true
+	}
+	return 0, false
+}
+
+func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
+	if len(a.elements) == 0 {
+		panic(fmt.Sprintf("empty data slab %d", a.header.id))
+	}
+	if len(a.elements) < 2 {
+		return false
+	}
+	if a.header.size-size < uint32(minThreshold) {
+		return false
+	}
+	lendSize := uint32(0)
+	for i := 0; i < len(a.elements); i++ {
+		lendSize += a.elements[i].ByteSize()
+		if a.header.size-lendSize < uint32(minThreshold) {
+			return false
+		}
+		if lendSize >= size {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
+	if len(a.elements) == 0 {
+		panic(fmt.Sprintf("empty data slab %d", a.header.id))
+	}
+	if len(a.elements) < 2 {
+		return false
+	}
+	if a.header.size-size < uint32(minThreshold) {
+		return false
+	}
+	lendSize := uint32(0)
+	for i := len(a.elements) - 1; i >= 0; i-- {
+		lendSize += a.elements[i].ByteSize()
+		if a.header.size-lendSize < uint32(minThreshold) {
+			return false
+		}
+		if lendSize >= size {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *ArrayDataSlab) Header() *SlabHeader {
+	return a.header
+}
+
+func (a *ArrayDataSlab) IsLeaf() bool {
+	return true
+}
+
+func (a *ArrayDataSlab) ID() StorageID {
+	return a.header.id
+}
+
+func (a *ArrayDataSlab) ByteSize() uint32 {
+	return a.header.size
+}
+
+func (a *ArrayDataSlab) String() string {
+	var elements []Storable
+	if len(a.elements) <= 6 {
+		elements = a.elements
+	} else {
+		elements = append(elements, a.elements[:3]...)
+		elements = append(elements, a.elements[len(a.elements)-3:]...)
+	}
+
+	var elemsStr []string
+	for _, e := range elements {
+		elemsStr = append(elemsStr, e.String())
+	}
+
+	if len(a.elements) > 6 {
+		elemsStr = append(elemsStr, "")
+		copy(elemsStr[4:], elemsStr[3:])
+		elemsStr[3] = "..."
+	}
+	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
+}
+
+func newArrayMetaDataSlab(storage SlabStorage) *ArrayMetaDataSlab {
 	slab := &ArrayMetaDataSlab{
 		storage: storage,
 		header: &SlabHeader{
@@ -361,7 +390,7 @@ func newArrayMetaDataSlab(storage Storage) *ArrayMetaDataSlab {
 	return slab
 }
 
-func (a *ArrayMetaDataSlab) ShallowCloneWithNewID(storage Storage) ArrayNode {
+func (a *ArrayMetaDataSlab) ShallowCloneWithNewID(storage SlabStorage) ArrayNode {
 	copied := newArrayMetaDataSlab(storage)
 	copied.header.size = a.header.size
 	copied.header.count = a.header.count
@@ -369,7 +398,7 @@ func (a *ArrayMetaDataSlab) ShallowCloneWithNewID(storage Storage) ArrayNode {
 	return copied
 }
 
-func (a *ArrayMetaDataSlab) Get(index uint64) (Item, error) {
+func (a *ArrayMetaDataSlab) Get(index uint64) (Storable, error) {
 
 	if index >= uint64(a.header.count) {
 		return nil, fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
@@ -392,7 +421,7 @@ func (a *ArrayMetaDataSlab) Get(index uint64) (Item, error) {
 	return node.Get(index)
 }
 
-func (a *ArrayMetaDataSlab) Set(index uint64, v Item) error {
+func (a *ArrayMetaDataSlab) Set(index uint64, v Storable) error {
 
 	if index >= uint64(a.header.count) {
 		return fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
@@ -433,7 +462,7 @@ func (a *ArrayMetaDataSlab) Set(index uint64, v Item) error {
 // Insert inserts v into correct ArrayDataSlab.
 // index must be >=0 and <= a.header.count.
 // If index == a.header.count, Insert appends v to the end of underlying data slab.
-func (a *ArrayMetaDataSlab) Insert(index uint64, v Item) error {
+func (a *ArrayMetaDataSlab) Insert(index uint64, v Storable) error {
 	if index > uint64(a.header.count) {
 		return fmt.Errorf("insert at index %d out of bounds", index)
 	}
@@ -484,7 +513,7 @@ func (a *ArrayMetaDataSlab) Insert(index uint64, v Item) error {
 	return nil
 }
 
-func (a *ArrayMetaDataSlab) Remove(index uint64) (Item, error) {
+func (a *ArrayMetaDataSlab) Remove(index uint64) (Storable, error) {
 
 	if index > uint64(a.header.count) {
 		return nil, fmt.Errorf("remove at index %d out of bounds", index)
@@ -662,35 +691,6 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildNode(node ArrayNode, nodeHeader
 	return nil
 }
 
-func (a *ArrayMetaDataSlab) Header() *SlabHeader {
-	return a.header
-}
-
-func (a ArrayMetaDataSlab) IsFull() bool {
-	return a.header.size > uint32(maxThreshold)
-}
-
-func (a ArrayMetaDataSlab) IsUnderflow() (uint32, bool) {
-	if uint32(minThreshold) > a.header.size {
-		return uint32(minThreshold) - a.header.size, true
-	}
-	return 0, false
-}
-
-func (a *ArrayMetaDataSlab) CanLendToLeft(size uint32) bool {
-	n := uint32(math.Ceil(float64(size) / headerSize))
-	return a.header.size-headerSize*n > uint32(minThreshold)
-}
-
-func (a *ArrayMetaDataSlab) CanLendToRight(size uint32) bool {
-	n := uint32(math.Ceil(float64(size) / headerSize))
-	return a.header.size-headerSize*n > uint32(minThreshold)
-}
-
-func (a ArrayMetaDataSlab) IsLeaf() bool {
-	return false
-}
-
 func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
 	meta2 := slab.(*ArrayMetaDataSlab)
 	a.orderedHeaders = append(a.orderedHeaders, meta2.orderedHeaders...)
@@ -794,29 +794,103 @@ func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab) error {
 	return nil
 }
 
-func NewArray(storage Storage) *Array {
+func (a ArrayMetaDataSlab) IsFull() bool {
+	return a.header.size > uint32(maxThreshold)
+}
+
+func (a ArrayMetaDataSlab) IsUnderflow() (uint32, bool) {
+	if uint32(minThreshold) > a.header.size {
+		return uint32(minThreshold) - a.header.size, true
+	}
+	return 0, false
+}
+
+func (a *ArrayMetaDataSlab) CanLendToLeft(size uint32) bool {
+	n := uint32(math.Ceil(float64(size) / headerSize))
+	return a.header.size-headerSize*n > uint32(minThreshold)
+}
+
+func (a *ArrayMetaDataSlab) CanLendToRight(size uint32) bool {
+	n := uint32(math.Ceil(float64(size) / headerSize))
+	return a.header.size-headerSize*n > uint32(minThreshold)
+}
+
+func (a ArrayMetaDataSlab) IsLeaf() bool {
+	return false
+}
+
+func (a *ArrayMetaDataSlab) Header() *SlabHeader {
+	return a.header
+}
+
+func (a *ArrayMetaDataSlab) ByteSize() uint32 {
+	return a.header.size
+}
+
+func (a *ArrayMetaDataSlab) ID() StorageID {
+	return a.header.id
+}
+
+func (a *ArrayMetaDataSlab) String() string {
+	var elemsStr []string
+	for _, h := range a.orderedHeaders {
+		node, err := getArrayNodeFromStorageID(a.storage, h.id)
+		if err != nil {
+			return err.Error()
+		}
+		elemsStr = append(elemsStr, node.String())
+	}
+	return strings.Join(elemsStr, " ")
+}
+
+func NewArray(storage SlabStorage) *Array {
 	return &Array{storage: storage}
 }
 
-func (array *Array) Get(i uint64) (Item, error) {
+func (array *Array) Get(i uint64) (Storable, error) {
 	if array.root == nil {
 		return nil, fmt.Errorf("out of bounds")
 	}
-	return array.root.Get(i)
+	v, err := array.root.Get(i)
+	if err != nil {
+		return nil, err
+	}
+	// TODO: optimize this
+	if idValue, ok := v.(StorageIDValue); ok {
+		id := StorageID(idValue)
+		if id == StorageIDUndefined {
+			return nil, fmt.Errorf("invalid storage id")
+		}
+		slab, found, err := array.storage.Retrieve(id)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, fmt.Errorf("slab %d not found", id)
+		}
+		return slab, nil
+	}
+	return v, nil
 }
 
-func (array *Array) Set(index uint64, v Item) error {
+func (array *Array) Set(index uint64, v Storable) error {
 	if array.root == nil {
 		return fmt.Errorf("out of bounds")
+	}
+	if v.ByteSize() > uint32(maxInlineElementSize) {
+		v = StorageIDValue(v.ID())
 	}
 	return array.root.Set(index, v)
 }
 
-func (array *Array) Append(v Item) error {
+func (array *Array) Append(v Storable) error {
 	return array.Insert(array.Count(), v)
 }
 
-func (array *Array) Insert(index uint64, v Item) error {
+func (array *Array) Insert(index uint64, v Storable) error {
+	if v.ByteSize() > uint32(maxInlineElementSize) {
+		v = StorageIDValue(v.ID())
+	}
 	if array.root == nil {
 		if index != 0 {
 			return fmt.Errorf("out of bounds")
@@ -869,7 +943,7 @@ func (array *Array) Insert(index uint64, v Item) error {
 	return nil
 }
 
-func (array *Array) Remove(index uint64) (Item, error) {
+func (array *Array) Remove(index uint64) (Storable, error) {
 	if array.root == nil {
 		return nil, fmt.Errorf("out of bounds")
 	}
@@ -916,7 +990,7 @@ func (array *Array) Remove(index uint64) (Item, error) {
 	return v, nil
 }
 
-func (array *Array) Iterate(fn func(Item)) error {
+func (array *Array) Iterate(fn func(Storable)) error {
 	id := array.dataSlabStorageID
 
 	for id != StorageIDUndefined {
@@ -940,13 +1014,6 @@ func (array *Array) Iterate(fn func(Item)) error {
 	return nil
 }
 
-func (array *Array) StorageID() StorageID {
-	if array.root == nil {
-		return StorageIDUndefined
-	}
-	return array.root.Header().id
-}
-
 func (array *Array) Count() uint64 {
 	if array.root == nil {
 		return 0
@@ -954,7 +1021,17 @@ func (array *Array) Count() uint64 {
 	return uint64(array.root.Header().count)
 }
 
-func getArrayNodeFromStorageID(storage Storage, id StorageID) (ArrayNode, error) {
+func (array *Array) String() string {
+	if array.root == nil {
+		return "[]"
+	}
+	if array.root.IsLeaf() {
+		return array.root.String()
+	}
+	return fmt.Sprintf("[%s]", array.root.String())
+}
+
+func getArrayNodeFromStorageID(storage SlabStorage, id StorageID) (ArrayNode, error) {
 	if id == StorageIDUndefined {
 		return nil, fmt.Errorf("invalid storage id")
 	}

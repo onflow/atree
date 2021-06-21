@@ -11,30 +11,30 @@ func generateStorageID() StorageID {
 	return StorageID(storageIDCounter)
 }
 
-type Storage interface {
+type SlabStorage interface {
 	Store(StorageID, Slab) error
 	Retrieve(StorageID) (Slab, bool, error)
 	Remove(StorageID)
 }
 
-type BasicStorage struct {
+type BasicSlabStorage struct {
 	slabs map[StorageID]Slab
 }
 
-func NewBasicStorage() *BasicStorage {
-	return &BasicStorage{slabs: make(map[StorageID]Slab)}
+func NewBasicSlabStorage() *BasicSlabStorage {
+	return &BasicSlabStorage{slabs: make(map[StorageID]Slab)}
 }
 
-func (s *BasicStorage) Retrieve(id StorageID) (Slab, bool, error) {
+func (s *BasicSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 	slab, ok := s.slabs[id]
 	return slab, ok, nil
 }
 
-func (s *BasicStorage) Store(id StorageID, slab Slab) error {
+func (s *BasicSlabStorage) Store(id StorageID, slab Slab) error {
 	s.slabs[id] = slab
 	return nil
 }
 
-func (s *BasicStorage) Remove(id StorageID) {
+func (s *BasicSlabStorage) Remove(id StorageID) {
 	delete(s.slabs, id)
 }

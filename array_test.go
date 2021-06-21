@@ -21,7 +21,7 @@ func TestAppendAndGet(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	storage := NewBasicStorage()
+	storage := NewBasicSlabStorage()
 
 	array := NewArray(storage)
 
@@ -48,7 +48,7 @@ func TestSetAndGet(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	storage := NewBasicStorage()
+	storage := NewBasicSlabStorage()
 
 	array := NewArray(storage)
 
@@ -75,6 +75,7 @@ func TestSetAndGet(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, verified)
 }
+
 func TestInsertAndGet(t *testing.T) {
 	setThreshold(50)
 	defer func() {
@@ -85,7 +86,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicStorage()
+		storage := NewBasicSlabStorage()
 
 		array := NewArray(storage)
 
@@ -112,7 +113,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicStorage()
+		storage := NewBasicSlabStorage()
 
 		array := NewArray(storage)
 
@@ -139,7 +140,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicStorage()
+		storage := NewBasicSlabStorage()
 
 		array := NewArray(storage)
 
@@ -177,7 +178,7 @@ func TestRemove(t *testing.T) {
 	t.Run("remove-first", func(t *testing.T) {
 		const arraySize = 256 * 256
 
-		storage := NewBasicStorage()
+		storage := NewBasicSlabStorage()
 
 		array := NewArray(storage)
 
@@ -212,7 +213,7 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicStorage()
+		storage := NewBasicSlabStorage()
 
 		array := NewArray(storage)
 
@@ -247,7 +248,7 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicStorage()
+		storage := NewBasicSlabStorage()
 
 		array := NewArray(storage)
 
@@ -290,7 +291,7 @@ func TestSplit(t *testing.T) {
 	t.Run("leaf node as root", func(t *testing.T) {
 		const arraySize = 50
 
-		storage := NewBasicStorage()
+		storage := NewBasicSlabStorage()
 
 		array := NewArray(storage)
 
@@ -314,7 +315,7 @@ func TestSplit(t *testing.T) {
 
 		const arraySize = 50
 
-		storage := NewBasicStorage()
+		storage := NewBasicSlabStorage()
 
 		array := NewArray(storage)
 
@@ -335,7 +336,9 @@ func TestSplit(t *testing.T) {
 			slab, found, err := storage.Retrieve(id)
 			require.NoError(t, err)
 			require.True(t, found)
-			require.False(t, slab.IsLeaf())
+			node, ok := slab.(ArrayNode)
+			require.True(t, ok)
+			require.False(t, node.IsLeaf())
 		}
 	})
 }
@@ -348,7 +351,7 @@ func TestIterate(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	storage := NewBasicStorage()
+	storage := NewBasicSlabStorage()
 
 	array := NewArray(storage)
 
@@ -358,7 +361,7 @@ func TestIterate(t *testing.T) {
 	}
 
 	i := uint64(0)
-	err := array.Iterate(func(v Item) {
+	err := array.Iterate(func(v Storable) {
 		e, ok := v.(Uint64Value)
 		require.True(t, ok)
 		require.Equal(t, i, uint64(e))
@@ -376,13 +379,13 @@ func TestConstRootStorageID(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	storage := NewBasicStorage()
+	storage := NewBasicSlabStorage()
 
 	array := NewArray(storage)
 	err := array.Append(Uint64Value(0))
 	require.NoError(t, err)
 
-	savedRootID := array.StorageID()
+	savedRootID := array.root.Header().id
 	require.NotEqual(t, StorageIDUndefined, savedRootID)
 
 	for i := uint64(1); i < arraySize; i++ {
@@ -390,7 +393,7 @@ func TestConstRootStorageID(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	rootID := array.StorageID()
+	rootID := array.root.Header().id
 	require.Equal(t, savedRootID, rootID)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -412,7 +415,7 @@ func TestSetRandomValue(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	storage := NewBasicStorage()
+	storage := NewBasicSlabStorage()
 
 	array := NewArray(storage)
 
@@ -464,7 +467,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicStorage()
+		storage := NewBasicSlabStorage()
 
 		array := NewArray(storage)
 
@@ -496,7 +499,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicStorage()
+		storage := NewBasicSlabStorage()
 
 		array := NewArray(storage)
 
@@ -528,7 +531,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicStorage()
+		storage := NewBasicSlabStorage()
 
 		array := NewArray(storage)
 
@@ -570,7 +573,7 @@ func TestRemoveRandomElement(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	storage := NewBasicStorage()
+	storage := NewBasicSlabStorage()
 
 	array := NewArray(storage)
 
@@ -627,7 +630,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	storage := NewBasicStorage()
+	storage := NewBasicSlabStorage()
 
 	array := NewArray(storage)
 
@@ -724,7 +727,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	storage := NewBasicStorage()
+	storage := NewBasicSlabStorage()
 
 	array := NewArray(storage)
 
@@ -829,15 +832,15 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	storage := NewBasicStorage()
+	storage := NewBasicSlabStorage()
 
 	array := NewArray(storage)
 
-	values := make([]Item, 0, actionCount)
+	values := make([]Storable, 0, actionCount)
 
 	for i := uint64(0); i < actionCount; i++ {
 
-		var v Item
+		var v Storable
 
 		switch rand.Intn(MaxType) {
 		case Uint8Type:
@@ -917,4 +920,80 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	verified, err := array.valid()
 	require.NoError(t, err)
 	require.True(t, verified)
+}
+
+func TestNestedArray(t *testing.T) {
+
+	setThreshold(50)
+	defer func() {
+		setThreshold(1024)
+	}()
+
+	t.Run("inline", func(t *testing.T) {
+
+		const arraySize = 256 * 256
+
+		storage := NewBasicSlabStorage()
+
+		nestedArrays := make([]Storable, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			nested := NewArray(storage)
+			nested.Append(Uint64Value(i * 2))
+			nested.Append(Uint64Value(i*2 + 1))
+			require.True(t, nested.root.IsLeaf())
+
+			nestedArrays[i] = nested.root
+		}
+
+		array := NewArray(storage)
+		for _, a := range nestedArrays {
+			err := array.Append(a)
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+			require.Equal(t, nestedArrays[i], e)
+		}
+
+		verified, err := array.valid()
+		require.NoError(t, err)
+		require.True(t, verified)
+	})
+	t.Run("not-inline", func(t *testing.T) {
+
+		const arraySize = 256 * 256
+
+		storage := NewBasicSlabStorage()
+
+		nestedArrays := make([]Storable, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			nested := NewArray(storage)
+			for i := uint64(0); i < 50; i++ {
+				err := nested.Append(Uint64Value(i))
+				require.NoError(t, err)
+			}
+			require.False(t, nested.root.IsLeaf())
+
+			nestedArrays[i] = nested.root
+		}
+
+		array := NewArray(storage)
+		for _, a := range nestedArrays {
+			err := array.Append(a)
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+			require.Equal(t, nestedArrays[i], e)
+		}
+
+		verified, err := array.valid()
+		require.NoError(t, err)
+		require.True(t, verified)
+	})
+
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"container/list"
 	"fmt"
+	"strings"
 )
 
 type Stats struct {
@@ -38,22 +39,19 @@ func (array *Array) Stats() (Stats, error) {
 		for e := ids.Front(); e != nil; e = e.Next() {
 			id := e.Value.(StorageID)
 
-			slab, found, err := array.storage.Retrieve(id)
+			node, err := getArrayNodeFromStorageID(array.storage, id)
 			if err != nil {
 				return Stats{}, err
 			}
-			if !found {
-				return Stats{}, fmt.Errorf("slab %d not found", id)
-			}
 
-			if slab.IsLeaf() {
+			if node.IsLeaf() {
 				// leaf node
-				leaf := slab.(*ArrayDataSlab)
+				leaf := node.(*ArrayDataSlab)
 				leafNodeCount++
 				leafNodeSize += uint64(leaf.header.size)
 			} else {
 				// internal node
-				node := slab.(*ArrayMetaDataSlab)
+				node := node.(*ArrayMetaDataSlab)
 				internalNodeCount++
 				internalNodeSize += uint64(node.header.size)
 
@@ -88,6 +86,8 @@ func (array *Array) Print() {
 	nextLevelIDs := list.New()
 	nextLevelIDs.PushBack(array.root.Header().id)
 
+	overflowIDs := list.New()
+
 	level := 0
 	for nextLevelIDs.Len() > 0 {
 
@@ -98,30 +98,42 @@ func (array *Array) Print() {
 		for e := ids.Front(); e != nil; e = e.Next() {
 			id := e.Value.(StorageID)
 
-			slab, found, err := array.storage.Retrieve(id)
+			node, err := getArrayNodeFromStorageID(array.storage, id)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			if !found {
-				fmt.Printf("slab %d not found", id)
-				return
-			}
 
-			if slab.IsLeaf() {
+			if node.IsLeaf() {
 				// leaf node
-				leaf := slab.(*ArrayDataSlab)
+				leaf := node.(*ArrayDataSlab)
 				fmt.Printf("level %d, leaf (%+v): ", level+1, *(leaf.header))
+
+				var elements []Storable
 				if len(leaf.elements) <= 6 {
-					fmt.Printf("%+v\n", leaf.elements)
+					elements = leaf.elements
 				} else {
-					es := leaf.elements
-					lastIdx := len(leaf.elements) - 1
-					fmt.Printf("[%d %d %d ... %d %d %d]\n", es[0], es[1], es[2], es[lastIdx-2], es[lastIdx-1], es[lastIdx])
+					elements = append(elements, leaf.elements[:3]...)
+					elements = append(elements, leaf.elements[len(leaf.elements)-3:]...)
 				}
+
+				var elemsStr []string
+				for _, e := range elements {
+					if id, ok := e.(StorageIDValue); ok {
+						overflowIDs.PushBack(StorageID(id))
+					}
+					elemsStr = append(elemsStr, e.String())
+				}
+
+				if len(leaf.elements) > 6 {
+					elemsStr = append(elemsStr, "")
+					copy(elemsStr[4:], elemsStr[3:])
+					elemsStr[3] = "..."
+				}
+				fmt.Printf("[%s]\n", strings.Join(elemsStr, " "))
 			} else {
 				// internal node
-				node := slab.(*ArrayMetaDataSlab)
+				node := node.(*ArrayMetaDataSlab)
 				fmt.Printf("level %d, meta (%+v) headers: [", level+1, *(node.header))
 				for _, h := range node.orderedHeaders {
 					fmt.Printf("%+v ", *h)
@@ -132,6 +144,20 @@ func (array *Array) Print() {
 		}
 
 		level++
+	}
+
+	if overflowIDs.Len() > 0 {
+		for e := overflowIDs.Front(); e != nil; e = e.Next() {
+			id := e.Value.(StorageID)
+
+			// TODO: expand this to include other types
+			node, err := getArrayNodeFromStorageID(array.storage, id)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			fmt.Printf("overflow node: (id %d) %s\n", id, node.String())
+		}
 	}
 }
 
@@ -144,15 +170,13 @@ func (array *Array) valid() (bool, error) {
 }
 
 func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
-	slab, found, err := array.storage.Retrieve(id)
+
+	node, err := getArrayNodeFromStorageID(array.storage, id)
 	if err != nil {
 		return false, 0, err
 	}
-	if !found {
-		return false, 0, fmt.Errorf("slab %d not found", id)
-	}
-	if slab.IsLeaf() {
-		node, ok := slab.(*ArrayDataSlab)
+	if node.IsLeaf() {
+		node, ok := node.(*ArrayDataSlab)
 		if !ok {
 			return false, 0, fmt.Errorf("slab %d is not ArrayDataSlab", id)
 		}
@@ -164,8 +188,8 @@ func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 			computedSize += e.ByteSize()
 		}
 
-		_, underflow := slab.IsUnderflow()
-		sizeValid := (level == 0) || (!slab.IsFull() && !underflow)
+		_, underflow := node.IsUnderflow()
+		sizeValid := (level == 0) || (!node.IsFull() && !underflow)
 
 		t := count == node.header.count &&
 			computedSize == node.header.size &&
@@ -173,12 +197,12 @@ func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 		return t, count, nil
 	}
 
-	node, ok := slab.(*ArrayMetaDataSlab)
+	metaNode, ok := node.(*ArrayMetaDataSlab)
 	if !ok {
 		return false, 0, fmt.Errorf("slab %d is not ArrayMetaDataSlab", id)
 	}
 	sum := uint32(0)
-	for _, h := range node.orderedHeaders {
+	for _, h := range metaNode.orderedHeaders {
 		verified, count, err := array._valid(h.id, level+1)
 		if !verified || err != nil {
 			return false, 0, err
@@ -186,11 +210,11 @@ func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 		sum += count
 	}
 
-	_, underflow := slab.IsUnderflow()
-	sizeValid := (level == 0) || (!slab.IsFull() && !underflow)
+	_, underflow := node.IsUnderflow()
+	sizeValid := (level == 0) || (!node.IsFull() && !underflow)
 
-	t := sum == node.header.count &&
-		uint32(len(node.orderedHeaders)*headerSize) == node.header.size &&
+	t := sum == metaNode.header.count &&
+		uint32(len(metaNode.orderedHeaders)*headerSize) == metaNode.header.size &&
 		sizeValid
 	return t, sum, nil
 }

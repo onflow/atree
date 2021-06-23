@@ -156,11 +156,19 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 	rightSlabStartIndex := 0
 	leftSlabSize := uint32(0)
 	for i, e := range a.elements {
-		leftSlabSize += e.ByteSize()
-		if leftSlabSize >= midPoint {
-			rightSlabStartIndex = i + 1
+		elemSize := e.ByteSize()
+		if leftSlabSize+elemSize >= midPoint {
+			// i is mid point element.  Place i on the small side.
+			if leftSlabSize <= size-leftSlabSize-elemSize {
+				leftSlabSize += elemSize
+				rightSlabStartIndex = i + 1
+			} else {
+				rightSlabStartIndex = i
+			}
 			break
 		}
+		// left slab size < midPoint
+		leftSlabSize += elemSize
 	}
 
 	rightSlab := newArrayDataSlab()

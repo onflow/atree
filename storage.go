@@ -15,6 +15,8 @@ type SlabStorage interface {
 	Store(StorageID, Slab) error
 	Retrieve(StorageID) (Slab, bool, error)
 	Remove(StorageID)
+
+	Count() int
 }
 
 type BasicSlabStorage struct {
@@ -37,4 +39,8 @@ func (s *BasicSlabStorage) Store(id StorageID, slab Slab) error {
 
 func (s *BasicSlabStorage) Remove(id StorageID) {
 	delete(s.slabs, id)
+}
+
+func (s *BasicSlabStorage) Count() int {
+	return len(s.slabs)
 }

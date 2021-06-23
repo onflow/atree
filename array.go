@@ -105,6 +105,9 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error
 }
 
 func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
+	if index > uint64(len(a.elements)) {
+		return fmt.Errorf("out of bounds")
+	}
 	if index == uint64(len(a.elements)) {
 		a.elements = append(a.elements, v)
 	} else {
@@ -119,6 +122,9 @@ func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) er
 }
 
 func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
+	if index >= uint64(len(a.elements)) {
+		return nil, fmt.Errorf("out of bounds")
+	}
 	v := a.elements[index]
 
 	switch index {
@@ -507,7 +513,7 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 
 func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
 
-	if index > uint64(a.header.count) {
+	if index >= uint64(a.header.count) {
 		return nil, fmt.Errorf("remove at index %d out of bounds", index)
 	}
 

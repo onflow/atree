@@ -42,6 +42,9 @@ func TestAppendAndGet(t *testing.T) {
 	verified, err := array.valid()
 	require.NoError(t, err)
 	require.True(t, verified)
+
+	stats, _ := array.Stats()
+	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 }
 
 func TestSetAndGet(t *testing.T) {
@@ -74,6 +77,9 @@ func TestSetAndGet(t *testing.T) {
 	verified, err := array.valid()
 	require.NoError(t, err)
 	require.True(t, verified)
+
+	stats, _ := array.Stats()
+	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 }
 
 func TestInsertAndGet(t *testing.T) {
@@ -107,6 +113,9 @@ func TestInsertAndGet(t *testing.T) {
 		verified, err := array.valid()
 		require.NoError(t, err)
 		require.True(t, verified)
+
+		stats, _ := array.Stats()
+		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("insert-last", func(t *testing.T) {
@@ -134,6 +143,9 @@ func TestInsertAndGet(t *testing.T) {
 		verified, err := array.valid()
 		require.NoError(t, err)
 		require.True(t, verified)
+
+		stats, _ := array.Stats()
+		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("insert", func(t *testing.T) {
@@ -166,6 +178,9 @@ func TestInsertAndGet(t *testing.T) {
 		verified, err := array.valid()
 		require.NoError(t, err)
 		require.True(t, verified)
+
+		stats, _ := array.Stats()
+		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 	})
 }
 
@@ -207,6 +222,9 @@ func TestRemove(t *testing.T) {
 		}
 
 		require.Equal(t, uint64(0), array.Count())
+
+		stats, _ := array.Stats()
+		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("remove-last", func(t *testing.T) {
@@ -242,6 +260,9 @@ func TestRemove(t *testing.T) {
 		}
 
 		require.Equal(t, uint64(0), array.Count())
+
+		stats, _ := array.Stats()
+		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("remove", func(t *testing.T) {
@@ -284,6 +305,9 @@ func TestRemove(t *testing.T) {
 			require.True(t, ok)
 			require.Equal(t, j, uint64(e))
 		}
+
+		stats, _ := array.Stats()
+		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 	})
 }
 
@@ -305,6 +329,9 @@ func TestSplit(t *testing.T) {
 		require.True(t, array.root.IsLeaf())
 		require.Equal(t, uint32(50), array.root.Header().count)
 		require.Equal(t, uint32(8*50), array.root.Header().size)
+
+		stats, _ := array.Stats()
+		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("internal node as root", func(t *testing.T) {
@@ -340,6 +367,9 @@ func TestSplit(t *testing.T) {
 			require.True(t, ok)
 			require.False(t, node.IsLeaf())
 		}
+
+		stats, _ := array.Stats()
+		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 	})
 }
 
@@ -454,6 +484,9 @@ func TestSetRandomValue(t *testing.T) {
 	verified, err := array.valid()
 	require.NoError(t, err)
 	require.True(t, verified)
+
+	stats, _ := array.Stats()
+	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 }
 
 func TestInsertRandomValue(t *testing.T) {
@@ -493,6 +526,9 @@ func TestInsertRandomValue(t *testing.T) {
 		verified, err := array.valid()
 		require.NoError(t, err)
 		require.True(t, verified)
+
+		stats, _ := array.Stats()
+		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("insert-last", func(t *testing.T) {
@@ -525,6 +561,9 @@ func TestInsertRandomValue(t *testing.T) {
 		verified, err := array.valid()
 		require.NoError(t, err)
 		require.True(t, verified)
+
+		stats, _ := array.Stats()
+		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("insert-random", func(t *testing.T) {
@@ -560,6 +599,9 @@ func TestInsertRandomValue(t *testing.T) {
 		verified, err := array.valid()
 		require.NoError(t, err)
 		require.True(t, verified)
+
+		stats, _ := array.Stats()
+		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 	})
 
 }
@@ -611,6 +653,9 @@ func TestRemoveRandomElement(t *testing.T) {
 	verified, err := array.valid()
 	require.NoError(t, err)
 	require.True(t, verified)
+
+	stats, _ := array.Stats()
+	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 }
 
 func TestRandomAppendSetInsertRemove(t *testing.T) {
@@ -708,6 +753,9 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	verified, err := array.valid()
 	require.NoError(t, err)
 	require.True(t, verified)
+
+	stats, _ := array.Stats()
+	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 }
 
 func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
@@ -805,6 +853,9 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	verified, err := array.valid()
 	require.NoError(t, err)
 	require.True(t, verified)
+
+	stats, _ := array.Stats()
+	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 }
 
 func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
@@ -920,6 +971,9 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	verified, err := array.valid()
 	require.NoError(t, err)
 	require.True(t, verified)
+
+	stats, _ := array.Stats()
+	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
 }
 
 func TestNestedArray(t *testing.T) {

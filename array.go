@@ -664,6 +664,9 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildNode(storage SlabStorage, node 
 			return err
 		}
 
+		// Remove right sib from SlabStorage
+		storage.Remove(rightSib.Header().id)
+
 		// Update MetaDataSlab
 		copy(a.orderedHeaders[nodeHeaderIndex+1:], a.orderedHeaders[nodeHeaderIndex+2:])
 		a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
@@ -681,6 +684,9 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildNode(storage SlabStorage, node 
 			return err
 		}
 
+		// Remove node from SlabStorage
+		storage.Remove(node.Header().id)
+
 		// Update MetaDataSlab
 		copy(a.orderedHeaders[nodeHeaderIndex:], a.orderedHeaders[nodeHeaderIndex+1:])
 		a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
@@ -697,6 +703,9 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildNode(storage SlabStorage, node 
 			return err
 		}
 
+		// Remove node from SlabStorage
+		storage.Remove(node.Header().id)
+
 		// Update MetaDataSlab
 		copy(a.orderedHeaders[nodeHeaderIndex:], a.orderedHeaders[nodeHeaderIndex+1:])
 		a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
@@ -705,6 +714,9 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildNode(storage SlabStorage, node 
 		if err != nil {
 			return err
 		}
+
+		// Remove rightSib from SlabStorage
+		storage.Remove(rightSib.Header().id)
 
 		// Update MetaDataSlab
 		copy(a.orderedHeaders[nodeHeaderIndex+1:], a.orderedHeaders[nodeHeaderIndex+2:])
@@ -988,9 +1000,13 @@ func (array *Array) Remove(index uint64) (Storable, error) {
 		// Set root to nil if tree is empty.
 		root := array.root.(*ArrayDataSlab)
 		if len(root.elements) == 0 {
+			// Remove node from SlabStorage
+			array.storage.Remove(root.Header().id)
+
 			array.root = nil
 			array.dataSlabStorageID = StorageIDUndefined
 		}
+
 		return v, nil
 	}
 
@@ -1010,6 +1026,8 @@ func (array *Array) Remove(index uint64) (Storable, error) {
 		node.Header().id = oldRootID
 
 		array.storage.Store(oldRootID, node)
+
+		array.storage.Remove(childID)
 
 		array.root = node
 

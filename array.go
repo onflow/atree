@@ -968,7 +968,7 @@ func (array *Array) Insert(index uint64, v Storable) error {
 		root := array.root.(*ArrayMetaDataSlab)
 		root.orderedHeaders = []*SlabHeader{left.Header(), right.Header()}
 		root.header.count = left.Header().count + right.Header().count
-		root.header.size = headerSize * 2
+		root.header.size = headerSize * uint32(len(root.orderedHeaders))
 	}
 
 	return nil

@@ -408,6 +408,10 @@ func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, er
 		return nil, fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
 	}
 
+	// Find child slab containing the element at given index.
+	// index is decremented by each child slab's element count.
+	// When decremented index is less than the element count,
+	// index is already adjusted to that slab's index range.
 	var id StorageID
 	for _, h := range a.orderedHeaders {
 		if index < uint64(h.count) {
@@ -431,6 +435,10 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) e
 		return fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
 	}
 
+	// Find child slab containing the element at given index.
+	// index is decremented by each child slab's element count.
+	// When decremented index is less than the element count,
+	// index is already adjusted to that slab's index range.
 	var id StorageID
 	var headerIndex int
 	for i, h := range a.orderedHeaders {
@@ -490,6 +498,10 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 		id = h.id
 		index = uint64(h.count)
 	} else {
+		// Find child slab containing the element at given index.
+		// index is decremented by each child slab's element count.
+		// When decremented index is less than the element count,
+		// index is already adjusted to that slab's index range.
 		for i, h := range a.orderedHeaders {
 			if index < uint64(h.count) {
 				id = h.id
@@ -525,6 +537,10 @@ func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable,
 		return nil, fmt.Errorf("remove at index %d out of bounds", index)
 	}
 
+	// Find child slab containing the element at given index.
+	// index is decremented by each child slab's element count.
+	// When decremented index is less than the element count,
+	// index is already adjusted to that slab's index range.
 	var id StorageID
 	var headerIndex int
 	for i, h := range a.orderedHeaders {

@@ -292,21 +292,17 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 
 	b := slab.(*ArrayDataSlab)
 
-	// TODO: simplify this code block.
 	count := a.header.count + b.header.count
-	// data size is slab size minus slab prefix size
-	dataSize := a.header.size + b.header.size - dataSlabPrefixSize*2
+	size := a.header.size + b.header.size
 
-	midPoint := uint32(math.Ceil(float64(dataSize) / 2))
+	midPoint := uint32(math.Ceil(float64(size) / 2))
 
 	leftSlabCount := a.header.count
-	leftSlabDataSize := a.header.size - dataSlabPrefixSize
-
-	minDataSize := uint32(minThreshold) - dataSlabPrefixSize
+	leftSlabDataSize := a.header.size
 
 	// Left node size is as close to midPoint as possible while right node size >= minThreshold
 	for i := len(a.elements) - 1; i >= 0; i-- {
-		if leftSlabDataSize-a.elements[i].ByteSize() < midPoint && dataSize-leftSlabDataSize >= minDataSize {
+		if leftSlabDataSize-a.elements[i].ByteSize() < midPoint && size-leftSlabDataSize >= uint32(minThreshold) {
 			break
 		}
 		leftSlabDataSize -= a.elements[i].ByteSize()
@@ -328,11 +324,11 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 	a.elements = a.elements[:leftSlabCount]
 
 	// Update left slab header
-	a.header.size = leftSlabDataSize + dataSlabPrefixSize
+	a.header.size = leftSlabDataSize
 	a.header.count = leftSlabCount
 
 	// Update right slab header
-	b.header.size = dataSize - leftSlabDataSize + dataSlabPrefixSize
+	b.header.size = size - leftSlabDataSize
 	b.header.count = count - leftSlabCount
 
 	return nil
@@ -342,21 +338,17 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 	b := slab.(*ArrayDataSlab)
 
-	// TODO: simplify this code block.
 	count := a.header.count + b.header.count
-	// data size is slab size minus slab prefix size
-	dataSize := a.header.size + b.header.size - dataSlabPrefixSize*2
+	size := a.header.size + b.header.size
 
-	midPoint := uint32(math.Ceil(float64(dataSize) / 2))
+	midPoint := uint32(math.Ceil(float64(size) / 2))
 
 	leftSlabCount := uint32(len(a.elements))
-	leftSlabDataSize := a.header.size - dataSlabPrefixSize
-
-	minDataSize := uint32(minThreshold) - dataSlabPrefixSize
+	leftSlabDataSize := a.header.size
 
 	for _, e := range b.elements {
 		if leftSlabDataSize+e.ByteSize() > midPoint {
-			if dataSize-leftSlabDataSize-e.ByteSize() >= uint32(minDataSize) {
+			if size-leftSlabDataSize-e.ByteSize() >= uint32(minThreshold) {
 				// Include this element in left node
 				leftSlabDataSize += e.ByteSize()
 				leftSlabCount++
@@ -380,11 +372,11 @@ func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 	b.elements = b.elements[rightStartIndex:]
 
 	// Update left slab header
-	a.header.size = leftSlabDataSize + dataSlabPrefixSize
+	a.header.size = leftSlabDataSize
 	a.header.count = leftSlabCount
 
 	// Update right slab header
-	b.header.size = dataSize - leftSlabDataSize + dataSlabPrefixSize
+	b.header.size = size - leftSlabDataSize
 	b.header.count = count - leftSlabCount
 
 	return nil

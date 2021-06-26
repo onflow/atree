@@ -283,7 +283,7 @@ func (a *ArrayDataSlab) Merge(slab Slab) error {
 	a.elements = append(a.elements, slab2.elements...)
 	a.header.size = a.header.size + slab2.header.size - dataSlabPrefixSize
 	a.header.count += slab2.header.count
-
+	a.next = slab2.next
 	return nil
 }
 

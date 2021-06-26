@@ -376,31 +376,126 @@ func TestSplit(t *testing.T) {
 }
 
 func TestIterate(t *testing.T) {
-	setThreshold(60)
-	defer func() {
-		setThreshold(1024)
-	}()
+	t.Run("append", func(t *testing.T) {
+		setThreshold(60)
+		defer func() {
+			setThreshold(1024)
+		}()
 
-	const arraySize = 256 * 256
+		const arraySize = 256 * 256
 
-	storage := NewBasicSlabStorage()
+		array := NewArray(NewBasicSlabStorage())
 
-	array := NewArray(storage)
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
 
-	for i := uint64(0); i < arraySize; i++ {
-		err := array.Append(Uint64Value(i))
+		i := uint64(0)
+		err := array.Iterate(func(v Storable) {
+			e, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, i, uint64(e))
+			i++
+		})
 		require.NoError(t, err)
-	}
-
-	i := uint64(0)
-	err := array.Iterate(func(v Storable) {
-		e, ok := v.(Uint64Value)
-		require.True(t, ok)
-		require.Equal(t, i, uint64(e))
-		i++
+		require.Equal(t, i, uint64(arraySize))
 	})
-	require.NoError(t, err)
-	require.Equal(t, i, uint64(arraySize))
+
+	t.Run("set", func(t *testing.T) {
+		setThreshold(60)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		const arraySize = 256 * 256
+
+		array := NewArray(NewBasicSlabStorage())
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Set(i, Uint64Value(i*10))
+			require.NoError(t, err)
+		}
+
+		i := uint64(0)
+		err := array.Iterate(func(v Storable) {
+			e, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, i*10, uint64(e))
+			i++
+		})
+		require.NoError(t, err)
+		require.Equal(t, i, uint64(arraySize))
+	})
+
+	t.Run("insert", func(t *testing.T) {
+		setThreshold(60)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		const arraySize = 256 * 256
+
+		array := NewArray(NewBasicSlabStorage())
+
+		for i := uint64(0); i < arraySize; i += 2 {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		for i := uint64(1); i < arraySize; i += 2 {
+			err := array.Insert(i, Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		i := uint64(0)
+		err := array.Iterate(func(v Storable) {
+			e, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, i, uint64(e))
+			i++
+		})
+		require.NoError(t, err)
+		require.Equal(t, i, uint64(arraySize))
+	})
+
+	t.Run("remove", func(t *testing.T) {
+		setThreshold(60)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		const arraySize = 256 * 256
+
+		array := NewArray(NewBasicSlabStorage())
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+
+		// Remove every other elements
+		for i := uint64(0); i < array.Count(); i++ {
+			_, err := array.Remove(i)
+			require.NoError(t, err)
+		}
+
+		i := uint64(1)
+		err := array.Iterate(func(v Storable) {
+			e, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, i, uint64(e))
+			i += 2
+		})
+		require.NoError(t, err)
+	})
 }
 
 func TestConstRootStorageID(t *testing.T) {
@@ -752,6 +847,16 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 		require.Equal(t, v, uint64(ev))
 	}
 
+	i := 0
+	err := array.Iterate(func(v Storable) {
+		e, ok := v.(Uint64Value)
+		require.True(t, ok)
+		require.Equal(t, values[i], uint64(e))
+		i++
+	})
+	require.NoError(t, err)
+	require.Equal(t, len(values), i)
+
 	verified, err := array.valid()
 	require.NoError(t, err)
 	require.True(t, verified)
@@ -851,6 +956,16 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, v, uint8(ev))
 	}
+
+	i := 0
+	err := array.Iterate(func(v Storable) {
+		e, ok := v.(Uint8Value)
+		require.True(t, ok)
+		require.Equal(t, values[i], uint8(e))
+		i++
+	})
+	require.NoError(t, err)
+	require.Equal(t, len(values), i)
 
 	verified, err := array.valid()
 	require.NoError(t, err)
@@ -969,6 +1084,14 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, v, e)
 	}
+
+	i := 0
+	err := array.Iterate(func(v Storable) {
+		require.Equal(t, values[i], v)
+		i++
+	})
+	require.NoError(t, err)
+	require.Equal(t, len(values), i)
 
 	verified, err := array.valid()
 	require.NoError(t, err)

@@ -17,6 +17,10 @@ func init() {
 	rand.Seed(seed)
 }
 
+func resetStorageID() {
+	storageIDCounter = 0
+}
+
 func TestAppendAndGet(t *testing.T) {
 
 	const arraySize = 256 * 256
@@ -77,7 +81,7 @@ func TestSetAndGet(t *testing.T) {
 }
 
 func TestInsertAndGet(t *testing.T) {
-	setThreshold(50)
+	setThreshold(60)
 	defer func() {
 		setThreshold(1024)
 	}()
@@ -170,7 +174,7 @@ func TestInsertAndGet(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	setThreshold(50)
+	setThreshold(60)
 	defer func() {
 		setThreshold(1024)
 	}()
@@ -304,7 +308,6 @@ func TestSplit(t *testing.T) {
 		require.NotNil(t, array.root)
 		require.True(t, array.root.IsLeaf())
 		require.Equal(t, uint32(50), array.root.Header().count)
-		require.Equal(t, uint32(8*50), array.root.Header().size)
 	})
 
 	t.Run("internal node as root", func(t *testing.T) {
@@ -328,7 +331,6 @@ func TestSplit(t *testing.T) {
 		require.NotNil(t, array.root)
 		require.False(t, array.root.IsLeaf())
 		require.Equal(t, uint32(50), array.root.Header().count)
-		require.Equal(t, uint32(16*3), array.root.Header().size) // 3 headers
 
 		root := array.root.(*ArrayMetaDataSlab)
 		for _, h := range root.orderedHeaders {
@@ -344,7 +346,7 @@ func TestSplit(t *testing.T) {
 }
 
 func TestIterate(t *testing.T) {
-	setThreshold(50)
+	setThreshold(60)
 	defer func() {
 		setThreshold(1024)
 	}()
@@ -372,7 +374,7 @@ func TestIterate(t *testing.T) {
 }
 
 func TestConstRootStorageID(t *testing.T) {
-	setThreshold(50)
+	setThreshold(60)
 	defer func() {
 		setThreshold(1024)
 	}()
@@ -408,7 +410,7 @@ func TestConstRootStorageID(t *testing.T) {
 
 func TestSetRandomValue(t *testing.T) {
 
-	setThreshold(50)
+	setThreshold(60)
 	defer func() {
 		setThreshold(1024)
 	}()
@@ -458,7 +460,7 @@ func TestSetRandomValue(t *testing.T) {
 
 func TestInsertRandomValue(t *testing.T) {
 
-	setThreshold(50)
+	setThreshold(60)
 	defer func() {
 		setThreshold(1024)
 	}()
@@ -566,7 +568,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 func TestRemoveRandomElement(t *testing.T) {
 
-	setThreshold(50)
+	setThreshold(60)
 	defer func() {
 		setThreshold(1024)
 	}()
@@ -623,7 +625,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 		MaxAction
 	)
 
-	setThreshold(50)
+	setThreshold(60)
 	defer func() {
 		setThreshold(1024)
 	}()
@@ -720,7 +722,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 		MaxAction
 	)
 
-	setThreshold(50)
+	setThreshold(60)
 	defer func() {
 		setThreshold(1024)
 	}()
@@ -825,7 +827,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 		MaxType
 	)
 
-	setThreshold(50)
+	setThreshold(60)
 	defer func() {
 		setThreshold(1024)
 	}()
@@ -924,7 +926,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 func TestNestedArray(t *testing.T) {
 
-	setThreshold(50)
+	setThreshold(60)
 	defer func() {
 		setThreshold(1024)
 	}()
@@ -938,8 +940,12 @@ func TestNestedArray(t *testing.T) {
 		nestedArrays := make([]Storable, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
 			nested := NewArray(storage)
-			nested.Append(Uint64Value(i * 2))
-			nested.Append(Uint64Value(i*2 + 1))
+
+			err := nested.Append(Uint64Value(i * 2))
+			require.NoError(t, err)
+
+			err = nested.Append(Uint64Value(i*2 + 1))
+			require.NoError(t, err)
 			require.True(t, nested.root.IsLeaf())
 
 			nestedArrays[i] = nested.root
@@ -996,4 +1002,282 @@ func TestNestedArray(t *testing.T) {
 		require.True(t, verified)
 	})
 
+}
+
+func TestEncode(t *testing.T) {
+	t.Run("empty tree", func(t *testing.T) {
+		storage := NewBasicSlabStorage()
+
+		array := NewArray(storage)
+
+		b, err := array.Encode()
+		require.NoError(t, err)
+		require.Equal(t, 0, len(b))
+	})
+
+	t.Run("data root", func(t *testing.T) {
+		const arraySize = 5
+
+		// Reset storage id for consistent encoded data
+		resetStorageID()
+
+		storage := NewBasicSlabStorage()
+		array := NewArray(storage)
+
+		for i := uint64(0); i < arraySize; i++ {
+			array.Append(Uint64Value(i))
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+
+		expected := []byte{
+			// root
+			// node flag (leaf node | array data)
+			0x06,
+			// prev storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			// next storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			// CBOR encoded array size (fixed size 3 byte)
+			0x99, 0x00, 0x05,
+			// CBOR encoded array elements
+			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04,
+		}
+
+		b, err := array.Encode()
+		require.NoError(t, err)
+		require.Equal(t, expected, b)
+	})
+
+	t.Run("metadata root", func(t *testing.T) {
+		setThreshold(50)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		const arraySize = 20
+
+		// Reset storage id for consistent encoded data
+		resetStorageID()
+
+		storage := NewBasicSlabStorage()
+		array := NewArray(storage)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+
+		/*
+			level 1, meta ({id:1 size:37 count:20}) headers: [{id:2 size:50 count:10} {id:3 size:50 count:10} ]
+			level 2, leaf ({id:2 size:50 count:10}): [0 1 2 ... 7 8 9]
+			level 2, leaf ({id:3 size:50 count:10}): [10 11 12 ... 17 18 19]
+		*/
+		expected := []byte{
+			// root (meta data slab)
+			// node flag
+			0x01,
+			// child header count
+			0x00, 0x00, 0x00, 0x02,
+			// child header 1 (storage id, count, size)
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x32,
+			// child header 2
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x32,
+
+			// data slab
+			// node flag
+			0x06,
+			// prev storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			// next storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			// CBOR encoded array head (fixed size 3 byte)
+			0x99, 0x00, 0x0a,
+			// CBOR encoded array elements
+			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x09,
+
+			// data slab
+			// node flag
+			0x06,
+			// prev storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			// next storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			// CBOR encoded array head (fixed size 3 byte)
+			0x99, 0x00, 0x0a,
+			// CBOR encoded array elements
+			0xd8, 0xa4, 0x0a, 0xd8, 0xa4, 0x0b, 0xd8, 0xa4, 0x0c, 0xd8, 0xa4, 0x0d, 0xd8, 0xa4, 0x0e, 0xd8, 0xa4, 0x0f, 0xd8, 0xa4, 0x10, 0xd8, 0xa4, 0x11, 0xd8, 0xa4, 0x12, 0xd8, 0xa4, 0x13,
+		}
+		b, err := array.Encode()
+		require.NoError(t, err)
+		require.Equal(t, expected, b)
+	})
+}
+
+func TestDecodeEncode(t *testing.T) {
+	t.Run("empty tree", func(t *testing.T) {
+		storage := NewBasicSlabStorage()
+
+		decoded, err := NewArrayFromData(storage, StorageIDUndefined, []byte{})
+		require.NoError(t, err)
+		require.Equal(t, nil, decoded.root)
+		require.Equal(t, StorageIDUndefined, decoded.dataSlabStorageID)
+
+		// Encode decoded array and compare encoded bytes
+		encodedData, err := decoded.Encode()
+		require.NoError(t, err)
+		require.Equal(t, []byte(nil), encodedData)
+	})
+
+	t.Run("data root", func(t *testing.T) {
+		storage := NewBasicSlabStorage()
+
+		data := []byte{
+			// root
+			// node flag (leaf node | array data)
+			0x06,
+			// prev storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			// next storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			// CBOR encoded array head (fixed size 3 byte)
+			0x99, 0x00, 0x05,
+			// CBOR encoded array elements
+			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04,
+		}
+		decoded, err := NewArrayFromData(storage, StorageID(1), data)
+		require.NoError(t, err)
+		require.Equal(t, uint64(5), decoded.Count())
+		require.NotNil(t, decoded.root)
+		require.True(t, decoded.root.IsLeaf())
+
+		expected := []Storable{Uint64Value(0), Uint64Value(1), Uint64Value(2), Uint64Value(3), Uint64Value(4)}
+
+		leaf := decoded.root.(*ArrayDataSlab)
+		require.Equal(t, expected, leaf.elements)
+
+		// Encode decoded array and compare encoded bytes
+		encodedData, err := decoded.Encode()
+		require.NoError(t, err)
+		require.Equal(t, data, encodedData)
+	})
+
+	t.Run("metadata root", func(t *testing.T) {
+		setThreshold(50)
+		defer func() {
+			setThreshold(1024)
+		}()
+
+		storage := NewBasicSlabStorage()
+
+		// level 1, meta ({id:1 size:37 count:20}) headers: [{id:2 size:50 count:10} {id:3 size:50 count:10} ]
+		// level 2, leaf ({id:2 size:50 count:10}): [0 1 2 ... 7 8 9]
+		// level 2, leaf ({id:3 size:50 count:10}): [10 11 12 ... 17 18 19]
+
+		data := []byte{
+			// root
+			// node flag (internal)
+			0x01,
+			// child header count
+			0x00, 0x00, 0x00, 0x02,
+			// child header 1 (storage id, count, size)
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x32,
+			// child header 2
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x32,
+
+			// leaf 1
+			// node flag
+			0x06,
+			// prev storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			// next storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			// CBOR encoded array head (fixed size 3 byte)
+			0x99, 0x00, 0x0a,
+			// CBOR encoded array elements
+			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x09,
+
+			// leaf 2
+			// node flag
+			0x06,
+			// prev storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			// next storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			// CBOR encoded array head (fixed size 3 byte)
+			0x99, 0x00, 0x0a,
+			// CBOR encoded array elements
+			0xd8, 0xa4, 0x0a, 0xd8, 0xa4, 0x0b, 0xd8, 0xa4, 0x0c, 0xd8, 0xa4, 0x0d, 0xd8, 0xa4, 0x0e, 0xd8, 0xa4, 0x0f, 0xd8, 0xa4, 0x10, 0xd8, 0xa4, 0x11, 0xd8, 0xa4, 0x12, 0xd8, 0xa4, 0x13,
+		}
+
+		decoded, err := NewArrayFromData(storage, StorageID(1), data)
+		require.NoError(t, err)
+		require.Equal(t, uint64(20), decoded.Count())
+		require.NotNil(t, decoded.root)
+		require.False(t, decoded.root.IsLeaf())
+
+		// Encode decoded array and compare encoded bytes
+		encodedData, err := decoded.Encode()
+		require.NoError(t, err)
+		require.Equal(t, data, encodedData)
+	})
+}
+
+func TestDecodeEncodeRandomData(t *testing.T) {
+	const (
+		Uint8Type = iota
+		Uint16Type
+		Uint32Type
+		Uint64Type
+		MaxType
+	)
+
+	setThreshold(60)
+	defer func() {
+		setThreshold(1024)
+	}()
+
+	const arraySize = 256 * 256
+
+	array := NewArray(NewBasicSlabStorage())
+
+	for i := uint64(0); i < arraySize; i++ {
+
+		var v Storable
+
+		switch rand.Intn(MaxType) {
+		case Uint8Type:
+			n := rand.Intn(math.MaxUint8 + 1)
+			v = Uint8Value(n)
+		case Uint16Type:
+			n := rand.Intn(math.MaxUint16 + 1)
+			v = Uint16Value(n)
+		case Uint32Type:
+			v = Uint32Value(rand.Uint32())
+		case Uint64Type:
+			v = Uint64Value(rand.Uint64())
+		}
+
+		err := array.Append(v)
+		require.NoError(t, err)
+	}
+
+	verified, err := array.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
+
+	// Encode array with random data of mixed types
+	b1, err := array.Encode()
+	require.NoError(t, err)
+
+	// Decode data to new array
+	decodedArray, err := NewArrayFromData(NewBasicSlabStorage(), array.root.Header().id, b1)
+	require.NoError(t, err)
+
+	// Encode decoded array
+	b2, err := decodedArray.Encode()
+	require.NoError(t, err)
+	require.Equal(t, b1, b2)
 }

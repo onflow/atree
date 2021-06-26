@@ -189,12 +189,13 @@ func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 		}
 
 		_, underflow := node.IsUnderflow()
-		sizeValid := (level == 0) || (!node.IsFull() && !underflow)
+		validTreeNodeSize := (level == 0) || (!node.IsFull() && !underflow)
 
-		t := count == node.header.count &&
-			computedSize == node.header.size &&
-			sizeValid
-		return t, count, nil
+		validCount := count == node.header.count
+
+		validSize := (dataSlabPrefixSize + computedSize) == node.header.size
+
+		return validTreeNodeSize && validCount && validSize, count, nil
 	}
 
 	metaNode, ok := node.(*ArrayMetaDataSlab)
@@ -211,10 +212,12 @@ func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 	}
 
 	_, underflow := node.IsUnderflow()
-	sizeValid := (level == 0) || (!node.IsFull() && !underflow)
+	validTreeNodeSize := (level == 0) || (!node.IsFull() && !underflow)
 
-	t := sum == metaNode.header.count &&
-		uint32(len(metaNode.orderedHeaders)*headerSize) == metaNode.header.size &&
-		sizeValid
-	return t, sum, nil
+	validCount := sum == metaNode.header.count
+
+	computedSize := uint32(len(metaNode.orderedHeaders)*headerSize) + metaDataSlabPrefixSize
+	validSize := computedSize == metaNode.header.size
+
+	return validTreeNodeSize && validCount && validSize, sum, nil
 }

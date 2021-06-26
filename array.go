@@ -134,7 +134,7 @@ func newArrayDataSlabFromData(dec *Decoder, size uint32) (*ArrayDataSlab, error)
 }
 
 // Leaf node header (17 bytes):
-//   flag (1 bytes) | prev sib storage ID (8 bytes) | next sib storage ID (8 bytes)
+//   | slab flag (1 bytes) | prev sib storage ID (8 bytes) | next sib storage ID (8 bytes) |
 // Leaf node content (for now):
 //   CBOR encoded array of elements
 func (a *ArrayDataSlab) Encode(enc *Encoder) error {
@@ -195,6 +195,9 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error
 }
 
 func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
+	if index > uint64(len(a.elements)) {
+		return fmt.Errorf("out of bounds")
+	}
 	if index == uint64(len(a.elements)) {
 		a.elements = append(a.elements, v)
 	} else {
@@ -209,6 +212,9 @@ func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) er
 }
 
 func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
+	if index >= uint64(len(a.elements)) {
+		return nil, fmt.Errorf("out of bounds")
+	}
 	v := a.elements[index]
 
 	switch index {
@@ -240,11 +246,19 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 	rightSlabStartIndex := 0
 	leftSlabSize := uint32(0)
 	for i, e := range a.elements {
-		leftSlabSize += e.ByteSize()
-		if leftSlabSize >= midPoint {
-			rightSlabStartIndex = i + 1
+		elemSize := e.ByteSize()
+		if leftSlabSize+elemSize >= midPoint {
+			// i is mid point element.  Place i on the small side.
+			if leftSlabSize <= dataSize-leftSlabSize-elemSize {
+				leftSlabSize += elemSize
+				rightSlabStartIndex = i + 1
+			} else {
+				rightSlabStartIndex = i
+			}
 			break
 		}
+		// left slab size < midPoint
+		leftSlabSize += elemSize
 	}
 
 	rightSlab := newArrayDataSlab()
@@ -516,7 +530,7 @@ func newArrayMetaDataSlabFromData(dec *Decoder) (*ArrayMetaDataSlab, error) {
 }
 
 // Internal node header (5 bytes):
-//   node flag (1 bytes) | child header count (4 bytes)
+//      | slab flag (1 bytes) | child header count (4 bytes) |
 // Internal node content (n * 16 bytes):
 // 	[[count, size, storage id], ...]
 func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
@@ -555,6 +569,10 @@ func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, er
 		return nil, fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
 	}
 
+	// Find child slab containing the element at given index.
+	// index is decremented by each child slab's element count.
+	// When decremented index is less than the element count,
+	// index is already adjusted to that slab's index range.
 	var id StorageID
 	for _, h := range a.orderedHeaders {
 		if index < uint64(h.count) {
@@ -578,6 +596,10 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) e
 		return fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
 	}
 
+	// Find child slab containing the element at given index.
+	// index is decremented by each child slab's element count.
+	// When decremented index is less than the element count,
+	// index is already adjusted to that slab's index range.
 	var id StorageID
 	var headerIndex int
 	for i, h := range a.orderedHeaders {
@@ -638,6 +660,10 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 		id = h.id
 		index = uint64(h.count)
 	} else {
+		// Find child slab containing the element at given index.
+		// index is decremented by each child slab's element count.
+		// When decremented index is less than the element count,
+		// index is already adjusted to that slab's index range.
 		for i, h := range a.orderedHeaders {
 			if index < uint64(h.count) {
 				id = h.id
@@ -669,10 +695,14 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 
 func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
 
-	if index > uint64(a.header.count) {
+	if index >= uint64(a.header.count) {
 		return nil, fmt.Errorf("remove at index %d out of bounds", index)
 	}
 
+	// Find child slab containing the element at given index.
+	// index is decremented by each child slab's element count.
+	// When decremented index is less than the element count,
+	// index is already adjusted to that slab's index range.
 	var id StorageID
 	var headerIndex int
 	for i, h := range a.orderedHeaders {
@@ -796,6 +826,9 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildNode(storage SlabStorage, node 
 			return err
 		}
 
+		// Remove right sib from SlabStorage
+		storage.Remove(rightSib.Header().id)
+
 		// Update MetaDataSlab
 		copy(a.orderedHeaders[nodeHeaderIndex+1:], a.orderedHeaders[nodeHeaderIndex+2:])
 		a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
@@ -813,6 +846,9 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildNode(storage SlabStorage, node 
 			return err
 		}
 
+		// Remove node from SlabStorage
+		storage.Remove(node.Header().id)
+
 		// Update MetaDataSlab
 		copy(a.orderedHeaders[nodeHeaderIndex:], a.orderedHeaders[nodeHeaderIndex+1:])
 		a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
@@ -829,6 +865,9 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildNode(storage SlabStorage, node 
 			return err
 		}
 
+		// Remove node from SlabStorage
+		storage.Remove(node.Header().id)
+
 		// Update MetaDataSlab
 		copy(a.orderedHeaders[nodeHeaderIndex:], a.orderedHeaders[nodeHeaderIndex+1:])
 		a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
@@ -837,6 +876,9 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildNode(storage SlabStorage, node 
 		if err != nil {
 			return err
 		}
+
+		// Remove rightSib from SlabStorage
+		storage.Remove(rightSib.Header().id)
 
 		// Update MetaDataSlab
 		copy(a.orderedHeaders[nodeHeaderIndex+1:], a.orderedHeaders[nodeHeaderIndex+2:])
@@ -1290,7 +1332,7 @@ func (array *Array) Insert(index uint64, v Storable) error {
 		root := array.root.(*ArrayMetaDataSlab)
 		root.orderedHeaders = []*SlabHeader{left.Header(), right.Header()}
 		root.header.count = left.Header().count + right.Header().count
-		root.header.size = metaDataSlabPrefixSize + headerSize*2
+		root.header.size = metaDataSlabPrefixSize + headerSize*uint32(len(root.orderedHeaders))
 	}
 
 	return nil
@@ -1310,9 +1352,13 @@ func (array *Array) Remove(index uint64) (Storable, error) {
 		// Set root to nil if tree is empty.
 		root := array.root.(*ArrayDataSlab)
 		if len(root.elements) == 0 {
+			// Remove node from SlabStorage
+			array.storage.Remove(root.Header().id)
+
 			array.root = nil
 			array.dataSlabStorageID = StorageIDUndefined
 		}
+
 		return v, nil
 	}
 
@@ -1332,6 +1378,8 @@ func (array *Array) Remove(index uint64) (Storable, error) {
 		node.Header().id = oldRootID
 
 		array.storage.Store(oldRootID, node)
+
+		array.storage.Remove(childID)
 
 		array.root = node
 

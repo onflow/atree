@@ -1108,7 +1108,7 @@ func TestNestedArray(t *testing.T) {
 		setThreshold(1024)
 	}()
 
-	t.Run("inline", func(t *testing.T) {
+	t.Run("small", func(t *testing.T) {
 
 		const arraySize = 256 * 256
 
@@ -1123,6 +1123,7 @@ func TestNestedArray(t *testing.T) {
 
 			err = nested.Append(Uint64Value(i*2 + 1))
 			require.NoError(t, err)
+
 			require.True(t, nested.root.IsLeaf())
 
 			nestedArrays[i] = nested.root
@@ -1144,7 +1145,8 @@ func TestNestedArray(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, verified)
 	})
-	t.Run("not-inline", func(t *testing.T) {
+
+	t.Run("big", func(t *testing.T) {
 
 		const arraySize = 256 * 256
 
@@ -1178,7 +1180,6 @@ func TestNestedArray(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, verified)
 	})
-
 }
 
 func TestEncode(t *testing.T) {

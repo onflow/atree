@@ -10,6 +10,8 @@ type Storable interface {
 	ByteSize() uint32
 	ID() StorageID
 
+	Mutable() bool
+
 	String() string
 }
 
@@ -52,6 +54,10 @@ func (v Uint8Value) ByteSize() uint32 {
 	return 2 + getUintCBORSize(uint64(v))
 }
 
+func (v Uint8Value) Mutable() bool {
+	return false
+}
+
 func (v Uint8Value) ID() StorageID {
 	return StorageIDUndefined
 }
@@ -77,6 +83,10 @@ func (v Uint16Value) Encode(enc *Encoder) error {
 func (v Uint16Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + getUintCBORSize(uint64(v))
+}
+
+func (v Uint16Value) Mutable() bool {
+	return false
 }
 
 func (v Uint16Value) ID() StorageID {
@@ -111,6 +121,10 @@ func (v Uint32Value) ByteSize() uint32 {
 	return 2 + getUintCBORSize(uint64(v))
 }
 
+func (v Uint32Value) Mutable() bool {
+	return false
+}
+
 func (v Uint32Value) ID() StorageID {
 	return StorageIDUndefined
 }
@@ -143,6 +157,10 @@ func (v Uint64Value) ByteSize() uint32 {
 	return 2 + getUintCBORSize(uint64(v))
 }
 
+func (v Uint64Value) Mutable() bool {
+	return false
+}
+
 func (v Uint64Value) ID() StorageID {
 	return StorageIDUndefined
 }
@@ -173,6 +191,10 @@ func (v StorageIDValue) Encode(enc *Encoder) error {
 func (v StorageIDValue) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + getUintCBORSize(uint64(v))
+}
+
+func (v StorageIDValue) Mutable() bool {
+	return false
 }
 
 func (v StorageIDValue) ID() StorageID {

@@ -447,6 +447,10 @@ func (a *ArrayDataSlab) IsLeaf() bool {
 	return true
 }
 
+func (a *ArrayDataSlab) Mutable() bool {
+	return true
+}
+
 func (a *ArrayDataSlab) ID() StorageID {
 	return a.header.id
 }
@@ -1018,6 +1022,10 @@ func (a *ArrayMetaDataSlab) ByteSize() uint32 {
 	return a.header.size
 }
 
+func (a *ArrayMetaDataSlab) Mutable() bool {
+	return true
+}
+
 func (a *ArrayMetaDataSlab) ID() StorageID {
 	return a.header.id
 }
@@ -1254,7 +1262,7 @@ func (array *Array) Set(index uint64, v Storable) error {
 	if array.root == nil {
 		return fmt.Errorf("out of bounds")
 	}
-	if v.ByteSize() > uint32(maxInlineElementSize) {
+	if v.Mutable() || v.ByteSize() > uint32(maxInlineElementSize) {
 		v = StorageIDValue(v.ID())
 	}
 	return array.root.Set(array.storage, index, v)
@@ -1265,7 +1273,7 @@ func (array *Array) Append(v Storable) error {
 }
 
 func (array *Array) Insert(index uint64, v Storable) error {
-	if v.ByteSize() > uint32(maxInlineElementSize) {
+	if v.Mutable() || v.ByteSize() > uint32(maxInlineElementSize) {
 		v = StorageIDValue(v.ID())
 	}
 

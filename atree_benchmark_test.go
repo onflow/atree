@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -42,7 +43,12 @@ func RandomValue() Storable {
 func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	rand.Seed(time.Now().UnixNano())
-	storage := NewBasicSlabStorage()
+
+	baseStorage := NewInMemBaseStorage()
+
+	// storage := NewBasicSlabStorage()
+	storage := NewPersistentSlabStorage(baseStorage)
+
 	array := NewArray(storage)
 
 	var start time.Time
@@ -77,8 +83,8 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 		start = time.Now()
 		s, err := array.Remove(uint64(ind))
 		totalRemoveTime += time.Since(start)
-		totalRawDataSize -= s.ByteSize()
 		require.NoError(b, err)
+		totalRawDataSize -= s.ByteSize()
 	}
 
 	// insert
@@ -101,6 +107,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 		require.NoError(b, err)
 	}
 
+	fmt.Println(baseStorage.SegmentCounts())
 	// storageOverheadRatio := float64(storage.Size()) / float64(basicArraySize)
 	// b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
 	b.ReportMetric(float64(int(totalAppendTime)/numberOfElements), "avg_append_time_(ns)")

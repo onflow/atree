@@ -86,6 +86,14 @@ func (s *InMemBaseStorage) SegmentCounts() int {
 	return len(s.segments)
 }
 
+func (s *InMemBaseStorage) Size() int {
+	total := 0
+	for _, seg := range s.segments {
+		total += len(seg)
+	}
+	return total
+}
+
 func (s *InMemBaseStorage) BytesRetrieved() int {
 	return s.bytesRetrieved
 }
@@ -187,15 +195,15 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	// TODO call to decode
-	_ = data
-	return slab, ok, nil
+	slab, err = decodeSlab(id, data)
+	return slab, ok, err
 }
 
 func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {
-	var data []byte
-	// TODO encode values
-	// data := slab.Encode()
+	data, err := slab.Bytes()
+	if err != nil {
+		return err
+	}
 	return s.baseStorage.Store(id, data)
 }
 

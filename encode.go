@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -28,27 +27,18 @@ func newEncoder(w io.Writer) *Encoder {
 	}
 }
 
-type Decoder struct {
-	io.Reader
-	scratch [32]byte
-}
-
-func newDecoder(data []byte) *Decoder {
-	return &Decoder{
-		Reader: bytes.NewBuffer(data),
-	}
-}
-
-func (dec *Decoder) newCBORDecoder(size uint32) (*cbor.StreamDecoder, error) {
-	b := make([]byte, size)
-	n, err := dec.Read(b)
-	if err != nil {
-		return nil, err
-	}
-	if uint32(n) != size {
+func decodeSlab(id StorageID, data []byte) (Slab, error) {
+	if len(data) == 0 {
 		return nil, errors.New("data is too short")
 	}
-	return cbor.NewByteStreamDecoder(b), nil
+	flag := data[0]
+	if flag&flagArray != 0 {
+		if flag&flagInternalNode != 0 {
+			return newArrayMetaDataSlabFromData(id, data)
+		}
+		return newArrayDataSlabFromData(id, data)
+	}
+	return nil, fmt.Errorf("data has invalid flag %x", flag)
 }
 
 func decodeStorable(dec *cbor.StreamDecoder) (Storable, error) {

@@ -1187,89 +1187,44 @@ func TestNestedArray(t *testing.T) {
 }
 
 func TestEncode(t *testing.T) {
-	t.Run("empty tree", func(t *testing.T) {
-		storage := NewBasicSlabStorage()
 
-		array := NewArray(storage)
+	setThreshold(50)
+	defer func() {
+		setThreshold(1024)
+	}()
 
-		b, err := array.Encode()
+	// Reset storage id for consistent storage id
+	resetStorageID()
+
+	// Create and populate array in memory
+	storage := NewBasicSlabStorage()
+	array := NewArray(storage)
+
+	const arraySize = 20
+	for i := uint64(0); i < arraySize; i++ {
+		err := array.Append(Uint64Value(i))
 		require.NoError(t, err)
-		require.Equal(t, 0, len(b))
-	})
+	}
+	require.Equal(t, uint64(arraySize), array.Count())
 
-	t.Run("data root", func(t *testing.T) {
-		const arraySize = 5
-
-		// Reset storage id for consistent encoded data
-		resetStorageID()
-
-		storage := NewBasicSlabStorage()
-		array := NewArray(storage)
-
-		for i := uint64(0); i < arraySize; i++ {
-			array.Append(Uint64Value(i))
-		}
-
-		require.Equal(t, uint64(arraySize), array.Count())
-
-		expected := []byte{
-			// root
-			// node flag (leaf node | array data)
-			0x06,
-			// prev storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			// next storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			// CBOR encoded array size (fixed size 3 byte)
-			0x99, 0x00, 0x05,
-			// CBOR encoded array elements
-			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04,
-		}
-
-		b, err := array.Encode()
-		require.NoError(t, err)
-		require.Equal(t, expected, b)
-	})
-
-	t.Run("metadata root", func(t *testing.T) {
-		setThreshold(50)
-		defer func() {
-			setThreshold(1024)
-		}()
-
-		const arraySize = 20
-
-		// Reset storage id for consistent encoded data
-		resetStorageID()
-
-		storage := NewBasicSlabStorage()
-		array := NewArray(storage)
-
-		for i := uint64(0); i < arraySize; i++ {
-			err := array.Append(Uint64Value(i))
-			require.NoError(t, err)
-		}
-
-		require.Equal(t, uint64(arraySize), array.Count())
-
-		/*
-			level 1, meta ({id:1 size:37 count:20}) headers: [{id:2 size:50 count:10} {id:3 size:50 count:10} ]
-			level 2, leaf ({id:2 size:50 count:10}): [0 1 2 ... 7 8 9]
-			level 2, leaf ({id:3 size:50 count:10}): [10 11 12 ... 17 18 19]
-		*/
-		expected := []byte{
-			// root (meta data slab)
-			// node flag
-			0x01,
+	// Expected serialized slab data with storage id
+	expected := map[StorageID][]byte{
+		1:
+		// (metadata slab) headers: [{id:2 size:50 count:10} {id:3 size:50 count:10} ]
+		{
+			// array meta data slab flag
+			0x05,
 			// child header count
 			0x00, 0x00, 0x00, 0x02,
 			// child header 1 (storage id, count, size)
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x32,
 			// child header 2
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x32,
-
-			// data slab
-			// node flag
+		},
+		2:
+		// (data slab) prev: 0, next: 3, data: [0 1 2 ... 7 8 9]
+		{
+			// array data slab flag
 			0x06,
 			// prev storage id
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1279,9 +1234,11 @@ func TestEncode(t *testing.T) {
 			0x99, 0x00, 0x0a,
 			// CBOR encoded array elements
 			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x09,
-
-			// data slab
-			// node flag
+		},
+		3:
+		// (data slab) prev: 2, next: 0, data: [10 11 12 ... 17 18 19]
+		{
+			// array data slab flag
 			0x06,
 			// prev storage id
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
@@ -1291,86 +1248,38 @@ func TestEncode(t *testing.T) {
 			0x99, 0x00, 0x0a,
 			// CBOR encoded array elements
 			0xd8, 0xa4, 0x0a, 0xd8, 0xa4, 0x0b, 0xd8, 0xa4, 0x0c, 0xd8, 0xa4, 0x0d, 0xd8, 0xa4, 0x0e, 0xd8, 0xa4, 0x0f, 0xd8, 0xa4, 0x10, 0xd8, 0xa4, 0x11, 0xd8, 0xa4, 0x12, 0xd8, 0xa4, 0x13,
-		}
-		b, err := array.Encode()
-		require.NoError(t, err)
-		require.Equal(t, expected, b)
-	})
+		},
+	}
+
+	m, err := storage.Encode()
+	require.NoError(t, err)
+	require.Equal(t, expected, m)
 }
 
 func TestDecodeEncode(t *testing.T) {
-	t.Run("empty tree", func(t *testing.T) {
-		storage := NewBasicSlabStorage()
 
-		decoded, err := NewArrayFromData(storage, StorageIDUndefined, []byte{})
-		require.NoError(t, err)
-		require.Equal(t, nil, decoded.root)
-		require.Equal(t, StorageIDUndefined, decoded.dataSlabStorageID)
+	setThreshold(50)
+	defer func() {
+		setThreshold(1024)
+	}()
 
-		// Encode decoded array and compare encoded bytes
-		encodedData, err := decoded.Encode()
-		require.NoError(t, err)
-		require.Equal(t, []byte(nil), encodedData)
-	})
-
-	t.Run("data root", func(t *testing.T) {
-		storage := NewBasicSlabStorage()
-
-		data := []byte{
-			// root
-			// node flag (leaf node | array data)
-			0x06,
-			// prev storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			// next storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-			// CBOR encoded array head (fixed size 3 byte)
-			0x99, 0x00, 0x05,
-			// CBOR encoded array elements
-			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04,
-		}
-		decoded, err := NewArrayFromData(storage, StorageID(1), data)
-		require.NoError(t, err)
-		require.Equal(t, uint64(5), decoded.Count())
-		require.NotNil(t, decoded.root)
-		require.True(t, decoded.root.IsLeaf())
-
-		expected := []Storable{Uint64Value(0), Uint64Value(1), Uint64Value(2), Uint64Value(3), Uint64Value(4)}
-
-		leaf := decoded.root.(*ArrayDataSlab)
-		require.Equal(t, expected, leaf.elements)
-
-		// Encode decoded array and compare encoded bytes
-		encodedData, err := decoded.Encode()
-		require.NoError(t, err)
-		require.Equal(t, data, encodedData)
-	})
-
-	t.Run("metadata root", func(t *testing.T) {
-		setThreshold(50)
-		defer func() {
-			setThreshold(1024)
-		}()
-
-		storage := NewBasicSlabStorage()
-
-		// level 1, meta ({id:1 size:37 count:20}) headers: [{id:2 size:50 count:10} {id:3 size:50 count:10} ]
-		// level 2, leaf ({id:2 size:50 count:10}): [0 1 2 ... 7 8 9]
-		// level 2, leaf ({id:3 size:50 count:10}): [10 11 12 ... 17 18 19]
-
-		data := []byte{
-			// root
-			// node flag (internal)
-			0x01,
+	data := map[StorageID][]byte{
+		1:
+		// (metadata slab) headers: [{id:2 size:50 count:10} {id:3 size:50 count:10} ]
+		{
+			// array meta data slab flag
+			0x05,
 			// child header count
 			0x00, 0x00, 0x00, 0x02,
 			// child header 1 (storage id, count, size)
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x32,
 			// child header 2
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x32,
-
-			// leaf 1
-			// node flag
+		},
+		2:
+		// (data slab) prev: 0, next: 3, data: [0 1 2 ... 7 8 9]
+		{
+			// array data slab flag
 			0x06,
 			// prev storage id
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1380,9 +1289,11 @@ func TestDecodeEncode(t *testing.T) {
 			0x99, 0x00, 0x0a,
 			// CBOR encoded array elements
 			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x09,
-
-			// leaf 2
-			// node flag
+		},
+		3:
+		// (data slab) prev: 2, next: 0, data: [10 11 12 ... 17 18 19]
+		{
+			// array data slab flag
 			0x06,
 			// prev storage id
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
@@ -1392,19 +1303,48 @@ func TestDecodeEncode(t *testing.T) {
 			0x99, 0x00, 0x0a,
 			// CBOR encoded array elements
 			0xd8, 0xa4, 0x0a, 0xd8, 0xa4, 0x0b, 0xd8, 0xa4, 0x0c, 0xd8, 0xa4, 0x0d, 0xd8, 0xa4, 0x0e, 0xd8, 0xa4, 0x0f, 0xd8, 0xa4, 0x10, 0xd8, 0xa4, 0x11, 0xd8, 0xa4, 0x12, 0xd8, 0xa4, 0x13,
-		}
+		},
+	}
 
-		decoded, err := NewArrayFromData(storage, StorageID(1), data)
-		require.NoError(t, err)
-		require.Equal(t, uint64(20), decoded.Count())
-		require.NotNil(t, decoded.root)
-		require.False(t, decoded.root.IsLeaf())
+	// Decode serialized slabs and store them in storage
+	storage := NewBasicSlabStorage()
+	err := storage.Load(data)
+	require.NoError(t, err)
 
-		// Encode decoded array and compare encoded bytes
-		encodedData, err := decoded.Encode()
-		require.NoError(t, err)
-		require.Equal(t, data, encodedData)
-	})
+	// Check metadata slab (storage id 1)
+	node, err := getArrayNodeFromStorageID(storage, 1)
+	require.NoError(t, err)
+	require.False(t, node.IsLeaf())
+
+	meta := node.(*ArrayMetaDataSlab)
+	require.Equal(t, 2, len(meta.orderedHeaders))
+	require.Equal(t, StorageID(2), meta.orderedHeaders[0].id)
+	require.Equal(t, StorageID(3), meta.orderedHeaders[1].id)
+
+	// Check data slab (storage id 2)
+	node, err = getArrayNodeFromStorageID(storage, 2)
+	require.NoError(t, err)
+	require.True(t, node.IsLeaf())
+
+	dataslab := node.(*ArrayDataSlab)
+	require.Equal(t, 10, len(dataslab.elements))
+	require.Equal(t, Uint64Value(0), dataslab.elements[0])
+	require.Equal(t, Uint64Value(9), dataslab.elements[9])
+
+	// Check data slab (storage id 3)
+	node, err = getArrayNodeFromStorageID(storage, 3)
+	require.NoError(t, err)
+	require.True(t, node.IsLeaf())
+
+	dataslab = node.(*ArrayDataSlab)
+	require.Equal(t, 10, len(dataslab.elements))
+	require.Equal(t, Uint64Value(10), dataslab.elements[0])
+	require.Equal(t, Uint64Value(19), dataslab.elements[9])
+
+	// Encode storaged slabs and compare encoded bytes
+	encodedData, err := storage.Encode()
+	require.NoError(t, err)
+	require.Equal(t, data, encodedData)
 }
 
 func TestDecodeEncodeRandomData(t *testing.T) {
@@ -1421,10 +1361,11 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 		setThreshold(1024)
 	}()
 
+	storage := NewBasicSlabStorage()
+	array := NewArray(storage)
+
 	const arraySize = 256 * 256
-
-	array := NewArray(NewBasicSlabStorage())
-
+	values := make([]Storable, arraySize)
 	for i := uint64(0); i < arraySize; i++ {
 
 		var v Storable
@@ -1442,6 +1383,8 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 			v = Uint64Value(rand.Uint64())
 		}
 
+		values[i] = v
+
 		err := array.Append(v)
 		require.NoError(t, err)
 	}
@@ -1450,16 +1393,25 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, verified)
 
-	// Encode array with random data of mixed types
-	b1, err := array.Encode()
+	rootID := array.root.Header().id
+
+	// Encode slabs with random data of mixed types
+	m1, err := storage.Encode()
 	require.NoError(t, err)
 
-	// Decode data to new array
-	decodedArray, err := NewArrayFromData(NewBasicSlabStorage(), array.root.Header().id, b1)
+	// Decode data to new storage
+	storage2 := NewBasicSlabStorage()
+	err = storage2.Load(m1)
 	require.NoError(t, err)
 
-	// Encode decoded array
-	b2, err := decodedArray.Encode()
+	// Create new array from new storage
+	array2, err := NewArrayWithRootID(storage2, rootID)
 	require.NoError(t, err)
-	require.Equal(t, b1, b2)
+
+	// Get and check every element from new array.
+	for i := uint64(0); i < arraySize; i++ {
+		e, err := array2.Get(i)
+		require.NoError(t, err)
+		require.Equal(t, values[i], e)
+	}
 }

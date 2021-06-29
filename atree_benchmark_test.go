@@ -60,6 +60,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 		require.NoError(b, err)
 	}
 
+	b.ResetTimer()
 	// append
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue()

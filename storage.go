@@ -146,6 +146,33 @@ func (s *BasicSlabStorage) Count() int {
 	return len(s.slabs)
 }
 
+// Encode returns serialized slabs in storage.
+// This is currently used for testing.
+func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
+	m := make(map[StorageID][]byte)
+	for id, slab := range s.slabs {
+		b, err := slab.Bytes()
+		if err != nil {
+			return nil, err
+		}
+		m[id] = b
+	}
+	return m, nil
+}
+
+// Load deserializes encoded slabs and stores in storage.
+// This is currently used for testing.
+func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
+	for id, data := range m {
+		slab, err := decodeSlab(id, data)
+		if err != nil {
+			return err
+		}
+		s.slabs[id] = slab
+	}
+	return nil
+}
+
 type PersistentSlabStorage struct {
 	baseStorage BaseStorage
 }

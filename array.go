@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 const (
@@ -27,6 +29,9 @@ const (
 
 type Slab interface {
 	Storable
+
+	// Bytes is a wrapper for Storable.Encode()
+	Bytes() ([]byte, error)
 
 	Header() *SlabHeader
 
@@ -94,27 +99,24 @@ func newArrayDataSlab() *ArrayDataSlab {
 	}
 }
 
-func newArrayDataSlabFromData(dec *Decoder, size uint32) (*ArrayDataSlab, error) {
+func newArrayDataSlabFromData(slabID StorageID, data []byte) (*ArrayDataSlab, error) {
 
-	// Read previous and next slab storage ID (flag is already read at calling function).
-	n, err := dec.Read(dec.scratch[:16])
-	if err != nil {
-		return nil, err
-	}
-	if n != 16 {
-		return nil, errors.New("data is too short")
+	if len(data) < dataSlabPrefixSize {
+		return nil, errors.New("data is too short for array data slab")
 	}
 
-	// prev storage id
-	prev := binary.BigEndian.Uint64(dec.scratch[:8])
-
-	// next storage id
-	next := binary.BigEndian.Uint64(dec.scratch[8:16])
-
-	cborDec, err := dec.newCBORDecoder(size - 16)
-	if err != nil {
-		return nil, err
+	// Check flag
+	if data[0]&flagArray == 0 || data[0]&flagLeafNode == 0 {
+		return nil, fmt.Errorf("data has invalid flag 0x%x, want 0x%x", data[0], flagArray&flagLeafNode)
 	}
+
+	// Decode prev storage id
+	prev := binary.BigEndian.Uint64(data[1:9])
+
+	// Decode next storage id
+	next := binary.BigEndian.Uint64(data[9:17])
+
+	cborDec := cbor.NewByteStreamDecoder(data[17:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
@@ -133,8 +135,22 @@ func newArrayDataSlabFromData(dec *Decoder, size uint32) (*ArrayDataSlab, error)
 	return &ArrayDataSlab{
 		prev:     StorageID(prev),
 		next:     StorageID(next),
+		header:   &SlabHeader{id: slabID, size: uint32(len(data)), count: uint32(elemCount)},
 		elements: elements,
 	}, nil
+}
+
+// TODO: make this function inline
+// TODO: reuse bytes.Buffer with a sync.Pool
+func (a *ArrayDataSlab) Bytes() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := newEncoder(&buf)
+
+	err := a.Encode(enc)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // Leaf node header (17 bytes):
@@ -494,39 +510,56 @@ func newArrayMetaDataSlab() *ArrayMetaDataSlab {
 	}
 }
 
-func newArrayMetaDataSlabFromData(dec *Decoder) (*ArrayMetaDataSlab, error) {
-
-	// Decode number of child headers (flag is already read at calling function).
-	n, err := dec.Read(dec.scratch[:4])
-	if err != nil {
-		return nil, err
-	}
-	if n != 4 {
-		return nil, errors.New("data is too short")
+func newArrayMetaDataSlabFromData(slabID StorageID, data []byte) (*ArrayMetaDataSlab, error) {
+	if len(data) < metaDataSlabPrefixSize {
+		return nil, errors.New("data is too short for array metadata slab")
 	}
 
-	headerCount := binary.BigEndian.Uint32(dec.scratch[:4])
+	// Check flag
+	if data[0]&flagArray == 0 || data[0]&flagInternalNode == 0 {
+		return nil, fmt.Errorf("data has invalid flag 0x%x, want 0x%x", data[0], flagArray&flagInternalNode)
+	}
+
+	// Decode number of child headers
+	headerCount := binary.BigEndian.Uint32(data[1:5])
+
+	if len(data) != metaDataSlabPrefixSize+16*int(headerCount) {
+		return nil, fmt.Errorf("data has unexpected length %d, want %d", len(data), metaDataSlabPrefixSize+16*headerCount)
+	}
+
+	off := 5
 
 	// Decode child headers
 	headers := make([]*SlabHeader, headerCount)
+	totalCount := uint32(0)
 	for i := 0; i < int(headerCount); i++ {
-
-		n, err := dec.Read(dec.scratch[:16])
-		if err != nil {
-			return nil, err
-		}
-		if n != 16 {
-			return nil, errors.New("data is too short")
-		}
-
-		id := binary.BigEndian.Uint64(dec.scratch[:8])
-		count := binary.BigEndian.Uint32(dec.scratch[8:12])
-		size := binary.BigEndian.Uint32(dec.scratch[12:16])
+		id := binary.BigEndian.Uint64(data[off : off+8])
+		count := binary.BigEndian.Uint32(data[off+8 : off+12])
+		size := binary.BigEndian.Uint32(data[off+12 : off+16])
 
 		headers[i] = &SlabHeader{id: StorageID(id), count: count, size: size}
+
+		totalCount += count
+
+		off += 16
 	}
 
-	return &ArrayMetaDataSlab{orderedHeaders: headers}, nil
+	return &ArrayMetaDataSlab{
+		header:         &SlabHeader{id: slabID, size: uint32(len(data)), count: totalCount},
+		orderedHeaders: headers,
+	}, nil
+}
+
+// TODO: make this function inline
+func (a *ArrayMetaDataSlab) Bytes() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := newEncoder(&buf)
+
+	err := a.Encode(enc)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // Internal node header (5 bytes):
@@ -536,7 +569,7 @@ func newArrayMetaDataSlabFromData(dec *Decoder) (*ArrayMetaDataSlab, error) {
 func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
 	// Encode flag
-	enc.scratch[0] = flagInternalNode
+	enc.scratch[0] = flagArray | flagInternalNode
 
 	// Encode child header count
 	binary.BigEndian.PutUint32(enc.scratch[1:], uint32(len(a.orderedHeaders)))
@@ -1046,194 +1079,12 @@ func NewArray(storage SlabStorage) *Array {
 	return &Array{storage: storage}
 }
 
-func NewArrayFromData(storage SlabStorage, id StorageID, data []byte) (*Array, error) {
-
-	array := NewArray(storage)
-
-	if len(data) == 0 {
-		return array, nil
-	}
-
-	dec := newDecoder(data)
-
-	// Decode flag
-	n, err := dec.Read(dec.scratch[:1])
+func NewArrayWithRootID(storage SlabStorage, rootID StorageID) (*Array, error) {
+	root, err := getArrayNodeFromStorageID(storage, rootID)
 	if err != nil {
 		return nil, err
 	}
-	if n != 1 {
-		return nil, errors.New("data is too short")
-	}
-
-	if dec.scratch[0]&flagLeafNode > 0 {
-		// Decode data slab as root
-		root, err := newArrayDataSlabFromData(dec, uint32(len(data))-1)
-		if err != nil {
-			return nil, err
-		}
-
-		// Check if there is any unread data
-		n, _ := dec.Read(dec.scratch[:1])
-		if n != 0 {
-			return nil, errors.New("too much data")
-		}
-
-		root.header = &SlabHeader{
-			id:    id,
-			count: uint32(len(root.elements)),
-			size:  uint32(len(data)),
-		}
-
-		storage.Store(id, root)
-
-		array.root = root
-		array.dataSlabStorageID = id
-
-		return array, nil
-	}
-
-	// Decode meta data slab as root
-	root, err := newArrayMetaDataSlabFromData(dec)
-	if err != nil {
-		return nil, err
-	}
-
-	count := uint32(0)
-	size := uint32(metaDataSlabPrefixSize)
-	for _, h := range root.orderedHeaders {
-		count += h.count
-		size += headerSize
-	}
-	root.header = &SlabHeader{
-		id:    id,
-		count: count,
-		size:  size,
-	}
-
-	storage.Store(id, root)
-
-	array.root = root
-
-	// Decode more data
-
-	savedHeaders := make([]*SlabHeader, len(root.orderedHeaders))
-	copy(savedHeaders, root.orderedHeaders)
-
-	for len(savedHeaders) > 0 {
-
-		// Read flag
-		n, err := dec.Read(dec.scratch[:1])
-		if err != nil {
-			return nil, err
-		}
-		if n != 1 {
-			return nil, errors.New("data is too short")
-		}
-
-		if dec.scratch[0]&flagLeafNode > 0 {
-			// Decode data slab
-
-			if dec.scratch[0]&flagArray == 0 {
-				return nil, errors.New("wrong data type")
-			}
-
-			header := savedHeaders[0]
-
-			node, err := newArrayDataSlabFromData(dec, header.size-1) // It's header.size-1 because we read flag.
-			if err != nil {
-				return nil, err
-			}
-
-			node.header = header
-
-			storage.Store(node.header.id, node)
-
-			// Remove first saved headers
-			copy(savedHeaders, savedHeaders[1:])
-			savedHeaders = savedHeaders[:len(savedHeaders)-1]
-
-			if array.dataSlabStorageID == StorageIDUndefined {
-				array.dataSlabStorageID = node.header.id
-			}
-
-		} else {
-			// Decode meta data slab
-
-			node, err := newArrayMetaDataSlabFromData(dec)
-			if err != nil {
-				return nil, err
-			}
-
-			node.header = savedHeaders[0]
-
-			storage.Store(node.header.id, node)
-
-			// Remove first saved headers
-			copy(savedHeaders, savedHeaders[1:])
-			savedHeaders = savedHeaders[:len(savedHeaders)-1]
-
-			// Append more headers to saved headers
-			savedHeaders = append(savedHeaders, node.orderedHeaders...)
-		}
-	}
-
-	// Check if there is any unread data.
-	n, _ = dec.Read(dec.scratch[:1])
-	if n != 0 {
-		return nil, errors.New("too much data")
-	}
-
-	return array, nil
-}
-
-// TODO: encode overflow slabs (not-inlined immutable variable sized slab and mutable variable sized slab)
-func (array *Array) Encode() ([]byte, error) {
-
-	if array.root == nil {
-		return nil, nil
-	}
-
-	var buf bytes.Buffer
-	enc := newEncoder(&buf)
-
-	// Array root is data slab, encode and return.
-	if array.root.IsLeaf() {
-		err := array.root.Encode(enc)
-		if err != nil {
-			return nil, err
-		}
-		return buf.Bytes(), nil
-	}
-
-	// Encode meta slabs using BFT, followed by data slabs, and then overflow slabs.
-	ids := []StorageID{array.root.Header().id}
-
-	for len(ids) > 0 {
-
-		id := ids[0]
-
-		copy(ids, ids[1:])
-		ids = ids[:len(ids)-1]
-
-		node, err := getArrayNodeFromStorageID(array.storage, id)
-		if err != nil {
-			return nil, err
-		}
-
-		err = node.Encode(enc)
-		if err != nil {
-			return nil, err
-		}
-
-		if !node.IsLeaf() {
-			node := node.(*ArrayMetaDataSlab)
-			for _, h := range node.orderedHeaders {
-				ids = append(ids, h.id)
-			}
-		}
-	}
-
-	return buf.Bytes(), nil
+	return &Array{storage: storage, root: root}, nil
 }
 
 func (array *Array) Get(i uint64) (Storable, error) {

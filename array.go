@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
 const (
@@ -125,7 +123,7 @@ func newArrayDataSlabFromData(slabID StorageID, data []byte) (*ArrayDataSlab, er
 	// Decode next storage id
 	next := binary.BigEndian.Uint64(data[9:17])
 
-	cborDec := cbor.NewByteStreamDecoder(data[17:])
+	cborDec := NewByteStreamDecoder(data[17:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {

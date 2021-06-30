@@ -5,8 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
 const (
@@ -44,7 +42,7 @@ func newBasicArrayDataSlabFromData(id StorageID, data []byte) (*BasicArrayDataSl
 		return nil, fmt.Errorf("data has invalid flag 0x%x, want 0x%x", data[0], flagBasicArray)
 	}
 
-	cborDec := cbor.NewByteStreamDecoder(data[1:])
+	cborDec := NewByteStreamDecoder(data[1:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {

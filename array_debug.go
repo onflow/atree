@@ -21,10 +21,6 @@ type Stats struct {
 
 // Stats returns stats about the array slabs.
 func (array *Array) Stats() (Stats, error) {
-	if array.root == nil {
-		return Stats{}, nil
-	}
-
 	level := uint64(0)
 	internalNodeCount := uint64(0)
 	internalNodeSize := uint64(0)
@@ -82,11 +78,6 @@ func (array *Array) Stats() (Stats, error) {
 }
 
 func (array *Array) Print() {
-	if array.root == nil {
-		fmt.Printf("empty tree\n")
-		return
-	}
-
 	nextLevelIDs := list.New()
 	nextLevelIDs.PushBack(array.root.Header().id)
 
@@ -166,9 +157,6 @@ func (array *Array) Print() {
 }
 
 func (array *Array) valid() (bool, error) {
-	if array.root == nil {
-		return true, nil
-	}
 	verified, _, err := array._valid(array.root.Header().id, 0)
 	return verified, err
 }

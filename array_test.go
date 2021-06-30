@@ -1076,9 +1076,6 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 		require.Equal(t, array.Count(), uint64(len(values)))
 
 		verified, err := array.valid()
-		if !verified {
-			array.Print()
-		}
 		require.NoError(t, err)
 		require.True(t, verified)
 	}
@@ -1414,4 +1411,79 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, values[i], e)
 	}
+}
+
+func TestEmptyArray(t *testing.T) {
+
+	storage := NewBasicSlabStorage()
+
+	array := NewArray(storage)
+
+	rootID := array.root.Header().id
+
+	require.Equal(t, 1, storage.Count())
+
+	t.Run("get", func(t *testing.T) {
+		_, err := array.Get(0)
+		require.Error(t, err, IndexOutOfRangeError{})
+	})
+
+	t.Run("set", func(t *testing.T) {
+		err := array.Set(0, Uint64Value(0))
+		require.Error(t, err, IndexOutOfRangeError{})
+	})
+
+	t.Run("insert", func(t *testing.T) {
+		err := array.Insert(1, Uint64Value(0))
+		require.Error(t, err, IndexOutOfRangeError{})
+	})
+
+	t.Run("remove", func(t *testing.T) {
+		_, err := array.Remove(0)
+		require.Error(t, err, IndexOutOfRangeError{})
+	})
+
+	t.Run("iterate", func(t *testing.T) {
+		i := uint64(0)
+		err := array.Iterate(func(v Storable) {
+			i++
+		})
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), i)
+	})
+
+	t.Run("count", func(t *testing.T) {
+		count := array.Count()
+		require.Equal(t, uint64(0), count)
+	})
+
+	t.Run("encode", func(t *testing.T) {
+		m, err := storage.Encode()
+		require.NoError(t, err)
+		require.Equal(t, 1, len(m))
+
+		data, ok := m[rootID]
+		require.True(t, ok)
+
+		expectedData := []byte{
+			// array data slab flag
+			0x06,
+			// prev storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			// next storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			// CBOR encoded array head (fixed size 3 byte)
+			0x99, 0x00, 0x00,
+		}
+
+		require.Equal(t, expectedData, data)
+	})
+
+	t.Run("decode", func(t *testing.T) {
+		array2, err := NewArrayWithRootID(storage, rootID)
+		require.NoError(t, err)
+		require.True(t, array2.root.IsLeaf())
+		require.Equal(t, uint32(0), array2.root.Header().count)
+		require.Equal(t, uint32(dataSlabPrefixSize), array2.root.Header().size)
+	})
 }

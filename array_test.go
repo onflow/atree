@@ -222,7 +222,7 @@ func TestRemove(t *testing.T) {
 
 			require.Equal(t, arraySize-i-1, array.Count())
 
-			if i%8 == 0 {
+			if i%256 == 0 {
 				verified, err := array.valid()
 				require.NoError(t, err)
 				require.True(t, verified)
@@ -260,7 +260,7 @@ func TestRemove(t *testing.T) {
 
 			require.Equal(t, uint64(i), array.Count())
 
-			if i%8 == 0 {
+			if i%256 == 0 {
 				verified, err := array.valid()
 				require.NoError(t, err)
 				require.True(t, verified)
@@ -298,7 +298,7 @@ func TestRemove(t *testing.T) {
 
 			require.Equal(t, e, v)
 
-			if i%8 == 0 {
+			if i%256 == 0 {
 				verified, err := array.valid()
 				require.NoError(t, err)
 				require.True(t, verified)

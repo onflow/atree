@@ -71,67 +71,61 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 		err := array.Append(v)
 		require.NoError(b, err)
 	}
-
+	require.NoError(b, storage.Commit())
 	b.ResetTimer()
 
-	// clean up setup
-
 	// append
-	require.NoError(b, storage.Commit())
 	storage.DropCache()
+	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue()
 		totalRawDataSize += v.ByteSize()
-		start = time.Now()
 		err := array.Append(v)
-		totalAppendTime += time.Since(start)
 		require.NoError(b, err)
 	}
+	require.NoError(b, storage.Commit())
+	totalAppendTime = time.Since(start)
 
 	// remove
-	require.NoError(b, storage.Commit())
 	storage.DropCache()
+	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
-		start = time.Now()
 		s, err := array.Remove(uint64(ind))
-		totalRemoveTime += time.Since(start)
 		require.NoError(b, err)
 		totalRawDataSize -= s.ByteSize()
 	}
+	require.NoError(b, storage.Commit())
+	totalRemoveTime = time.Since(start)
 
 	// insert
-	require.NoError(b, storage.Commit())
 	storage.DropCache()
+	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		v := RandomValue()
 		totalRawDataSize += v.ByteSize()
-		start = time.Now()
 		err := array.Insert(uint64(ind), v)
-		totalInsertTime += time.Since(start)
 		require.NoError(b, err)
 	}
+	require.NoError(b, storage.Commit())
+	totalInsertTime = time.Since(start)
 
 	// lookup
-	require.NoError(b, storage.Commit())
 	storage.DropCache()
+	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
-		start = time.Now()
 		_, err := array.Get(uint64(ind))
-		totalLookupTime += time.Since(start)
 		require.NoError(b, err)
 	}
+	require.NoError(b, storage.Commit())
+	totalLookupTime = time.Since(start)
 
-	// arrayID := array.dataSlabStorageID
-
-	arrayID := array.root.header.id
+	arrayID := array.StorageID()
 
 	// random lookup
 	baseStorage.ResetReporter()
-	err := storage.Commit()
-	require.NoError(b, err)
 	storage.DropCache()
 
 	newArray, err := NewBasicArrayWithRootID(storage, arrayID)

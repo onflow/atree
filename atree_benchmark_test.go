@@ -73,7 +73,12 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	}
 
 	b.ResetTimer()
+
+	// clean up setup
+
 	// append
+	require.NoError(b, storage.Commit())
+	storage.DropCache()
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue()
 		totalRawDataSize += v.ByteSize()
@@ -84,6 +89,8 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	}
 
 	// remove
+	require.NoError(b, storage.Commit())
+	storage.DropCache()
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		start = time.Now()
@@ -94,6 +101,8 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	}
 
 	// insert
+	require.NoError(b, storage.Commit())
+	storage.DropCache()
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		v := RandomValue()
@@ -105,6 +114,8 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	}
 
 	// lookup
+	require.NoError(b, storage.Commit())
+	storage.DropCache()
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		start = time.Now()
@@ -137,10 +148,10 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	b.ReportMetric(float64(baseStorage.Size()), "storage_stored_data_size")
 	b.ReportMetric(float64(baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
 	b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
-	b.ReportMetric(float64(int(totalAppendTime)/numberOfElements), "avg_append_time_(ns)")
-	b.ReportMetric(float64(int(totalRemoveTime)/numberOfElements), "avg_remove_time_(ns)")
-	b.ReportMetric(float64(int(totalInsertTime)/numberOfElements), "avg_insert_time_(ns)")
-	b.ReportMetric(float64(int(totalLookupTime)/numberOfElements), "avg_lookup_time_(ns)")
+	b.ReportMetric(float64(int(totalAppendTime)), "append_100_time_(ns)")
+	b.ReportMetric(float64(int(totalRemoveTime)), "remove_100_time_(ns)")
+	b.ReportMetric(float64(int(totalInsertTime)), "insert_100_time_(ns)")
+	b.ReportMetric(float64(int(totalLookupTime)), "lookup_100_time_(ns)")
 	// b.ReportMetric(float64(storage.BytesRetrieved()), "bytes_retrieved")
 	// b.ReportMetric(float64(storage.BytesStored()), "bytes_stored")
 	// b.ReportMetric(float64(storage.SegmentTouched()), "segments_touched"

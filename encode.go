@@ -33,10 +33,14 @@ func decodeSlab(id StorageID, data []byte) (Slab, error) {
 	}
 	flag := data[0]
 	if flag&flagArray != 0 {
+
 		if flag&flagInternalNode != 0 {
 			return newArrayMetaDataSlabFromData(id, data)
 		}
 		return newArrayDataSlabFromData(id, data)
+
+	} else if flag&flagBasicArray != 0 {
+		return newBasicArrayDataSlabFromData(id, data)
 	}
 	return nil, fmt.Errorf("data has invalid flag %x", flag)
 }

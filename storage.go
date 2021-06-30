@@ -115,6 +115,8 @@ func (s *InMemBaseStorage) SegmentsTouched() int {
 }
 
 func (s *InMemBaseStorage) ResetReporter() {
+	s.bytesStored = 0
+	s.bytesRetrieved = 0
 	s.segmentsReturned = make(map[StorageID]interface{})
 	s.segmentsUpdated = make(map[StorageID]interface{})
 	s.segmentsTouched = make(map[StorageID]interface{})

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -13,15 +12,19 @@ import (
 // running this test with
 //   go test -bench=.  -benchmem
 // will track the heap allocations for the Benchmarks
-func BenchmarkSmallArray(b *testing.B) { benchmarkArray(b, 10, 100) }
+func BenchmarkXSArray(b *testing.B) { benchmarkArray(b, 10, 100) }
 
-func BenchmarkMidArray(b *testing.B) { benchmarkArray(b, 1000, 100) }
+func BenchmarkSArray(b *testing.B) { benchmarkArray(b, 1000, 100) }
 
-func BenchmarkLargeArray(b *testing.B) { benchmarkArray(b, 100_000, 100) }
+func BenchmarkMArray(b *testing.B) { benchmarkArray(b, 10_000, 100) }
 
-func BenchmarkHugeArray(b *testing.B) { benchmarkArray(b, 10_000_000, 100) }
+func BenchmarkLArray(b *testing.B) { benchmarkArray(b, 100_000, 100) }
 
-func BenchmarkSuperHugeArray(b *testing.B) { benchmarkArray(b, 100_000_000, 100) }
+func BenchmarkXLArray(b *testing.B) { benchmarkArray(b, 1_000_000, 100) }
+
+func BenchmarkXXLArray(b *testing.B) { benchmarkArray(b, 10_000_000, 10) }
+
+func BenchmarkXXXLArray(b *testing.B) { benchmarkArray(b, 100_000_000, 5) }
 
 // TODO add nested arrays as class 5
 func RandomValue() Storable {
@@ -50,6 +53,8 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	storage := NewPersistentSlabStorage(baseStorage)
 
 	array := NewArray(storage)
+
+	// TODO capture arrayID here ?
 
 	var start time.Time
 	var totalRawDataSize uint32
@@ -107,9 +112,22 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 		require.NoError(b, err)
 	}
 
-	fmt.Println(baseStorage.SegmentCounts())
-	// storageOverheadRatio := float64(storage.Size()) / float64(basicArraySize)
-	// b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
+	arrayID := array.dataSlabStorageID
+
+	// random lookup
+	baseStorage.ResetReporter()
+	newArray, err := NewArrayWithRootID(storage, arrayID)
+	require.NoError(b, err)
+	ind := rand.Intn(int(newArray.Count()))
+	_, err = newArray.Get(uint64(ind))
+	require.NoError(b, err)
+	storageOverheadRatio := float64(baseStorage.Size()) / float64(totalRawDataSize)
+	b.ReportMetric(float64(baseStorage.SegmentsTouched()), "segments_touched")
+	b.ReportMetric(float64(baseStorage.SegmentCounts()), "segments_total")
+	b.ReportMetric(float64(totalRawDataSize), "storage_raw_data_size")
+	b.ReportMetric(float64(baseStorage.Size()), "storage_stored_data_size")
+	b.ReportMetric(float64(baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
+	b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
 	b.ReportMetric(float64(int(totalAppendTime)/numberOfElements), "avg_append_time_(ns)")
 	b.ReportMetric(float64(int(totalRemoveTime)/numberOfElements), "avg_remove_time_(ns)")
 	b.ReportMetric(float64(int(totalInsertTime)/numberOfElements), "avg_insert_time_(ns)")

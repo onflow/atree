@@ -90,6 +90,10 @@ type Array struct {
 	dataSlabStorageID StorageID
 }
 
+func (a *Array) StorageID() StorageID {
+	return a.dataSlabStorageID
+}
+
 func newArrayDataSlab() *ArrayDataSlab {
 	return &ArrayDataSlab{
 		header: &SlabHeader{

@@ -185,14 +185,82 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 
 type PersistentSlabStorage struct {
 	baseStorage BaseStorage
+	cache       map[StorageID]Slab
+	deltas      map[StorageID]Slab
+	autoCommit  bool // flag to call commit after each opeartion
 }
 
-func NewPersistentSlabStorage(base BaseStorage) *PersistentSlabStorage {
-	return &PersistentSlabStorage{baseStorage: base}
+type StorageOption func(st *PersistentSlabStorage) *PersistentSlabStorage
+
+func NewPersistentSlabStorage(base BaseStorage, opts ...StorageOption) *PersistentSlabStorage {
+	storage := &PersistentSlabStorage{baseStorage: base,
+		cache:      make(map[StorageID]Slab),
+		deltas:     make(map[StorageID]Slab),
+		autoCommit: true}
+
+	for _, applyOption := range opts {
+		storage = applyOption(storage)
+	}
+
+	return storage
+}
+
+// WithNoAutoCommit sets the autocommit functionality off
+func WithNoAutoCommit() StorageOption {
+	return func(st *PersistentSlabStorage) *PersistentSlabStorage {
+		st.autoCommit = false
+		return st
+	}
+}
+
+func (s *PersistentSlabStorage) Commit() error {
+	for id, slab := range s.deltas {
+		// deleted slabs
+		if slab == nil {
+			s.baseStorage.Remove(id)
+			continue
+		}
+
+		// serialize
+		data, err := slab.Bytes()
+		if err != nil {
+			return err
+		}
+		// store
+		err = s.baseStorage.Store(id, data)
+		if err != nil {
+			return err
+		}
+		// add to read cache
+		s.cache[id] = slab
+	}
+	// reset deltas
+	s.deltas = make(map[StorageID]Slab)
+	return nil
+}
+
+func (s *PersistentSlabStorage) DropDeltas() {
+	s.deltas = make(map[StorageID]Slab)
+}
+
+func (s *PersistentSlabStorage) DropCache() {
+	s.cache = make(map[StorageID]Slab)
 }
 
 func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 	var slab Slab
+
+	// check deltas first
+	if slab, ok := s.deltas[id]; ok {
+		return slab, slab != nil, nil
+	}
+
+	// check the read cache next
+	if slab, ok := s.cache[id]; ok {
+		return slab, true, nil
+	}
+
+	// fetch from base storage last
 	data, ok, err := s.baseStorage.Retrieve(id)
 	if err != nil {
 		return nil, false, err
@@ -202,17 +270,29 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 }
 
 func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {
-	data, err := slab.Bytes()
-	if err != nil {
-		return err
+	if s.autoCommit {
+		data, err := slab.Bytes()
+		if err != nil {
+			return err
+		}
+		return s.baseStorage.Store(id, data)
 	}
-	return s.baseStorage.Store(id, data)
+
+	// add to deltas
+	s.deltas[id] = slab
+	return nil
 }
 
 func (s *PersistentSlabStorage) Remove(id StorageID) {
-	s.baseStorage.Remove(id)
+	if s.autoCommit {
+		s.baseStorage.Remove(id)
+	}
+
+	// add to nil to deltas under that id
+	s.deltas[id] = nil
 }
 
+// Warning Counts doesn't consider new segments in the deltas and only returns commited values
 func (s *PersistentSlabStorage) Count() int {
 	return s.baseStorage.SegmentCounts()
 }

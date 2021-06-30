@@ -50,9 +50,10 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	baseStorage := NewInMemBaseStorage()
 
 	// storage := NewBasicSlabStorage()
-	storage := NewPersistentSlabStorage(baseStorage)
+	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	array := NewArray(storage)
+	// array := NewArray(storage)
+	array := NewBasicArray(storage)
 
 	// TODO capture arrayID here ?
 
@@ -112,11 +113,19 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 		require.NoError(b, err)
 	}
 
-	arrayID := array.dataSlabStorageID
+	// arrayID := array.dataSlabStorageID
+
+	arrayID := array.root.header.id
 
 	// random lookup
 	baseStorage.ResetReporter()
-	newArray, err := NewArrayWithRootID(storage, arrayID)
+	err := storage.Commit()
+	require.NoError(b, err)
+	storage.DropCache()
+
+	newArray, err := NewBasicArrayWithRootID(storage, arrayID)
+
+	// newArray, err := NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 	ind := rand.Intn(int(newArray.Count()))
 	_, err = newArray.Get(uint64(ind))

@@ -83,9 +83,8 @@ type ArrayNode interface {
 
 // Array is tree
 type Array struct {
-	storage           SlabStorage
-	root              ArrayNode
-	dataSlabStorageID StorageID
+	storage SlabStorage
+	root    ArrayNode
 }
 
 type IndexOutOfRangeError struct {
@@ -1147,9 +1146,8 @@ func NewArray(storage SlabStorage) *Array {
 	storage.Store(root.header.id, root)
 
 	return &Array{
-		storage:           storage,
-		root:              root,
-		dataSlabStorageID: root.header.id,
+		storage: storage,
+		root:    root,
 	}
 }
 
@@ -1219,15 +1217,12 @@ func (array *Array) Insert(index uint64, v Storable) error {
 		array.storage.Store(right.Header().id, right)
 
 		if array.root.IsLeaf() {
-
 			// Create new ArrayMetaDataSlab with the same storage ID as root
 			array.root = &ArrayMetaDataSlab{
 				header: &SlabHeader{
 					id: array.root.Header().id,
 				},
 			}
-
-			array.dataSlabStorageID = left.Header().id
 		}
 
 		root := array.root.(*ArrayMetaDataSlab)
@@ -1268,12 +1263,6 @@ func (array *Array) Remove(index uint64) (Storable, error) {
 			array.storage.Remove(childID)
 
 			array.root = node
-
-			if _, ok := array.root.(*ArrayDataSlab); ok {
-				array.dataSlabStorageID = oldRootID
-			}
-
-			//array.storage.Store(array.root.ID(), array.root)
 		}
 	}
 
@@ -1281,7 +1270,12 @@ func (array *Array) Remove(index uint64) (Storable, error) {
 }
 
 func (array *Array) Iterate(fn func(Storable)) error {
-	id := array.dataSlabStorageID
+	node, err := firstDataSlab(array.storage, array.root)
+	if err != nil {
+		return nil
+	}
+
+	id := node.ID()
 
 	for id != StorageIDUndefined {
 		slab, found, err := array.storage.Retrieve(id)
@@ -1351,4 +1345,17 @@ func getArrayNodeFromStorageID(storage SlabStorage, id StorageID) (ArrayNode, er
 		return nil, fmt.Errorf("slab %d is not ArrayNode", id)
 	}
 	return node, nil
+}
+
+func firstDataSlab(storage SlabStorage, node ArrayNode) (ArrayNode, error) {
+	if node.IsLeaf() {
+		return node, nil
+	}
+	meta := node.(*ArrayMetaDataSlab)
+	id := meta.orderedHeaders[0].id
+	node, err := getArrayNodeFromStorageID(storage, id)
+	if err != nil {
+		return nil, err
+	}
+	return firstDataSlab(storage, node)
 }

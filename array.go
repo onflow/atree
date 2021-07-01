@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
 const (
@@ -90,6 +88,15 @@ type Array struct {
 	dataSlabStorageID StorageID
 }
 
+type IndexOutOfRangeError struct {
+	// TODO: add more info
+}
+
+func (e IndexOutOfRangeError) Error() string {
+	// TODO: add more info
+	return "index out of range"
+}
+
 func (a *Array) StorageID() StorageID {
 	return a.dataSlabStorageID
 }
@@ -120,7 +127,7 @@ func newArrayDataSlabFromData(slabID StorageID, data []byte) (*ArrayDataSlab, er
 	// Decode next storage id
 	next := binary.BigEndian.Uint64(data[9:17])
 
-	cborDec := cbor.NewByteStreamDecoder(data[17:])
+	cborDec := NewByteStreamDecoder(data[17:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
@@ -203,14 +210,14 @@ func (a *ArrayDataSlab) ShallowCloneWithNewID() ArrayNode {
 
 func (a *ArrayDataSlab) Get(storage SlabStorage, index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
-		return nil, fmt.Errorf("out of bounds")
+		return nil, IndexOutOfRangeError{}
 	}
 	return a.elements[index], nil
 }
 
 func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error {
 	if index >= uint64(len(a.elements)) {
-		return fmt.Errorf("out of bounds")
+		return IndexOutOfRangeError{}
 	}
 	oldSize := a.elements[index].ByteSize()
 	a.elements[index] = v
@@ -223,7 +230,7 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error
 
 func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
 	if index > uint64(len(a.elements)) {
-		return fmt.Errorf("out of bounds")
+		return IndexOutOfRangeError{}
 	}
 	if index == uint64(len(a.elements)) {
 		a.elements = append(a.elements, v)
@@ -243,7 +250,7 @@ func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) er
 
 func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
-		return nil, fmt.Errorf("out of bounds")
+		return nil, IndexOutOfRangeError{}
 	}
 	v := a.elements[index]
 
@@ -612,7 +619,7 @@ func (a *ArrayMetaDataSlab) ShallowCloneWithNewID() ArrayNode {
 func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, error) {
 
 	if index >= uint64(a.header.count) {
-		return nil, fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
+		return nil, IndexOutOfRangeError{}
 	}
 
 	// Find child slab containing the element at given index.
@@ -639,7 +646,7 @@ func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, er
 func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) error {
 
 	if index >= uint64(a.header.count) {
-		return fmt.Errorf("index %d out of bounds for slab %d", index, a.header.id)
+		return IndexOutOfRangeError{}
 	}
 
 	// Find child slab containing the element at given index.
@@ -687,7 +694,7 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) e
 // If index == a.header.count, Insert appends v to the end of underlying data slab.
 func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
 	if index > uint64(a.header.count) {
-		return fmt.Errorf("insert at index %d out of bounds", index)
+		return IndexOutOfRangeError{}
 	}
 
 	if len(a.orderedHeaders) == 0 {
@@ -741,7 +748,7 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
 
 	if index >= uint64(a.header.count) {
-		return nil, fmt.Errorf("remove at index %d out of bounds", index)
+		return nil, IndexOutOfRangeError{}
 	}
 
 	// Find child slab containing the element at given index.
@@ -1139,7 +1146,15 @@ func (a *ArrayMetaDataSlab) String() string {
 }
 
 func NewArray(storage SlabStorage) *Array {
-	return &Array{storage: storage}
+	root := newArrayDataSlab()
+
+	storage.Store(root.header.id, root)
+
+	return &Array{
+		storage:           storage,
+		root:              root,
+		dataSlabStorageID: root.header.id,
+	}
 }
 
 func NewArrayWithRootID(storage SlabStorage, rootID StorageID) (*Array, error) {
@@ -1151,9 +1166,6 @@ func NewArrayWithRootID(storage SlabStorage, rootID StorageID) (*Array, error) {
 }
 
 func (array *Array) Get(i uint64) (Storable, error) {
-	if array.root == nil {
-		return nil, fmt.Errorf("out of bounds")
-	}
 	v, err := array.root.Get(array.storage, i)
 	if err != nil {
 		return nil, err
@@ -1177,9 +1189,6 @@ func (array *Array) Get(i uint64) (Storable, error) {
 }
 
 func (array *Array) Set(index uint64, v Storable) error {
-	if array.root == nil {
-		return fmt.Errorf("out of bounds")
-	}
 	if v.Mutable() || v.ByteSize() > uint32(maxInlineElementSize) {
 		v = StorageIDValue(v.ID())
 	}
@@ -1193,24 +1202,6 @@ func (array *Array) Append(v Storable) error {
 func (array *Array) Insert(index uint64, v Storable) error {
 	if v.Mutable() || v.ByteSize() > uint32(maxInlineElementSize) {
 		v = StorageIDValue(v.ID())
-	}
-
-	if array.root == nil {
-		if index != 0 {
-			return fmt.Errorf("out of bounds")
-		}
-
-		slab := newArrayDataSlab()
-
-		err := slab.Insert(array.storage, 0, v)
-		if err != nil {
-			return err
-		}
-
-		array.root = slab
-		array.dataSlabStorageID = slab.header.id
-
-		return nil
 	}
 
 	err := array.root.Insert(array.storage, index, v)
@@ -1255,54 +1246,39 @@ func (array *Array) Insert(index uint64, v Storable) error {
 }
 
 func (array *Array) Remove(index uint64) (Storable, error) {
-	if array.root == nil {
-		return nil, fmt.Errorf("out of bounds")
-	}
-
 	v, err := array.root.Remove(array.storage, index)
 	if err != nil {
 		return nil, err
 	}
 
-	if array.root.IsLeaf() {
-		// Set root to nil if tree is empty.
-		if array.root.Header().count == 0 {
-			// Remove node from SlabStorage
-			array.storage.Remove(array.root.Header().id)
+	if !array.root.IsLeaf() {
+		// Set root to its child node if there is only one child node left.
+		root := array.root.(*ArrayMetaDataSlab)
+		if len(root.orderedHeaders) == 1 {
 
-			array.root = nil
-			array.dataSlabStorageID = StorageIDUndefined
+			childID := root.orderedHeaders[0].id
+
+			node, err := getArrayNodeFromStorageID(array.storage, childID)
+			if err != nil {
+				return nil, err
+			}
+
+			oldRootID := root.header.id
+
+			node.Header().id = oldRootID
+
+			array.storage.Store(oldRootID, node)
+
+			array.storage.Remove(childID)
+
+			array.root = node
+
+			if _, ok := array.root.(*ArrayDataSlab); ok {
+				array.dataSlabStorageID = oldRootID
+			}
+
+			//array.storage.Store(array.root.ID(), array.root)
 		}
-
-		return v, nil
-	}
-
-	// Set root to its child node if there is only one child node left.
-	root := array.root.(*ArrayMetaDataSlab)
-	if len(root.orderedHeaders) == 1 {
-
-		childID := root.orderedHeaders[0].id
-
-		node, err := getArrayNodeFromStorageID(array.storage, childID)
-		if err != nil {
-			return nil, err
-		}
-
-		oldRootID := root.header.id
-
-		node.Header().id = oldRootID
-
-		array.storage.Store(oldRootID, node)
-
-		array.storage.Remove(childID)
-
-		array.root = node
-
-		if _, ok := array.root.(*ArrayDataSlab); ok {
-			array.dataSlabStorageID = oldRootID
-		}
-
-		//array.storage.Store(array.root.ID(), array.root)
 	}
 
 	return v, nil
@@ -1333,16 +1309,10 @@ func (array *Array) Iterate(fn func(Storable)) error {
 }
 
 func (array *Array) Count() uint64 {
-	if array.root == nil {
-		return 0
-	}
 	return uint64(array.root.Header().count)
 }
 
 func (array *Array) String() string {
-	if array.root == nil {
-		return "[]"
-	}
 	if array.root.IsLeaf() {
 		return array.root.String()
 	}

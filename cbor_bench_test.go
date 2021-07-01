@@ -12,7 +12,78 @@ const (
 	cborArrayElementsTargetSize = 512*3 - 20 // max slab size minus data slab fix-sized prefix
 )
 
-func BenchmarkCBORArrayUint8(b *testing.B) {
+func BenchmarkEncodeCBORArrayUint8(b *testing.B) {
+	values := getUint8Values()
+	benchmarkEncodeCBORArray(b, values)
+}
+
+func BenchmarkEncodeCBORArrayUint64(b *testing.B) {
+	values := getUint64Values()
+	benchmarkEncodeCBORArray(b, values)
+}
+
+func BenchmarkEncodeCBORArrayMixedTypes(b *testing.B) {
+	values := getMixTypedValues()
+	benchmarkEncodeCBORArray(b, values)
+}
+
+func BenchmarkDecodeCBORArrayUint8(b *testing.B) {
+	values := getUint8Values()
+	data := encode(values)
+	benchmarkDecodeCBORArray(b, data)
+}
+
+func BenchmarkDecodeCBORArrayUint64(b *testing.B) {
+	values := getUint64Values()
+	data := encode(values)
+	benchmarkDecodeCBORArray(b, data)
+}
+
+func BenchmarkDecodeCBORArrayMixedTypes(b *testing.B) {
+	values := getMixTypedValues()
+	data := encode(values)
+	benchmarkDecodeCBORArray(b, data)
+}
+
+func benchmarkEncodeCBORArray(b *testing.B, values []Storable) {
+
+	b.Logf("Encoding array of %d elements", len(values))
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		var buf bytes.Buffer
+		enc := newEncoder(&buf)
+
+		enc.scratch[0] = 0x80 | 27
+		binary.BigEndian.PutUint64(enc.scratch[1:], uint64(len(values)))
+		enc.Write(enc.scratch[:9])
+
+		for _, v := range values {
+			v.Encode(enc)
+		}
+		enc.cbor.Flush()
+	}
+}
+
+func benchmarkDecodeCBORArray(b *testing.B, data []byte) {
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		cborDec := NewByteStreamDecoder(data)
+
+		elemCount, _ := cborDec.DecodeArrayHead()
+
+		elements := make([]Storable, elemCount)
+		for i := 0; i < int(elemCount); i++ {
+			storable, _ := decodeStorable(cborDec)
+			elements[i] = storable
+		}
+	}
+}
+
+func getUint8Values() []Storable {
 	var values []Storable
 	size := 0
 	for {
@@ -23,10 +94,10 @@ func BenchmarkCBORArrayUint8(b *testing.B) {
 		size += int(v.ByteSize())
 		values = append(values, v)
 	}
-	benchmarkCBORArray(b, values)
+	return values
 }
 
-func BenchmarkCBORArrayUint64(b *testing.B) {
+func getUint64Values() []Storable {
 	var values []Storable
 	size := 0
 	for {
@@ -37,10 +108,10 @@ func BenchmarkCBORArrayUint64(b *testing.B) {
 		size += int(v.ByteSize())
 		values = append(values, v)
 	}
-	benchmarkCBORArray(b, values)
+	return values
 }
 
-func BenchmarkCBORArrayMixedTypes(b *testing.B) {
+func getMixTypedValues() []Storable {
 	var values []Storable
 	size := 0
 	for {
@@ -63,26 +134,20 @@ func BenchmarkCBORArrayMixedTypes(b *testing.B) {
 		size += int(v.ByteSize())
 		values = append(values, v)
 	}
-	benchmarkCBORArray(b, values)
+	return values
 }
 
-func benchmarkCBORArray(b *testing.B, values []Storable) {
+func encode(values []Storable) []byte {
+	var buf bytes.Buffer
+	enc := newEncoder(&buf)
 
-	b.Logf("Encoding array of %d elements", len(values))
+	enc.scratch[0] = 0x80 | 27
+	binary.BigEndian.PutUint64(enc.scratch[1:], uint64(len(values)))
+	enc.Write(enc.scratch[:9])
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		var buf bytes.Buffer
-		enc := newEncoder(&buf)
-
-		enc.scratch[0] = 0x80 | 27
-		binary.BigEndian.PutUint64(enc.scratch[1:], uint64(len(values)))
-		enc.Write(enc.scratch[:9])
-
-		for _, v := range values {
-			v.Encode(enc)
-		}
-		enc.cbor.Flush()
+	for _, v := range values {
+		v.Encode(enc)
 	}
+	enc.cbor.Flush()
+	return buf.Bytes()
 }

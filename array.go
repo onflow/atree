@@ -96,6 +96,10 @@ func (e IndexOutOfRangeError) Error() string {
 	return "index out of range"
 }
 
+func (a *Array) StorageID() StorageID {
+	return a.root.Header().id
+}
+
 func newArrayDataSlab() *ArrayDataSlab {
 	return &ArrayDataSlab{
 		header: &SlabHeader{

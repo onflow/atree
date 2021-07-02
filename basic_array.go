@@ -213,6 +213,10 @@ func NewBasicArray(storage SlabStorage) *BasicArray {
 	}
 }
 
+func (a *BasicArray) StorageID() StorageID {
+	return a.root.ID()
+}
+
 func NewBasicArrayWithRootID(storage SlabStorage, id StorageID) (*BasicArray, error) {
 	if id == StorageIDUndefined {
 		return nil, fmt.Errorf("invalid storage id")

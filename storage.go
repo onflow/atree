@@ -266,6 +266,10 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 		return nil, false, err
 	}
 	slab, err = decodeSlab(id, data)
+	if err == nil {
+		// save decoded slab to cache
+		s.cache[id] = slab
+	}
 	return slab, ok, err
 }
 

@@ -98,7 +98,7 @@ func (e IndexOutOfRangeError) Error() string {
 }
 
 func (a *Array) StorageID() StorageID {
-	return a.dataSlabStorageID
+	return a.root.Header().id
 }
 
 func newArrayDataSlab() *ArrayDataSlab {

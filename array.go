@@ -78,6 +78,8 @@ type ArrayNode interface {
 	CanLendToLeft(size uint32) bool
 	CanLendToRight(size uint32) bool
 
+	SetHeader(*SlabHeader)
+
 	Slab
 }
 
@@ -478,6 +480,10 @@ func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
 	return false
 }
 
+func (a *ArrayDataSlab) SetHeader(header *SlabHeader) {
+	a.header = header
+}
+
 func (a *ArrayDataSlab) Header() *SlabHeader {
 	return a.header
 }
@@ -668,12 +674,12 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) e
 		return err
 	}
 
+	node.SetHeader(a.orderedHeaders[headerIndex])
+
 	err = node.Set(storage, index, v)
 	if err != nil {
 		return err
 	}
-
-	a.orderedHeaders[headerIndex] = node.Header()
 
 	if node.IsFull() {
 		return a.SplitChildNode(storage, node, headerIndex)
@@ -727,12 +733,13 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 		return err
 	}
 
+	node.SetHeader(a.orderedHeaders[headerIndex])
+
 	err = node.Insert(storage, index, v)
 	if err != nil {
 		return err
 	}
 
-	a.orderedHeaders[headerIndex] = node.Header()
 	a.header.count++
 
 	if node.IsFull() {
@@ -770,12 +777,13 @@ func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable,
 		return nil, err
 	}
 
+	node.SetHeader(a.orderedHeaders[headerIndex])
+
 	v, err := node.Remove(storage, index)
 	if err != nil {
 		return nil, err
 	}
 
-	a.orderedHeaders[headerIndex] = node.Header()
 	a.header.count--
 
 	if underflowSize, isUnderflow := node.IsUnderflow(); isUnderflow {
@@ -835,7 +843,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildNode(storage SlabStorage, node 
 		if err != nil {
 			return err
 		}
-		a.orderedHeaders[nodeHeaderIndex-1] = leftSib.Header()
+		leftSib.SetHeader(a.orderedHeaders[nodeHeaderIndex-1])
 	}
 	if nodeHeaderIndex < len(a.orderedHeaders)-1 {
 		rightSibID := a.orderedHeaders[nodeHeaderIndex+1].id
@@ -845,7 +853,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildNode(storage SlabStorage, node 
 		if err != nil {
 			return err
 		}
-		a.orderedHeaders[nodeHeaderIndex+1] = rightSib.Header()
+		rightSib.SetHeader(a.orderedHeaders[nodeHeaderIndex+1])
 	}
 
 	leftCanLend := leftSib != nil && leftSib.CanLendToRight(underflowSize)
@@ -1118,6 +1126,10 @@ func (a *ArrayMetaDataSlab) CanLendToRight(size uint32) bool {
 
 func (a ArrayMetaDataSlab) IsLeaf() bool {
 	return false
+}
+
+func (a *ArrayMetaDataSlab) SetHeader(header *SlabHeader) {
+	a.header = header
 }
 
 func (a *ArrayMetaDataSlab) Header() *SlabHeader {

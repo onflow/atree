@@ -29,7 +29,9 @@ func TestAppendAndGet(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	storage := NewBasicSlabStorage()
+	baseStorage := NewInMemBaseStorage()
+
+	storage := NewPersistentSlabStorage(baseStorage)
 
 	array := NewArray(storage)
 
@@ -59,7 +61,9 @@ func TestSetAndGet(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	storage := NewBasicSlabStorage()
+	baseStorage := NewInMemBaseStorage()
+
+	storage := NewPersistentSlabStorage(baseStorage)
 
 	array := NewArray(storage)
 
@@ -100,7 +104,9 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		array := NewArray(storage)
 
@@ -130,7 +136,9 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		array := NewArray(storage)
 
@@ -160,7 +168,9 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		array := NewArray(storage)
 
@@ -201,7 +211,9 @@ func TestRemove(t *testing.T) {
 	t.Run("remove-first", func(t *testing.T) {
 		const arraySize = 256 * 256
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		array := NewArray(storage)
 
@@ -239,7 +251,9 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		array := NewArray(storage)
 
@@ -277,7 +291,9 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		array := NewArray(storage)
 
@@ -323,7 +339,9 @@ func TestSplit(t *testing.T) {
 	t.Run("leaf node as root", func(t *testing.T) {
 		const arraySize = 50
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		array := NewArray(storage)
 
@@ -349,7 +367,9 @@ func TestSplit(t *testing.T) {
 
 		const arraySize = 50
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		array := NewArray(storage)
 
@@ -388,7 +408,11 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		array := NewArray(NewBasicSlabStorage())
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
+
+		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -414,7 +438,11 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		array := NewArray(NewBasicSlabStorage())
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
+
+		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -445,7 +473,11 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		array := NewArray(NewBasicSlabStorage())
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
+
+		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i += 2 {
 			err := array.Append(Uint64Value(i))
@@ -476,7 +508,11 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		array := NewArray(NewBasicSlabStorage())
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
+
+		array := NewArray(storage)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -510,7 +546,9 @@ func TestConstRootStorageID(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	storage := NewBasicSlabStorage()
+	baseStorage := NewInMemBaseStorage()
+
+	storage := NewPersistentSlabStorage(baseStorage)
 
 	array := NewArray(storage)
 	err := array.Append(Uint64Value(0))
@@ -546,7 +584,9 @@ func TestSetRandomValue(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	storage := NewBasicSlabStorage()
+	baseStorage := NewInMemBaseStorage()
+
+	storage := NewPersistentSlabStorage(baseStorage)
 
 	array := NewArray(storage)
 
@@ -601,7 +641,9 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		array := NewArray(storage)
 
@@ -636,7 +678,9 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		array := NewArray(storage)
 
@@ -671,7 +715,9 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		array := NewArray(storage)
 
@@ -716,7 +762,9 @@ func TestRemoveRandomElement(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	storage := NewBasicSlabStorage()
+	baseStorage := NewInMemBaseStorage()
+
+	storage := NewPersistentSlabStorage(baseStorage)
 
 	array := NewArray(storage)
 
@@ -776,7 +824,9 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	storage := NewBasicSlabStorage()
+	baseStorage := NewInMemBaseStorage()
+
+	storage := NewPersistentSlabStorage(baseStorage)
 
 	array := NewArray(storage)
 
@@ -886,7 +936,9 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	storage := NewBasicSlabStorage()
+	baseStorage := NewInMemBaseStorage()
+
+	storage := NewPersistentSlabStorage(baseStorage)
 
 	array := NewArray(storage)
 
@@ -1004,7 +1056,9 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	storage := NewBasicSlabStorage()
+	baseStorage := NewInMemBaseStorage()
+
+	storage := NewPersistentSlabStorage(baseStorage)
 
 	array := NewArray(storage)
 
@@ -1113,7 +1167,9 @@ func TestNestedArray(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		nestedArrays := make([]Storable, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
@@ -1151,7 +1207,9 @@ func TestNestedArray(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		storage := NewBasicSlabStorage()
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage)
 
 		nestedArrays := make([]Storable, arraySize)
 		for i := uint64(0); i < arraySize; i++ {

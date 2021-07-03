@@ -199,14 +199,16 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 }
 
 func (a *ArrayDataSlab) ShallowCloneWithNewID() ArrayNode {
-	copied := newArrayDataSlab()
-	copied.header.size = a.header.size
-	copied.header.count = a.header.count
-	copied.elements = a.elements
-	copied.prev = a.prev
-	copied.next = a.next
-
-	return copied
+	return &ArrayDataSlab{
+		header: &SlabHeader{
+			id:    generateStorageID(),
+			size:  a.header.size,
+			count: a.header.count,
+		},
+		elements: a.elements,
+		prev:     a.prev,
+		next:     a.next,
+	}
 }
 
 func (a *ArrayDataSlab) Get(storage SlabStorage, index uint64) (Storable, error) {
@@ -302,14 +304,20 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 		leftSlabSize += elemSize
 	}
 
-	rightSlab := newArrayDataSlab()
-	rightSlab.elements = make([]Storable, len(a.elements)-rightSlabStartIndex)
-	copy(rightSlab.elements, a.elements[rightSlabStartIndex:])
-	rightSlab.prev = a.header.id
-	rightSlab.next = a.next
+	rightElemCount := len(a.elements) - rightSlabStartIndex
 
-	rightSlab.header.size = dataSlabPrefixSize + dataSize - leftSlabSize
-	rightSlab.header.count = uint32(len(rightSlab.elements))
+	rightSlab := &ArrayDataSlab{
+		header: &SlabHeader{
+			id:    generateStorageID(),
+			size:  dataSlabPrefixSize + dataSize - leftSlabSize,
+			count: uint32(rightElemCount),
+		},
+		prev: a.header.id,
+		next: a.next,
+	}
+
+	rightSlab.elements = make([]Storable, rightElemCount)
+	copy(rightSlab.elements, a.elements[rightSlabStartIndex:])
 
 	a.elements = a.elements[:rightSlabStartIndex]
 	a.header.size = dataSlabPrefixSize + leftSlabSize
@@ -526,15 +534,6 @@ func (a *ArrayDataSlab) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
-func newArrayMetaDataSlab() *ArrayMetaDataSlab {
-	return &ArrayMetaDataSlab{
-		header: &SlabHeader{
-			id:   generateStorageID(),
-			size: metaDataSlabPrefixSize,
-		},
-	}
-}
-
 func newArrayMetaDataSlabFromData(slabID StorageID, data []byte) (*ArrayMetaDataSlab, error) {
 	if len(data) < metaDataSlabPrefixSize {
 		return nil, errors.New("data is too short for array metadata slab")
@@ -613,12 +612,14 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 }
 
 func (a *ArrayMetaDataSlab) ShallowCloneWithNewID() ArrayNode {
-	copied := newArrayMetaDataSlab()
-	copied.header.size = a.header.size
-	copied.header.count = a.header.count
-	copied.orderedHeaders = a.orderedHeaders
-
-	return copied
+	return &ArrayMetaDataSlab{
+		header: &SlabHeader{
+			id:    generateStorageID(),
+			size:  a.header.size,
+			count: a.header.count,
+		},
+		orderedHeaders: a.orderedHeaders,
+	}
 }
 
 func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, error) {
@@ -1023,11 +1024,16 @@ func (a *ArrayMetaDataSlab) Split() (Slab, Slab, error) {
 		leftSlabCount += a.orderedHeaders[i].count
 	}
 
-	right := newArrayMetaDataSlab()
+	right := &ArrayMetaDataSlab{
+		header: &SlabHeader{
+			id:    generateStorageID(),
+			size:  a.header.size - uint32(leftSlabSize),
+			count: a.header.count - leftSlabCount,
+		},
+	}
+
 	right.orderedHeaders = make([]*SlabHeader, len(a.orderedHeaders)-rightSlabStartIndex)
 	copy(right.orderedHeaders, a.orderedHeaders[rightSlabStartIndex:])
-	right.header.count = a.header.count - leftSlabCount
-	right.header.size = a.header.size - uint32(leftSlabSize)
 
 	a.orderedHeaders = a.orderedHeaders[:rightSlabStartIndex]
 	a.header.count = leftSlabCount

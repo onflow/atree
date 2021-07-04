@@ -28,7 +28,7 @@ func setThreshold(threshold uint64) {
 	maxInlineElementSize = targetThreshold / 2
 }
 
-// TODO: implement different slab size for internal node and leaf node.
+// TODO: implement different slab size for metadata slab and data slab.
 func main() {
 	var slabSize uint64
 	var numElements uint64

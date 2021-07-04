@@ -13,7 +13,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-// Encoder writes atree internal and leaf node values to io.Writer.
+// Encoder writes atree slabs to io.Writer.
 type Encoder struct {
 	io.Writer
 	cbor    *cbor.StreamEncoder
@@ -34,7 +34,7 @@ func decodeSlab(id StorageID, data []byte) (Slab, error) {
 	flag := data[0]
 	if flag&flagArray != 0 {
 
-		if flag&flagInternalNode != 0 {
+		if flag&flagMetaDataSlab != 0 {
 			return newArrayMetaDataSlabFromData(id, data)
 		}
 		return newArrayDataSlabFromData(id, data)

@@ -20,8 +20,8 @@ type Storable interface {
 }
 
 const (
-	flagInternalNode byte = 0x01
-	flagLeafNode     byte = 0x02
+	flagMetaDataSlab byte = 0x01
+	flagDataSlab     byte = 0x02
 	flagArray        byte = 0x04
 )
 

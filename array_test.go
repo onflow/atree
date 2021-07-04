@@ -54,7 +54,7 @@ func TestAppendAndGet(t *testing.T) {
 	require.True(t, verified)
 
 	stats, _ := array.Stats()
-	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 }
 
 func TestSetAndGet(t *testing.T) {
@@ -91,7 +91,7 @@ func TestSetAndGet(t *testing.T) {
 	require.True(t, verified)
 
 	stats, _ := array.Stats()
-	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 }
 
 func TestInsertAndGet(t *testing.T) {
@@ -129,7 +129,7 @@ func TestInsertAndGet(t *testing.T) {
 		require.True(t, verified)
 
 		stats, _ := array.Stats()
-		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("insert-last", func(t *testing.T) {
@@ -161,7 +161,7 @@ func TestInsertAndGet(t *testing.T) {
 		require.True(t, verified)
 
 		stats, _ := array.Stats()
-		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("insert", func(t *testing.T) {
@@ -198,7 +198,7 @@ func TestInsertAndGet(t *testing.T) {
 		require.True(t, verified)
 
 		stats, _ := array.Stats()
-		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
 }
 
@@ -244,7 +244,7 @@ func TestRemove(t *testing.T) {
 		require.Equal(t, uint64(0), array.Count())
 
 		stats, _ := array.Stats()
-		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("remove-last", func(t *testing.T) {
@@ -284,7 +284,7 @@ func TestRemove(t *testing.T) {
 		require.Equal(t, uint64(0), array.Count())
 
 		stats, _ := array.Stats()
-		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("remove", func(t *testing.T) {
@@ -331,12 +331,12 @@ func TestRemove(t *testing.T) {
 		}
 
 		stats, _ := array.Stats()
-		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
 }
 
 func TestSplit(t *testing.T) {
-	t.Run("leaf node as root", func(t *testing.T) {
+	t.Run("data slab as root", func(t *testing.T) {
 		const arraySize = 50
 
 		baseStorage := NewInMemBaseStorage()
@@ -350,16 +350,15 @@ func TestSplit(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		// leaf node as root
 		require.NotNil(t, array.root)
-		require.True(t, array.root.IsLeaf())
+		require.True(t, array.root.IsData())
 		require.Equal(t, uint32(50), array.root.Header().count)
 
 		stats, _ := array.Stats()
-		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
 
-	t.Run("internal node as root", func(t *testing.T) {
+	t.Run("metdata slab as root", func(t *testing.T) {
 		setThreshold(50)
 		defer func() {
 			setThreshold(1024)
@@ -378,9 +377,8 @@ func TestSplit(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		// meta node as root
 		require.NotNil(t, array.root)
-		require.False(t, array.root.IsLeaf())
+		require.False(t, array.root.IsData())
 		require.Equal(t, uint32(50), array.root.Header().count)
 
 		root := array.root.(*ArrayMetaDataSlab)
@@ -389,13 +387,13 @@ func TestSplit(t *testing.T) {
 			slab, found, err := storage.Retrieve(id)
 			require.NoError(t, err)
 			require.True(t, found)
-			node, ok := slab.(ArrayNode)
+			arraySlab, ok := slab.(ArraySlab)
 			require.True(t, ok)
-			require.False(t, node.IsLeaf())
+			require.False(t, arraySlab.IsData())
 		}
 
 		stats, _ := array.Stats()
-		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
 }
 
@@ -627,7 +625,7 @@ func TestSetRandomValue(t *testing.T) {
 	require.True(t, verified)
 
 	stats, _ := array.Stats()
-	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 }
 
 func TestInsertRandomValue(t *testing.T) {
@@ -671,7 +669,7 @@ func TestInsertRandomValue(t *testing.T) {
 		require.True(t, verified)
 
 		stats, _ := array.Stats()
-		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("insert-last", func(t *testing.T) {
@@ -708,7 +706,7 @@ func TestInsertRandomValue(t *testing.T) {
 		require.True(t, verified)
 
 		stats, _ := array.Stats()
-		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
 
 	t.Run("insert-random", func(t *testing.T) {
@@ -748,7 +746,7 @@ func TestInsertRandomValue(t *testing.T) {
 		require.True(t, verified)
 
 		stats, _ := array.Stats()
-		require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
 
 }
@@ -804,7 +802,7 @@ func TestRemoveRandomElement(t *testing.T) {
 	require.True(t, verified)
 
 	stats, _ := array.Stats()
-	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 }
 
 func TestRandomAppendSetInsertRemove(t *testing.T) {
@@ -916,7 +914,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	require.True(t, verified)
 
 	stats, _ := array.Stats()
-	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 }
 
 func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
@@ -1028,7 +1026,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	require.True(t, verified)
 
 	stats, _ := array.Stats()
-	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 }
 
 func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
@@ -1153,7 +1151,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	require.True(t, verified)
 
 	stats, _ := array.Stats()
-	require.Equal(t, stats.LeafNodeCount+stats.InternalNodeCount, uint64(array.storage.Count()))
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 }
 
 func TestNestedArray(t *testing.T) {
@@ -1181,7 +1179,7 @@ func TestNestedArray(t *testing.T) {
 			err = nested.Append(Uint64Value(i*2 + 1))
 			require.NoError(t, err)
 
-			require.True(t, nested.root.IsLeaf())
+			require.True(t, nested.root.IsData())
 
 			nestedArrays[i] = nested.root
 		}
@@ -1218,7 +1216,7 @@ func TestNestedArray(t *testing.T) {
 				err := nested.Append(Uint64Value(i))
 				require.NoError(t, err)
 			}
-			require.False(t, nested.root.IsLeaf())
+			require.False(t, nested.root.IsData())
 
 			nestedArrays[i] = nested.root
 		}
@@ -1367,34 +1365,34 @@ func TestDecodeEncode(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check metadata slab (storage id 1)
-	node, err := getArrayNodeFromStorageID(storage, 1)
+	slab, err := getArraySlab(storage, 1)
 	require.NoError(t, err)
-	require.False(t, node.IsLeaf())
+	require.False(t, slab.IsData())
 
-	meta := node.(*ArrayMetaDataSlab)
+	meta := slab.(*ArrayMetaDataSlab)
 	require.Equal(t, 2, len(meta.orderedHeaders))
 	require.Equal(t, StorageID(2), meta.orderedHeaders[0].id)
 	require.Equal(t, StorageID(3), meta.orderedHeaders[1].id)
 
 	// Check data slab (storage id 2)
-	node, err = getArrayNodeFromStorageID(storage, 2)
+	slab, err = getArraySlab(storage, 2)
 	require.NoError(t, err)
-	require.True(t, node.IsLeaf())
+	require.True(t, slab.IsData())
 
-	dataslab := node.(*ArrayDataSlab)
-	require.Equal(t, 10, len(dataslab.elements))
-	require.Equal(t, Uint64Value(0), dataslab.elements[0])
-	require.Equal(t, Uint64Value(9), dataslab.elements[9])
+	dataSlab := slab.(*ArrayDataSlab)
+	require.Equal(t, 10, len(dataSlab.elements))
+	require.Equal(t, Uint64Value(0), dataSlab.elements[0])
+	require.Equal(t, Uint64Value(9), dataSlab.elements[9])
 
 	// Check data slab (storage id 3)
-	node, err = getArrayNodeFromStorageID(storage, 3)
+	slab, err = getArraySlab(storage, 3)
 	require.NoError(t, err)
-	require.True(t, node.IsLeaf())
+	require.True(t, slab.IsData())
 
-	dataslab = node.(*ArrayDataSlab)
-	require.Equal(t, 10, len(dataslab.elements))
-	require.Equal(t, Uint64Value(10), dataslab.elements[0])
-	require.Equal(t, Uint64Value(19), dataslab.elements[9])
+	dataSlab = slab.(*ArrayDataSlab)
+	require.Equal(t, 10, len(dataSlab.elements))
+	require.Equal(t, Uint64Value(10), dataSlab.elements[0])
+	require.Equal(t, Uint64Value(19), dataSlab.elements[9])
 
 	// Encode storaged slabs and compare encoded bytes
 	encodedData, err := storage.Encode()
@@ -1540,7 +1538,7 @@ func TestEmptyArray(t *testing.T) {
 	t.Run("decode", func(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage, rootID)
 		require.NoError(t, err)
-		require.True(t, array2.root.IsLeaf())
+		require.True(t, array2.root.IsData())
 		require.Equal(t, uint32(0), array2.root.Header().count)
 		require.Equal(t, uint32(dataSlabPrefixSize), array2.root.Header().size)
 	})

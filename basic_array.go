@@ -228,11 +228,11 @@ func NewBasicArrayWithRootID(storage SlabStorage, id StorageID) (*BasicArray, er
 	if !found {
 		return nil, fmt.Errorf("slab %d not found", id)
 	}
-	node, ok := slab.(*BasicArrayDataSlab)
+	dataSlab, ok := slab.(*BasicArrayDataSlab)
 	if !ok {
 		return nil, fmt.Errorf("slab %d is not BasicArrayDataSlab", id)
 	}
-	return &BasicArray{storage: storage, root: node}, nil
+	return &BasicArray{storage: storage, root: dataSlab}, nil
 }
 
 func (array *BasicArray) Get(index uint64) (Storable, error) {

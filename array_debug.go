@@ -11,21 +11,19 @@ import (
 )
 
 type Stats struct {
-	Levels                uint64
-	ElementCount          uint64
-	InternalNodeCount     uint64
-	LeafNodeCount         uint64
-	InternalNodeOccupancy float64
-	LeafNodeOccupancy     float64 // sum(leaf node size)/(num of leaf node * threshold size)
+	Levels            uint64
+	ElementCount      uint64
+	MetaDataSlabCount uint64
+	DataSlabCount     uint64
 }
 
 // Stats returns stats about the array slabs.
 func (array *Array) Stats() (Stats, error) {
 	level := uint64(0)
-	internalNodeCount := uint64(0)
-	internalNodeSize := uint64(0)
-	leafNodeCount := uint64(0)
-	leafNodeSize := uint64(0)
+	metaDataSlabCount := uint64(0)
+	metaDataSlabSize := uint64(0)
+	dataSlabCount := uint64(0)
+	dataSlabSize := uint64(0)
 
 	nextLevelIDs := list.New()
 	nextLevelIDs.PushBack(array.root.Header().id)
@@ -39,23 +37,21 @@ func (array *Array) Stats() (Stats, error) {
 		for e := ids.Front(); e != nil; e = e.Next() {
 			id := e.Value.(StorageID)
 
-			node, err := getArrayNodeFromStorageID(array.storage, id)
+			slab, err := getArraySlab(array.storage, id)
 			if err != nil {
 				return Stats{}, err
 			}
 
-			if node.IsLeaf() {
-				// leaf node
-				leaf := node.(*ArrayDataSlab)
-				leafNodeCount++
-				leafNodeSize += uint64(leaf.header.size)
+			if slab.IsData() {
+				leaf := slab.(*ArrayDataSlab)
+				dataSlabCount++
+				dataSlabSize += uint64(leaf.header.size)
 			} else {
-				// internal node
-				node := node.(*ArrayMetaDataSlab)
-				internalNodeCount++
-				internalNodeSize += uint64(node.header.size)
+				meta := slab.(*ArrayMetaDataSlab)
+				metaDataSlabCount++
+				metaDataSlabSize += uint64(meta.header.size)
 
-				for _, h := range node.orderedHeaders {
+				for _, h := range meta.orderedHeaders {
 					nextLevelIDs.PushBack(h.id)
 				}
 			}
@@ -64,16 +60,11 @@ func (array *Array) Stats() (Stats, error) {
 		level++
 	}
 
-	leafNodeOccupancy := float64(leafNodeSize) / float64(targetThreshold*leafNodeCount)
-	internalNodeNodeOccupancy := float64(internalNodeSize) / float64(targetThreshold*internalNodeCount)
-
 	return Stats{
-		Levels:                level,
-		ElementCount:          array.Count(),
-		InternalNodeCount:     internalNodeCount,
-		LeafNodeCount:         leafNodeCount,
-		InternalNodeOccupancy: internalNodeNodeOccupancy,
-		LeafNodeOccupancy:     leafNodeOccupancy,
+		Levels:            level,
+		ElementCount:      array.Count(),
+		MetaDataSlabCount: metaDataSlabCount,
+		DataSlabCount:     dataSlabCount,
 	}, nil
 }
 
@@ -93,23 +84,22 @@ func (array *Array) Print() {
 		for e := ids.Front(); e != nil; e = e.Next() {
 			id := e.Value.(StorageID)
 
-			node, err := getArrayNodeFromStorageID(array.storage, id)
+			slab, err := getArraySlab(array.storage, id)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
 
-			if node.IsLeaf() {
-				// leaf node
-				leaf := node.(*ArrayDataSlab)
-				fmt.Printf("level %d, leaf (%+v): ", level+1, *(leaf.header))
+			if slab.IsData() {
+				dataSlab := slab.(*ArrayDataSlab)
+				fmt.Printf("level %d, leaf (%+v): ", level+1, *(dataSlab.header))
 
 				var elements []Storable
-				if len(leaf.elements) <= 6 {
-					elements = leaf.elements
+				if len(dataSlab.elements) <= 6 {
+					elements = dataSlab.elements
 				} else {
-					elements = append(elements, leaf.elements[:3]...)
-					elements = append(elements, leaf.elements[len(leaf.elements)-3:]...)
+					elements = append(elements, dataSlab.elements[:3]...)
+					elements = append(elements, dataSlab.elements[len(dataSlab.elements)-3:]...)
 				}
 
 				var elemsStr []string
@@ -120,17 +110,16 @@ func (array *Array) Print() {
 					elemsStr = append(elemsStr, e.String())
 				}
 
-				if len(leaf.elements) > 6 {
+				if len(dataSlab.elements) > 6 {
 					elemsStr = append(elemsStr, "")
 					copy(elemsStr[4:], elemsStr[3:])
 					elemsStr[3] = "..."
 				}
 				fmt.Printf("[%s]\n", strings.Join(elemsStr, " "))
 			} else {
-				// internal node
-				node := node.(*ArrayMetaDataSlab)
-				fmt.Printf("level %d, meta (%+v) headers: [", level+1, *(node.header))
-				for _, h := range node.orderedHeaders {
+				meta := slab.(*ArrayMetaDataSlab)
+				fmt.Printf("level %d, meta (%+v) headers: [", level+1, *(meta.header))
+				for _, h := range meta.orderedHeaders {
 					fmt.Printf("%+v ", *h)
 					nextLevelIDs.PushBack(h.id)
 				}
@@ -146,12 +135,12 @@ func (array *Array) Print() {
 			id := e.Value.(StorageID)
 
 			// TODO: expand this to include other types
-			node, err := getArrayNodeFromStorageID(array.storage, id)
+			slab, err := getArraySlab(array.storage, id)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
 			}
-			fmt.Printf("overflow node: (id %d) %s\n", id, node.String())
+			fmt.Printf("overflow: (id %d) %s\n", id, slab.String())
 		}
 	}
 }
@@ -163,39 +152,39 @@ func (array *Array) valid() (bool, error) {
 
 func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 
-	node, err := getArrayNodeFromStorageID(array.storage, id)
+	slab, err := getArraySlab(array.storage, id)
 	if err != nil {
 		return false, 0, err
 	}
-	if node.IsLeaf() {
-		node, ok := node.(*ArrayDataSlab)
+	if slab.IsData() {
+		dataSlab, ok := slab.(*ArrayDataSlab)
 		if !ok {
 			return false, 0, fmt.Errorf("slab %d is not ArrayDataSlab", id)
 		}
 
-		count := uint32(len(node.elements))
+		count := uint32(len(dataSlab.elements))
 
 		computedSize := uint32(0)
-		for _, e := range node.elements {
+		for _, e := range dataSlab.elements {
 			computedSize += e.ByteSize()
 		}
 
-		_, underflow := node.IsUnderflow()
-		validTreeNodeSize := (level == 0) || (!node.IsFull() && !underflow)
+		_, underflow := dataSlab.IsUnderflow()
+		validFill := (level == 0) || (!dataSlab.IsFull() && !underflow)
 
-		validCount := count == node.header.count
+		validCount := count == dataSlab.header.count
 
-		validSize := (dataSlabPrefixSize + computedSize) == node.header.size
+		validSize := (dataSlabPrefixSize + computedSize) == dataSlab.header.size
 
-		return validTreeNodeSize && validCount && validSize, count, nil
+		return validFill && validCount && validSize, count, nil
 	}
 
-	metaNode, ok := node.(*ArrayMetaDataSlab)
+	meta, ok := slab.(*ArrayMetaDataSlab)
 	if !ok {
 		return false, 0, fmt.Errorf("slab %d is not ArrayMetaDataSlab", id)
 	}
 	sum := uint32(0)
-	for _, h := range metaNode.orderedHeaders {
+	for _, h := range meta.orderedHeaders {
 		verified, count, err := array._valid(h.id, level+1)
 		if !verified || err != nil {
 			return false, 0, err
@@ -203,13 +192,13 @@ func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 		sum += count
 	}
 
-	_, underflow := node.IsUnderflow()
-	validTreeNodeSize := (level == 0) || (!node.IsFull() && !underflow)
+	_, underflow := meta.IsUnderflow()
+	validFill := (level == 0) || (!meta.IsFull() && !underflow)
 
-	validCount := sum == metaNode.header.count
+	validCount := sum == meta.header.count
 
-	computedSize := uint32(len(metaNode.orderedHeaders)*headerSize) + metaDataSlabPrefixSize
-	validSize := computedSize == metaNode.header.size
+	computedSize := uint32(len(meta.orderedHeaders)*headerSize) + metaDataSlabPrefixSize
+	validSize := computedSize == meta.header.size
 
-	return validTreeNodeSize && validCount && validSize, sum, nil
+	return validFill && validCount && validSize, sum, nil
 }

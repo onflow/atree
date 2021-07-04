@@ -382,7 +382,7 @@ func TestSplit(t *testing.T) {
 		require.Equal(t, uint32(50), array.root.Header().count)
 
 		root := array.root.(*ArrayMetaDataSlab)
-		for _, h := range root.orderedHeaders {
+		for _, h := range root.childrenHeaders {
 			id := h.id
 			slab, found, err := storage.Retrieve(id)
 			require.NoError(t, err)
@@ -1370,9 +1370,9 @@ func TestDecodeEncode(t *testing.T) {
 	require.False(t, slab.IsData())
 
 	meta := slab.(*ArrayMetaDataSlab)
-	require.Equal(t, 2, len(meta.orderedHeaders))
-	require.Equal(t, StorageID(2), meta.orderedHeaders[0].id)
-	require.Equal(t, StorageID(3), meta.orderedHeaders[1].id)
+	require.Equal(t, 2, len(meta.childrenHeaders))
+	require.Equal(t, StorageID(2), meta.childrenHeaders[0].id)
+	require.Equal(t, StorageID(3), meta.childrenHeaders[1].id)
 
 	// Check data slab (storage id 2)
 	slab, err = getArraySlab(storage, 2)

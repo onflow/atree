@@ -15,7 +15,7 @@ import (
 
 const (
 	// slab header size: storage id (8 bytes) + count (4 bytes) + size (4 bytes)
-	headerSize = 8 + 4 + 4
+	slabHeaderSize = 8 + 4 + 4
 
 	// meta data slab prefix size: flag (1 byte) + child header count (4 bytes)
 	metaDataSlabPrefixSize = 1 + 4
@@ -57,8 +57,8 @@ type ArrayDataSlab struct {
 
 // ArrayMetaDataSlab is internal node, implementing ArraySlab.
 type ArrayMetaDataSlab struct {
-	header         *SlabHeader
-	orderedHeaders []*SlabHeader
+	header          *SlabHeader
+	childrenHeaders []*SlabHeader
 }
 
 type ArraySlab interface {
@@ -96,10 +96,6 @@ func (e IndexOutOfRangeError) Error() string {
 	return "index out of range"
 }
 
-func (a *Array) StorageID() StorageID {
-	return a.root.Header().id
-}
-
 func newArrayDataSlab() *ArrayDataSlab {
 	return &ArrayDataSlab{
 		header: &SlabHeader{
@@ -109,7 +105,7 @@ func newArrayDataSlab() *ArrayDataSlab {
 	}
 }
 
-func newArrayDataSlabFromData(slabID StorageID, data []byte) (*ArrayDataSlab, error) {
+func newArrayDataSlabFromData(id StorageID, data []byte) (*ArrayDataSlab, error) {
 
 	if len(data) < dataSlabPrefixSize {
 		return nil, errors.New("data is too short for array data slab")
@@ -145,7 +141,7 @@ func newArrayDataSlabFromData(slabID StorageID, data []byte) (*ArrayDataSlab, er
 	return &ArrayDataSlab{
 		prev:     StorageID(prev),
 		next:     StorageID(next),
-		header:   &SlabHeader{id: slabID, size: uint32(len(data)), count: uint32(elemCount)},
+		header:   &SlabHeader{id: id, size: uint32(len(data)), count: uint32(elemCount)},
 		elements: elements,
 	}, nil
 }
@@ -178,7 +174,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	// Encode next storage id
 	binary.BigEndian.PutUint64(enc.scratch[9:], uint64(a.next))
 
-	// Encode CBOR array size (encode cbor array size manually for fixed sized serialization)
+	// Encode CBOR array size manually for fix-sized encoding
 	enc.scratch[17] = 0x80 | 25
 	binary.BigEndian.PutUint16(enc.scratch[18:], uint16(len(a.elements)))
 
@@ -191,6 +187,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 			return err
 		}
 	}
+
 	enc.cbor.Flush()
 
 	return nil
@@ -276,155 +273,140 @@ func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, err
 func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 	if len(a.elements) < 2 {
 		// Can't split slab with less than two elements
-		return nil, nil, fmt.Errorf("can't split array slab with less than 2 elements")
+		return nil, nil, fmt.Errorf("can't split slab with less than 2 elements")
 	}
 
-	// This computes the ceil of split to keep the first part with more members (optimized for append operations)
+	// This computes the ceil of split to give the first slab with more elements.
 	dataSize := a.header.size - dataSlabPrefixSize
-	d := float64(dataSize) / float64(2)
-	midPoint := uint32(math.Ceil(d))
+	midPoint := uint32(math.Ceil(float64(dataSize) / 2))
 
-	rightSlabStartIndex := 0
-	leftSlabSize := uint32(0)
+	leftSize := uint32(0)
+	leftCount := 0
 	for i, e := range a.elements {
 		elemSize := e.ByteSize()
-		if leftSlabSize+elemSize >= midPoint {
+		if leftSize+elemSize >= midPoint {
 			// i is mid point element.  Place i on the small side.
-			if leftSlabSize <= dataSize-leftSlabSize-elemSize {
-				leftSlabSize += elemSize
-				rightSlabStartIndex = i + 1
+			if leftSize <= dataSize-leftSize-elemSize {
+				leftSize += elemSize
+				leftCount = i + 1
 			} else {
-				rightSlabStartIndex = i
+				leftCount = i
 			}
 			break
 		}
 		// left slab size < midPoint
-		leftSlabSize += elemSize
+		leftSize += elemSize
 	}
 
-	rightElemCount := len(a.elements) - rightSlabStartIndex
-
+	// Construct right slab
 	rightSlab := &ArrayDataSlab{
 		header: &SlabHeader{
 			id:    generateStorageID(),
-			size:  dataSlabPrefixSize + dataSize - leftSlabSize,
-			count: uint32(rightElemCount),
+			size:  dataSlabPrefixSize + dataSize - leftSize,
+			count: uint32(len(a.elements) - leftCount),
 		},
 		prev: a.header.id,
 		next: a.next,
 	}
 
-	rightSlab.elements = make([]Storable, rightElemCount)
-	copy(rightSlab.elements, a.elements[rightSlabStartIndex:])
+	rightSlab.elements = make([]Storable, len(a.elements)-leftCount)
+	copy(rightSlab.elements, a.elements[leftCount:])
 
-	a.elements = a.elements[:rightSlabStartIndex]
-	a.header.size = dataSlabPrefixSize + leftSlabSize
-	a.header.count = uint32(len(a.elements))
+	// Modify left (original) slab
+	a.elements = a.elements[:leftCount]
+	a.header.size = dataSlabPrefixSize + leftSize
+	a.header.count = uint32(leftCount)
 	a.next = rightSlab.header.id
 
 	return a, rightSlab, nil
 }
 
 func (a *ArrayDataSlab) Merge(slab Slab) error {
-	slab2 := slab.(*ArrayDataSlab)
-	a.elements = append(a.elements, slab2.elements...)
-	a.header.size = a.header.size + slab2.header.size - dataSlabPrefixSize
-	a.header.count += slab2.header.count
-	a.next = slab2.next
+	rightSlab := slab.(*ArrayDataSlab)
+	a.elements = append(a.elements, rightSlab.elements...)
+	a.header.size = a.header.size + rightSlab.header.size - dataSlabPrefixSize
+	a.header.count += rightSlab.header.count
+	a.next = rightSlab.next
 	return nil
 }
 
-// LendToRight rebalances slabs by moving elements from left to right
+// LendToRight rebalances slabs by moving elements from left slab to right slab
 func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 
-	b := slab.(*ArrayDataSlab)
+	rightSlab := slab.(*ArrayDataSlab)
 
-	count := a.header.count + b.header.count
-	size := a.header.size + b.header.size
+	count := a.header.count + rightSlab.header.count
+	size := a.header.size + rightSlab.header.size
+
+	leftCount := a.header.count
+	leftSize := a.header.size
 
 	midPoint := uint32(math.Ceil(float64(size) / 2))
-
-	leftSlabCount := a.header.count
-	leftSlabDataSize := a.header.size
 
 	// Left slab size is as close to midPoint as possible while right slab size >= minThreshold
 	for i := len(a.elements) - 1; i >= 0; i-- {
-		if leftSlabDataSize-a.elements[i].ByteSize() < midPoint && size-leftSlabDataSize >= uint32(minThreshold) {
+		elemSize := a.elements[i].ByteSize()
+		if leftSize-elemSize < midPoint && size-leftSize >= uint32(minThreshold) {
 			break
 		}
-		leftSlabDataSize -= a.elements[i].ByteSize()
-		leftSlabCount--
+		leftSize -= elemSize
+		leftCount--
 	}
 
-	if leftSlabCount == a.header.count {
-		panic(fmt.Sprintf("computed left slab %v remains unchanged after rebalancing", *a.header))
-	}
+	// Update right slab
+	elements := make([]Storable, count-leftCount)
+	n := copy(elements, a.elements[leftCount:])
+	copy(elements[n:], rightSlab.elements)
 
-	// Update right slab elements
-	elements := make([]Storable, count-leftSlabCount)
-	n := copy(elements, a.elements[leftSlabCount:])
-	copy(elements[n:], b.elements)
+	rightSlab.elements = elements
+	rightSlab.header.size = size - leftSize
+	rightSlab.header.count = count - leftCount
 
-	b.elements = elements
-
-	// Update left slab elements
-	a.elements = a.elements[:leftSlabCount]
-
-	// Update left slab header
-	a.header.size = leftSlabDataSize
-	a.header.count = leftSlabCount
-
-	// Update right slab header
-	b.header.size = size - leftSlabDataSize
-	b.header.count = count - leftSlabCount
+	// Update left slab
+	a.elements = a.elements[:leftCount]
+	a.header.size = leftSize
+	a.header.count = leftCount
 
 	return nil
 }
 
-// BorrowFromRight rebalances slabs by moving elements from right to left
+// BorrowFromRight rebalances slabs by moving elements from right slab to left slab.
 func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
-	b := slab.(*ArrayDataSlab)
+	rightSlab := slab.(*ArrayDataSlab)
 
-	count := a.header.count + b.header.count
-	size := a.header.size + b.header.size
+	count := a.header.count + rightSlab.header.count
+	size := a.header.size + rightSlab.header.size
+
+	leftCount := a.header.count
+	leftSize := a.header.size
 
 	midPoint := uint32(math.Ceil(float64(size) / 2))
 
-	leftSlabCount := uint32(len(a.elements))
-	leftSlabDataSize := a.header.size
-
-	for _, e := range b.elements {
-		if leftSlabDataSize+e.ByteSize() > midPoint {
-			if size-leftSlabDataSize-e.ByteSize() >= uint32(minThreshold) {
+	for _, e := range rightSlab.elements {
+		elemSize := e.ByteSize()
+		if leftSize+elemSize > midPoint {
+			if size-leftSize-elemSize >= uint32(minThreshold) {
 				// Include this element in left slab
-				leftSlabDataSize += e.ByteSize()
-				leftSlabCount++
+				leftSize += elemSize
+				leftCount++
 			}
 			break
 		}
-		leftSlabDataSize += e.ByteSize()
-		leftSlabCount++
+		leftSize += elemSize
+		leftCount++
 	}
 
-	if leftSlabCount == a.header.count {
-		panic(fmt.Sprintf("computed left slab %v remains unchanged after rebalancing", *a.header))
-	}
+	rightStartIndex := leftCount - a.header.count
 
-	rightStartIndex := leftSlabCount - a.header.count
+	// Update left slab
+	a.elements = append(a.elements, rightSlab.elements[:rightStartIndex]...)
+	a.header.size = leftSize
+	a.header.count = leftCount
 
-	// Update left slab elements
-	a.elements = append(a.elements, b.elements[:rightStartIndex]...)
-
-	// Update right slab elements
-	b.elements = b.elements[rightStartIndex:]
-
-	// Update left slab header
-	a.header.size = leftSlabDataSize
-	a.header.count = leftSlabCount
-
-	// Update right slab header
-	b.header.size = size - leftSlabDataSize
-	b.header.count = count - leftSlabCount
+	// Update right slab
+	rightSlab.elements = rightSlab.elements[rightStartIndex:]
+	rightSlab.header.size = size - leftSize
+	rightSlab.header.count = count - leftCount
 
 	return nil
 }
@@ -532,7 +514,7 @@ func (a *ArrayDataSlab) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
-func newArrayMetaDataSlabFromData(slabID StorageID, data []byte) (*ArrayMetaDataSlab, error) {
+func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab, error) {
 	if len(data) < metaDataSlabPrefixSize {
 		return nil, errors.New("data is too short for array metadata slab")
 	}
@@ -567,8 +549,8 @@ func newArrayMetaDataSlabFromData(slabID StorageID, data []byte) (*ArrayMetaData
 	}
 
 	return &ArrayMetaDataSlab{
-		header:         &SlabHeader{id: slabID, size: uint32(len(data)), count: totalCount},
-		orderedHeaders: headers,
+		header:          &SlabHeader{id: id, size: uint32(len(data)), count: totalCount},
+		childrenHeaders: headers,
 	}, nil
 }
 
@@ -594,12 +576,12 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 	enc.scratch[0] = flagArray | flagMetaDataSlab
 
 	// Encode child header count
-	binary.BigEndian.PutUint32(enc.scratch[1:], uint32(len(a.orderedHeaders)))
+	binary.BigEndian.PutUint32(enc.scratch[1:], uint32(len(a.childrenHeaders)))
 
 	enc.Write(enc.scratch[:5])
 
-	// Encode child headers
-	for _, h := range a.orderedHeaders {
+	// Encode children headers
+	for _, h := range a.childrenHeaders {
 		binary.BigEndian.PutUint64(enc.scratch[:], uint64(h.id))
 		binary.BigEndian.PutUint32(enc.scratch[8:], h.count)
 		binary.BigEndian.PutUint32(enc.scratch[12:], h.size)
@@ -616,7 +598,7 @@ func (a *ArrayMetaDataSlab) ShallowCloneWithNewID() ArraySlab {
 			size:  a.header.size,
 			count: a.header.count,
 		},
-		orderedHeaders: a.orderedHeaders,
+		childrenHeaders: a.childrenHeaders,
 	}
 }
 
@@ -630,21 +612,21 @@ func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, er
 	// index is decremented by each child slab's element count.
 	// When decremented index is less than the element count,
 	// index is already adjusted to that slab's index range.
-	var id StorageID
-	for _, h := range a.orderedHeaders {
+	var childID StorageID
+	for _, h := range a.childrenHeaders {
 		if index < uint64(h.count) {
-			id = h.id
+			childID = h.id
 			break
 		}
 		index -= uint64(h.count)
 	}
 
-	slab, err := getArraySlab(storage, id)
+	child, err := getArraySlab(storage, childID)
 	if err != nil {
 		return nil, err
 	}
 
-	return slab.Get(storage, index)
+	return child.Get(storage, index)
 }
 
 func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) error {
@@ -657,35 +639,35 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) e
 	// index is decremented by each child slab's element count.
 	// When decremented index is less than the element count,
 	// index is already adjusted to that slab's index range.
-	var id StorageID
-	var headerIndex int
-	for i, h := range a.orderedHeaders {
+	var childID StorageID
+	var childHeaderIndex int
+	for i, h := range a.childrenHeaders {
 		if index < uint64(h.count) {
-			id = h.id
-			headerIndex = i
+			childID = h.id
+			childHeaderIndex = i
 			break
 		}
 		index -= uint64(h.count)
 	}
 
-	slab, err := getArraySlab(storage, id)
+	child, err := getArraySlab(storage, childID)
 	if err != nil {
 		return err
 	}
 
-	slab.SetHeader(a.orderedHeaders[headerIndex])
+	child.SetHeader(a.childrenHeaders[childHeaderIndex])
 
-	err = slab.Set(storage, index, v)
+	err = child.Set(storage, index, v)
 	if err != nil {
 		return err
 	}
 
-	if slab.IsFull() {
-		return a.SplitChildSlab(storage, slab, headerIndex)
+	if child.IsFull() {
+		return a.SplitChildSlab(storage, child, childHeaderIndex)
 	}
 
-	if underflowSize, underflow := slab.IsUnderflow(); underflow {
-		return a.MergeOrRebalanceChildSlab(storage, slab, headerIndex, underflowSize)
+	if underflowSize, underflow := child.IsUnderflow(); underflow {
+		return a.MergeOrRebalanceChildSlab(storage, child, childHeaderIndex, underflowSize)
 	}
 
 	storage.Store(a.header.id, a)
@@ -693,56 +675,56 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) e
 	return nil
 }
 
-// Insert inserts v into correct ArrayDataSlab.
+// Insert inserts v into the correct child slab.
 // index must be >=0 and <= a.header.count.
-// If index == a.header.count, Insert appends v to the end of underlying data slab.
+// If index == a.header.count, Insert appends v to the end of underlying slab.
 func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
 	if index > uint64(a.header.count) {
 		return IndexOutOfRangeError{}
 	}
 
-	if len(a.orderedHeaders) == 0 {
+	if len(a.childrenHeaders) == 0 {
 		panic("Inserting to empty MetaDataSlab")
 	}
 
-	var id StorageID
-	var headerIndex int
+	var childID StorageID
+	var childHeaderIndex int
 	if index == uint64(a.header.count) {
-		headerIndex = len(a.orderedHeaders) - 1
-		h := a.orderedHeaders[headerIndex]
-		id = h.id
+		childHeaderIndex = len(a.childrenHeaders) - 1
+		h := a.childrenHeaders[childHeaderIndex]
+		childID = h.id
 		index = uint64(h.count)
 	} else {
 		// Find child slab containing the element at given index.
 		// index is decremented by each child slab's element count.
 		// When decremented index is less than the element count,
 		// index is already adjusted to that slab's index range.
-		for i, h := range a.orderedHeaders {
+		for i, h := range a.childrenHeaders {
 			if index < uint64(h.count) {
-				id = h.id
-				headerIndex = i
+				childID = h.id
+				childHeaderIndex = i
 				break
 			}
 			index -= uint64(h.count)
 		}
 	}
 
-	slab, err := getArraySlab(storage, id)
+	child, err := getArraySlab(storage, childID)
 	if err != nil {
 		return err
 	}
 
-	slab.SetHeader(a.orderedHeaders[headerIndex])
+	child.SetHeader(a.childrenHeaders[childHeaderIndex])
 
-	err = slab.Insert(storage, index, v)
+	err = child.Insert(storage, index, v)
 	if err != nil {
 		return err
 	}
 
 	a.header.count++
 
-	if slab.IsFull() {
-		return a.SplitChildSlab(storage, slab, headerIndex)
+	if child.IsFull() {
+		return a.SplitChildSlab(storage, child, childHeaderIndex)
 	}
 
 	storage.Store(a.header.id, a)
@@ -760,33 +742,33 @@ func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable,
 	// index is decremented by each child slab's element count.
 	// When decremented index is less than the element count,
 	// index is already adjusted to that slab's index range.
-	var id StorageID
-	var headerIndex int
-	for i, h := range a.orderedHeaders {
+	var childID StorageID
+	var childHeaderIndex int
+	for i, h := range a.childrenHeaders {
 		if index < uint64(h.count) {
-			id = h.id
-			headerIndex = i
+			childID = h.id
+			childHeaderIndex = i
 			break
 		}
 		index -= uint64(h.count)
 	}
 
-	slab, err := getArraySlab(storage, id)
+	child, err := getArraySlab(storage, childID)
 	if err != nil {
 		return nil, err
 	}
 
-	slab.SetHeader(a.orderedHeaders[headerIndex])
+	child.SetHeader(a.childrenHeaders[childHeaderIndex])
 
-	v, err := slab.Remove(storage, index)
+	v, err := child.Remove(storage, index)
 	if err != nil {
 		return nil, err
 	}
 
 	a.header.count--
 
-	if underflowSize, isUnderflow := slab.IsUnderflow(); isUnderflow {
-		err = a.MergeOrRebalanceChildSlab(storage, slab, headerIndex, underflowSize)
+	if underflowSize, isUnderflow := child.IsUnderflow(); isUnderflow {
+		err = a.MergeOrRebalanceChildSlab(storage, child, childHeaderIndex, underflowSize)
 		if err != nil {
 			return nil, err
 		}
@@ -803,15 +785,18 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 		return err
 	}
 
-	a.orderedHeaders = append(a.orderedHeaders, nil)
-	if childHeaderIndex < len(a.orderedHeaders)-2 {
-		copy(a.orderedHeaders[childHeaderIndex+2:], a.orderedHeaders[childHeaderIndex+1:])
+	// Add new child slab (right) to childrenHeaders
+	a.childrenHeaders = append(a.childrenHeaders, nil)
+	if childHeaderIndex < len(a.childrenHeaders)-2 {
+		copy(a.childrenHeaders[childHeaderIndex+2:], a.childrenHeaders[childHeaderIndex+1:])
 	}
-	a.orderedHeaders[childHeaderIndex] = left.Header()
-	a.orderedHeaders[childHeaderIndex+1] = right.Header()
+	a.childrenHeaders[childHeaderIndex] = left.Header()
+	a.childrenHeaders[childHeaderIndex+1] = right.Header()
 
-	a.header.size += headerSize
+	// Increase header size
+	a.header.size += slabHeaderSize
 
+	// Store modified slabs
 	storage.Store(left.Header().id, left)
 	storage.Store(right.Header().id, right)
 	storage.Store(a.header.id, a)
@@ -832,34 +817,33 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 // +-----------------------+-----------------------+----------------------+-----------------------+
 func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child ArraySlab, childHeaderIndex int, underflowSize uint32) error {
 
-	// left and right siblings of the same parent.
+	// Retrieve left and right siblings of the same parent.
 	var leftSib, rightSib ArraySlab
 	if childHeaderIndex > 0 {
-		leftSibID := a.orderedHeaders[childHeaderIndex-1].id
+		leftSibID := a.childrenHeaders[childHeaderIndex-1].id
 
 		var err error
 		leftSib, err = getArraySlab(storage, leftSibID)
 		if err != nil {
 			return err
 		}
-		leftSib.SetHeader(a.orderedHeaders[childHeaderIndex-1])
+		leftSib.SetHeader(a.childrenHeaders[childHeaderIndex-1])
 	}
-	if childHeaderIndex < len(a.orderedHeaders)-1 {
-		rightSibID := a.orderedHeaders[childHeaderIndex+1].id
+	if childHeaderIndex < len(a.childrenHeaders)-1 {
+		rightSibID := a.childrenHeaders[childHeaderIndex+1].id
 
 		var err error
 		rightSib, err = getArraySlab(storage, rightSibID)
 		if err != nil {
 			return err
 		}
-		rightSib.SetHeader(a.orderedHeaders[childHeaderIndex+1])
+		rightSib.SetHeader(a.childrenHeaders[childHeaderIndex+1])
 	}
 
 	leftCanLend := leftSib != nil && leftSib.CanLendToRight(underflowSize)
 	rightCanLend := rightSib != nil && rightSib.CanLendToLeft(underflowSize)
 
 	// Child can rebalance elements with at least one sibling.
-	// Parent slab doesn't need to be modified for rebalancing.
 	if leftCanLend || rightCanLend {
 
 		// Rebalance with right sib
@@ -909,7 +893,6 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 	}
 
 	// Child can't rebalance with any sibling.  It must merge with one sibling.
-	// Parent slab needs to be modified for merging.
 
 	if leftSib == nil {
 
@@ -919,16 +902,17 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 			return err
 		}
 
-		// Update MetaDataSlab
-		copy(a.orderedHeaders[childHeaderIndex+1:], a.orderedHeaders[childHeaderIndex+2:])
-		a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
+		// Update MetaDataSlab's childrenHeaders
+		copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
+		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
 
-		a.header.size -= headerSize
+		a.header.size -= slabHeaderSize
 
+		// Store modified slabs in storage
 		storage.Store(child.ID(), child)
 		storage.Store(a.header.id, a)
 
-		// Remove right sib from SlabStorage
+		// Remove right sib from storage
 		storage.Remove(rightSib.Header().id)
 
 		return nil
@@ -942,16 +926,17 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 			return err
 		}
 
-		// Update MetaDataSlab
-		copy(a.orderedHeaders[childHeaderIndex:], a.orderedHeaders[childHeaderIndex+1:])
-		a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
+		// Update MetaDataSlab's childrenHeaders
+		copy(a.childrenHeaders[childHeaderIndex:], a.childrenHeaders[childHeaderIndex+1:])
+		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
 
-		a.header.size -= headerSize
+		a.header.size -= slabHeaderSize
 
+		// Store modified slabs in storage
 		storage.Store(leftSib.ID(), leftSib)
 		storage.Store(a.header.id, a)
 
-		// Remove child from SlabStorage
+		// Remove child from storage
 		storage.Remove(child.Header().id)
 
 		return nil
@@ -964,16 +949,17 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 			return err
 		}
 
-		// Update MetaDataSlab
-		copy(a.orderedHeaders[childHeaderIndex:], a.orderedHeaders[childHeaderIndex+1:])
-		a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
+		// Update MetaDataSlab's childrenHeaders
+		copy(a.childrenHeaders[childHeaderIndex:], a.childrenHeaders[childHeaderIndex+1:])
+		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
 
-		a.header.size -= headerSize
+		a.header.size -= slabHeaderSize
 
+		// Store modified slabs in storage
 		storage.Store(leftSib.ID(), leftSib)
 		storage.Store(a.header.id, a)
 
-		// Remove child from SlabStorage
+		// Remove child from storage
 		storage.Remove(child.Header().id)
 
 		return nil
@@ -984,125 +970,120 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 		return err
 	}
 
-	// Update MetaDataSlab
-	copy(a.orderedHeaders[childHeaderIndex+1:], a.orderedHeaders[childHeaderIndex+2:])
-	a.orderedHeaders = a.orderedHeaders[:len(a.orderedHeaders)-1]
+	// Update MetaDataSlab's childrenHeaders
+	copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
+	a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
 
-	a.header.size -= headerSize
+	a.header.size -= slabHeaderSize
 
+	// Store modified slabs in storage
 	storage.Store(child.ID(), child)
 	storage.Store(a.header.id, a)
 
-	// Remove rightSib from SlabStorage
+	// Remove rightSib from storage
 	storage.Remove(rightSib.Header().id)
 
 	return nil
 }
 
 func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
-	meta2 := slab.(*ArrayMetaDataSlab)
-	a.orderedHeaders = append(a.orderedHeaders, meta2.orderedHeaders...)
-	a.header.size += meta2.header.size - metaDataSlabPrefixSize
-	a.header.count += meta2.header.count
+	rightSlab := slab.(*ArrayMetaDataSlab)
+	a.childrenHeaders = append(a.childrenHeaders, rightSlab.childrenHeaders...)
+	a.header.size += rightSlab.header.size - metaDataSlabPrefixSize
+	a.header.count += rightSlab.header.count
 	return nil
 }
 
 func (a *ArrayMetaDataSlab) Split() (Slab, Slab, error) {
 
-	if len(a.orderedHeaders) < 2 {
+	if len(a.childrenHeaders) < 2 {
 		// Can't split meta slab with less than 2 headers
 		return nil, nil, fmt.Errorf("can't split meta slab with less than 2 headers")
 	}
 
-	rightSlabStartIndex := int(math.Ceil(float64(len(a.orderedHeaders)) / float64(2)))
-	leftSlabSize := rightSlabStartIndex * headerSize
+	leftChildrenCount := int(math.Ceil(float64(len(a.childrenHeaders)) / 2))
+	leftSize := leftChildrenCount * slabHeaderSize
 
-	leftSlabCount := uint32(0)
-	for i := 0; i < rightSlabStartIndex; i++ {
-		leftSlabCount += a.orderedHeaders[i].count
+	leftCount := uint32(0)
+	for i := 0; i < leftChildrenCount; i++ {
+		leftCount += a.childrenHeaders[i].count
 	}
 
-	right := &ArrayMetaDataSlab{
+	// Construct right slab
+	rightSlab := &ArrayMetaDataSlab{
 		header: &SlabHeader{
 			id:    generateStorageID(),
-			size:  a.header.size - uint32(leftSlabSize),
-			count: a.header.count - leftSlabCount,
+			size:  a.header.size - uint32(leftSize),
+			count: a.header.count - leftCount,
 		},
 	}
 
-	right.orderedHeaders = make([]*SlabHeader, len(a.orderedHeaders)-rightSlabStartIndex)
-	copy(right.orderedHeaders, a.orderedHeaders[rightSlabStartIndex:])
+	rightSlab.childrenHeaders = make([]*SlabHeader, len(a.childrenHeaders)-leftChildrenCount)
+	copy(rightSlab.childrenHeaders, a.childrenHeaders[leftChildrenCount:])
 
-	a.orderedHeaders = a.orderedHeaders[:rightSlabStartIndex]
-	a.header.count = leftSlabCount
-	a.header.size = metaDataSlabPrefixSize + uint32(leftSlabSize)
+	// Modify left (original)slab
+	a.childrenHeaders = a.childrenHeaders[:leftChildrenCount]
+	a.header.count = leftCount
+	a.header.size = metaDataSlabPrefixSize + uint32(leftSize)
 
-	return a, right, nil
+	return a, rightSlab, nil
 }
 
 func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
-	b := slab.(*ArrayMetaDataSlab)
+	rightSlab := slab.(*ArrayMetaDataSlab)
 
-	headerLen := len(a.orderedHeaders) + len(b.orderedHeaders)
-	leftSlabHeaderLen := headerLen / 2
-	rightSlabHeaderLen := headerLen - leftSlabHeaderLen
+	childrenHeadersLen := len(a.childrenHeaders) + len(rightSlab.childrenHeaders)
+	leftChildrenHeadersLen := childrenHeadersLen / 2
 
-	// Prepend some headers to right (b) from left (a)
+	// Update right slab childrenHeaders by prepending borrowed children headers
+	rightChildrenHeaders := make([]*SlabHeader, childrenHeadersLen-leftChildrenHeadersLen)
+	n := copy(rightChildrenHeaders, a.childrenHeaders[leftChildrenHeadersLen:])
+	copy(rightChildrenHeaders[n:], rightSlab.childrenHeaders)
+	rightSlab.childrenHeaders = rightChildrenHeaders
 
-	// Update slab b elements
-	rElements := make([]*SlabHeader, rightSlabHeaderLen)
-	n := copy(rElements, a.orderedHeaders[leftSlabHeaderLen:])
-	copy(rElements[n:], b.orderedHeaders)
-	b.orderedHeaders = rElements
+	// Update right slab header
+	rightSlab.header.count = 0
+	for i := 0; i < len(rightSlab.childrenHeaders); i++ {
+		rightSlab.header.count += rightSlab.childrenHeaders[i].count
+	}
+	rightSlab.header.size = metaDataSlabPrefixSize + uint32(len(rightSlab.childrenHeaders))*slabHeaderSize
 
-	// Update slab a elements
-	a.orderedHeaders = a.orderedHeaders[:leftSlabHeaderLen]
+	// Update left slab (original)
+	a.childrenHeaders = a.childrenHeaders[:leftChildrenHeadersLen]
 
-	// Update slab a header
 	a.header.count = 0
-	for i := 0; i < len(a.orderedHeaders); i++ {
-		a.header.count += a.orderedHeaders[i].count
+	for i := 0; i < len(a.childrenHeaders); i++ {
+		a.header.count += a.childrenHeaders[i].count
 	}
-	a.header.size = metaDataSlabPrefixSize + uint32(leftSlabHeaderLen)*headerSize
-
-	// Update slab b header
-	b.header.count = 0
-	for i := 0; i < len(b.orderedHeaders); i++ {
-		b.header.count += b.orderedHeaders[i].count
-	}
-	b.header.size = metaDataSlabPrefixSize + uint32(rightSlabHeaderLen)*headerSize
+	a.header.size = metaDataSlabPrefixSize + uint32(leftChildrenHeadersLen)*slabHeaderSize
 
 	return nil
 }
 
 func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab) error {
-	b := slab.(*ArrayMetaDataSlab)
+	rightSlab := slab.(*ArrayMetaDataSlab)
 
-	headerLen := len(a.orderedHeaders) + len(b.orderedHeaders)
-	leftSlabHeaderLen := headerLen / 2
-	rightSlabHeaderLen := headerLen - leftSlabHeaderLen
+	childrenHeadersLen := len(a.childrenHeaders) + len(rightSlab.childrenHeaders)
+	leftSlabHeaderLen := childrenHeadersLen / 2
+	rightSlabHeaderLen := childrenHeadersLen - leftSlabHeaderLen
 
-	// Append some headers to left (a) from right (b)
+	// Update left slab (original)
+	a.childrenHeaders = append(a.childrenHeaders, rightSlab.childrenHeaders[:leftSlabHeaderLen-len(a.childrenHeaders)]...)
 
-	// Update slab a elements
-	a.orderedHeaders = append(a.orderedHeaders, b.orderedHeaders[:leftSlabHeaderLen-len(a.orderedHeaders)]...)
-
-	// Update slab b elements
-	b.orderedHeaders = b.orderedHeaders[len(b.orderedHeaders)-rightSlabHeaderLen:]
-
-	// Update slab a header
 	a.header.count = 0
-	for i := 0; i < len(a.orderedHeaders); i++ {
-		a.header.count += a.orderedHeaders[i].count
+	for i := 0; i < len(a.childrenHeaders); i++ {
+		a.header.count += a.childrenHeaders[i].count
 	}
-	a.header.size = metaDataSlabPrefixSize + uint32(leftSlabHeaderLen)*headerSize
+	a.header.size = metaDataSlabPrefixSize + uint32(leftSlabHeaderLen)*slabHeaderSize
 
-	// Update slab b header
-	b.header.count = 0
-	for i := 0; i < len(b.orderedHeaders); i++ {
-		b.header.count += b.orderedHeaders[i].count
+	// Update right slab
+	rightSlab.childrenHeaders = rightSlab.childrenHeaders[len(rightSlab.childrenHeaders)-rightSlabHeaderLen:]
+
+	rightSlab.header.count = 0
+	for i := 0; i < len(rightSlab.childrenHeaders); i++ {
+		rightSlab.header.count += rightSlab.childrenHeaders[i].count
 	}
-	b.header.size = metaDataSlabPrefixSize + uint32(rightSlabHeaderLen)*headerSize
+	rightSlab.header.size = metaDataSlabPrefixSize + uint32(rightSlabHeaderLen)*slabHeaderSize
 
 	return nil
 }
@@ -1119,13 +1100,13 @@ func (a ArrayMetaDataSlab) IsUnderflow() (uint32, bool) {
 }
 
 func (a *ArrayMetaDataSlab) CanLendToLeft(size uint32) bool {
-	n := uint32(math.Ceil(float64(size) / headerSize))
-	return a.header.size-headerSize*n > uint32(minThreshold)
+	n := uint32(math.Ceil(float64(size) / slabHeaderSize))
+	return a.header.size-slabHeaderSize*n > uint32(minThreshold)
 }
 
 func (a *ArrayMetaDataSlab) CanLendToRight(size uint32) bool {
-	n := uint32(math.Ceil(float64(size) / headerSize))
-	return a.header.size-headerSize*n > uint32(minThreshold)
+	n := uint32(math.Ceil(float64(size) / slabHeaderSize))
+	return a.header.size-slabHeaderSize*n > uint32(minThreshold)
 }
 
 func (a ArrayMetaDataSlab) IsData() bool {
@@ -1154,7 +1135,7 @@ func (a *ArrayMetaDataSlab) ID() StorageID {
 
 func (a *ArrayMetaDataSlab) String() string {
 	var elemsStr []string
-	for _, h := range a.orderedHeaders {
+	for _, h := range a.childrenHeaders {
 		elemsStr = append(elemsStr, fmt.Sprintf("%+v", *h))
 	}
 	return strings.Join(elemsStr, " ")
@@ -1179,8 +1160,8 @@ func NewArrayWithRootID(storage SlabStorage, rootID StorageID) (*Array, error) {
 	return &Array{storage: storage, root: root}, nil
 }
 
-func (array *Array) Get(i uint64) (Storable, error) {
-	v, err := array.root.Get(array.storage, i)
+func (a *Array) Get(i uint64) (Storable, error) {
+	v, err := a.root.Get(a.storage, i)
 	if err != nil {
 		return nil, err
 	}
@@ -1190,7 +1171,7 @@ func (array *Array) Get(i uint64) (Storable, error) {
 		if id == StorageIDUndefined {
 			return nil, fmt.Errorf("invalid storage id")
 		}
-		slab, found, err := array.storage.Retrieve(id)
+		slab, found, err := a.storage.Retrieve(id)
 		if err != nil {
 			return nil, err
 		}
@@ -1202,30 +1183,30 @@ func (array *Array) Get(i uint64) (Storable, error) {
 	return v, nil
 }
 
-func (array *Array) Set(index uint64, v Storable) error {
+func (a *Array) Set(index uint64, v Storable) error {
 	if v.Mutable() || v.ByteSize() > uint32(maxInlineElementSize) {
 		v = StorageIDValue(v.ID())
 	}
-	return array.root.Set(array.storage, index, v)
+	return a.root.Set(a.storage, index, v)
 }
 
-func (array *Array) Append(v Storable) error {
-	return array.Insert(array.Count(), v)
+func (a *Array) Append(v Storable) error {
+	return a.Insert(a.Count(), v)
 }
 
-func (array *Array) Insert(index uint64, v Storable) error {
+func (a *Array) Insert(index uint64, v Storable) error {
 	if v.Mutable() || v.ByteSize() > uint32(maxInlineElementSize) {
 		v = StorageIDValue(v.ID())
 	}
 
-	err := array.root.Insert(array.storage, index, v)
+	err := a.root.Insert(a.storage, index, v)
 	if err != nil {
 		return err
 	}
 
-	if array.root.IsFull() {
+	if a.root.IsFull() {
 
-		copiedRoot := array.root.ShallowCloneWithNewID()
+		copiedRoot := a.root.ShallowCloneWithNewID()
 
 		// Split copied root
 		left, right, err := copiedRoot.Split()
@@ -1233,64 +1214,63 @@ func (array *Array) Insert(index uint64, v Storable) error {
 			return err
 		}
 
-		array.storage.Store(left.Header().id, left)
-		array.storage.Store(right.Header().id, right)
-
-		if array.root.IsData() {
+		if a.root.IsData() {
 			// Create new ArrayMetaDataSlab with the same storage ID as root
-			array.root = &ArrayMetaDataSlab{
+			rootID := a.root.ID()
+			a.root = &ArrayMetaDataSlab{
 				header: &SlabHeader{
-					id: array.root.Header().id,
+					id: rootID,
 				},
 			}
 		}
 
-		root := array.root.(*ArrayMetaDataSlab)
-		root.orderedHeaders = []*SlabHeader{left.Header(), right.Header()}
+		root := a.root.(*ArrayMetaDataSlab)
+		root.childrenHeaders = []*SlabHeader{left.Header(), right.Header()}
 		root.header.count = left.Header().count + right.Header().count
-		root.header.size = metaDataSlabPrefixSize + headerSize*uint32(len(root.orderedHeaders))
+		root.header.size = metaDataSlabPrefixSize + slabHeaderSize*uint32(len(root.childrenHeaders))
 
-		array.storage.Store(array.root.Header().id, array.root)
+		a.storage.Store(left.Header().id, left)
+		a.storage.Store(right.Header().id, right)
+		a.storage.Store(a.root.Header().id, a.root)
 	}
 
 	return nil
 }
 
-func (array *Array) Remove(index uint64) (Storable, error) {
-	v, err := array.root.Remove(array.storage, index)
+func (a *Array) Remove(index uint64) (Storable, error) {
+	v, err := a.root.Remove(a.storage, index)
 	if err != nil {
 		return nil, err
 	}
 
-	if !array.root.IsData() {
-		// Set root to its child slab if there is only one child slab left.
-		root := array.root.(*ArrayMetaDataSlab)
-		if len(root.orderedHeaders) == 1 {
+	if !a.root.IsData() {
+		// Set root to its child slab if root has one child slab.
+		root := a.root.(*ArrayMetaDataSlab)
+		if len(root.childrenHeaders) == 1 {
 
-			childID := root.orderedHeaders[0].id
+			rootID := root.header.id
 
-			child, err := getArraySlab(array.storage, childID)
+			childID := root.childrenHeaders[0].id
+
+			child, err := getArraySlab(a.storage, childID)
 			if err != nil {
 				return nil, err
 			}
 
-			oldRootID := root.header.id
+			a.root = child
 
-			child.Header().id = oldRootID
+			a.root.Header().id = rootID
 
-			array.storage.Store(oldRootID, child)
-
-			array.storage.Remove(childID)
-
-			array.root = child
+			a.storage.Store(rootID, a.root)
+			a.storage.Remove(childID)
 		}
 	}
 
 	return v, nil
 }
 
-func (array *Array) Iterate(fn func(Storable)) error {
-	slab, err := firstDataSlab(array.storage, array.root)
+func (a *Array) Iterate(fn func(Storable)) error {
+	slab, err := firstDataSlab(a.storage, a.root)
 	if err != nil {
 		return nil
 	}
@@ -1298,7 +1278,7 @@ func (array *Array) Iterate(fn func(Storable)) error {
 	id := slab.ID()
 
 	for id != StorageIDUndefined {
-		slab, found, err := array.storage.Retrieve(id)
+		slab, found, err := a.storage.Retrieve(id)
 		if err != nil {
 			return err
 		}
@@ -1318,32 +1298,36 @@ func (array *Array) Iterate(fn func(Storable)) error {
 	return nil
 }
 
-func (array *Array) Count() uint64 {
-	return uint64(array.root.Header().count)
+func (a *Array) Count() uint64 {
+	return uint64(a.root.Header().count)
 }
 
-func (array *Array) String() string {
-	if array.root.IsData() {
-		return array.root.String()
+func (a *Array) StorageID() StorageID {
+	return a.root.Header().id
+}
+
+func (a *Array) String() string {
+	if a.root.IsData() {
+		return a.root.String()
 	}
-	meta := array.root.(*ArrayMetaDataSlab)
-	return array.string(meta)
+	meta := a.root.(*ArrayMetaDataSlab)
+	return a.string(meta)
 }
 
-func (array *Array) string(meta *ArrayMetaDataSlab) string {
+func (a *Array) string(meta *ArrayMetaDataSlab) string {
 	var elemsStr []string
 
-	for _, h := range meta.orderedHeaders {
-		slab, err := getArraySlab(array.storage, h.id)
+	for _, h := range meta.childrenHeaders {
+		child, err := getArraySlab(a.storage, h.id)
 		if err != nil {
 			return err.Error()
 		}
-		if slab.IsData() {
-			data := slab.(*ArrayDataSlab)
+		if child.IsData() {
+			data := child.(*ArrayDataSlab)
 			elemsStr = append(elemsStr, data.String())
 		} else {
-			meta := slab.(*ArrayMetaDataSlab)
-			elemsStr = append(elemsStr, array.string(meta))
+			meta := child.(*ArrayMetaDataSlab)
+			elemsStr = append(elemsStr, a.string(meta))
 		}
 	}
 	return strings.Join(elemsStr, " ")
@@ -1372,7 +1356,7 @@ func firstDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) {
 		return slab, nil
 	}
 	meta := slab.(*ArrayMetaDataSlab)
-	firstChildID := meta.orderedHeaders[0].id
+	firstChildID := meta.childrenHeaders[0].id
 	firstChild, err := getArraySlab(storage, firstChildID)
 	if err != nil {
 		return nil, err

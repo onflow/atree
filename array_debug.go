@@ -51,7 +51,7 @@ func (array *Array) Stats() (Stats, error) {
 				metaDataSlabCount++
 				metaDataSlabSize += uint64(meta.header.size)
 
-				for _, h := range meta.orderedHeaders {
+				for _, h := range meta.childrenHeaders {
 					nextLevelIDs.PushBack(h.id)
 				}
 			}
@@ -119,7 +119,7 @@ func (array *Array) Print() {
 			} else {
 				meta := slab.(*ArrayMetaDataSlab)
 				fmt.Printf("level %d, meta (%+v) headers: [", level+1, *(meta.header))
-				for _, h := range meta.orderedHeaders {
+				for _, h := range meta.childrenHeaders {
 					fmt.Printf("%+v ", *h)
 					nextLevelIDs.PushBack(h.id)
 				}
@@ -184,7 +184,7 @@ func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 		return false, 0, fmt.Errorf("slab %d is not ArrayMetaDataSlab", id)
 	}
 	sum := uint32(0)
-	for _, h := range meta.orderedHeaders {
+	for _, h := range meta.childrenHeaders {
 		verified, count, err := array._valid(h.id, level+1)
 		if !verified || err != nil {
 			return false, 0, err
@@ -197,7 +197,7 @@ func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 
 	validCount := sum == meta.header.count
 
-	computedSize := uint32(len(meta.orderedHeaders)*headerSize) + metaDataSlabPrefixSize
+	computedSize := uint32(len(meta.childrenHeaders)*slabHeaderSize) + metaDataSlabPrefixSize
 	validSize := computedSize == meta.header.size
 
 	return validFill && validCount && validSize, sum, nil

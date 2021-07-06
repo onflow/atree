@@ -23,6 +23,9 @@ const (
 	// version (1 byte) + flag (1 byte) + prev id (8 bytes) + next id (8 bytes) + CBOR array size (3 bytes)
 	// (3 bytes of array size support up to 65535 array elements)
 	dataSlabPrefixSize = 2 + 8 + 8 + 3
+
+	// 32 is faster than 24 and 40.
+	linearScanThreshold = 32
 )
 
 type Slab interface {
@@ -57,8 +60,9 @@ type ArrayDataSlab struct {
 
 // ArrayMetaDataSlab is internal node, implementing ArraySlab.
 type ArrayMetaDataSlab struct {
-	header          SlabHeader
-	childrenHeaders []SlabHeader
+	header           SlabHeader
+	childrenHeaders  []SlabHeader
+	childrenCountSum []uint32
 }
 
 type ArraySlab interface {
@@ -546,23 +550,26 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 	off := 4
 
 	// Decode child headers
-	headers := make([]SlabHeader, headerCount)
+	childrenHeaders := make([]SlabHeader, headerCount)
+	childrenCountSum := make([]uint32, headerCount)
 	totalCount := uint32(0)
 	for i := 0; i < int(headerCount); i++ {
 		id := binary.BigEndian.Uint64(data[off : off+8])
 		count := binary.BigEndian.Uint32(data[off+8 : off+12])
 		size := binary.BigEndian.Uint32(data[off+12 : off+16])
 
-		headers[i] = SlabHeader{id: StorageID(id), count: count, size: size}
-
 		totalCount += count
+
+		childrenHeaders[i] = SlabHeader{id: StorageID(id), count: count, size: size}
+		childrenCountSum[i] = totalCount
 
 		off += 16
 	}
 
 	return &ArrayMetaDataSlab{
-		header:          SlabHeader{id: id, size: uint32(len(data)), count: totalCount},
-		childrenHeaders: headers,
+		header:           SlabHeader{id: id, size: uint32(len(data)), count: totalCount},
+		childrenHeaders:  childrenHeaders,
+		childrenCountSum: childrenCountSum,
 	}, nil
 }
 
@@ -613,7 +620,8 @@ func (a *ArrayMetaDataSlab) ShallowCloneWithNewID() ArraySlab {
 			size:  a.header.size,
 			count: a.header.count,
 		},
-		childrenHeaders: a.childrenHeaders,
+		childrenHeaders:  a.childrenHeaders,
+		childrenCountSum: a.childrenCountSum,
 	}
 }
 
@@ -623,23 +631,42 @@ func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, er
 		return nil, IndexOutOfRangeError{}
 	}
 
-	// Find child slab containing the element at given index.
-	// index is decremented by each child slab's element count.
-	// When decremented index is less than the element count,
-	// index is already adjusted to that slab's index range.
-	var childID StorageID
-	for _, h := range a.childrenHeaders {
-		if index < uint64(h.count) {
-			childID = h.id
-			break
+	var childHeaderIndex int
+	if len(a.childrenCountSum) < linearScanThreshold {
+		for i, countsum := range a.childrenCountSum {
+			if index < uint64(countsum) {
+				childHeaderIndex = i
+				break
+			}
 		}
-		index -= uint64(h.count)
+	} else {
+		low, high := 0, len(a.childrenCountSum)
+		for low < high {
+			// The following line is borrowed from Go runtime .
+			mid := int(uint(low+high) >> 1) // avoid overflow when computing mid
+			midCountSum := uint64(a.childrenCountSum[mid])
+
+			if midCountSum < index {
+				low = mid + 1
+			} else if midCountSum > index {
+				high = mid
+			} else {
+				low = mid + 1
+				break
+
+			}
+		}
+		childHeaderIndex = low
 	}
+
+	childID := a.childrenHeaders[childHeaderIndex].id
+
+	adjustedIndex := index + uint64(a.childrenHeaders[childHeaderIndex].count) - uint64(a.childrenCountSum[childHeaderIndex])
 
 	childSlab, _, err := storage.Retrieve(childID)
 
 	if child, ok := childSlab.(ArraySlab); ok {
-		return child.Get(storage, index)
+		return child.Get(storage, adjustedIndex)
 	}
 
 	return nil, ArraySlabNotFoundError{childID, err}
@@ -651,27 +678,45 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) e
 		return IndexOutOfRangeError{}
 	}
 
-	// Find child slab containing the element at given index.
-	// index is decremented by each child slab's element count.
-	// When decremented index is less than the element count,
-	// index is already adjusted to that slab's index range.
-	var childID StorageID
 	var childHeaderIndex int
-	for i, h := range a.childrenHeaders {
-		if index < uint64(h.count) {
-			childID = h.id
-			childHeaderIndex = i
-			break
+
+	if len(a.childrenCountSum) < linearScanThreshold {
+		for i, countsum := range a.childrenCountSum {
+			if index < uint64(countsum) {
+				childHeaderIndex = i
+				break
+			}
 		}
-		index -= uint64(h.count)
+	} else {
+		low, high := 0, len(a.childrenCountSum)
+		for low < high {
+			// The following line is borrowed from Go runtime .
+			mid := int(uint(low+high) >> 1) // avoid overflow when computing mid
+			midCountSum := uint64(a.childrenCountSum[mid])
+
+			if midCountSum < index {
+				low = mid + 1
+			} else if midCountSum > index {
+				high = mid
+			} else {
+				low = mid + 1
+				break
+
+			}
+		}
+		childHeaderIndex = low
 	}
+
+	childID := a.childrenHeaders[childHeaderIndex].id
+
+	adjustedIndex := index + uint64(a.childrenHeaders[childHeaderIndex].count) - uint64(a.childrenCountSum[childHeaderIndex])
 
 	child, err := getArraySlab(storage, childID)
 	if err != nil {
 		return err
 	}
 
-	err = child.Set(storage, index, v)
+	err = child.Set(storage, adjustedIndex, v)
 	if err != nil {
 		return err
 	}
@@ -705,24 +750,43 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 
 	var childID StorageID
 	var childHeaderIndex int
+	var adjustedIndex uint64
 	if index == uint64(a.header.count) {
 		childHeaderIndex = len(a.childrenHeaders) - 1
 		h := a.childrenHeaders[childHeaderIndex]
 		childID = h.id
-		index = uint64(h.count)
+		adjustedIndex = uint64(h.count)
 	} else {
-		// Find child slab containing the element at given index.
-		// index is decremented by each child slab's element count.
-		// When decremented index is less than the element count,
-		// index is already adjusted to that slab's index range.
-		for i, h := range a.childrenHeaders {
-			if index < uint64(h.count) {
-				childID = h.id
-				childHeaderIndex = i
-				break
+		if len(a.childrenCountSum) < linearScanThreshold {
+			for i, countsum := range a.childrenCountSum {
+				if index < uint64(countsum) {
+					childHeaderIndex = i
+					break
+				}
 			}
-			index -= uint64(h.count)
+		} else {
+			low, high := 0, len(a.childrenCountSum)
+			for low < high {
+				// The following line is borrowed from Go runtime .
+				mid := int(uint(low+high) >> 1) // avoid overflow when computing mid
+				midCountSum := uint64(a.childrenCountSum[mid])
+
+				if midCountSum < index {
+					low = mid + 1
+				} else if midCountSum > index {
+					high = mid
+				} else {
+					low = mid + 1
+					break
+
+				}
+			}
+			childHeaderIndex = low
 		}
+
+		childID = a.childrenHeaders[childHeaderIndex].id
+
+		adjustedIndex = index + uint64(a.childrenHeaders[childHeaderIndex].count) - uint64(a.childrenCountSum[childHeaderIndex])
 	}
 
 	child, err := getArraySlab(storage, childID)
@@ -730,12 +794,17 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 		return err
 	}
 
-	err = child.Insert(storage, index, v)
+	err = child.Insert(storage, adjustedIndex, v)
 	if err != nil {
 		return err
 	}
 
 	a.header.count++
+
+	// Increment childrenCountSum from childHeaderIndex
+	for i := childHeaderIndex; i < len(a.childrenCountSum); i++ {
+		a.childrenCountSum[i]++
+	}
 
 	a.childrenHeaders[childHeaderIndex] = child.Header()
 
@@ -754,32 +823,54 @@ func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable,
 		return nil, IndexOutOfRangeError{}
 	}
 
-	// Find child slab containing the element at given index.
-	// index is decremented by each child slab's element count.
-	// When decremented index is less than the element count,
-	// index is already adjusted to that slab's index range.
-	var childID StorageID
 	var childHeaderIndex int
-	for i, h := range a.childrenHeaders {
-		if index < uint64(h.count) {
-			childID = h.id
-			childHeaderIndex = i
-			break
+	if len(a.childrenCountSum) < linearScanThreshold {
+		for i, countsum := range a.childrenCountSum {
+			if index < uint64(countsum) {
+				childHeaderIndex = i
+				break
+			}
 		}
-		index -= uint64(h.count)
+	} else {
+		low, high := 0, len(a.childrenCountSum)
+		for low < high {
+			// The following line is borrowed from Go runtime .
+			mid := int(uint(low+high) >> 1) // avoid overflow when computing mid
+			midCountSum := uint64(a.childrenCountSum[mid])
+
+			if midCountSum < index {
+				low = mid + 1
+			} else if midCountSum > index {
+				high = mid
+			} else {
+				low = mid + 1
+				break
+
+			}
+		}
+		childHeaderIndex = low
 	}
+
+	childID := a.childrenHeaders[childHeaderIndex].id
+
+	adjustedIndex := index + uint64(a.childrenHeaders[childHeaderIndex].count) - uint64(a.childrenCountSum[childHeaderIndex])
 
 	child, err := getArraySlab(storage, childID)
 	if err != nil {
 		return nil, err
 	}
 
-	v, err := child.Remove(storage, index)
+	v, err := child.Remove(storage, adjustedIndex)
 	if err != nil {
 		return nil, err
 	}
 
 	a.header.count--
+
+	// Decrement childrenCountSum from childHeaderIndex
+	for i := childHeaderIndex; i < len(a.childrenCountSum); i++ {
+		a.childrenCountSum[i]--
+	}
 
 	a.childrenHeaders[childHeaderIndex] = child.Header()
 
@@ -808,6 +899,11 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 	}
 	a.childrenHeaders[childHeaderIndex] = left.Header()
 	a.childrenHeaders[childHeaderIndex+1] = right.Header()
+
+	// Adjust childrenCountSum
+	a.childrenCountSum = append(a.childrenCountSum, uint32(0))
+	copy(a.childrenCountSum[childHeaderIndex+1:], a.childrenCountSum[childHeaderIndex:])
+	a.childrenCountSum[childHeaderIndex] -= right.Header().count
 
 	// Increase header size
 	a.header.size += slabHeaderSize
@@ -862,6 +958,8 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 
 		// Rebalance with right sib
 		if !leftCanLend {
+			baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
+
 			err := child.BorrowFromRight(rightSib)
 			if err != nil {
 				return err
@@ -870,6 +968,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 			a.childrenHeaders[childHeaderIndex] = child.Header()
 			a.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
 
+			// Adjust childrenCountSum
+			a.childrenCountSum[childHeaderIndex] = baseCountSum + child.Header().count
+
+			// Store modified slabs
 			storage.Store(child.ID(), child)
 			storage.Store(rightSib.ID(), rightSib)
 			storage.Store(a.header.id, a)
@@ -878,6 +980,8 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 
 		// Rebalance with left sib
 		if !rightCanLend {
+			baseCountSum := a.childrenCountSum[childHeaderIndex-1] - leftSib.Header().count
+
 			err := leftSib.LendToRight(child)
 			if err != nil {
 				return err
@@ -886,6 +990,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 			a.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
 			a.childrenHeaders[childHeaderIndex] = child.Header()
 
+			// Adjust childrenCountSum
+			a.childrenCountSum[childHeaderIndex-1] = baseCountSum + leftSib.Header().count
+
+			// Store modified slabs
 			storage.Store(leftSib.ID(), leftSib)
 			storage.Store(child.ID(), child)
 			storage.Store(a.header.id, a)
@@ -894,6 +1002,8 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 
 		// Rebalance with bigger sib
 		if leftSib.Header().size > rightSib.Header().size {
+			baseCountSum := a.childrenCountSum[childHeaderIndex-1] - leftSib.Header().count
+
 			err := leftSib.LendToRight(child)
 			if err != nil {
 				return err
@@ -902,11 +1012,17 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 			a.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
 			a.childrenHeaders[childHeaderIndex] = child.Header()
 
+			// Adjust childrenCountSum
+			a.childrenCountSum[childHeaderIndex-1] = baseCountSum + leftSib.Header().count
+
+			// Store modified slabs
 			storage.Store(leftSib.ID(), leftSib)
 			storage.Store(child.ID(), child)
 			storage.Store(a.header.id, a)
 			return nil
 		}
+
+		baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
 
 		err := child.BorrowFromRight(rightSib)
 		if err != nil {
@@ -916,6 +1032,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 		a.childrenHeaders[childHeaderIndex] = child.Header()
 		a.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
 
+		// Adjust childrenCountSum
+		a.childrenCountSum[childHeaderIndex] = baseCountSum + child.Header().count
+
+		// Store modified slabs
 		storage.Store(child.ID(), child)
 		storage.Store(rightSib.ID(), rightSib)
 		storage.Store(a.header.id, a)
@@ -937,6 +1057,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 		// Update MetaDataSlab's childrenHeaders
 		copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
 		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
+
+		// Adjust childrenCountSum
+		copy(a.childrenCountSum[childHeaderIndex:], a.childrenCountSum[childHeaderIndex+1:])
+		a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
 
 		a.header.size -= slabHeaderSize
 
@@ -964,6 +1088,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 		copy(a.childrenHeaders[childHeaderIndex:], a.childrenHeaders[childHeaderIndex+1:])
 		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
 
+		// Adjust childrenCountSum
+		copy(a.childrenCountSum[childHeaderIndex-1:], a.childrenCountSum[childHeaderIndex:])
+		a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
+
 		a.header.size -= slabHeaderSize
 
 		// Store modified slabs in storage
@@ -989,6 +1117,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 		copy(a.childrenHeaders[childHeaderIndex:], a.childrenHeaders[childHeaderIndex+1:])
 		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
 
+		// Adjust childrenCountSum
+		copy(a.childrenCountSum[childHeaderIndex-1:], a.childrenCountSum[childHeaderIndex:])
+		a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
+
 		a.header.size -= slabHeaderSize
 
 		// Store modified slabs in storage
@@ -1012,6 +1144,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 	copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
 	a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
 
+	// Adjust childrenCountSum
+	copy(a.childrenCountSum[childHeaderIndex:], a.childrenCountSum[childHeaderIndex+1:])
+	a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
+
 	a.header.size -= slabHeaderSize
 
 	// Store modified slabs in storage
@@ -1025,10 +1161,20 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 }
 
 func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
+	baseCountSum := a.childrenCountSum[len(a.childrenCountSum)-1]
+	leftSlabChildrenCount := len(a.childrenHeaders)
+
 	rightSlab := slab.(*ArrayMetaDataSlab)
 	a.childrenHeaders = append(a.childrenHeaders, rightSlab.childrenHeaders...)
 	a.header.size += rightSlab.header.size - metaDataSlabPrefixSize
 	a.header.count += rightSlab.header.count
+
+	// Adjust childrenCountSum
+	for i := leftSlabChildrenCount; i < len(a.childrenHeaders); i++ {
+		baseCountSum += a.childrenHeaders[i].count
+		a.childrenCountSum = append(a.childrenCountSum, baseCountSum)
+	}
+
 	return nil
 }
 
@@ -1059,8 +1205,16 @@ func (a *ArrayMetaDataSlab) Split() (Slab, Slab, error) {
 	rightSlab.childrenHeaders = make([]SlabHeader, len(a.childrenHeaders)-leftChildrenCount)
 	copy(rightSlab.childrenHeaders, a.childrenHeaders[leftChildrenCount:])
 
+	rightSlab.childrenCountSum = make([]uint32, len(rightSlab.childrenHeaders))
+	countSum := uint32(0)
+	for i := 0; i < len(rightSlab.childrenCountSum); i++ {
+		countSum += rightSlab.childrenHeaders[i].count
+		rightSlab.childrenCountSum[i] = countSum
+	}
+
 	// Modify left (original)slab
 	a.childrenHeaders = a.childrenHeaders[:leftChildrenCount]
+	a.childrenCountSum = a.childrenCountSum[:leftChildrenCount]
 	a.header.count = leftCount
 	a.header.size = metaDataSlabPrefixSize + uint32(leftSize)
 
@@ -1079,6 +1233,14 @@ func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 	copy(rightChildrenHeaders[n:], rightSlab.childrenHeaders)
 	rightSlab.childrenHeaders = rightChildrenHeaders
 
+	// Rebuild right slab childrenCountSum
+	rightSlab.childrenCountSum = make([]uint32, len(rightSlab.childrenHeaders))
+	countSum := uint32(0)
+	for i := 0; i < len(rightSlab.childrenCountSum); i++ {
+		countSum += rightSlab.childrenHeaders[i].count
+		rightSlab.childrenCountSum[i] = countSum
+	}
+
 	// Update right slab header
 	rightSlab.header.count = 0
 	for i := 0; i < len(rightSlab.childrenHeaders); i++ {
@@ -1088,6 +1250,7 @@ func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 
 	// Update left slab (original)
 	a.childrenHeaders = a.childrenHeaders[:leftChildrenHeadersLen]
+	a.childrenCountSum = a.childrenCountSum[:leftChildrenHeadersLen]
 
 	a.header.count = 0
 	for i := 0; i < len(a.childrenHeaders); i++ {
@@ -1099,6 +1262,9 @@ func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 }
 
 func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab) error {
+	originalLeftSlabCountSum := a.header.count
+	originalLeftSlabHeaderLen := len(a.childrenHeaders)
+
 	rightSlab := slab.(*ArrayMetaDataSlab)
 
 	childrenHeadersLen := len(a.childrenHeaders) + len(rightSlab.childrenHeaders)
@@ -1108,19 +1274,24 @@ func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab) error {
 	// Update left slab (original)
 	a.childrenHeaders = append(a.childrenHeaders, rightSlab.childrenHeaders[:leftSlabHeaderLen-len(a.childrenHeaders)]...)
 
-	a.header.count = 0
-	for i := 0; i < len(a.childrenHeaders); i++ {
-		a.header.count += a.childrenHeaders[i].count
+	countSum := originalLeftSlabCountSum
+	for i := originalLeftSlabHeaderLen; i < len(a.childrenHeaders); i++ {
+		countSum += a.childrenHeaders[i].count
+		a.childrenCountSum = append(a.childrenCountSum, countSum)
 	}
+	a.header.count = countSum
 	a.header.size = metaDataSlabPrefixSize + uint32(leftSlabHeaderLen)*slabHeaderSize
 
 	// Update right slab
 	rightSlab.childrenHeaders = rightSlab.childrenHeaders[len(rightSlab.childrenHeaders)-rightSlabHeaderLen:]
+	rightSlab.childrenCountSum = rightSlab.childrenCountSum[:len(rightSlab.childrenHeaders)]
 
-	rightSlab.header.count = 0
+	countSum = uint32(0)
 	for i := 0; i < len(rightSlab.childrenHeaders); i++ {
-		rightSlab.header.count += rightSlab.childrenHeaders[i].count
+		countSum += rightSlab.childrenHeaders[i].count
+		rightSlab.childrenCountSum[i] = countSum
 	}
+	rightSlab.header.count = countSum
 	rightSlab.header.size = metaDataSlabPrefixSize + uint32(rightSlabHeaderLen)*slabHeaderSize
 
 	return nil
@@ -1264,6 +1435,7 @@ func (a *Array) Insert(index uint64, v Storable) error {
 
 		root := a.root.(*ArrayMetaDataSlab)
 		root.childrenHeaders = []SlabHeader{left.Header(), right.Header()}
+		root.childrenCountSum = []uint32{left.Header().count, left.Header().count + right.Header().count}
 		root.header.count = left.Header().count + right.Header().count
 		root.header.size = metaDataSlabPrefixSize + slabHeaderSize*uint32(len(root.childrenHeaders))
 

@@ -287,7 +287,7 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 
 	// This computes the ceil of split to give the first slab with more elements.
 	dataSize := a.header.size - dataSlabPrefixSize
-	midPoint := uint32(math.Ceil(float64(dataSize) / 2))
+	midPoint := (dataSize + 1) >> 1
 
 	leftSize := uint32(0)
 	leftCount := 0
@@ -350,7 +350,7 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 	leftCount := a.header.count
 	leftSize := a.header.size
 
-	midPoint := uint32(math.Ceil(float64(size) / 2))
+	midPoint := (size + 1) >> 1
 
 	// Left slab size is as close to midPoint as possible while right slab size >= minThreshold
 	for i := len(a.elements) - 1; i >= 0; i-- {
@@ -389,7 +389,7 @@ func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 	leftCount := a.header.count
 	leftSize := a.header.size
 
-	midPoint := uint32(math.Ceil(float64(size) / 2))
+	midPoint := (size + 1) >> 1
 
 	for _, e := range rightSlab.elements {
 		elemSize := e.ByteSize()

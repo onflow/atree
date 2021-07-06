@@ -279,7 +279,12 @@ func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {
 		if err != nil {
 			return err
 		}
-		return s.baseStorage.Store(id, data)
+		err = s.baseStorage.Store(id, data)
+		if err != nil {
+			return err
+		}
+		s.cache[id] = slab
+		return nil
 	}
 
 	// add to deltas

@@ -26,9 +26,19 @@ func BenchmarkLArray(b *testing.B) { benchmarkArray(b, 100_000, 100) }
 
 func BenchmarkXLArray(b *testing.B) { benchmarkArray(b, 1_000_000, 100) }
 
-func BenchmarkXXLArray(b *testing.B) { benchmarkArray(b, 10_000_000, 100) }
+func BenchmarkXXLArray(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping BenchmarkXXLArray in short mode")
+	}
+	benchmarkArray(b, 10_000_000, 100)
+}
 
-func BenchmarkXXXLArray(b *testing.B) { benchmarkArray(b, 100_000_000, 100) }
+func BenchmarkXXXLArray(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping BenchmarkXXXLArray in short mode")
+	}
+	benchmarkArray(b, 100_000_000, 100)
+}
 
 // TODO add nested arrays as class 5
 func RandomValue() Storable {

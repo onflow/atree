@@ -5,149 +5,180 @@
 package main
 
 import (
-	"flag"
 	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-var elementCount = flag.Int("elemcount", 100000, "number of elements in atree")
-var slabTargetSize = flag.Int("slabsize", 1024, "target slab size")
-
-// perm returns a slice of n Storables (Uint64Value) in the range of [0, MaxUint64].
-func perm(n int) []Storable {
-	values := make([]Storable, n)
-	for i := 0; i < n; i++ {
-		v := rand.Uint64()
-		values[i] = Uint64Value(v)
-	}
-	return values
-}
+// var slabTargetSize = flag.Int("slabsize", 1024, "target slab size")
 
 var noop Storable
 
-func BenchmarkGet(b *testing.B) {
+func BenchmarkGetXSArray(b *testing.B) { benchmarkGet(b, 10, 100) }
+
+func BenchmarkGetSArray(b *testing.B) { benchmarkGet(b, 1000, 100) }
+
+func BenchmarkGetMArray(b *testing.B) { benchmarkGet(b, 10_000, 100) }
+
+func BenchmarkGetLArray(b *testing.B) { benchmarkGet(b, 100_000, 100) }
+
+func BenchmarkGetXLArray(b *testing.B) { benchmarkGet(b, 1_000_000, 100) }
+
+func BenchmarkGetXXLArray(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping BenchmarkGetXXLArray in short mode")
+	}
+	benchmarkGet(b, 10_000_000, 100)
+}
+
+func BenchmarkInsertXSArray(b *testing.B) { benchmarkInsert(b, 10, 100) }
+
+func BenchmarkInsertSArray(b *testing.B) { benchmarkInsert(b, 1000, 100) }
+
+func BenchmarkInsertMArray(b *testing.B) { benchmarkInsert(b, 10_000, 100) }
+
+func BenchmarkInsertLArray(b *testing.B) { benchmarkInsert(b, 100_000, 100) }
+
+func BenchmarkInsertXLArray(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping BenchmarkInsertXLArray in short mode")
+	}
+	benchmarkInsert(b, 1_000_000, 100)
+}
+
+func BenchmarkInsertXXLArray(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping BenchmarkInsertXXLArray in short mode")
+	}
+	benchmarkInsert(b, 10_000_000, 100)
+}
+
+func BenchmarkRemoveXSArray(b *testing.B) { benchmarkRemove(b, 10, 10) }
+
+func BenchmarkRemoveSArray(b *testing.B) { benchmarkRemove(b, 1000, 100) }
+
+func BenchmarkRemoveMArray(b *testing.B) { benchmarkRemove(b, 10_000, 100) }
+
+func BenchmarkRemoveLArray(b *testing.B) { benchmarkRemove(b, 100_000, 100) }
+
+func BenchmarkRemoveXLArray(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping BenchmarkRemoveXLArray in short mode")
+	}
+	benchmarkRemove(b, 1_000_000, 100)
+}
+
+func BenchmarkRemoveXXLArray(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping BenchmarkRemoveXXLArray in short mode")
+	}
+	benchmarkRemove(b, 10_000_000, 100)
+}
+
+// XXXLArray takes too long to run.
+// func BenchmarkLookupXXXLArray(b *testing.B) { benchmarkLookup(b, 100_000_000, 100) }
+
+func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, error) {
+
+	array := NewArray(storage)
+
+	for i := 0; i < initialArraySize; i++ {
+		v := RandomValue()
+		err := array.Append(v)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err := storage.Commit()
+	if err != nil {
+		return nil, err
+	}
+
+	arrayID := array.StorageID()
+
+	storage.DropCache()
+
+	newArray, err := NewArrayWithRootID(storage, arrayID)
+	if err != nil {
+		return nil, err
+	}
+
+	return newArray, nil
+}
+
+func benchmarkGet(b *testing.B, initialArraySize, numberOfElements int) {
 
 	b.StopTimer()
 
-	setThreshold(uint64(*slabTargetSize))
+	baseStorage := NewInMemBaseStorage()
 
-	// rvalues are random numbers to populate atree.
-	rvalues := perm(*elementCount)
+	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	// rindices are random indices for Get function.
-	rindices := rand.Perm(*elementCount)
-
-	// Create and populate an array of elemCount elements.
-	array := NewArray(NewBasicSlabStorage())
-	for _, v := range rvalues {
-		array.Append(v)
-	}
-	require.Equal(b, len(rvalues), int(array.Count()))
+	array, err := setupArray(storage, initialArraySize)
+	require.NoError(b, err)
 
 	var storable Storable
 
 	b.StartTimer()
-	i := 0
-	for i < b.N {
-		for _, idx := range rindices {
-			v, _ := array.Get(uint64(idx))
-			storable = v
 
-			i++
-			if i >= b.N {
-				return
-			}
+	for i := 0; i < b.N; i++ {
+		for i := 0; i < numberOfElements; i++ {
+			index := rand.Intn(int(array.Count()))
+			v, _ := array.Get(uint64(index))
+			storable = v
 		}
 	}
 
 	noop = storable
 }
 
-func BenchmarkInsert(b *testing.B) {
+func benchmarkInsert(b *testing.B, initialArraySize, numberOfElements int) {
 
 	b.StopTimer()
 
-	setThreshold(uint64(*slabTargetSize))
+	baseStorage := NewInMemBaseStorage()
 
-	// rvalues are random numbers to populate atree.
-	rvalues := perm(*elementCount)
+	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	storage := NewBasicSlabStorage()
+	for i := 0; i < b.N; i++ {
 
-	b.Run("insert-first", func(b *testing.B) {
-		array := NewArray(storage)
+		b.StopTimer()
+
+		array, err := setupArray(storage, initialArraySize)
+		require.NoError(b, err)
 
 		b.StartTimer()
-		i := 0
-		for i < b.N {
-			for _, v := range rvalues {
-				array.Insert(0, v)
 
-				i++
-				if i >= b.N {
-					return
-				}
-			}
+		for i := 0; i < numberOfElements; i++ {
+			index := rand.Intn(int(array.Count()))
+			v := RandomValue()
+			array.Insert(uint64(index), v)
 		}
-		b.StopTimer()
-	})
+	}
+}
 
-	b.Run("insert-last", func(b *testing.B) {
-		array := NewArray(storage)
+func benchmarkRemove(b *testing.B, initialArraySize, numberOfElements int) {
+
+	b.StopTimer()
+
+	baseStorage := NewInMemBaseStorage()
+
+	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+
+	for i := 0; i < b.N; i++ {
+
+		b.StopTimer()
+
+		array, err := setupArray(storage, initialArraySize)
+		require.NoError(b, err)
 
 		b.StartTimer()
-		i := 0
-		for i < b.N {
-			for idx, v := range rvalues {
-				array.Insert(uint64(idx), v)
 
-				i++
-				if i >= b.N {
-					return
-				}
-			}
+		for i := 0; i < numberOfElements; i++ {
+			index := rand.Intn(int(array.Count()))
+			array.Remove(uint64(index))
 		}
-		b.StopTimer()
-	})
-
-	b.Run("insert-random", func(b *testing.B) {
-		array := NewArray(storage)
-
-		rindice := make([]int, *elementCount)
-		for i := 0; i < len(rindice); i++ {
-			if i == 0 {
-				rindice[i] = 0
-			} else {
-				rindice[i] = rand.Intn(i)
-			}
-		}
-
-		b.StartTimer()
-		i := 0
-		for i < b.N {
-			for idx, v := range rvalues {
-				array.Insert(uint64(rindice[idx]), v)
-
-				i++
-				if i >= b.N {
-					return
-				}
-			}
-		}
-		b.StopTimer()
-	})
-}
-
-func BenchmarkSet(b *testing.B) {
-	// TODO
-}
-
-func BenchmarkRemove(b *testing.B) {
-	// TODO
-}
-
-func BenchmarkRemoveInsert(b *testing.B) {
-	// TODO
+	}
 }

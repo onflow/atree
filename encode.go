@@ -28,10 +28,10 @@ func newEncoder(w io.Writer) *Encoder {
 }
 
 func decodeSlab(id StorageID, data []byte) (Slab, error) {
-	if len(data) == 0 {
+	if len(data) < 2 {
 		return nil, errors.New("data is too short")
 	}
-	flag := data[0]
+	flag := data[1]
 	if flag&flagArray != 0 {
 
 		if flag&flagMetaDataSlab != 0 {

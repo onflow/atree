@@ -31,7 +31,7 @@ type Slab interface {
 	// Bytes is a wrapper for Storable.Encode()
 	Bytes() ([]byte, error)
 
-	Header() *SlabHeader
+	Header() SlabHeader
 
 	Split() (Slab, Slab, error)
 	Merge(Slab) error
@@ -51,14 +51,14 @@ type SlabHeader struct {
 type ArrayDataSlab struct {
 	prev     StorageID
 	next     StorageID
-	header   *SlabHeader
+	header   SlabHeader
 	elements []Storable
 }
 
 // ArrayMetaDataSlab is internal node, implementing ArraySlab.
 type ArrayMetaDataSlab struct {
-	header          *SlabHeader
-	childrenHeaders []*SlabHeader
+	header          SlabHeader
+	childrenHeaders []SlabHeader
 }
 
 type ArraySlab interface {
@@ -76,7 +76,7 @@ type ArraySlab interface {
 	CanLendToLeft(size uint32) bool
 	CanLendToRight(size uint32) bool
 
-	SetHeader(*SlabHeader)
+	SetID(StorageID)
 
 	Slab
 }
@@ -98,7 +98,7 @@ func (e IndexOutOfRangeError) Error() string {
 
 func newArrayDataSlab() *ArrayDataSlab {
 	return &ArrayDataSlab{
-		header: &SlabHeader{
+		header: SlabHeader{
 			id:   generateStorageID(),
 			size: dataSlabPrefixSize,
 		},
@@ -141,7 +141,7 @@ func newArrayDataSlabFromData(id StorageID, data []byte) (*ArrayDataSlab, error)
 	return &ArrayDataSlab{
 		prev:     StorageID(prev),
 		next:     StorageID(next),
-		header:   &SlabHeader{id: id, size: uint32(len(data)), count: uint32(elemCount)},
+		header:   SlabHeader{id: id, size: uint32(len(data)), count: uint32(elemCount)},
 		elements: elements,
 	}, nil
 }
@@ -195,7 +195,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 func (a *ArrayDataSlab) ShallowCloneWithNewID() ArraySlab {
 	return &ArrayDataSlab{
-		header: &SlabHeader{
+		header: SlabHeader{
 			id:    generateStorageID(),
 			size:  a.header.size,
 			count: a.header.count,
@@ -300,7 +300,7 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 
 	// Construct right slab
 	rightSlab := &ArrayDataSlab{
-		header: &SlabHeader{
+		header: SlabHeader{
 			id:    generateStorageID(),
 			size:  dataSlabPrefixSize + dataSize - leftSize,
 			count: uint32(len(a.elements) - leftCount),
@@ -468,11 +468,11 @@ func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
 	return false
 }
 
-func (a *ArrayDataSlab) SetHeader(header *SlabHeader) {
-	a.header = header
+func (a *ArrayDataSlab) SetID(id StorageID) {
+	a.header.id = id
 }
 
-func (a *ArrayDataSlab) Header() *SlabHeader {
+func (a *ArrayDataSlab) Header() SlabHeader {
 	return a.header
 }
 
@@ -534,14 +534,14 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 	off := 5
 
 	// Decode child headers
-	headers := make([]*SlabHeader, headerCount)
+	headers := make([]SlabHeader, headerCount)
 	totalCount := uint32(0)
 	for i := 0; i < int(headerCount); i++ {
 		id := binary.BigEndian.Uint64(data[off : off+8])
 		count := binary.BigEndian.Uint32(data[off+8 : off+12])
 		size := binary.BigEndian.Uint32(data[off+12 : off+16])
 
-		headers[i] = &SlabHeader{id: StorageID(id), count: count, size: size}
+		headers[i] = SlabHeader{id: StorageID(id), count: count, size: size}
 
 		totalCount += count
 
@@ -549,7 +549,7 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 	}
 
 	return &ArrayMetaDataSlab{
-		header:          &SlabHeader{id: id, size: uint32(len(data)), count: totalCount},
+		header:          SlabHeader{id: id, size: uint32(len(data)), count: totalCount},
 		childrenHeaders: headers,
 	}, nil
 }
@@ -593,7 +593,7 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
 func (a *ArrayMetaDataSlab) ShallowCloneWithNewID() ArraySlab {
 	return &ArrayMetaDataSlab{
-		header: &SlabHeader{
+		header: SlabHeader{
 			id:    generateStorageID(),
 			size:  a.header.size,
 			count: a.header.count,
@@ -655,12 +655,12 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) e
 		return err
 	}
 
-	child.SetHeader(a.childrenHeaders[childHeaderIndex])
-
 	err = child.Set(storage, index, v)
 	if err != nil {
 		return err
 	}
+
+	a.childrenHeaders[childHeaderIndex] = child.Header()
 
 	if child.IsFull() {
 		return a.SplitChildSlab(storage, child, childHeaderIndex)
@@ -714,14 +714,14 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 		return err
 	}
 
-	child.SetHeader(a.childrenHeaders[childHeaderIndex])
-
 	err = child.Insert(storage, index, v)
 	if err != nil {
 		return err
 	}
 
 	a.header.count++
+
+	a.childrenHeaders[childHeaderIndex] = child.Header()
 
 	if child.IsFull() {
 		return a.SplitChildSlab(storage, child, childHeaderIndex)
@@ -758,14 +758,14 @@ func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable,
 		return nil, err
 	}
 
-	child.SetHeader(a.childrenHeaders[childHeaderIndex])
-
 	v, err := child.Remove(storage, index)
 	if err != nil {
 		return nil, err
 	}
 
 	a.header.count--
+
+	a.childrenHeaders[childHeaderIndex] = child.Header()
 
 	if underflowSize, isUnderflow := child.IsUnderflow(); isUnderflow {
 		err = a.MergeOrRebalanceChildSlab(storage, child, childHeaderIndex, underflowSize)
@@ -786,7 +786,7 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 	}
 
 	// Add new child slab (right) to childrenHeaders
-	a.childrenHeaders = append(a.childrenHeaders, nil)
+	a.childrenHeaders = append(a.childrenHeaders, SlabHeader{})
 	if childHeaderIndex < len(a.childrenHeaders)-2 {
 		copy(a.childrenHeaders[childHeaderIndex+2:], a.childrenHeaders[childHeaderIndex+1:])
 	}
@@ -827,7 +827,6 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 		if err != nil {
 			return err
 		}
-		leftSib.SetHeader(a.childrenHeaders[childHeaderIndex-1])
 	}
 	if childHeaderIndex < len(a.childrenHeaders)-1 {
 		rightSibID := a.childrenHeaders[childHeaderIndex+1].id
@@ -837,7 +836,6 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 		if err != nil {
 			return err
 		}
-		rightSib.SetHeader(a.childrenHeaders[childHeaderIndex+1])
 	}
 
 	leftCanLend := leftSib != nil && leftSib.CanLendToRight(underflowSize)
@@ -852,6 +850,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 			if err != nil {
 				return err
 			}
+
+			a.childrenHeaders[childHeaderIndex] = child.Header()
+			a.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
+
 			storage.Store(child.ID(), child)
 			storage.Store(rightSib.ID(), rightSib)
 			storage.Store(a.header.id, a)
@@ -864,6 +866,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 			if err != nil {
 				return err
 			}
+
+			a.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
+			a.childrenHeaders[childHeaderIndex] = child.Header()
+
 			storage.Store(leftSib.ID(), leftSib)
 			storage.Store(child.ID(), child)
 			storage.Store(a.header.id, a)
@@ -876,6 +882,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 			if err != nil {
 				return err
 			}
+
+			a.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
+			a.childrenHeaders[childHeaderIndex] = child.Header()
+
 			storage.Store(leftSib.ID(), leftSib)
 			storage.Store(child.ID(), child)
 			storage.Store(a.header.id, a)
@@ -886,6 +896,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 		if err != nil {
 			return err
 		}
+
+		a.childrenHeaders[childHeaderIndex] = child.Header()
+		a.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
+
 		storage.Store(child.ID(), child)
 		storage.Store(rightSib.ID(), rightSib)
 		storage.Store(a.header.id, a)
@@ -901,6 +915,8 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 		if err != nil {
 			return err
 		}
+
+		a.childrenHeaders[childHeaderIndex] = child.Header()
 
 		// Update MetaDataSlab's childrenHeaders
 		copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
@@ -926,6 +942,8 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 			return err
 		}
 
+		a.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
+
 		// Update MetaDataSlab's childrenHeaders
 		copy(a.childrenHeaders[childHeaderIndex:], a.childrenHeaders[childHeaderIndex+1:])
 		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
@@ -949,6 +967,8 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 			return err
 		}
 
+		a.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
+
 		// Update MetaDataSlab's childrenHeaders
 		copy(a.childrenHeaders[childHeaderIndex:], a.childrenHeaders[childHeaderIndex+1:])
 		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
@@ -969,6 +989,8 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 	if err != nil {
 		return err
 	}
+
+	a.childrenHeaders[childHeaderIndex] = child.Header()
 
 	// Update MetaDataSlab's childrenHeaders
 	copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
@@ -1011,14 +1033,14 @@ func (a *ArrayMetaDataSlab) Split() (Slab, Slab, error) {
 
 	// Construct right slab
 	rightSlab := &ArrayMetaDataSlab{
-		header: &SlabHeader{
+		header: SlabHeader{
 			id:    generateStorageID(),
 			size:  a.header.size - uint32(leftSize),
 			count: a.header.count - leftCount,
 		},
 	}
 
-	rightSlab.childrenHeaders = make([]*SlabHeader, len(a.childrenHeaders)-leftChildrenCount)
+	rightSlab.childrenHeaders = make([]SlabHeader, len(a.childrenHeaders)-leftChildrenCount)
 	copy(rightSlab.childrenHeaders, a.childrenHeaders[leftChildrenCount:])
 
 	// Modify left (original)slab
@@ -1036,7 +1058,7 @@ func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 	leftChildrenHeadersLen := childrenHeadersLen / 2
 
 	// Update right slab childrenHeaders by prepending borrowed children headers
-	rightChildrenHeaders := make([]*SlabHeader, childrenHeadersLen-leftChildrenHeadersLen)
+	rightChildrenHeaders := make([]SlabHeader, childrenHeadersLen-leftChildrenHeadersLen)
 	n := copy(rightChildrenHeaders, a.childrenHeaders[leftChildrenHeadersLen:])
 	copy(rightChildrenHeaders[n:], rightSlab.childrenHeaders)
 	rightSlab.childrenHeaders = rightChildrenHeaders
@@ -1113,11 +1135,11 @@ func (a ArrayMetaDataSlab) IsData() bool {
 	return false
 }
 
-func (a *ArrayMetaDataSlab) SetHeader(header *SlabHeader) {
-	a.header = header
+func (a *ArrayMetaDataSlab) SetID(id StorageID) {
+	a.header.id = id
 }
 
-func (a *ArrayMetaDataSlab) Header() *SlabHeader {
+func (a *ArrayMetaDataSlab) Header() SlabHeader {
 	return a.header
 }
 
@@ -1136,7 +1158,7 @@ func (a *ArrayMetaDataSlab) ID() StorageID {
 func (a *ArrayMetaDataSlab) String() string {
 	var elemsStr []string
 	for _, h := range a.childrenHeaders {
-		elemsStr = append(elemsStr, fmt.Sprintf("%+v", *h))
+		elemsStr = append(elemsStr, fmt.Sprintf("%+v", h))
 	}
 	return strings.Join(elemsStr, " ")
 }
@@ -1218,14 +1240,14 @@ func (a *Array) Insert(index uint64, v Storable) error {
 			// Create new ArrayMetaDataSlab with the same storage ID as root
 			rootID := a.root.ID()
 			a.root = &ArrayMetaDataSlab{
-				header: &SlabHeader{
+				header: SlabHeader{
 					id: rootID,
 				},
 			}
 		}
 
 		root := a.root.(*ArrayMetaDataSlab)
-		root.childrenHeaders = []*SlabHeader{left.Header(), right.Header()}
+		root.childrenHeaders = []SlabHeader{left.Header(), right.Header()}
 		root.header.count = left.Header().count + right.Header().count
 		root.header.size = metaDataSlabPrefixSize + slabHeaderSize*uint32(len(root.childrenHeaders))
 
@@ -1259,7 +1281,7 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 
 			a.root = child
 
-			a.root.Header().id = rootID
+			a.root.SetID(rootID)
 
 			a.storage.Store(rootID, a.root)
 			a.storage.Remove(childID)

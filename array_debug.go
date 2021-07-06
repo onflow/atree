@@ -92,7 +92,7 @@ func (array *Array) Print() {
 
 			if slab.IsData() {
 				dataSlab := slab.(*ArrayDataSlab)
-				fmt.Printf("level %d, leaf (%+v): ", level+1, *(dataSlab.header))
+				fmt.Printf("level %d, leaf (%+v): ", level+1, dataSlab.header)
 
 				var elements []Storable
 				if len(dataSlab.elements) <= 6 {
@@ -118,9 +118,9 @@ func (array *Array) Print() {
 				fmt.Printf("[%s]\n", strings.Join(elemsStr, " "))
 			} else {
 				meta := slab.(*ArrayMetaDataSlab)
-				fmt.Printf("level %d, meta (%+v) headers: [", level+1, *(meta.header))
+				fmt.Printf("level %d, meta (%+v) headers: [", level+1, meta.header)
 				for _, h := range meta.childrenHeaders {
-					fmt.Printf("%+v ", *h)
+					fmt.Printf("%+v ", h)
 					nextLevelIDs.PushBack(h.id)
 				}
 				fmt.Println("]")

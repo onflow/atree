@@ -16,29 +16,22 @@ import (
 // running this test with
 //   go test -bench=.  -benchmem
 // will track the heap allocations for the Benchmarks
-func BenchmarkXSArray(b *testing.B) { benchmarkArray(b, 10, 100) }
 
-func BenchmarkSArray(b *testing.B) { benchmarkArray(b, 1000, 100) }
+const opCount = 100
 
-func BenchmarkMArray(b *testing.B) { benchmarkArray(b, 10_000, 100) }
+func BenchmarkXSArray(b *testing.B) { benchmarkArray(b, 100, opCount) }
 
-func BenchmarkLArray(b *testing.B) { benchmarkArray(b, 100_000, 100) }
+func BenchmarkSArray(b *testing.B) { benchmarkArray(b, 1000, opCount) }
 
-func BenchmarkXLArray(b *testing.B) { benchmarkArray(b, 1_000_000, 100) }
+func BenchmarkMArray(b *testing.B) { benchmarkArray(b, 10_000, opCount) }
 
-func BenchmarkXXLArray(b *testing.B) {
-	if testing.Short() {
-		b.Skip("Skipping BenchmarkXXLArray in short mode")
-	}
-	benchmarkArray(b, 10_000_000, 100)
-}
+func BenchmarkLArray(b *testing.B) { benchmarkArray(b, 100_000, opCount) }
 
-func BenchmarkXXXLArray(b *testing.B) {
-	if testing.Short() {
-		b.Skip("Skipping BenchmarkXXXLArray in short mode")
-	}
-	benchmarkArray(b, 100_000_000, 100)
-}
+func BenchmarkXLArray(b *testing.B) { benchmarkArray(b, 1_000_000, opCount) }
+
+func BenchmarkXXLArray(b *testing.B) { benchmarkArray(b, 10_000_000, opCount) }
+
+func BenchmarkXXXLArray(b *testing.B) { benchmarkArray(b, 100_000_000, opCount) }
 
 // TODO add nested arrays as class 5
 func RandomValue() Storable {
@@ -68,8 +61,6 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	array := NewArray(storage)
 	// array := NewBasicArray(storage)
 
-	// TODO capture arrayID here ?
-
 	var start time.Time
 	var totalRawDataSize uint32
 	var totalAppendTime time.Duration
@@ -91,11 +82,10 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	// append
 	storage.DropCache()
+	start = time.Now()
 	array, err := NewArrayWithRootID(storage, arrayID)
 	// array, err := NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
-
-	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue()
 		totalRawDataSize += v.ByteSize()
@@ -107,11 +97,11 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	// remove
 	storage.DropCache()
+	start = time.Now()
 	array, err = NewArrayWithRootID(storage, arrayID)
 	// array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
-	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		s, err := array.Remove(uint64(ind))
@@ -123,11 +113,11 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	// insert
 	storage.DropCache()
+	start = time.Now()
 	array, err = NewArrayWithRootID(storage, arrayID)
 	// array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
-	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		v := RandomValue()
@@ -140,11 +130,11 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	// lookup
 	storage.DropCache()
+	start = time.Now()
 	array, err = NewArrayWithRootID(storage, arrayID)
 	// array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
-	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		_, err := array.Get(uint64(ind))
@@ -168,14 +158,58 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	b.ReportMetric(float64(baseStorage.SegmentCounts()), "segments_total")
 	b.ReportMetric(float64(totalRawDataSize), "storage_raw_data_size")
 	b.ReportMetric(float64(baseStorage.Size()), "storage_stored_data_size")
-	b.ReportMetric(float64(baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
 	b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
-	b.ReportMetric(float64(array.Count()), "number_of_elements")
+	b.ReportMetric(float64(baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
+	// b.ReportMetric(float64(array.Count()), "number_of_elements")
 	b.ReportMetric(float64(int(totalAppendTime)), "append_100_time_(ns)")
 	b.ReportMetric(float64(int(totalRemoveTime)), "remove_100_time_(ns)")
 	b.ReportMetric(float64(int(totalInsertTime)), "insert_100_time_(ns)")
 	b.ReportMetric(float64(int(totalLookupTime)), "lookup_100_time_(ns)")
-	// b.ReportMetric(float64(storage.BytesRetrieved()), "bytes_retrieved")
-	// b.ReportMetric(float64(storage.BytesStored()), "bytes_stored")
-	// b.ReportMetric(float64(storage.SegmentTouched()), "segments_touched"
+}
+
+func BenchmarkLArrayMemoryImpact(b *testing.B) { benchmarkLongTermImpactOnMemory(b, 10_000, 1000_000) }
+
+// BenchmarkArray benchmarks the performance of the atree array
+func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps int) {
+
+	rand.Seed(time.Now().UnixNano())
+	baseStorage := NewInMemBaseStorage()
+	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	array := NewArray(storage)
+
+	var totalRawDataSize uint32
+
+	// setup
+	for i := 0; i < initialArraySize; i++ {
+		v := RandomValue()
+		totalRawDataSize += v.ByteSize()
+		err := array.Append(v)
+		require.NoError(b, err)
+	}
+	require.NoError(b, storage.Commit())
+	b.ResetTimer()
+
+	for i := 0; i < numberOfOps; i++ {
+		ind := rand.Intn(int(array.Count()))
+		// select opt
+		switch rand.Intn(2) {
+		case 0: // remove
+			v, err := array.Remove(uint64(ind))
+			totalRawDataSize -= v.ByteSize()
+			require.NoError(b, err)
+		case 1: // insert
+			v := RandomValue()
+			totalRawDataSize += v.ByteSize()
+			err := array.Insert(uint64(ind), v)
+			require.NoError(b, err)
+		}
+	}
+	require.NoError(b, storage.Commit())
+
+	storageOverheadRatio := float64(baseStorage.Size()) / float64(totalRawDataSize)
+	b.ReportMetric(float64(baseStorage.SegmentsTouched()), "segments_touched")
+	b.ReportMetric(float64(baseStorage.SegmentCounts()), "segments_total")
+	b.ReportMetric(float64(totalRawDataSize), "storage_raw_data_size")
+	b.ReportMetric(float64(baseStorage.Size()), "storage_stored_data_size")
+	b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
 }

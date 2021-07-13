@@ -161,7 +161,7 @@ func (s *BasicSlabStorage) Count() int {
 func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
 	m := make(map[StorageID][]byte)
 	for id, slab := range s.slabs {
-		b, err := slab.Bytes()
+		b, err := Encode(slab)
 		if err != nil {
 			return nil, err
 		}
@@ -222,7 +222,7 @@ func (s *PersistentSlabStorage) Commit() error {
 		}
 
 		// serialize
-		data, err := slab.Bytes()
+		data, err := Encode(slab)
 		if err != nil {
 			return err
 		}
@@ -275,7 +275,7 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 
 func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {
 	if s.autoCommit {
-		data, err := slab.Bytes()
+		data, err := Encode(slab)
 		if err != nil {
 			return err
 		}

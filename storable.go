@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 )
 
@@ -207,4 +208,16 @@ func (v StorageIDValue) ID() StorageID {
 
 func (v StorageIDValue) String() string {
 	return fmt.Sprintf("id(%d)", v)
+}
+
+// Encode is a wrapper for Storable.Encode()
+func Encode(storable Storable) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := newEncoder(&buf)
+
+	err := storable.Encode(enc)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

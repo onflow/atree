@@ -18,7 +18,7 @@ const (
 )
 
 type BasicArrayDataSlab struct {
-	header   SlabHeader
+	header   ArraySlabHeader
 	elements []Storable
 }
 
@@ -29,7 +29,7 @@ type BasicArray struct {
 
 func NewBasicArrayDataSlab() *BasicArrayDataSlab {
 	return &BasicArrayDataSlab{
-		header: SlabHeader{
+		header: ArraySlabHeader{
 			id:   generateStorageID(),
 			size: basicArrayDataSlabPrefixSize,
 		},
@@ -63,7 +63,7 @@ func newBasicArrayDataSlabFromData(id StorageID, data []byte) (*BasicArrayDataSl
 	}
 
 	return &BasicArrayDataSlab{
-		header:   SlabHeader{id: id, size: uint32(len(data)), count: uint32(elemCount)},
+		header:   ArraySlabHeader{id: id, size: uint32(len(data)), count: uint32(elemCount)},
 		elements: elements,
 	}, nil
 }
@@ -174,7 +174,7 @@ func (array *BasicArrayDataSlab) Count() uint64 {
 	return uint64(len(array.elements))
 }
 
-func (array *BasicArrayDataSlab) Header() SlabHeader {
+func (array *BasicArrayDataSlab) Header() ArraySlabHeader {
 	return array.header
 }
 

@@ -174,7 +174,7 @@ func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 
 		validCount := count == dataSlab.header.count
 
-		validSize := (dataSlabPrefixSize + computedSize) == dataSlab.header.size
+		validSize := (arrayDataSlabPrefixSize + computedSize) == dataSlab.header.size
 
 		return validFill && validCount && validSize, count, nil
 	}
@@ -197,7 +197,7 @@ func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 
 	validCount := sum == meta.header.count
 
-	computedSize := uint32(len(meta.childrenHeaders)*slabHeaderSize) + metaDataSlabPrefixSize
+	computedSize := uint32(len(meta.childrenHeaders)*arraySlabHeaderSize) + arrayMetaDataSlabPrefixSize
 	validSize := computedSize == meta.header.size
 
 	return validFill && validCount && validSize, sum, nil

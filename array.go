@@ -96,12 +96,12 @@ func (e IndexOutOfRangeError) Error() string {
 	return "index out of range"
 }
 
-type ArraySlabNotFoundError struct {
+type SlabNotFoundError struct {
 	id  StorageID
 	err error
 }
 
-func (e ArraySlabNotFoundError) Error() string {
+func (e SlabNotFoundError) Error() string {
 	return fmt.Sprintf("failed to retrieve ArraySlab %d: %v", e.id, e.err)
 }
 
@@ -491,6 +491,14 @@ func (a *ArrayDataSlab) ByteSize() uint32 {
 	return a.header.size
 }
 
+func (v *ArrayDataSlab) Equal(other Storable) bool {
+	otherSlab, ok := other.(*ArrayDataSlab)
+	if !ok {
+		return false
+	}
+	return otherSlab.ID() == v.ID()
+}
+
 func (a *ArrayDataSlab) String() string {
 	var elements []Storable
 	if len(a.elements) <= 6 {
@@ -640,7 +648,7 @@ func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, er
 		return child.Get(storage, adjustedIndex)
 	}
 
-	return nil, ArraySlabNotFoundError{childID, err}
+	return nil, SlabNotFoundError{childID, err}
 }
 
 func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) error {
@@ -1316,6 +1324,14 @@ func (a *ArrayMetaDataSlab) ID() StorageID {
 	return a.header.id
 }
 
+func (v *ArrayMetaDataSlab) Equal(other Storable) bool {
+	otherSlab, ok := other.(*ArrayMetaDataSlab)
+	if !ok {
+		return false
+	}
+	return otherSlab.ID() == v.ID()
+}
+
 func (a *ArrayMetaDataSlab) String() string {
 	var elemsStr []string
 	for _, h := range a.childrenHeaders {
@@ -1527,7 +1543,7 @@ func getArraySlab(storage SlabStorage, id StorageID) (ArraySlab, error) {
 		return arraySlab, nil
 	}
 
-	return nil, ArraySlabNotFoundError{id, err}
+	return nil, SlabNotFoundError{id, err}
 }
 
 func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) {

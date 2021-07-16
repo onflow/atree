@@ -13,9 +13,12 @@ type Storable interface {
 	Encode(*Encoder) error
 
 	ByteSize() uint32
+
 	ID() StorageID
 
 	Mutable() bool
+
+	Equal(other Storable) bool
 
 	String() string
 }
@@ -67,6 +70,14 @@ func (v Uint8Value) ID() StorageID {
 	return StorageIDUndefined
 }
 
+func (v Uint8Value) Equal(other Storable) bool {
+	otherUint8, ok := other.(Uint8Value)
+	if !ok {
+		return false
+	}
+	return uint8(otherUint8) == uint8(v)
+}
+
 func (v Uint8Value) String() string {
 	return fmt.Sprintf("%d", uint8(v))
 }
@@ -96,6 +107,14 @@ func (v Uint16Value) Mutable() bool {
 
 func (v Uint16Value) ID() StorageID {
 	return StorageIDUndefined
+}
+
+func (v Uint16Value) Equal(other Storable) bool {
+	otherUint16, ok := other.(Uint16Value)
+	if !ok {
+		return false
+	}
+	return uint16(otherUint16) == uint16(v)
 }
 
 func (v Uint16Value) String() string {
@@ -134,6 +153,14 @@ func (v Uint32Value) ID() StorageID {
 	return StorageIDUndefined
 }
 
+func (v Uint32Value) Equal(other Storable) bool {
+	otherUint32, ok := other.(Uint32Value)
+	if !ok {
+		return false
+	}
+	return uint32(otherUint32) == uint32(v)
+}
+
 func (v Uint32Value) String() string {
 	return fmt.Sprintf("%d", uint32(v))
 }
@@ -170,8 +197,62 @@ func (v Uint64Value) ID() StorageID {
 	return StorageIDUndefined
 }
 
+func (v Uint64Value) Equal(other Storable) bool {
+	otherUint64, ok := other.(Uint64Value)
+	if !ok {
+		return false
+	}
+	return uint64(otherUint64) == uint64(v)
+}
+
 func (v Uint64Value) String() string {
 	return fmt.Sprintf("%d", uint64(v))
+}
+
+type StringValue struct {
+	str  string
+	size uint32
+	id   StorageID // Don't create valid storage id until id is requested
+}
+
+func NewStringValue(s string) *StringValue {
+	size := getUintCBORSize(uint64(len(s))) + uint32(len(s))
+	return &StringValue{
+		str:  s,
+		size: size,
+		id:   StorageIDUndefined,
+	}
+}
+
+func (v *StringValue) Encode(enc *Encoder) error {
+	return enc.cbor.EncodeString(v.str)
+}
+
+func (v *StringValue) ByteSize() uint32 {
+	return v.size
+}
+
+func (v *StringValue) Mutable() bool {
+	return false
+}
+
+func (v *StringValue) ID() StorageID {
+	if v.id == StorageIDUndefined {
+		v.id = generateStorageID()
+	}
+	return v.id
+}
+
+func (v *StringValue) Equal(other Storable) bool {
+	otherString, ok := other.(*StringValue)
+	if !ok {
+		return false
+	}
+	return otherString.str == v.str
+}
+
+func (v *StringValue) String() string {
+	return v.str
 }
 
 type StorageIDValue StorageID
@@ -204,6 +285,14 @@ func (v StorageIDValue) Mutable() bool {
 
 func (v StorageIDValue) ID() StorageID {
 	return StorageID(v)
+}
+
+func (v StorageIDValue) Equal(other Storable) bool {
+	otherID, ok := other.(StorageIDValue)
+	if !ok {
+		return false
+	}
+	return StorageIDValue(otherID) == StorageIDValue(v)
 }
 
 func (v StorageIDValue) String() string {

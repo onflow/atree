@@ -210,6 +210,14 @@ func (array *BasicArrayDataSlab) BorrowFromRight(Slab) error {
 	return errors.New("not applicable")
 }
 
+func (v *BasicArrayDataSlab) Equal(other Storable) bool {
+	otherSlab, ok := other.(*BasicArrayDataSlab)
+	if !ok {
+		return false
+	}
+	return otherSlab.ID() == v.ID()
+}
+
 func NewBasicArray(storage SlabStorage) *BasicArray {
 	return &BasicArray{
 		storage: storage,

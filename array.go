@@ -482,6 +482,10 @@ func (a *ArrayDataSlab) IsFull() bool {
 	return a.header.size > uint32(maxThreshold)
 }
 
+// IsUnderflow returns the number of bytes needed for the data slab
+// to reach the min threshold.
+// Returns true if the min threshold has not been reached yet.
+//
 func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
 	if uint32(minThreshold) > a.header.size {
 		return uint32(minThreshold) - a.header.size, true

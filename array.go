@@ -293,16 +293,23 @@ func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, err
 	if index >= uint64(len(a.elements)) {
 		return nil, IndexOutOfRangeError{}
 	}
+
 	v := a.elements[index]
+
+	lastIndex := len(a.elements) - 1
 
 	switch index {
 	case 0:
 		a.elements = a.elements[1:]
 	case uint64(len(a.elements)) - 1:
-		a.elements = a.elements[:len(a.elements)-1]
+		// NOTE: prevent memory leak
+		a.elements[lastIndex] = nil
+		a.elements = a.elements[:lastIndex]
 	default:
 		copy(a.elements[index:], a.elements[index+1:])
-		a.elements = a.elements[:len(a.elements)-1]
+		// NOTE: prevent memory leak
+		a.elements[lastIndex] = nil
+		a.elements = a.elements[:lastIndex]
 	}
 
 	a.header.count--

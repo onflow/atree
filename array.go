@@ -253,7 +253,7 @@ func (a *ArrayDataSlab) ShallowCloneWithNewID() ArraySlab {
 	}
 }
 
-func (a *ArrayDataSlab) Get(storage SlabStorage, index uint64) (Storable, error) {
+func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
 		return nil, IndexOutOfRangeError{}
 	}
@@ -268,9 +268,7 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error
 	a.elements[index] = v
 	a.header.size = a.header.size - oldSize + v.ByteSize()
 
-	storage.Store(a.header.id, a)
-
-	return nil
+	return storage.Store(a.header.id, a)
 }
 
 func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
@@ -288,9 +286,7 @@ func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) er
 	a.header.count++
 	a.header.size += v.ByteSize()
 
-	storage.Store(a.header.id, a)
-
-	return nil
+	return storage.Store(a.header.id, a)
 }
 
 func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
@@ -312,7 +308,10 @@ func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, err
 	a.header.count--
 	a.header.size -= v.ByteSize()
 
-	storage.Store(a.header.id, a)
+	err := storage.Store(a.header.id, a)
+	if err != nil {
+		return nil, err
+	}
 
 	return v, nil
 }

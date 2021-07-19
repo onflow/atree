@@ -1002,10 +1002,11 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 	return nil
 }
 
-// MergeOrRebalanceChildSlab merges or rebalances child slab.  If merged, then
-// parent slab's data is adjusted.
+// MergeOrRebalanceChildSlab merges or rebalances child slab.
+// If merged, then parent slab's data is adjusted.
+//
 // +-----------------------+-----------------------+----------------------+-----------------------+
-// |			   | no left sibling (sib) | left sib can't lend  | left sib can lend     |
+// |                       | no left sibling (sib) | left sib can't lend  | left sib can lend     |
 // +=======================+=======================+======================+=======================+
 // | no right sib          | panic                 | merge with left      | rebalance with left   |
 // +-----------------------+-----------------------+----------------------+-----------------------+
@@ -1013,6 +1014,7 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 // +-----------------------+-----------------------+----------------------+-----------------------+
 // | right sib can lend    | rebalance with right  | rebalance with right | rebalance with bigger |
 // +-----------------------+-----------------------+----------------------+-----------------------+
+//
 func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child ArraySlab, childHeaderIndex int, underflowSize uint32) error {
 
 	// Retrieve left and right siblings of the same parent.
@@ -1312,9 +1314,10 @@ func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 
 	childrenHeadersLen := len(a.childrenHeaders) + len(rightSlab.childrenHeaders)
 	leftChildrenHeadersLen := childrenHeadersLen / 2
+	rightChildrenHeadersLen := childrenHeadersLen - leftChildrenHeadersLen
 
 	// Update right slab childrenHeaders by prepending borrowed children headers
-	rightChildrenHeaders := make([]ArraySlabHeader, childrenHeadersLen-leftChildrenHeadersLen)
+	rightChildrenHeaders := make([]ArraySlabHeader, rightChildrenHeadersLen)
 	n := copy(rightChildrenHeaders, a.childrenHeaders[leftChildrenHeadersLen:])
 	copy(rightChildrenHeaders[n:], rightSlab.childrenHeaders)
 	rightSlab.childrenHeaders = rightChildrenHeaders

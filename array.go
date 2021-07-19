@@ -801,6 +801,9 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) e
 
 	a.childrenHeaders[childHeaderIndex] = child.Header()
 
+	// Update may increase or decrease the size,
+	// check if full and for underflow
+
 	if child.IsFull() {
 		return a.SplitChildSlab(storage, child, childHeaderIndex)
 	}
@@ -859,9 +862,15 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 
 	a.childrenHeaders[childHeaderIndex] = child.Header()
 
+	// Insertion increases the size,
+	// check if full
+
 	if child.IsFull() {
 		return a.SplitChildSlab(storage, child, childHeaderIndex)
 	}
+
+	// Insertion always increases the size,
+	// so there is no need to check underflow
 
 	return storage.Store(a.header.id, a)
 }
@@ -896,12 +905,18 @@ func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable,
 
 	a.childrenHeaders[childHeaderIndex] = child.Header()
 
+	// Removal decreases the size,
+	// check for underflow
+
 	if underflowSize, isUnderflow := child.IsUnderflow(); isUnderflow {
 		err = a.MergeOrRebalanceChildSlab(storage, child, childHeaderIndex, underflowSize)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	// Removal always decreases the size,
+	// so there is no need to check isFull
 
 	err = storage.Store(a.header.id, a)
 	if err != nil {

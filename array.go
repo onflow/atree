@@ -215,7 +215,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	enc.scratch[contentOffset] = 0x80 | 25
 
-	const countOffset = contentOffset+1
+	const countOffset = contentOffset + 1
 	const countSize = 2
 	binary.BigEndian.PutUint16(
 		enc.scratch[countOffset:],
@@ -223,7 +223,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	)
 
 	// Write scratch content to encoder
-	const totalSize = countOffset+countSize
+	const totalSize = countOffset + countSize
 	_, err := enc.Write(enc.scratch[:totalSize])
 	if err != nil {
 		return err
@@ -231,7 +231,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	// Encode data slab content (array of elements)
 	for _, e := range a.elements {
-		err := e.Encode(enc)
+		err = e.Encode(enc)
 		if err != nil {
 			return err
 		}
@@ -352,20 +352,25 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 	}
 
 	// Construct right slab
+	rightSlabCount := len(a.elements) - leftCount
 	rightSlab := &ArrayDataSlab{
 		header: ArraySlabHeader{
 			id:    generateStorageID(),
 			size:  arrayDataSlabPrefixSize + dataSize - leftSize,
-			count: uint32(len(a.elements) - leftCount),
+			count: uint32(rightSlabCount),
 		},
 		prev: a.header.id,
 		next: a.next,
 	}
 
-	rightSlab.elements = make([]Storable, len(a.elements)-leftCount)
+	rightSlab.elements = make([]Storable, rightSlabCount)
 	copy(rightSlab.elements, a.elements[leftCount:])
 
 	// Modify left (original) slab
+	// NOTE: prevent memory leak
+	for i := leftCount; i < len(a.elements); i++ {
+		a.elements[i] = nil
+	}
 	a.elements = a.elements[:leftCount]
 	a.header.size = arrayDataSlabPrefixSize + leftSize
 	a.header.count = uint32(leftCount)
@@ -416,6 +421,10 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 	rightSlab.header.count = count - leftCount
 
 	// Update left slab
+	// NOTE: prevent memory leak
+	for i := leftCount; i < uint32(len(a.elements)); i++ {
+		a.elements[i] = nil
+	}
 	a.elements = a.elements[:leftCount]
 	a.header.size = leftSize
 	a.header.count = leftCount
@@ -457,6 +466,11 @@ func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 	a.header.count = leftCount
 
 	// Update right slab
+	// TODO: copy elements to front instead?
+	// NOTE: prevent memory leak
+	for i := uint32(0); i < rightStartIndex; i++ {
+		rightSlab.elements[i] = nil
+	}
 	rightSlab.elements = rightSlab.elements[rightStartIndex:]
 	rightSlab.header.size = size - leftSize
 	rightSlab.header.count = count - leftCount
@@ -599,7 +613,6 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 		)
 	}
 
-
 	// Decode child headers
 	childrenHeaders := make([]ArraySlabHeader, childHeaderCount)
 	childrenCountSum := make([]uint32, childHeaderCount)
@@ -618,9 +631,9 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 		totalCount += count
 
 		childrenHeaders[i] = ArraySlabHeader{
-			id: StorageID(storageID),
+			id:    StorageID(storageID),
 			count: count,
-			size: size,
+			size:  size,
 		}
 		childrenCountSum[i] = totalCount
 
@@ -628,8 +641,8 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 	}
 
 	header := ArraySlabHeader{
-		id: id,
-		size: uint32(len(data)),
+		id:    id,
+		size:  uint32(len(data)),
 		count: totalCount,
 	}
 

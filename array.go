@@ -13,15 +13,17 @@ import (
 )
 
 const (
+	storageIDSize = 8
+
 	// slab header size: storage id (8 bytes) + count (4 bytes) + size (4 bytes)
-	arraySlabHeaderSize = 8 + 4 + 4
+	arraySlabHeaderSize = storageIDSize + 4 + 4
 
 	// meta data slab prefix size: version (1 byte) + flag (1 byte) + child header count (2 bytes)
 	arrayMetaDataSlabPrefixSize = 1 + 1 + 2
 
 	// version (1 byte) + flag (1 byte) + prev id (8 bytes) + next id (8 bytes) + CBOR array size (3 bytes)
 	// (3 bytes of array size support up to 65535 array elements)
-	arrayDataSlabPrefixSize = 2 + 8 + 8 + 3
+	arrayDataSlabPrefixSize = 2 + storageIDSize + storageIDSize + 3
 
 	// 32 is faster than 24 and 40.
 	linearScanThreshold = 32
@@ -115,23 +117,34 @@ func newArrayDataSlab() *ArrayDataSlab {
 }
 
 func newArrayDataSlabFromData(id StorageID, data []byte) (*ArrayDataSlab, error) {
-
+	// Check data length
 	if len(data) < arrayDataSlabPrefixSize {
 		return nil, errors.New("data is too short for array data slab")
 	}
 
 	// Check flag
-	if data[1]&flagArray == 0 || data[1]&flagDataSlab == 0 {
-		return nil, fmt.Errorf("data has invalid flag 0x%x, want 0x%x", data[0], flagArray&flagDataSlab)
+	flag := data[1]
+	if flag&flagArray == 0 || flag&flagDataSlab == 0 {
+		return nil, fmt.Errorf(
+			"data has invalid flag 0x%x, want 0x%x",
+			flag,
+			flagArray&flagDataSlab,
+		)
 	}
 
-	// Decode prev storage id
-	prev := binary.BigEndian.Uint64(data[2:10])
+	const versionAndFlagSize = 2
 
-	// Decode next storage id
-	next := binary.BigEndian.Uint64(data[10:18])
+	// Decode prev storage ID
+	const prevStorageIDOffset = versionAndFlagSize
+	prev := binary.BigEndian.Uint64(data[prevStorageIDOffset:])
 
-	cborDec := NewByteStreamDecoder(data[18:])
+	// Decode next storage ID
+	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
+	next := binary.BigEndian.Uint64(data[nextStorageIDOffset:])
+
+	// Decode content (CBOR array)
+	const contentOffset = nextStorageIDOffset + storageIDSize
+	cborDec := NewByteStreamDecoder(data[contentOffset:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
@@ -147,18 +160,32 @@ func newArrayDataSlabFromData(id StorageID, data []byte) (*ArrayDataSlab, error)
 		elements[i] = storable
 	}
 
+	header := ArraySlabHeader{
+		id:    id,
+		size:  uint32(len(data)),
+		count: uint32(elemCount),
+	}
+
 	return &ArrayDataSlab{
 		prev:     StorageID(prev),
 		next:     StorageID(next),
-		header:   ArraySlabHeader{id: id, size: uint32(len(data)), count: uint32(elemCount)},
+		header:   header,
 		elements: elements,
 	}, nil
 }
 
-// header (18 bytes):
+// Encode encodes this array data slab to the given encoder.
+//
+// Header (18 bytes):
+//
+//   +-------------------------------+-------------------------------+-------------------------------+
 //   | slab version + flag (2 bytes) | prev sib storage ID (8 bytes) | next sib storage ID (8 bytes) |
-// content (for now):
+//   +-------------------------------+-------------------------------+-------------------------------+
+//
+// Content (for now):
+//
 //   CBOR encoded array of elements
+//
 func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	// Encode version
@@ -167,17 +194,40 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	// Encode flag
 	enc.scratch[1] = flagDataSlab | flagArray
 
-	// Encode prev storage id
-	binary.BigEndian.PutUint64(enc.scratch[2:], uint64(a.prev))
+	const versionAndFlagSize = 2
 
-	// Encode next storage id
-	binary.BigEndian.PutUint64(enc.scratch[10:], uint64(a.next))
+	// Encode prev storage ID to scratch
+	const prevStorageIDOffset = versionAndFlagSize
+	binary.BigEndian.PutUint64(
+		enc.scratch[prevStorageIDOffset:],
+		uint64(a.prev),
+	)
+
+	// Encode next storage ID to scratch
+	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
+	binary.BigEndian.PutUint64(
+		enc.scratch[nextStorageIDOffset:],
+		uint64(a.next),
+	)
 
 	// Encode CBOR array size manually for fix-sized encoding
-	enc.scratch[18] = 0x80 | 25
-	binary.BigEndian.PutUint16(enc.scratch[19:], uint16(len(a.elements)))
+	const contentOffset = nextStorageIDOffset + storageIDSize
 
-	enc.Write(enc.scratch[:21])
+	enc.scratch[contentOffset] = 0x80 | 25
+
+	const countOffset = contentOffset+1
+	const countSize = 2
+	binary.BigEndian.PutUint16(
+		enc.scratch[countOffset:],
+		uint16(len(a.elements)),
+	)
+
+	// Write scratch content to encoder
+	const totalSize = countOffset+countSize
+	_, err := enc.Write(enc.scratch[:totalSize])
+	if err != nil {
+		return err
+	}
 
 	// Encode data slab content (array of elements)
 	for _, e := range a.elements {
@@ -187,9 +237,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 		}
 	}
 
-	enc.cbor.Flush()
-
-	return nil
+	return enc.cbor.Flush()
 }
 
 func (a *ArrayDataSlab) ShallowCloneWithNewID() ArraySlab {
@@ -519,47 +567,85 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 	}
 
 	// Check flag
-	if data[1]&flagArray == 0 || data[1]&flagMetaDataSlab == 0 {
-		return nil, fmt.Errorf("data has invalid flag 0x%x, want 0x%x", data[0], flagArray&flagMetaDataSlab)
+	flag := data[1]
+	if flag&flagArray == 0 || flag&flagMetaDataSlab == 0 {
+		return nil, fmt.Errorf(
+			"data has invalid flag 0x%x, want 0x%x",
+			flag,
+			flagArray&flagMetaDataSlab,
+		)
 	}
+
+	const versionAndFlagSize = 2
 
 	// Decode number of child headers
-	headerCount := binary.BigEndian.Uint16(data[2:4])
+	const childHeaderCountOffset = versionAndFlagSize
+	childHeaderCount := binary.BigEndian.Uint16(data[childHeaderCountOffset:])
 
-	if len(data) != arrayMetaDataSlabPrefixSize+16*int(headerCount) {
-		return nil, fmt.Errorf("data has unexpected length %d, want %d", len(data), arrayMetaDataSlabPrefixSize+16*headerCount)
+	const childHeaderSize = 16
+
+	expectedDataLength := arrayMetaDataSlabPrefixSize + childHeaderSize*int(childHeaderCount)
+	if len(data) != expectedDataLength {
+		return nil, fmt.Errorf(
+			"data has unexpected length %d, want %d",
+			len(data),
+			expectedDataLength,
+		)
 	}
 
-	off := 4
 
 	// Decode child headers
-	childrenHeaders := make([]ArraySlabHeader, headerCount)
-	childrenCountSum := make([]uint32, headerCount)
+	childrenHeaders := make([]ArraySlabHeader, childHeaderCount)
+	childrenCountSum := make([]uint32, childHeaderCount)
 	totalCount := uint32(0)
-	for i := 0; i < int(headerCount); i++ {
-		id := binary.BigEndian.Uint64(data[off : off+8])
-		count := binary.BigEndian.Uint32(data[off+8 : off+12])
-		size := binary.BigEndian.Uint32(data[off+12 : off+16])
+	offset := childHeaderCountOffset + 2
+
+	for i := 0; i < int(childHeaderCount); i++ {
+		storageID := binary.BigEndian.Uint64(data[offset:])
+
+		countOffset := offset + storageIDSize
+		count := binary.BigEndian.Uint32(data[countOffset:])
+
+		sizeOffset := countOffset + 4
+		size := binary.BigEndian.Uint32(data[sizeOffset:])
 
 		totalCount += count
 
-		childrenHeaders[i] = ArraySlabHeader{id: StorageID(id), count: count, size: size}
+		childrenHeaders[i] = ArraySlabHeader{
+			id: StorageID(storageID),
+			count: count,
+			size: size,
+		}
 		childrenCountSum[i] = totalCount
 
-		off += 16
+		offset += childHeaderSize
+	}
+
+	header := ArraySlabHeader{
+		id: id,
+		size: uint32(len(data)),
+		count: totalCount,
 	}
 
 	return &ArrayMetaDataSlab{
-		header:           ArraySlabHeader{id: id, size: uint32(len(data)), count: totalCount},
+		header:           header,
 		childrenHeaders:  childrenHeaders,
 		childrenCountSum: childrenCountSum,
 	}, nil
 }
 
-// header (4 bytes):
-//      | slab version (1 bytes) | slab flag (1 bytes) | child header count (2 bytes) |
-// content (n * 16 bytes):
+// Encode encodes this array meta-data slab to the given encoder.
+//
+// Header (4 bytes):
+//
+//     +-----------------------+--------------------+------------------------------+
+//     | slab version (1 byte) | slab flag (1 byte) | child header count (2 bytes) |
+//     +-----------------------+--------------------+------------------------------+
+//
+// Content (n * 16 bytes):
+//
 // 	[[count, size, storage id], ...]
+//
 func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
 	// Encode version
@@ -568,17 +654,37 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 	// Encode flag
 	enc.scratch[1] = flagArray | flagMetaDataSlab
 
-	// Encode child header count
-	binary.BigEndian.PutUint16(enc.scratch[2:], uint16(len(a.childrenHeaders)))
+	const versionAndFlagSize = 2
 
-	enc.Write(enc.scratch[:4])
+	// Encode child header count to scratch
+	const childHeaderCountOffset = versionAndFlagSize
+	binary.BigEndian.PutUint16(
+		enc.scratch[childHeaderCountOffset:],
+		uint16(len(a.childrenHeaders)),
+	)
+
+	// Write scratch content to encoder
+	const totalSize = childHeaderCountOffset + 2
+	_, err := enc.Write(enc.scratch[:totalSize])
+	if err != nil {
+		return err
+	}
 
 	// Encode children headers
 	for _, h := range a.childrenHeaders {
 		binary.BigEndian.PutUint64(enc.scratch[:], uint64(h.id))
-		binary.BigEndian.PutUint32(enc.scratch[8:], h.count)
-		binary.BigEndian.PutUint32(enc.scratch[12:], h.size)
-		enc.Write(enc.scratch[:16])
+
+		const countOffset = storageIDSize
+		binary.BigEndian.PutUint32(enc.scratch[countOffset:], h.count)
+
+		const sizeOffset = countOffset + 4
+		binary.BigEndian.PutUint32(enc.scratch[sizeOffset:], h.size)
+
+		const totalSize = sizeOffset + 4
+		_, err = enc.Write(enc.scratch[:totalSize])
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -604,8 +710,8 @@ func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, er
 
 	var childHeaderIndex int
 	if len(a.childrenCountSum) < linearScanThreshold {
-		for i, countsum := range a.childrenCountSum {
-			if index < uint64(countsum) {
+		for i, countSum := range a.childrenCountSum {
+			if index < uint64(countSum) {
 				childHeaderIndex = i
 				break
 			}

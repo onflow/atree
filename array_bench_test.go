@@ -81,7 +81,10 @@ func BenchmarkRemoveXXLArray(b *testing.B) {
 
 func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, error) {
 
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+	if err != nil {
+		return nil, err
+	}
 
 	for i := 0; i < initialArraySize; i++ {
 		v := RandomValue()
@@ -91,7 +94,7 @@ func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, e
 		}
 	}
 
-	err := storage.Commit()
+	err = storage.Commit()
 	if err != nil {
 		return nil, err
 	}

@@ -725,6 +725,7 @@ func (a *ArrayMetaDataSlab) ShallowCloneWithNewID() ArraySlab {
 	}
 }
 
+// TODO: improve naming
 func (a *ArrayMetaDataSlab) childSlabIndexInfo(
 	index uint64,
 ) (
@@ -737,7 +738,12 @@ func (a *ArrayMetaDataSlab) childSlabIndexInfo(
 		return 0, 0, 0, IndexOutOfRangeError{}
 	}
 
-	if len(a.childrenCountSum) < linearScanThreshold {
+	// Either perform a linear scan (for small number of children),
+	// or a binary search
+
+	count := len(a.childrenCountSum)
+
+	if count < linearScanThreshold {
 		for i, countSum := range a.childrenCountSum {
 			if index < uint64(countSum) {
 				childHeaderIndex = i
@@ -745,7 +751,7 @@ func (a *ArrayMetaDataSlab) childSlabIndexInfo(
 			}
 		}
 	} else {
-		low, high := 0, len(a.childrenCountSum)
+		low, high := 0, count
 		for low < high {
 			// The following line is borrowed from Go runtime .
 			mid := int(uint(low+high) >> 1) // avoid overflow when computing mid
@@ -980,7 +986,12 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 // | right sib can lend    | rebalance with right  | rebalance with right | rebalance with bigger |
 // +-----------------------+-----------------------+----------------------+-----------------------+
 //
-func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child ArraySlab, childHeaderIndex int, underflowSize uint32) error {
+func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
+	storage SlabStorage,
+	child ArraySlab,
+	childHeaderIndex int,
+	underflowSize uint32,
+) error {
 
 	// Retrieve left and right siblings of the same parent.
 	var leftSib, rightSib ArraySlab

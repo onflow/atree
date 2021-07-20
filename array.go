@@ -58,6 +58,9 @@ type ArrayDataSlab struct {
 type ArrayMetaDataSlab struct {
 	header           ArraySlabHeader
 	childrenHeaders  []ArraySlabHeader
+	// Cumulative counts in the children.
+	// For example, if the counts in childrenHeaders are [10, 15, 12],
+	// childrenCountSum is [10, 25, 37]
 	childrenCountSum []uint32
 }
 
@@ -411,7 +414,10 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 		leftCount--
 	}
 
-	// Update right slab
+	// Update the right slab
+	//
+	// It is easier and less error-prone to realloc elements for the right slab.
+
 	elements := make([]Storable, count-leftCount)
 	n := copy(elements, a.elements[leftCount:])
 	copy(elements[n:], rightSlab.elements)
@@ -493,6 +499,10 @@ func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
 	return 0, false
 }
 
+
+// CanLendToLeft returns true if elements on the left of the slab could be removed
+// so that the slab still stores more than the min threshold.
+//
 func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 	if len(a.elements) == 0 {
 		panic(fmt.Sprintf("empty data slab %d", a.header.id))
@@ -516,6 +526,9 @@ func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 	return false
 }
 
+// CanLendToRight returns true if elements on the right of the slab could be removed
+// so that the slab still stores more than the min threshold.
+//
 func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
 	if len(a.elements) == 0 {
 		panic(fmt.Sprintf("empty data slab %d", a.header.id))
@@ -1273,6 +1286,9 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 }
 
 func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
+
+	// The assumption len > 0 holds in all cases except for the root slab
+
 	baseCountSum := a.childrenCountSum[len(a.childrenCountSum)-1]
 	leftSlabChildrenCount := len(a.childrenHeaders)
 

@@ -18,7 +18,7 @@ type Stats struct {
 }
 
 // Stats returns stats about the array slabs.
-func (array *Array) Stats() (Stats, error) {
+func (a *Array) Stats() (Stats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
 	metaDataSlabSize := uint64(0)
@@ -26,7 +26,7 @@ func (array *Array) Stats() (Stats, error) {
 	dataSlabSize := uint64(0)
 
 	nextLevelIDs := list.New()
-	nextLevelIDs.PushBack(array.root.Header().id)
+	nextLevelIDs.PushBack(a.root.Header().id)
 
 	for nextLevelIDs.Len() > 0 {
 
@@ -37,7 +37,7 @@ func (array *Array) Stats() (Stats, error) {
 		for e := ids.Front(); e != nil; e = e.Next() {
 			id := e.Value.(StorageID)
 
-			slab, err := getArraySlab(array.storage, id)
+			slab, err := getArraySlab(a.storage, id)
 			if err != nil {
 				return Stats{}, err
 			}
@@ -62,15 +62,15 @@ func (array *Array) Stats() (Stats, error) {
 
 	return Stats{
 		Levels:            level,
-		ElementCount:      array.Count(),
+		ElementCount:      a.Count(),
 		MetaDataSlabCount: metaDataSlabCount,
 		DataSlabCount:     dataSlabCount,
 	}, nil
 }
 
-func (array *Array) Print() {
+func (a *Array) Print() {
 	nextLevelIDs := list.New()
-	nextLevelIDs.PushBack(array.root.Header().id)
+	nextLevelIDs.PushBack(a.root.Header().id)
 
 	overflowIDs := list.New()
 
@@ -84,7 +84,7 @@ func (array *Array) Print() {
 		for e := ids.Front(); e != nil; e = e.Next() {
 			id := e.Value.(StorageID)
 
-			slab, err := getArraySlab(array.storage, id)
+			slab, err := getArraySlab(a.storage, id)
 			if err != nil {
 				fmt.Println(err)
 				return
@@ -135,7 +135,7 @@ func (array *Array) Print() {
 			id := e.Value.(StorageID)
 
 			// TODO: expand this to include other types
-			slab, err := getArraySlab(array.storage, id)
+			slab, err := getArraySlab(a.storage, id)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
@@ -145,14 +145,14 @@ func (array *Array) Print() {
 	}
 }
 
-func (array *Array) valid() (bool, error) {
-	verified, _, err := array._valid(array.root.Header().id, 0)
+func (a *Array) valid() (bool, error) {
+	verified, _, err := a._valid(a.root.Header().id, 0)
 	return verified, err
 }
 
-func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
+func (a *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 
-	slab, err := getArraySlab(array.storage, id)
+	slab, err := getArraySlab(a.storage, id)
 	if err != nil {
 		return false, 0, err
 	}
@@ -185,7 +185,7 @@ func (array *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 	}
 	sum := uint32(0)
 	for _, h := range meta.childrenHeaders {
-		verified, count, err := array._valid(h.id, level+1)
+		verified, count, err := a._valid(h.id, level+1)
 		if !verified || err != nil {
 			return false, 0, err
 		}

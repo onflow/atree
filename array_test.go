@@ -8,9 +8,8 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"time"
-
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	//"golang.org/x/exp/rand"
@@ -36,7 +35,8 @@ func TestAppendAndGet(t *testing.T) {
 
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
 		err := array.Append(Uint64Value(i))
@@ -56,7 +56,8 @@ func TestAppendAndGet(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, verified)
 
-	storage.Commit()
+	err = storage.Commit()
+	require.NoError(t, err)
 
 	stats, _ := array.Stats()
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -70,7 +71,8 @@ func TestSetAndGet(t *testing.T) {
 
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
 		err := array.Append(Uint64Value(i))
@@ -95,7 +97,8 @@ func TestSetAndGet(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, verified)
 
-	storage.Commit()
+	err = storage.Commit()
+	require.NoError(t, err)
 
 	stats, _ := array.Stats()
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -115,7 +118,8 @@ func TestInsertAndGet(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Insert(0, Uint64Value(arraySize-i-1))
@@ -135,7 +139,8 @@ func TestInsertAndGet(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, verified)
 
-		storage.Commit()
+		err = storage.Commit()
+		require.NoError(t, err)
 
 		stats, _ := array.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -149,7 +154,8 @@ func TestInsertAndGet(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Insert(i, Uint64Value(i))
@@ -169,7 +175,8 @@ func TestInsertAndGet(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, verified)
 
-		storage.Commit()
+		err = storage.Commit()
+		require.NoError(t, err)
 
 		stats, _ := array.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -183,7 +190,8 @@ func TestInsertAndGet(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i += 2 {
 			err := array.Append(Uint64Value(i))
@@ -208,7 +216,8 @@ func TestInsertAndGet(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, verified)
 
-		storage.Commit()
+		err = storage.Commit()
+		require.NoError(t, err)
 
 		stats, _ := array.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -228,7 +237,8 @@ func TestRemove(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -256,7 +266,8 @@ func TestRemove(t *testing.T) {
 
 		require.Equal(t, uint64(0), array.Count())
 
-		storage.Commit()
+		err = storage.Commit()
+		require.NoError(t, err)
 
 		stats, _ := array.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -270,7 +281,8 @@ func TestRemove(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -298,7 +310,8 @@ func TestRemove(t *testing.T) {
 
 		require.Equal(t, uint64(0), array.Count())
 
-		storage.Commit()
+		err = storage.Commit()
+		require.NoError(t, err)
 
 		stats, _ := array.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -312,7 +325,8 @@ func TestRemove(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -347,7 +361,8 @@ func TestRemove(t *testing.T) {
 			require.Equal(t, j, uint64(e))
 		}
 
-		storage.Commit()
+		err = storage.Commit()
+		require.NoError(t, err)
 
 		stats, _ := array.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -362,7 +377,8 @@ func TestSplit(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -373,7 +389,8 @@ func TestSplit(t *testing.T) {
 		require.True(t, array.root.IsData())
 		require.Equal(t, uint32(50), array.root.Header().count)
 
-		storage.Commit()
+		err = storage.Commit()
+		require.NoError(t, err)
 
 		stats, _ := array.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -391,7 +408,8 @@ func TestSplit(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -413,7 +431,8 @@ func TestSplit(t *testing.T) {
 			require.False(t, arraySlab.IsData())
 		}
 
-		storage.Commit()
+		err = storage.Commit()
+		require.NoError(t, err)
 
 		stats, _ := array.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -433,7 +452,8 @@ func TestIterate(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -441,7 +461,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err := array.Iterate(func(v Storable) {
+		err = array.Iterate(func(v Storable) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i, uint64(e))
@@ -463,7 +483,8 @@ func TestIterate(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -476,7 +497,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err := array.Iterate(func(v Storable) {
+		err = array.Iterate(func(v Storable) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i*10, uint64(e))
@@ -498,7 +519,8 @@ func TestIterate(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i += 2 {
 			err := array.Append(Uint64Value(i))
@@ -511,7 +533,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err := array.Iterate(func(v Storable) {
+		err = array.Iterate(func(v Storable) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i, uint64(e))
@@ -533,7 +555,8 @@ func TestIterate(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -549,7 +572,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(1)
-		err := array.Iterate(func(v Storable) {
+		err = array.Iterate(func(v Storable) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i, uint64(e))
@@ -571,8 +594,10 @@ func TestConstRootStorageID(t *testing.T) {
 
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	array := NewArray(storage)
-	err := array.Append(Uint64Value(0))
+	array, err := NewArray(storage)
+	require.NoError(t, err)
+
+	err = array.Append(Uint64Value(0))
 	require.NoError(t, err)
 
 	savedRootID := array.root.Header().id
@@ -609,7 +634,8 @@ func TestSetRandomValue(t *testing.T) {
 
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+require.NoError(t, err)
 
 	values := make([]uint64, arraySize)
 
@@ -647,7 +673,8 @@ func TestSetRandomValue(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, verified)
 
-	storage.Commit()
+	err = storage.Commit()
+	require.NoError(t, err)
 
 	stats, _ := array.Stats()
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -668,7 +695,8 @@ func TestInsertRandomValue(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
 
@@ -693,8 +721,9 @@ func TestInsertRandomValue(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, verified)
 
-		storage.Commit()
-
+		err = storage.Commit()
+		require.NoError(t, err)
+		
 		stats, _ := array.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
 	})
@@ -707,7 +736,8 @@ func TestInsertRandomValue(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
 
@@ -732,7 +762,8 @@ func TestInsertRandomValue(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, verified)
 
-		storage.Commit()
+		err = storage.Commit()
+		require.NoError(t, err)
 
 		stats, _ := array.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -746,7 +777,8 @@ func TestInsertRandomValue(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
 
@@ -774,7 +806,8 @@ func TestInsertRandomValue(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, verified)
 
-		storage.Commit()
+		err = storage.Commit()
+		require.NoError(t, err)
 
 		stats, _ := array.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -794,7 +827,8 @@ func TestRemoveRandomElement(t *testing.T) {
 
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+require.NoError(t, err)
 
 	values := make([]uint64, arraySize)
 
@@ -831,7 +865,8 @@ func TestRemoveRandomElement(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, verified)
 
-	storage.Commit()
+	err = storage.Commit()
+	require.NoError(t, err)
 
 	stats, _ := array.Stats()
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -858,7 +893,8 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+require.NoError(t, err)
 
 	values := make([]uint64, 0, actionCount)
 
@@ -932,7 +968,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	}
 
 	i := 0
-	err := array.Iterate(func(v Storable) {
+	err = array.Iterate(func(v Storable) {
 		e, ok := v.(Uint64Value)
 		require.True(t, ok)
 		require.Equal(t, values[i], uint64(e))
@@ -945,7 +981,8 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, verified)
 
-	storage.Commit()
+	err = storage.Commit()
+	require.NoError(t, err)
 
 	stats, _ := array.Stats()
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -972,7 +1009,8 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+require.NoError(t, err)
 
 	values := make([]uint8, 0, actionCount)
 
@@ -1046,7 +1084,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	}
 
 	i := 0
-	err := array.Iterate(func(v Storable) {
+	err = array.Iterate(func(v Storable) {
 		e, ok := v.(Uint8Value)
 		require.True(t, ok)
 		require.Equal(t, values[i], uint8(e))
@@ -1059,7 +1097,8 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, verified)
 
-	storage.Commit()
+	err = storage.Commit()
+	require.NoError(t, err)
 
 	stats, _ := array.Stats()
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -1094,7 +1133,8 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+require.NoError(t, err)
 
 	values := make([]Storable, 0, actionCount)
 
@@ -1175,7 +1215,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	}
 
 	i := 0
-	err := array.Iterate(func(v Storable) {
+	err = array.Iterate(func(v Storable) {
 		require.Equal(t, values[i], v)
 		i++
 	})
@@ -1186,7 +1226,8 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, verified)
 
-	storage.Commit()
+	err = storage.Commit()
+	require.NoError(t, err)
 
 	stats, _ := array.Stats()
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.storage.Count()))
@@ -1209,9 +1250,10 @@ func TestNestedArray(t *testing.T) {
 
 		nestedArrays := make([]Storable, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			nested := NewArray(storage)
+			nested, err := NewArray(storage)
+			require.NoError(t, err)
 
-			err := nested.Append(Uint64Value(i * 2))
+			err = nested.Append(Uint64Value(i * 2))
 			require.NoError(t, err)
 
 			err = nested.Append(Uint64Value(i*2 + 1))
@@ -1222,7 +1264,8 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested.root
 		}
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+require.NoError(t, err)
 		for _, a := range nestedArrays {
 			err := array.Append(a)
 			require.NoError(t, err)
@@ -1249,7 +1292,9 @@ func TestNestedArray(t *testing.T) {
 
 		nestedArrays := make([]Storable, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			nested := NewArray(storage)
+			nested, err := NewArray(storage)
+			require.NoError(t, err)
+
 			for i := uint64(0); i < 50; i++ {
 				err := nested.Append(Uint64Value(i))
 				require.NoError(t, err)
@@ -1259,7 +1304,8 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested.root
 		}
 
-		array := NewArray(storage)
+		array, err := NewArray(storage)
+		require.NoError(t, err)
 		for _, a := range nestedArrays {
 			err := array.Append(a)
 			require.NoError(t, err)
@@ -1289,7 +1335,8 @@ func TestEncode(t *testing.T) {
 
 	// Create and populate array in memory
 	storage := NewBasicSlabStorage()
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+require.NoError(t, err)
 
 	const arraySize = 20
 	for i := uint64(0); i < arraySize; i++ {
@@ -1465,7 +1512,8 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	}()
 
 	storage := NewBasicSlabStorage()
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+require.NoError(t, err)
 
 	const arraySize = 256 * 256
 	values := make([]Storable, arraySize)
@@ -1523,7 +1571,8 @@ func TestEmptyArray(t *testing.T) {
 
 	storage := NewBasicSlabStorage()
 
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+require.NoError(t, err)
 
 	rootID := array.root.Header().id
 

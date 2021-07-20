@@ -46,10 +46,18 @@ func main() {
 
 	storage := NewBasicSlabStorage()
 
-	array := NewArray(storage)
+	array, err := NewArray(storage)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	for i := uint64(0); i < numElements; i++ {
-		array.Append(Uint64Value(i))
+		err := array.Append(Uint64Value(i))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 	}
 
 	stats, err := array.Stats()

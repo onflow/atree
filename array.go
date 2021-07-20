@@ -1034,7 +1034,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 	if leftCanLend || rightCanLend {
 
 		// Rebalance with right sib
-		if !leftCanLend {
+		if rightCanLend {
 			baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
 
 			err := child.BorrowFromRight(rightSib)
@@ -1061,7 +1061,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Rebalance with left sib
-		if !rightCanLend {
+		if leftCanLend {
 			baseCountSum := a.childrenCountSum[childHeaderIndex-1] - leftSib.Header().count
 
 			err := leftSib.LendToRight(child)

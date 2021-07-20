@@ -1112,35 +1112,37 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 				return err
 			}
 			return storage.Store(a.header.id, a)
-		}
+		} else {
+			// leftSib.ByteSize() <= rightSib.ByteSize
 
-		baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
+			baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
 
-		err := child.BorrowFromRight(rightSib)
-		if err != nil {
-			return err
-		}
+			err := child.BorrowFromRight(rightSib)
+			if err != nil {
+				return err
+			}
 
-		a.childrenHeaders[childHeaderIndex] = child.Header()
-		a.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
+			a.childrenHeaders[childHeaderIndex] = child.Header()
+			a.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
 
-		// Adjust childrenCountSum
-		a.childrenCountSum[childHeaderIndex] = baseCountSum + child.Header().count
+			// Adjust childrenCountSum
+			a.childrenCountSum[childHeaderIndex] = baseCountSum + child.Header().count
 
-		// Store modified slabs
-		err = storage.Store(child.ID(), child)
-		if err != nil {
-			return err
+			// Store modified slabs
+			err = storage.Store(child.ID(), child)
+			if err != nil {
+				return err
+			}
+			err = storage.Store(rightSib.ID(), rightSib)
+			if err != nil {
+				return err
+			}
+			err = storage.Store(a.header.id, a)
+			if err != nil {
+				return err
+			}
+			return nil
 		}
-		err = storage.Store(rightSib.ID(), rightSib)
-		if err != nil {
-			return err
-		}
-		err = storage.Store(a.header.id, a)
-		if err != nil {
-			return err
-		}
-		return nil
 	}
 
 	// Child can't rebalance with any sibling.  It must merge with one sibling.
@@ -1250,39 +1252,41 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		storage.Remove(child.ID())
 
 		return nil
+	} else {
+		// leftSib.ByteSize() > rightSib.ByteSize
+
+		err := child.Merge(rightSib)
+		if err != nil {
+			return err
+		}
+
+		a.childrenHeaders[childHeaderIndex] = child.Header()
+
+		// Update MetaDataSlab's childrenHeaders
+		copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
+		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
+
+		// Adjust childrenCountSum
+		copy(a.childrenCountSum[childHeaderIndex:], a.childrenCountSum[childHeaderIndex+1:])
+		a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
+
+		a.header.size -= arraySlabHeaderSize
+
+		// Store modified slabs in storage
+		err = storage.Store(child.ID(), child)
+		if err != nil {
+			return err
+		}
+		err = storage.Store(a.header.id, a)
+		if err != nil {
+			return err
+		}
+
+		// Remove rightSib from storage
+		storage.Remove(rightSib.ID())
+
+		return nil
 	}
-
-	err := child.Merge(rightSib)
-	if err != nil {
-		return err
-	}
-
-	a.childrenHeaders[childHeaderIndex] = child.Header()
-
-	// Update MetaDataSlab's childrenHeaders
-	copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
-	a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
-
-	// Adjust childrenCountSum
-	copy(a.childrenCountSum[childHeaderIndex:], a.childrenCountSum[childHeaderIndex+1:])
-	a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
-
-	a.header.size -= arraySlabHeaderSize
-
-	// Store modified slabs in storage
-	err = storage.Store(child.ID(), child)
-	if err != nil {
-		return err
-	}
-	err = storage.Store(a.header.id, a)
-	if err != nil {
-		return err
-	}
-
-	// Remove rightSib from storage
-	storage.Remove(rightSib.ID())
-
-	return nil
 }
 
 func (a *ArrayMetaDataSlab) Merge(slab Slab) error {

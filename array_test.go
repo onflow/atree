@@ -463,7 +463,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err = array.Iterate(func(_ int, v Storable) (bool, error) {
+		err = array.Iterate(func(_ int, v Value) (bool, error) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i, uint64(e))
@@ -500,7 +500,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err = array.Iterate(func(_ int, v Storable) (bool, error) {
+		err = array.Iterate(func(_ int, v Value) (bool, error) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i*10, uint64(e))
@@ -537,7 +537,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err = array.Iterate(func(_ int, v Storable) (bool, error) {
+		err = array.Iterate(func(_ int, v Value) (bool, error) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i, uint64(e))
@@ -577,7 +577,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(1)
-		err = array.Iterate(func(_ int, v Storable) (bool, error) {
+		err = array.Iterate(func(_ int, v Value) (bool, error) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i, uint64(e))
@@ -606,7 +606,7 @@ func TestIterate(t *testing.T) {
 		require.Equal(t, uint64(count), array.Count())
 
 		i := 0
-		err = array.Iterate(func(index int, _ Storable) (bool, error) {
+		err = array.Iterate(func(index int, _ Value) (bool, error) {
 			require.Equal(t, i, index)
 			i++
 
@@ -642,7 +642,7 @@ func TestIterate(t *testing.T) {
 		testErr := errors.New("test")
 
 		i := 0
-		err = array.Iterate(func(index int, _ Storable) (bool, error) {
+		err = array.Iterate(func(index int, _ Value) (bool, error) {
 			require.Equal(t, i, index)
 			i++
 
@@ -1078,7 +1078,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	}
 
 	i := 0
-	err = array.Iterate(func(_ int, v Storable) (bool, error) {
+	err = array.Iterate(func(_ int, v Value) (bool, error) {
 		e, ok := v.(Uint64Value)
 		require.True(t, ok)
 		require.Equal(t, values[i], uint64(e))
@@ -1195,7 +1195,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	}
 
 	i := 0
-	err = array.Iterate(func(_ int, v Storable) (bool, error) {
+	err = array.Iterate(func(_ int, v Value) (bool, error) {
 		e, ok := v.(Uint8Value)
 		require.True(t, ok)
 		require.Equal(t, values[i], uint8(e))
@@ -1248,11 +1248,11 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	array, err := NewArray(storage)
 	require.NoError(t, err)
 
-	values := make([]Storable, 0, actionCount)
+	values := make([]Value, 0, actionCount)
 
 	for i := uint64(0); i < actionCount; i++ {
 
-		var v Storable
+		var v Value
 
 		switch rand.Intn(MaxType) {
 		case Uint8Type:
@@ -1327,7 +1327,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	}
 
 	i := 0
-	err = array.Iterate(func(_ int, v Storable) (bool, error) {
+	err = array.Iterate(func(_ int, v Value) (bool, error) {
 		require.Equal(t, values[i], v)
 		i++
 		return true, nil
@@ -1361,7 +1361,7 @@ func TestNestedArray(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		nestedArrays := make([]Storable, arraySize)
+		nestedArrays := make([]*Array, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
 			nested, err := NewArray(storage)
 			require.NoError(t, err)
@@ -1374,7 +1374,7 @@ func TestNestedArray(t *testing.T) {
 
 			require.True(t, nested.root.IsData())
 
-			nestedArrays[i] = nested.root
+			nestedArrays[i] = nested
 		}
 
 		array, err := NewArray(storage)
@@ -1403,7 +1403,7 @@ func TestNestedArray(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		nestedArrays := make([]Storable, arraySize)
+		nestedArrays := make([]*Array, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
 			nested, err := NewArray(storage)
 			require.NoError(t, err)
@@ -1414,7 +1414,7 @@ func TestNestedArray(t *testing.T) {
 			}
 			require.False(t, nested.root.IsData())
 
-			nestedArrays[i] = nested.root
+			nestedArrays[i] = nested
 		}
 
 		array, err := NewArray(storage)
@@ -1626,10 +1626,10 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	require.NoError(t, err)
 
 	const arraySize = 256 * 256
-	values := make([]Storable, arraySize)
+	values := make([]Value, arraySize)
 	for i := uint64(0); i < arraySize; i++ {
 
-		var v Storable
+		var v Value
 
 		switch rand.Intn(MaxType) {
 		case Uint8Type:
@@ -1712,7 +1712,7 @@ func TestEmptyArray(t *testing.T) {
 
 	t.Run("iterate", func(t *testing.T) {
 		i := uint64(0)
-		err := array.Iterate(func(_ int, v Storable) (bool, error) {
+		err := array.Iterate(func(_ int, v Value) (bool, error) {
 			i++
 			return true, nil
 		})

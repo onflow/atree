@@ -22,9 +22,19 @@ type BasicArrayDataSlab struct {
 	elements []Storable
 }
 
+func (a *BasicArrayDataSlab) Value(storage SlabStorage) (Value, error) {
+	return &BasicArray{storage: storage, root: a}, nil
+}
+
 type BasicArray struct {
 	storage SlabStorage
 	root    *BasicArrayDataSlab
+}
+
+var _ Value = &BasicArray{}
+
+func (a *BasicArray) Storable() Storable {
+	return a.root
 }
 
 func NewBasicArrayDataSlab(storage SlabStorage) *BasicArrayDataSlab {
@@ -68,145 +78,163 @@ func newBasicArrayDataSlabFromData(id StorageID, data []byte) (*BasicArrayDataSl
 	}, nil
 }
 
-func (array *BasicArrayDataSlab) Bytes() ([]byte, error) {
+func (a *BasicArrayDataSlab) Bytes() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := newEncoder(&buf)
 
-	err := array.Encode(enc)
+	err := a.Encode(enc)
 	if err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
-func (array *BasicArrayDataSlab) Encode(enc *Encoder) error {
+func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 	// Encode flag
-	enc.Write([]byte{flagBasicArray})
+	_, err := enc.Write([]byte{flagBasicArray})
+	if err != nil {
+		return err
+	}
 
 	// Encode CBOR array size for 9 bytes
 	enc.scratch[0] = 0x80 | 27
-	binary.BigEndian.PutUint64(enc.scratch[1:], uint64(len(array.elements)))
+	binary.BigEndian.PutUint64(enc.scratch[1:], uint64(len(a.elements)))
 
-	enc.Write(enc.scratch[:9])
+	_, err = enc.Write(enc.scratch[:9])
+	if err != nil {
+		return err
+	}
 
-	for i := 0; i < len(array.elements); i++ {
-		err := array.elements[i].Encode(enc)
+	for i := 0; i < len(a.elements); i++ {
+		err := a.elements[i].Encode(enc)
 		if err != nil {
 			return err
 		}
 	}
-	enc.cbor.Flush()
+	err = enc.cbor.Flush()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (array *BasicArrayDataSlab) Get(storage SlabStorage, index uint64) (Storable, error) {
-	if index >= uint64(len(array.elements)) {
+func (a *BasicArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
+	if index >= uint64(len(a.elements)) {
 		return nil, fmt.Errorf("out of bounds")
 	}
-	v := array.elements[index]
+	v := a.elements[index]
 	return v, nil
 }
 
-func (array *BasicArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error {
-	if index >= uint64(len(array.elements)) {
+func (a *BasicArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error {
+	if index >= uint64(len(a.elements)) {
 		return fmt.Errorf("out of bounds")
 	}
 
-	oldElem := array.elements[index]
+	oldElem := a.elements[index]
 
-	array.elements[index] = v
+	a.elements[index] = v
 
-	array.header.size = array.header.size - oldElem.ByteSize() + v.ByteSize()
+	a.header.size = a.header.size - oldElem.ByteSize() + v.ByteSize()
 
-	storage.Store(array.header.id, array)
+	err := storage.Store(a.header.id, a)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (array *BasicArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
-	if index > uint64(len(array.elements)) {
+func (a *BasicArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
+	if index > uint64(len(a.elements)) {
 		return fmt.Errorf("out of bounds")
 	}
 
-	if index == uint64(len(array.elements)) {
-		array.elements = append(array.elements, v)
+	if index == uint64(len(a.elements)) {
+		a.elements = append(a.elements, v)
 	} else {
-		array.elements = append(array.elements, nil)
-		copy(array.elements[index+1:], array.elements[index:])
-		array.elements[index] = v
+		a.elements = append(a.elements, nil)
+		copy(a.elements[index+1:], a.elements[index:])
+		a.elements[index] = v
 	}
 
-	array.header.count++
-	array.header.size += v.ByteSize()
+	a.header.count++
+	a.header.size += v.ByteSize()
 
-	storage.Store(array.header.id, array)
+	err := storage.Store(a.header.id, a)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (array *BasicArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
-	if index >= uint64(len(array.elements)) {
+func (a *BasicArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
+	if index >= uint64(len(a.elements)) {
 		return nil, fmt.Errorf("out of bounds")
 	}
 
-	v := array.elements[index]
+	v := a.elements[index]
 
 	switch index {
 	case 0:
-		array.elements = array.elements[1:]
-	case uint64(len(array.elements)) - 1:
-		array.elements = array.elements[:len(array.elements)-1]
+		a.elements = a.elements[1:]
+	case uint64(len(a.elements)) - 1:
+		a.elements = a.elements[:len(a.elements)-1]
 	default:
-		copy(array.elements[index:], array.elements[index+1:])
-		array.elements = array.elements[:len(array.elements)-1]
+		copy(a.elements[index:], a.elements[index+1:])
+		a.elements = a.elements[:len(a.elements)-1]
 	}
 
-	array.header.count--
-	array.header.size -= v.ByteSize()
+	a.header.count--
+	a.header.size -= v.ByteSize()
 
-	storage.Store(array.header.id, array)
+	err := storage.Store(a.header.id, a)
+	if err != nil {
+		return nil, err
+	}
 
 	return v, nil
 }
 
-func (array *BasicArrayDataSlab) Count() uint64 {
-	return uint64(len(array.elements))
+func (a *BasicArrayDataSlab) Count() uint64 {
+	return uint64(len(a.elements))
 }
 
-func (array *BasicArrayDataSlab) Header() ArraySlabHeader {
-	return array.header
+func (a *BasicArrayDataSlab) Header() ArraySlabHeader {
+	return a.header
 }
 
-func (array *BasicArrayDataSlab) ByteSize() uint32 {
-	return array.header.size
+func (a *BasicArrayDataSlab) ByteSize() uint32 {
+	return a.header.size
 }
 
-func (array *BasicArrayDataSlab) ID() StorageID {
-	return array.header.id
+func (a *BasicArrayDataSlab) ID() StorageID {
+	return a.header.id
 }
 
-func (array *BasicArrayDataSlab) Mutable() bool {
+func (a *BasicArrayDataSlab) Mutable() bool {
 	return true
 }
 
-func (array *BasicArrayDataSlab) String() string {
-	return fmt.Sprintf("%v", array.elements)
+func (a *BasicArrayDataSlab) String() string {
+	return fmt.Sprintf("%v", a.elements)
 }
 
-func (array *BasicArrayDataSlab) Split(_ SlabStorage) (Slab, Slab, error) {
+func (a *BasicArrayDataSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, errors.New("not applicable")
 }
 
-func (array *BasicArrayDataSlab) Merge(Slab) error {
+func (a *BasicArrayDataSlab) Merge(Slab) error {
 	return errors.New("not applicable")
 }
 
-func (array *BasicArrayDataSlab) LendToRight(Slab) error {
+func (a *BasicArrayDataSlab) LendToRight(Slab) error {
 	return errors.New("not applicable")
 }
 
-func (array *BasicArrayDataSlab) BorrowFromRight(Slab) error {
+func (a *BasicArrayDataSlab) BorrowFromRight(Slab) error {
 	return errors.New("not applicable")
 }
 
@@ -239,31 +267,41 @@ func NewBasicArrayWithRootID(storage SlabStorage, id StorageID) (*BasicArray, er
 	return &BasicArray{storage: storage, root: dataSlab}, nil
 }
 
-func (array *BasicArray) Get(index uint64) (Storable, error) {
-	return array.root.Get(array.storage, index)
+func (a *BasicArray) Get(index uint64) (Value, error) {
+	storable, err := a.root.Get(a.storage, index)
+	if err != nil {
+		return nil, err
+	}
+	return storable.Value(a.storage)
 }
 
-func (array *BasicArray) Set(index uint64, v Storable) error {
-	return array.root.Set(array.storage, index, v)
+func (a *BasicArray) Set(index uint64, v Value) error {
+	storable := v.Storable()
+	return a.root.Set(a.storage, index, storable)
 }
 
-func (array *BasicArray) Append(v Storable) error {
-	index := uint64(array.root.header.count)
-	return array.Insert(index, v)
+func (a *BasicArray) Append(v Value) error {
+	index := uint64(a.root.header.count)
+	return a.Insert(index, v)
 }
 
-func (array *BasicArray) Insert(index uint64, v Storable) error {
-	return array.root.Insert(array.storage, index, v)
+func (a *BasicArray) Insert(index uint64, v Value) error {
+	storable := v.Storable()
+	return a.root.Insert(a.storage, index, storable)
 }
 
-func (array *BasicArray) Remove(index uint64) (Storable, error) {
-	return array.root.Remove(array.storage, index)
+func (a *BasicArray) Remove(index uint64) (Value, error) {
+	storable, err := a.root.Remove(a.storage, index)
+	if err != nil {
+		return nil, err
+	}
+	return storable.Value(a.storage)
 }
 
-func (array *BasicArray) Count() uint64 {
-	return array.root.Count()
+func (a *BasicArray) Count() uint64 {
+	return a.root.Count()
 }
 
-func (array *BasicArray) String() string {
-	return array.root.String()
+func (a *BasicArray) String() string {
+	return a.root.String()
 }

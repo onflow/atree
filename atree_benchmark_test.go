@@ -34,7 +34,7 @@ func BenchmarkXXLArray(b *testing.B) { benchmarkArray(b, 10_000_000, opCount) }
 func BenchmarkXXXLArray(b *testing.B) { benchmarkArray(b, 100_000_000, opCount) }
 
 // TODO add nested arrays as class 5
-func RandomValue() Storable {
+func RandomValue() Value {
 	switch rand.Intn(4) {
 	case 0:
 		return Uint8Value(rand.Intn(255))
@@ -73,7 +73,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	// setup
 	for i := 0; i < initialArraySize; i++ {
 		v := RandomValue()
-		totalRawDataSize += v.ByteSize()
+		totalRawDataSize += v.Storable().ByteSize()
 		err := array.Append(v)
 		require.NoError(b, err)
 	}
@@ -90,7 +90,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	require.NoError(b, err)
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue()
-		totalRawDataSize += v.ByteSize()
+		totalRawDataSize += v.Storable().ByteSize()
 		err := array.Append(v)
 		require.NoError(b, err)
 	}
@@ -108,7 +108,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 		ind := rand.Intn(int(array.Count()))
 		s, err := array.Remove(uint64(ind))
 		require.NoError(b, err)
-		totalRawDataSize -= s.ByteSize()
+		totalRawDataSize -= s.Storable().ByteSize()
 	}
 	require.NoError(b, storage.Commit())
 	totalRemoveTime = time.Since(start)
@@ -123,7 +123,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		v := RandomValue()
-		totalRawDataSize += v.ByteSize()
+		totalRawDataSize += v.Storable().ByteSize()
 		err := array.Insert(uint64(ind), v)
 		require.NoError(b, err)
 	}
@@ -185,7 +185,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 	// setup
 	for i := 0; i < initialArraySize; i++ {
 		v := RandomValue()
-		totalRawDataSize += v.ByteSize()
+		totalRawDataSize += v.Storable().ByteSize()
 		err := array.Append(v)
 		require.NoError(b, err)
 	}
@@ -198,11 +198,11 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 		switch rand.Intn(2) {
 		case 0: // remove
 			v, err := array.Remove(uint64(ind))
-			totalRawDataSize -= v.ByteSize()
+			totalRawDataSize -= v.Storable().ByteSize()
 			require.NoError(b, err)
 		case 1: // insert
 			v := RandomValue()
-			totalRawDataSize += v.ByteSize()
+			totalRawDataSize += v.Storable().ByteSize()
 			err := array.Insert(uint64(ind), v)
 			require.NoError(b, err)
 		}

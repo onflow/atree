@@ -296,11 +296,11 @@ func TestBasicArrayRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	array := NewBasicArray(storage)
 
-	values := make([]Storable, 0, actionCount)
+	values := make([]Value, 0, actionCount)
 
 	for i := uint64(0); i < actionCount; i++ {
 
-		var v Storable
+		var v Value
 
 		switch rand.Intn(MaxType) {
 		case Uint8Type:
@@ -384,10 +384,10 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 	array := NewBasicArray(storage)
 
 	const arraySize = 256 * 256
-	values := make([]Storable, arraySize)
+	values := make([]Value, arraySize)
 	for i := uint64(0); i < arraySize; i++ {
 
-		var v Storable
+		var v Value
 
 		switch rand.Intn(MaxType) {
 		case Uint8Type:

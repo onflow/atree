@@ -37,26 +37,26 @@ type InMemBaseStorage struct {
 	segments         map[StorageID][]byte
 	bytesRetrieved   int
 	bytesStored      int
-	segmentsReturned map[StorageID]interface{}
-	segmentsUpdated  map[StorageID]interface{}
-	segmentsTouched  map[StorageID]interface{}
+	segmentsReturned map[StorageID]struct{}
+	segmentsUpdated  map[StorageID]struct{}
+	segmentsTouched  map[StorageID]struct{}
 }
 
 func NewInMemBaseStorage() *InMemBaseStorage {
 	return &InMemBaseStorage{
 		segments:         make(map[StorageID][]byte),
-		segmentsReturned: make(map[StorageID]interface{}),
-		segmentsUpdated:  make(map[StorageID]interface{}),
-		segmentsTouched:  make(map[StorageID]interface{}),
+		segmentsReturned: make(map[StorageID]struct{}),
+		segmentsUpdated:  make(map[StorageID]struct{}),
+		segmentsTouched:  make(map[StorageID]struct{}),
 	}
 }
 
 func NewInMemBaseStorageFromMap(segments map[StorageID][]byte) *InMemBaseStorage {
 	return &InMemBaseStorage{
 		segments:         segments,
-		segmentsReturned: make(map[StorageID]interface{}),
-		segmentsUpdated:  make(map[StorageID]interface{}),
-		segmentsTouched:  make(map[StorageID]interface{}),
+		segmentsReturned: make(map[StorageID]struct{}),
+		segmentsUpdated:  make(map[StorageID]struct{}),
+		segmentsTouched:  make(map[StorageID]struct{}),
 	}
 }
 
@@ -117,9 +117,9 @@ func (s *InMemBaseStorage) SegmentsTouched() int {
 func (s *InMemBaseStorage) ResetReporter() {
 	s.bytesStored = 0
 	s.bytesRetrieved = 0
-	s.segmentsReturned = make(map[StorageID]interface{})
-	s.segmentsUpdated = make(map[StorageID]interface{})
-	s.segmentsTouched = make(map[StorageID]interface{})
+	s.segmentsReturned = make(map[StorageID]struct{})
+	s.segmentsUpdated = make(map[StorageID]struct{})
+	s.segmentsTouched = make(map[StorageID]struct{})
 }
 
 type SlabStorage interface {

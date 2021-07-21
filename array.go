@@ -58,6 +58,9 @@ type ArrayDataSlab struct {
 type ArrayMetaDataSlab struct {
 	header           ArraySlabHeader
 	childrenHeaders  []ArraySlabHeader
+	// Cumulative counts in the children.
+	// For example, if the counts in childrenHeaders are [10, 15, 12],
+	// childrenCountSum is [10, 25, 37]
 	childrenCountSum []uint32
 }
 
@@ -411,7 +414,10 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 		leftCount--
 	}
 
-	// Update right slab
+	// Update the right slab
+	//
+	// It is easier and less error-prone to realloc elements for the right slab.
+
 	elements := make([]Storable, count-leftCount)
 	n := copy(elements, a.elements[leftCount:])
 	copy(elements[n:], rightSlab.elements)
@@ -482,6 +488,10 @@ func (a *ArrayDataSlab) IsFull() bool {
 	return a.header.size > uint32(maxThreshold)
 }
 
+// IsUnderflow returns the number of bytes needed for the data slab
+// to reach the min threshold.
+// Returns true if the min threshold has not been reached yet.
+//
 func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
 	if uint32(minThreshold) > a.header.size {
 		return uint32(minThreshold) - a.header.size, true
@@ -489,6 +499,10 @@ func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
 	return 0, false
 }
 
+
+// CanLendToLeft returns true if elements on the left of the slab could be removed
+// so that the slab still stores more than the min threshold.
+//
 func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 	if len(a.elements) == 0 {
 		panic(fmt.Sprintf("empty data slab %d", a.header.id))
@@ -512,6 +526,9 @@ func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 	return false
 }
 
+// CanLendToRight returns true if elements on the right of the slab could be removed
+// so that the slab still stores more than the min threshold.
+//
 func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
 	if len(a.elements) == 0 {
 		panic(fmt.Sprintf("empty data slab %d", a.header.id))
@@ -721,6 +738,7 @@ func (a *ArrayMetaDataSlab) ShallowCloneWithNewID() ArraySlab {
 	}
 }
 
+// TODO: improve naming
 func (a *ArrayMetaDataSlab) childSlabIndexInfo(
 	index uint64,
 ) (
@@ -733,7 +751,12 @@ func (a *ArrayMetaDataSlab) childSlabIndexInfo(
 		return 0, 0, 0, IndexOutOfRangeError{}
 	}
 
-	if len(a.childrenCountSum) < linearScanThreshold {
+	// Either perform a linear scan (for small number of children),
+	// or a binary search
+
+	count := len(a.childrenCountSum)
+
+	if count < linearScanThreshold {
 		for i, countSum := range a.childrenCountSum {
 			if index < uint64(countSum) {
 				childHeaderIndex = i
@@ -741,7 +764,7 @@ func (a *ArrayMetaDataSlab) childSlabIndexInfo(
 			}
 		}
 	} else {
-		low, high := 0, len(a.childrenCountSum)
+		low, high := 0, count
 		for low < high {
 			// The following line is borrowed from Go runtime .
 			mid := int(uint(low+high) >> 1) // avoid overflow when computing mid
@@ -976,7 +999,12 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 // | right sib can lend    | rebalance with right  | rebalance with right | rebalance with bigger |
 // +-----------------------+-----------------------+----------------------+-----------------------+
 //
-func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child ArraySlab, childHeaderIndex int, underflowSize uint32) error {
+func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
+	storage SlabStorage,
+	child ArraySlab,
+	childHeaderIndex int,
+	underflowSize uint32,
+) error {
 
 	// Retrieve left and right siblings of the same parent.
 	var leftSib, rightSib ArraySlab
@@ -1084,35 +1112,37 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 				return err
 			}
 			return storage.Store(a.header.id, a)
-		}
+		} else {
+			// leftSib.ByteSize() <= rightSib.ByteSize
 
-		baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
+			baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
 
-		err := child.BorrowFromRight(rightSib)
-		if err != nil {
-			return err
-		}
+			err := child.BorrowFromRight(rightSib)
+			if err != nil {
+				return err
+			}
 
-		a.childrenHeaders[childHeaderIndex] = child.Header()
-		a.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
+			a.childrenHeaders[childHeaderIndex] = child.Header()
+			a.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
 
-		// Adjust childrenCountSum
-		a.childrenCountSum[childHeaderIndex] = baseCountSum + child.Header().count
+			// Adjust childrenCountSum
+			a.childrenCountSum[childHeaderIndex] = baseCountSum + child.Header().count
 
-		// Store modified slabs
-		err = storage.Store(child.ID(), child)
-		if err != nil {
-			return err
+			// Store modified slabs
+			err = storage.Store(child.ID(), child)
+			if err != nil {
+				return err
+			}
+			err = storage.Store(rightSib.ID(), rightSib)
+			if err != nil {
+				return err
+			}
+			err = storage.Store(a.header.id, a)
+			if err != nil {
+				return err
+			}
+			return nil
 		}
-		err = storage.Store(rightSib.ID(), rightSib)
-		if err != nil {
-			return err
-		}
-		err = storage.Store(a.header.id, a)
-		if err != nil {
-			return err
-		}
-		return nil
 	}
 
 	// Child can't rebalance with any sibling.  It must merge with one sibling.
@@ -1222,42 +1252,47 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(storage SlabStorage, child
 		storage.Remove(child.ID())
 
 		return nil
+	} else {
+		// leftSib.ByteSize() > rightSib.ByteSize
+
+		err := child.Merge(rightSib)
+		if err != nil {
+			return err
+		}
+
+		a.childrenHeaders[childHeaderIndex] = child.Header()
+
+		// Update MetaDataSlab's childrenHeaders
+		copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
+		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
+
+		// Adjust childrenCountSum
+		copy(a.childrenCountSum[childHeaderIndex:], a.childrenCountSum[childHeaderIndex+1:])
+		a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
+
+		a.header.size -= arraySlabHeaderSize
+
+		// Store modified slabs in storage
+		err = storage.Store(child.ID(), child)
+		if err != nil {
+			return err
+		}
+		err = storage.Store(a.header.id, a)
+		if err != nil {
+			return err
+		}
+
+		// Remove rightSib from storage
+		storage.Remove(rightSib.ID())
+
+		return nil
 	}
-
-	err := child.Merge(rightSib)
-	if err != nil {
-		return err
-	}
-
-	a.childrenHeaders[childHeaderIndex] = child.Header()
-
-	// Update MetaDataSlab's childrenHeaders
-	copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
-	a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
-
-	// Adjust childrenCountSum
-	copy(a.childrenCountSum[childHeaderIndex:], a.childrenCountSum[childHeaderIndex+1:])
-	a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
-
-	a.header.size -= arraySlabHeaderSize
-
-	// Store modified slabs in storage
-	err = storage.Store(child.ID(), child)
-	if err != nil {
-		return err
-	}
-	err = storage.Store(a.header.id, a)
-	if err != nil {
-		return err
-	}
-
-	// Remove rightSib from storage
-	storage.Remove(rightSib.ID())
-
-	return nil
 }
 
 func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
+
+	// The assumption len > 0 holds in all cases except for the root slab
+
 	baseCountSum := a.childrenCountSum[len(a.childrenCountSum)-1]
 	leftSlabChildrenCount := len(a.childrenHeaders)
 

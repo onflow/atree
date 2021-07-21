@@ -1662,6 +1662,27 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	return nil
 }
 
+func (a *Array) Copy(storage SlabStorage) (*Array, error) {
+	result, err := NewArray(storage)
+	if err != nil {
+		return nil, err
+	}
+
+	err = a.Iterate(func(index int, element Storable) (resume bool, err error) {
+		err = result.Insert(uint64(index), element)
+		if err != nil {
+			return false, err
+		}
+
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func (a *Array) Count() uint64 {
 	return uint64(a.root.Header().count)
 }

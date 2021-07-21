@@ -658,6 +658,38 @@ func TestIterate(t *testing.T) {
 		require.Equal(t, count/2, i)
 	})
 }
+
+func TestCopy(t *testing.T) {
+
+	setThreshold(60)
+	defer func() {
+		setThreshold(1024)
+	}()
+
+	const arraySize uint64 = 256 * 256
+
+	baseStorage := NewInMemBaseStorage()
+
+	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+
+	array, err := NewArray(storage)
+	require.NoError(t, err)
+
+	for i := uint64(0); i < arraySize; i++ {
+		err := array.Append(Uint64Value(i))
+		require.NoError(t, err)
+	}
+
+	arrayCopy, err := array.Copy(storage)
+	require.NoError(t, err)
+
+	require.Equal(t, arraySize, arrayCopy.Count())
+
+	for i := uint64(0); i < arraySize; i++ {
+		value, err := array.Get(i)
+		require.NoError(t, err)
+		require.Equal(t, Uint64Value(i), value)
+	}
 }
 
 func TestConstRootStorageID(t *testing.T) {

@@ -298,19 +298,14 @@ func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, err
 
 	lastIndex := len(a.elements) - 1
 
-	switch index {
-	case 0:
-		a.elements = a.elements[1:]
-	case uint64(len(a.elements)) - 1:
-		// NOTE: prevent memory leak
-		a.elements[lastIndex] = nil
-		a.elements = a.elements[:lastIndex]
-	default:
+	if index != uint64(lastIndex) {
 		copy(a.elements[index:], a.elements[index+1:])
-		// NOTE: prevent memory leak
-		a.elements[lastIndex] = nil
-		a.elements = a.elements[:lastIndex]
 	}
+
+	// NOTE: prevent memory leak
+	a.elements[lastIndex] = nil
+
+	a.elements = a.elements[:lastIndex]
 
 	a.header.count--
 	a.header.size -= v.ByteSize()

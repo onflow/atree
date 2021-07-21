@@ -1625,7 +1625,9 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 	return v, nil
 }
 
-func (a *Array) Iterate(fn func(Storable)) error {
+type ArrayIterationFunc func(index int, element Storable) (resume bool, err error)
+
+func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	slab, err := firstArrayDataSlab(a.storage, a.root)
 	if err != nil {
 		return err
@@ -1645,7 +1647,13 @@ func (a *Array) Iterate(fn func(Storable)) error {
 		dataSlab := slab.(*ArrayDataSlab)
 
 		for i := 0; i < len(dataSlab.elements); i++ {
-			fn(dataSlab.elements[i])
+			resume, err := fn(i, dataSlab.elements[i])
+			if err != nil {
+				return err
+			}
+			if !resume {
+				return nil
+			}
 		}
 
 		id = dataSlab.next

@@ -23,10 +23,6 @@ func init() {
 	fmt.Printf("seed: 0x%x\n", seed)
 }
 
-func resetStorageID() {
-	storageIDCounter = 0
-}
-
 func TestAppendAndGet(t *testing.T) {
 
 	const arraySize = 256 * 256
@@ -1330,13 +1326,10 @@ func TestEncode(t *testing.T) {
 		setThreshold(1024)
 	}()
 
-	// Reset storage id for consistent storage id
-	resetStorageID()
-
 	// Create and populate array in memory
 	storage := NewBasicSlabStorage()
 	array, err := NewArray(storage)
-require.NoError(t, err)
+	require.NoError(t, err)
 
 	const arraySize = 20
 	for i := uint64(0); i < arraySize; i++ {

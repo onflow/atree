@@ -32,7 +32,7 @@ const (
 type Slab interface {
 	Storable
 
-	Split() (Slab, Slab, error)
+	Split(SlabStorage) (Slab, Slab, error)
 	Merge(Slab) error
 	// LendToRight rebalances slabs by moving elements from left to right
 	LendToRight(Slab) error
@@ -67,7 +67,7 @@ type ArraySlab interface {
 	Insert(storage SlabStorage, index uint64, v Storable) error
 	Remove(storage SlabStorage, index uint64) (Storable, error)
 
-	ShallowCloneWithNewID() ArraySlab
+	ShallowCloneWithNewID(SlabStorage) ArraySlab
 
 	IsData() bool
 
@@ -107,10 +107,10 @@ func (e ArraySlabNotFoundError) Error() string {
 	return fmt.Sprintf("failed to retrieve ArraySlab %d: %v", e.id, e.err)
 }
 
-func newArrayDataSlab() *ArrayDataSlab {
+func newArrayDataSlab(storage SlabStorage) *ArrayDataSlab {
 	return &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:   generateStorageID(),
+			id:   storage.GenerateStorageID(),
 			size: arrayDataSlabPrefixSize,
 		},
 	}
@@ -240,10 +240,10 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	return enc.cbor.Flush()
 }
 
-func (a *ArrayDataSlab) ShallowCloneWithNewID() ArraySlab {
+func (a *ArrayDataSlab) ShallowCloneWithNewID(storage SlabStorage) ArraySlab {
 	return &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:    generateStorageID(),
+			id:    storage.GenerateStorageID(),
 			size:  a.header.size,
 			count: a.header.count,
 		},
@@ -323,7 +323,7 @@ func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, err
 	return v, nil
 }
 
-func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
+func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	if len(a.elements) < 2 {
 		// Can't split slab with less than two elements
 		return nil, nil, fmt.Errorf("can't split slab with less than 2 elements")
@@ -355,7 +355,7 @@ func (a *ArrayDataSlab) Split() (Slab, Slab, error) {
 	rightSlabCount := len(a.elements) - leftCount
 	rightSlab := &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:    generateStorageID(),
+			id:    storage.GenerateStorageID(),
 			size:  arrayDataSlabPrefixSize + dataSize - leftSize,
 			count: uint32(rightSlabCount),
 		},
@@ -709,10 +709,10 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (a *ArrayMetaDataSlab) ShallowCloneWithNewID() ArraySlab {
+func (a *ArrayMetaDataSlab) ShallowCloneWithNewID(storage SlabStorage) ArraySlab {
 	return &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
-			id:    generateStorageID(),
+			id:    storage.GenerateStorageID(),
 			size:  a.header.size,
 			count: a.header.count,
 		},
@@ -927,7 +927,7 @@ func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable,
 }
 
 func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab, childHeaderIndex int) error {
-	leftSlab, rightSlab, err := child.Split()
+	leftSlab, rightSlab, err := child.Split(storage)
 	if err != nil {
 		return err
 	}
@@ -1275,11 +1275,11 @@ func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
 	return nil
 }
 
-func (a *ArrayMetaDataSlab) Split() (Slab, Slab, error) {
+func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 
 	if len(a.childrenHeaders) < 2 {
 		// Can't split meta slab with less than 2 headers
-		return nil, nil, fmt.Errorf("can't split meta slab with less than 2 headers")
+		panic("can't split meta slab with less than 2 headers")
 	}
 
 	leftChildrenCount := int(math.Ceil(float64(len(a.childrenHeaders)) / 2))
@@ -1293,8 +1293,8 @@ func (a *ArrayMetaDataSlab) Split() (Slab, Slab, error) {
 	// Construct right slab
 	rightSlab := &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
-			id:    generateStorageID(),
-			size:  a.header.size - uint32(leftSize),
+			id:    storage.GenerateStorageID(),
+			size:    a.header.size - uint32(leftSize),
 			count: a.header.count - leftCount,
 		},
 	}
@@ -1449,7 +1449,7 @@ func (a *ArrayMetaDataSlab) String() string {
 }
 
 func NewArray(storage SlabStorage) (*Array, error) {
-	root := newArrayDataSlab()
+	root := newArrayDataSlab(storage)
 
 	err := storage.Store(root.header.id, root)
 	if err != nil {
@@ -1516,10 +1516,10 @@ func (a *Array) Insert(index uint64, v Storable) error {
 
 	if a.root.IsFull() {
 
-		copiedRoot := a.root.ShallowCloneWithNewID()
+		copiedRoot := a.root.ShallowCloneWithNewID(a.storage)
 
 		// Split copied root
-		leftSlab, rightSlab, err := copiedRoot.Split()
+		leftSlab, rightSlab, err := copiedRoot.Split(a.storage)
 		if err != nil {
 			return err
 		}

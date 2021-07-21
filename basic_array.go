@@ -27,10 +27,10 @@ type BasicArray struct {
 	root    *BasicArrayDataSlab
 }
 
-func NewBasicArrayDataSlab() *BasicArrayDataSlab {
+func NewBasicArrayDataSlab(storage SlabStorage) *BasicArrayDataSlab {
 	return &BasicArrayDataSlab{
 		header: ArraySlabHeader{
-			id:   generateStorageID(),
+			id:   storage.GenerateStorageID(),
 			size: basicArrayDataSlabPrefixSize,
 		},
 	}
@@ -194,7 +194,7 @@ func (array *BasicArrayDataSlab) String() string {
 	return fmt.Sprintf("%v", array.elements)
 }
 
-func (array *BasicArrayDataSlab) Split() (Slab, Slab, error) {
+func (array *BasicArrayDataSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, errors.New("not applicable")
 }
 
@@ -213,7 +213,7 @@ func (array *BasicArrayDataSlab) BorrowFromRight(Slab) error {
 func NewBasicArray(storage SlabStorage) *BasicArray {
 	return &BasicArray{
 		storage: storage,
-		root:    NewBasicArrayDataSlab(),
+		root:    NewBasicArrayDataSlab(storage),
 	}
 }
 

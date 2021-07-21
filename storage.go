@@ -8,13 +8,6 @@ type StorageID uint64
 
 const StorageIDUndefined = StorageID(0)
 
-var storageIDCounter uint64
-
-func generateStorageID() StorageID {
-	storageIDCounter++
-	return StorageID(storageIDCounter)
-}
-
 type BaseStorageUsageReporter interface {
 	BytesRetrieved() int
 	BytesStored() int
@@ -128,14 +121,21 @@ type SlabStorage interface {
 	Remove(StorageID)
 
 	Count() int
+	GenerateStorageID() StorageID
 }
 
 type BasicSlabStorage struct {
-	slabs map[StorageID]Slab
+	slabs         map[StorageID]Slab
+	nextStorageID StorageID
 }
 
 func NewBasicSlabStorage() *BasicSlabStorage {
 	return &BasicSlabStorage{slabs: make(map[StorageID]Slab)}
+}
+
+func (s *BasicSlabStorage) GenerateStorageID() StorageID {
+	s.nextStorageID++
+	return s.nextStorageID
 }
 
 func (s *BasicSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
@@ -184,10 +184,11 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 }
 
 type PersistentSlabStorage struct {
-	baseStorage BaseStorage
-	cache       map[StorageID]Slab
-	deltas      map[StorageID]Slab
-	autoCommit  bool // flag to call commit after each opeartion
+	baseStorage   BaseStorage
+	cache         map[StorageID]Slab
+	deltas        map[StorageID]Slab
+	autoCommit    bool // flag to call commit after each opeartion
+	nextStorageID StorageID
 }
 
 type StorageOption func(st *PersistentSlabStorage) *PersistentSlabStorage
@@ -211,6 +212,11 @@ func WithNoAutoCommit() StorageOption {
 		st.autoCommit = false
 		return st
 	}
+}
+
+func (s *PersistentSlabStorage) GenerateStorageID() StorageID {
+	s.nextStorageID++
+	return s.nextStorageID
 }
 
 func (s *PersistentSlabStorage) Commit() error {

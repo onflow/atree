@@ -39,6 +39,12 @@ const (
 
 type Uint8Value uint8
 
+var _ Value = Uint8Value(0)
+var _ Storable = Uint8Value(0)
+
+func (v Uint8Value) DeepCopy(_ SlabStorage) (Value, error) {
+	return v, nil
+}
 
 func (v Uint8Value) Value(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -84,6 +90,12 @@ func (v Uint8Value) String() string {
 
 type Uint16Value uint16
 
+var _ Value = Uint16Value(0)
+var _ Storable = Uint16Value(0)
+
+func (v Uint16Value) DeepCopy(_ SlabStorage) (Value, error) {
+	return v, nil
+}
 
 func (v Uint16Value) Value(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -123,6 +135,13 @@ func (v Uint16Value) String() string {
 }
 
 type Uint32Value uint32
+
+var _ Value = Uint32Value(0)
+var _ Storable = Uint32Value(0)
+
+func (v Uint32Value) DeepCopy(_ SlabStorage) (Value, error) {
+	return v, nil
+}
 
 func (v Uint32Value) Value(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -168,6 +187,13 @@ func (v Uint32Value) String() string {
 
 type Uint64Value uint64
 
+var _ Value = Uint64Value(0)
+var _ Storable = Uint64Value(0)
+
+func (v Uint64Value) DeepCopy(_ SlabStorage) (Value, error) {
+	return v, nil
+}
+
 func (v Uint64Value) Value(_ SlabStorage) (Value, error) {
 	return v, nil
 }
@@ -211,6 +237,8 @@ func (v Uint64Value) String() string {
 }
 
 type StorageIDStorable StorageID
+
+var _ Storable = StorageIDStorable(0)
 
 func (v StorageIDStorable) Value(storage SlabStorage) (Value, error) {
 	id := StorageID(v)

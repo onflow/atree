@@ -104,11 +104,13 @@ type Array struct {
 	root    ArraySlab
 }
 
-func (a Array) Value(_ SlabStorage) (Value, error) {
+var _ Value = &Array{}
+
+func (a *Array) Value(_ SlabStorage) (Value, error) {
 	return a, nil
 }
 
-func (a Array) Storable() Storable {
+func (a *Array) Storable() Storable {
 	return a.root
 }
 
@@ -1674,14 +1676,19 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	return nil
 }
 
-func (a *Array) Copy(storage SlabStorage) (*Array, error) {
+func (a *Array) DeepCopy(storage SlabStorage) (Value, error) {
 	result, err := NewArray(storage)
 	if err != nil {
 		return nil, err
 	}
 
 	err = a.Iterate(func(index int, element Value) (resume bool, err error) {
-		err = result.Insert(uint64(index), element)
+		elementCopy, err := element.DeepCopy(storage)
+		if err != nil {
+			return false, err
+		}
+
+		err = result.Insert(uint64(index), elementCopy)
 		if err != nil {
 			return false, err
 		}

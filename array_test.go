@@ -659,7 +659,7 @@ func TestIterate(t *testing.T) {
 	})
 }
 
-func TestCopy(t *testing.T) {
+func TestDeepCopy(t *testing.T) {
 
 	setThreshold(60)
 	defer func() {
@@ -680,8 +680,10 @@ func TestCopy(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	arrayCopy, err := array.Copy(storage)
-	require.NoError(t, err)
+	copied, err := array.DeepCopy(storage)
+	require.IsType(t, &Array{}, copied)
+
+	arrayCopy := copied.(*Array)
 
 	require.Equal(t, arraySize, arrayCopy.Count())
 

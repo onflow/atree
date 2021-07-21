@@ -33,6 +33,30 @@ type BasicArray struct {
 
 var _ Value = &BasicArray{}
 
+func (a *BasicArray) DeepCopy(storage SlabStorage) (Value, error) {
+	result := NewBasicArray(storage)
+
+	for i, element := range a.root.elements {
+		value, err := element.Value(storage)
+		if err != nil {
+			return nil, err
+		}
+
+		valueCopy, err := value.DeepCopy(storage)
+		if err != nil {
+			return nil, err
+		}
+
+		err = result.Insert(uint64(i), valueCopy)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+
 func (a *BasicArray) Storable() Storable {
 	return a.root
 }

@@ -18,6 +18,8 @@ type Storable interface {
 	Mutable() bool
 
 	String() string
+
+	Value(storage SlabStorage) (Value, error)
 }
 
 const (
@@ -36,6 +38,21 @@ const (
 )
 
 type Uint8Value uint8
+
+var _ Value = Uint8Value(0)
+var _ Storable = Uint8Value(0)
+
+func (v Uint8Value) DeepCopy(_ SlabStorage) (Value, error) {
+	return v, nil
+}
+
+func (v Uint8Value) Value(_ SlabStorage) (Value, error) {
+	return v, nil
+}
+
+func (v Uint8Value) Storable() Storable {
+	return v
+}
 
 // Encode encodes UInt8Value as
 // cbor.Tag{
@@ -73,6 +90,21 @@ func (v Uint8Value) String() string {
 
 type Uint16Value uint16
 
+var _ Value = Uint16Value(0)
+var _ Storable = Uint16Value(0)
+
+func (v Uint16Value) DeepCopy(_ SlabStorage) (Value, error) {
+	return v, nil
+}
+
+func (v Uint16Value) Value(_ SlabStorage) (Value, error) {
+	return v, nil
+}
+
+func (v Uint16Value) Storable() Storable {
+	return v
+}
+
 func (v Uint16Value) Encode(enc *Encoder) error {
 	err := enc.cbor.EncodeRawBytes([]byte{
 		// tag number
@@ -103,6 +135,21 @@ func (v Uint16Value) String() string {
 }
 
 type Uint32Value uint32
+
+var _ Value = Uint32Value(0)
+var _ Storable = Uint32Value(0)
+
+func (v Uint32Value) DeepCopy(_ SlabStorage) (Value, error) {
+	return v, nil
+}
+
+func (v Uint32Value) Value(_ SlabStorage) (Value, error) {
+	return v, nil
+}
+
+func (v Uint32Value) Storable() Storable {
+	return v
+}
 
 // Encode encodes UInt32Value as
 // cbor.Tag{
@@ -140,6 +187,21 @@ func (v Uint32Value) String() string {
 
 type Uint64Value uint64
 
+var _ Value = Uint64Value(0)
+var _ Storable = Uint64Value(0)
+
+func (v Uint64Value) DeepCopy(_ SlabStorage) (Value, error) {
+	return v, nil
+}
+
+func (v Uint64Value) Value(_ SlabStorage) (Value, error) {
+	return v, nil
+}
+
+func (v Uint64Value) Storable() Storable {
+	return v
+}
+
 // Encode encodes UInt64Value as
 // cbor.Tag{
 //		Number:  cborTagUInt64Value,
@@ -174,14 +236,31 @@ func (v Uint64Value) String() string {
 	return fmt.Sprintf("%d", uint64(v))
 }
 
-type StorageIDValue StorageID
+type StorageIDStorable StorageID
 
-// Encode encodes StorageIDValue as
+var _ Storable = StorageIDStorable(0)
+
+func (v StorageIDStorable) Value(storage SlabStorage) (Value, error) {
+	id := StorageID(v)
+	if id == StorageIDUndefined {
+		return nil, fmt.Errorf("invalid storage id")
+	}
+	slab, found, err := storage.Retrieve(id)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fmt.Errorf("slab %d not found", id)
+	}
+	return slab.Value(storage)
+}
+
+// Encode encodes StorageIDStorable as
 // cbor.Tag{
 //		Number:  cborTagStorageID,
 //		Content: uint64(v),
 // }
-func (v StorageIDValue) Encode(enc *Encoder) error {
+func (v StorageIDStorable) Encode(enc *Encoder) error {
 	err := enc.cbor.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagStorageID,
@@ -193,20 +272,20 @@ func (v StorageIDValue) Encode(enc *Encoder) error {
 }
 
 // TODO: cache size
-func (v StorageIDValue) ByteSize() uint32 {
+func (v StorageIDStorable) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + getUintCBORSize(uint64(v))
 }
 
-func (v StorageIDValue) Mutable() bool {
+func (v StorageIDStorable) Mutable() bool {
 	return false
 }
 
-func (v StorageIDValue) ID() StorageID {
+func (v StorageIDStorable) ID() StorageID {
 	return StorageID(v)
 }
 
-func (v StorageIDValue) String() string {
+func (v StorageIDStorable) String() string {
 	return fmt.Sprintf("id(%d)", v)
 }
 

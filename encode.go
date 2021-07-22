@@ -57,7 +57,7 @@ func decodeStorable(dec *cbor.StreamDecoder) (Storable, error) {
 		if err != nil {
 			return nil, err
 		}
-		return StorageIDValue(n), nil
+		return StorageIDStorable(n), nil
 
 	case cborTagUInt8Value:
 		n, err := dec.DecodeUint64()

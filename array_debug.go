@@ -104,7 +104,7 @@ func (a *Array) Print() {
 
 				var elemsStr []string
 				for _, e := range elements {
-					if id, ok := e.(StorageIDValue); ok {
+					if id, ok := e.(StorageIDStorable); ok {
 						overflowIDs.PushBack(StorageID(id))
 					}
 					elemsStr = append(elemsStr, e.String())

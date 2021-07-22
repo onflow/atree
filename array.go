@@ -54,6 +54,12 @@ type ArrayDataSlab struct {
 	elements []Storable
 }
 
+func (a *ArrayDataSlab) Value(storage SlabStorage) (Value, error) {
+	return &Array{storage: storage, root: a}, nil
+}
+
+var _ ArraySlab = &ArrayDataSlab{}
+
 // ArrayMetaDataSlab is internal node, implementing ArraySlab.
 type ArrayMetaDataSlab struct {
 	header           ArraySlabHeader
@@ -64,7 +70,15 @@ type ArrayMetaDataSlab struct {
 	childrenCountSum []uint32
 }
 
+var _ ArraySlab = &ArrayMetaDataSlab{}
+
+func (a *ArrayMetaDataSlab) Value(storage SlabStorage) (Value, error) {
+	return &Array{storage: storage, root: a}, nil
+}
+
 type ArraySlab interface {
+	Slab
+
 	Get(storage SlabStorage, index uint64) (Storable, error)
 	Set(storage SlabStorage, index uint64, v Storable) error
 	Insert(storage SlabStorage, index uint64, v Storable) error
@@ -82,14 +96,22 @@ type ArraySlab interface {
 	SetID(StorageID)
 
 	Header() ArraySlabHeader
-
-	Slab
 }
 
 // Array is tree
 type Array struct {
 	storage SlabStorage
 	root    ArraySlab
+}
+
+var _ Value = &Array{}
+
+func (a *Array) Value(_ SlabStorage) (Value, error) {
+	return a, nil
+}
+
+func (a *Array) Storable() Storable {
+	return a.root
 }
 
 type IndexOutOfRangeError struct {
@@ -1500,46 +1522,34 @@ func NewArrayWithRootID(storage SlabStorage, rootID StorageID) (*Array, error) {
 	return &Array{storage: storage, root: root}, nil
 }
 
-func (a *Array) Get(i uint64) (Storable, error) {
-	v, err := a.root.Get(a.storage, i)
+func (a *Array) Get(i uint64) (Value, error) {
+	storable, err := a.root.Get(a.storage, i)
 	if err != nil {
 		return nil, err
 	}
-	// TODO: optimize this
-	if idValue, ok := v.(StorageIDValue); ok {
-		id := StorageID(idValue)
-		if id == StorageIDUndefined {
-			return nil, fmt.Errorf("invalid storage id")
-		}
-		slab, found, err := a.storage.Retrieve(id)
-		if err != nil {
-			return nil, err
-		}
-		if !found {
-			return nil, fmt.Errorf("slab %d not found", id)
-		}
-		return slab, nil
-	}
-	return v, nil
+
+	return storable.Value(a.storage)
 }
 
-func (a *Array) Set(index uint64, v Storable) error {
-	if v.Mutable() || v.ByteSize() > uint32(maxInlineElementSize) {
-		v = StorageIDValue(v.ID())
+func (a *Array) Set(index uint64, value Value) error {
+	storable := value.Storable()
+	if storable.Mutable() || storable.ByteSize() > uint32(maxInlineElementSize) {
+		storable = StorageIDStorable(storable.ID())
 	}
-	return a.root.Set(a.storage, index, v)
+	return a.root.Set(a.storage, index, storable)
 }
 
-func (a *Array) Append(v Storable) error {
-	return a.Insert(a.Count(), v)
+func (a *Array) Append(value Value) error {
+	return a.Insert(a.Count(), value)
 }
 
-func (a *Array) Insert(index uint64, v Storable) error {
-	if v.Mutable() || v.ByteSize() > uint32(maxInlineElementSize) {
-		v = StorageIDValue(v.ID())
+func (a *Array) Insert(index uint64, value Value) error {
+	storable := value.Storable()
+	if storable.Mutable() || storable.ByteSize() > uint32(maxInlineElementSize) {
+		storable = StorageIDStorable(storable.ID())
 	}
 
-	err := a.root.Insert(a.storage, index, v)
+	err := a.root.Insert(a.storage, index, storable)
 	if err != nil {
 		return err
 	}
@@ -1590,8 +1600,8 @@ func (a *Array) Insert(index uint64, v Storable) error {
 	return nil
 }
 
-func (a *Array) Remove(index uint64) (Storable, error) {
-	v, err := a.root.Remove(a.storage, index)
+func (a *Array) Remove(index uint64) (Value, error) {
+	storable, err := a.root.Remove(a.storage, index)
 	if err != nil {
 		return nil, err
 	}
@@ -1622,10 +1632,12 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 		}
 	}
 
-	return v, nil
+	return storable.Value(a.storage)
 }
 
-func (a *Array) Iterate(fn func(Storable)) error {
+type ArrayIterationFunc func(element Value) (resume bool, err error)
+
+func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	slab, err := firstArrayDataSlab(a.storage, a.root)
 	if err != nil {
 		return err
@@ -1645,13 +1657,54 @@ func (a *Array) Iterate(fn func(Storable)) error {
 		dataSlab := slab.(*ArrayDataSlab)
 
 		for i := 0; i < len(dataSlab.elements); i++ {
-			fn(dataSlab.elements[i])
+			element, err := dataSlab.elements[i].Value(a.storage)
+			if err != nil {
+				return err
+			}
+			resume, err := fn(element)
+			if err != nil {
+				return err
+			}
+			if !resume {
+				return nil
+			}
 		}
 
 		id = dataSlab.next
 	}
 
 	return nil
+}
+
+func (a *Array) DeepCopy(storage SlabStorage) (Value, error) {
+	result, err := NewArray(storage)
+	if err != nil {
+		return nil, err
+	}
+
+
+	var index uint64
+	err = a.Iterate(func(element Value) (resume bool, err error) {
+
+		elementCopy, err := element.DeepCopy(storage)
+		if err != nil {
+			return false, err
+		}
+
+		err = result.Insert(index, elementCopy)
+		if err != nil {
+			return false, err
+		}
+
+		index++
+
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (a *Array) Count() uint64 {

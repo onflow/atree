@@ -1635,7 +1635,7 @@ func (a *Array) Remove(index uint64) (Value, error) {
 	return storable.Value(a.storage)
 }
 
-type ArrayIterationFunc func(index int, element Value) (resume bool, err error)
+type ArrayIterationFunc func(element Value) (resume bool, err error)
 
 func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	slab, err := firstArrayDataSlab(a.storage, a.root)
@@ -1661,7 +1661,7 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 			if err != nil {
 				return err
 			}
-			resume, err := fn(i, element)
+			resume, err := fn(element)
 			if err != nil {
 				return err
 			}
@@ -1682,16 +1682,21 @@ func (a *Array) DeepCopy(storage SlabStorage) (Value, error) {
 		return nil, err
 	}
 
-	err = a.Iterate(func(index int, element Value) (resume bool, err error) {
+
+	var index uint64
+	err = a.Iterate(func(element Value) (resume bool, err error) {
+
 		elementCopy, err := element.DeepCopy(storage)
 		if err != nil {
 			return false, err
 		}
 
-		err = result.Insert(uint64(index), elementCopy)
+		err = result.Insert(index, elementCopy)
 		if err != nil {
 			return false, err
 		}
+
+		index++
 
 		return true, nil
 	})

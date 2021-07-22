@@ -463,7 +463,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err = array.Iterate(func(_ int, v Value) (bool, error) {
+		err = array.Iterate(func(v Value) (bool, error) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i, uint64(e))
@@ -500,7 +500,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err = array.Iterate(func(_ int, v Value) (bool, error) {
+		err = array.Iterate(func(v Value) (bool, error) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i*10, uint64(e))
@@ -537,7 +537,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err = array.Iterate(func(_ int, v Value) (bool, error) {
+		err = array.Iterate(func(v Value) (bool, error) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i, uint64(e))
@@ -577,7 +577,7 @@ func TestIterate(t *testing.T) {
 		}
 
 		i := uint64(1)
-		err = array.Iterate(func(_ int, v Value) (bool, error) {
+		err = array.Iterate(func(v Value) (bool, error) {
 			e, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, i, uint64(e))
@@ -606,13 +606,12 @@ func TestIterate(t *testing.T) {
 		require.Equal(t, uint64(count), array.Count())
 
 		i := 0
-		err = array.Iterate(func(index int, _ Value) (bool, error) {
-			require.Equal(t, i, index)
-			i++
-
+		err = array.Iterate(func(_ Value) (bool, error) {
 			if i == count/2 {
 				return false, nil
 			}
+
+			i++
 
 			return true, nil
 		})
@@ -642,13 +641,12 @@ func TestIterate(t *testing.T) {
 		testErr := errors.New("test")
 
 		i := 0
-		err = array.Iterate(func(index int, _ Value) (bool, error) {
-			require.Equal(t, i, index)
-			i++
-
+		err = array.Iterate(func(_ Value) (bool, error) {
 			if i == count/2 {
 				return false, testErr
 			}
+
+			i++
 
 			return true, nil
 		})
@@ -685,13 +683,25 @@ func TestDeepCopy(t *testing.T) {
 
 	arrayCopy := copied.(*Array)
 
+	// Modify the original array
+	err = array.Insert(0, Uint64Value(42))
+	require.NoError(t, err)
+
 	require.Equal(t, arraySize, arrayCopy.Count())
 
 	for i := uint64(0); i < arraySize; i++ {
-		value, err := array.Get(i)
+		value, err := arrayCopy.Get(i)
 		require.NoError(t, err)
 		require.Equal(t, Uint64Value(i), value)
 	}
+
+	verified, err := array.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
+
+	err = storage.Commit()
+	require.NoError(t, err)
+
 }
 
 func TestConstRootStorageID(t *testing.T) {
@@ -1080,7 +1090,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	}
 
 	i := 0
-	err = array.Iterate(func(_ int, v Value) (bool, error) {
+	err = array.Iterate(func(v Value) (bool, error) {
 		e, ok := v.(Uint64Value)
 		require.True(t, ok)
 		require.Equal(t, values[i], uint64(e))
@@ -1197,7 +1207,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	}
 
 	i := 0
-	err = array.Iterate(func(_ int, v Value) (bool, error) {
+	err = array.Iterate(func(v Value) (bool, error) {
 		e, ok := v.(Uint8Value)
 		require.True(t, ok)
 		require.Equal(t, values[i], uint8(e))
@@ -1329,7 +1339,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	}
 
 	i := 0
-	err = array.Iterate(func(_ int, v Value) (bool, error) {
+	err = array.Iterate(func(v Value) (bool, error) {
 		require.Equal(t, values[i], v)
 		i++
 		return true, nil
@@ -1714,7 +1724,7 @@ func TestEmptyArray(t *testing.T) {
 
 	t.Run("iterate", func(t *testing.T) {
 		i := uint64(0)
-		err := array.Iterate(func(_ int, v Value) (bool, error) {
+		err := array.Iterate(func(v Value) (bool, error) {
 			i++
 			return true, nil
 		})

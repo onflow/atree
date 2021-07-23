@@ -18,7 +18,7 @@
 // Copyright © 2021 Montgomery Edwards⁴⁴⁸
 // This file is provided under MIT License.
 //
-package main
+package atree
 
 import (
 	"io"

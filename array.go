@@ -29,17 +29,6 @@ const (
 	linearScanThreshold = 32
 )
 
-type Slab interface {
-	Storable
-
-	Split(SlabStorage) (Slab, Slab, error)
-	Merge(Slab) error
-	// LendToRight rebalances slabs by moving elements from left to right
-	LendToRight(Slab) error
-	// BorrowFromRight rebalances slabs by moving elements from right to left
-	BorrowFromRight(Slab) error
-}
-
 type ArraySlabHeader struct {
 	id    StorageID // id is used to retrieve slab from storage
 	size  uint32    // size is used to split and merge; leaf: size of all element; internal: size of all headers

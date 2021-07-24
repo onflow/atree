@@ -7,26 +7,10 @@ package main
 import (
 	"flag"
 	"fmt"
+
+	"github.com/fxamacker/atree"
 )
 
-var (
-	// Default slab size
-	targetThreshold = uint64(1024) // 1kb
-
-	// minThreshold = targetThreshold / 4
-	minThreshold = targetThreshold / 2
-	maxThreshold = uint64(float64(targetThreshold) * 1.5)
-
-	maxInlineElementSize = targetThreshold / 2
-)
-
-func setThreshold(threshold uint64) {
-	targetThreshold = threshold
-	// minThreshold = targetThreshold / 4
-	minThreshold = targetThreshold / 2
-	maxThreshold = uint64(float64(targetThreshold) * 1.5)
-	maxInlineElementSize = targetThreshold / 2
-}
 
 // TODO: implement different slab size for metadata slab and data slab.
 func main() {
@@ -40,20 +24,26 @@ func main() {
 
 	flag.Parse()
 
-	setThreshold(slabSize)
+	targetThreshold, minThreshold, maxThreshold := atree.SetThreshold(slabSize)
 
-	fmt.Printf("Inserting %d elements (uint64) into array with slab size %d, min size %d, and max size %d ...\n", numElements, targetThreshold, minThreshold, maxThreshold)
+	fmt.Printf(
+		"Inserting %d elements (uint64) into array with slab size %d, min size %d, and max size %d ...\n",
+		numElements,
+		targetThreshold,
+		minThreshold,
+		maxThreshold,
+	)
 
-	storage := NewBasicSlabStorage()
+	storage := atree.NewBasicSlabStorage()
 
-	array, err := NewArray(storage)
+	array, err := atree.NewArray(storage)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	for i := uint64(0); i < numElements; i++ {
-		err := array.Append(Uint64Value(i))
+		err := array.Append(atree.Uint64Value(i))
 		if err != nil {
 			fmt.Println(err)
 			return

@@ -2,7 +2,7 @@
  * Copyright 2021 Dapper Labs, Inc.  All rights reserved.
  */
 
-package main
+package atree
 
 import (
 	"errors"
@@ -107,9 +107,9 @@ func TestSetAndGet(t *testing.T) {
 }
 
 func TestInsertAndGet(t *testing.T) {
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	t.Run("insert-first", func(t *testing.T) {
@@ -227,9 +227,9 @@ func TestInsertAndGet(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	t.Run("remove-first", func(t *testing.T) {
@@ -399,9 +399,9 @@ func TestSplit(t *testing.T) {
 	})
 
 	t.Run("metdata slab as root", func(t *testing.T) {
-		setThreshold(50)
+		SetThreshold(50)
 		defer func() {
-			setThreshold(1024)
+			SetThreshold(1024)
 		}()
 
 		const arraySize = 50
@@ -443,9 +443,9 @@ func TestSplit(t *testing.T) {
 
 func TestIterate(t *testing.T) {
 	t.Run("append", func(t *testing.T) {
-		setThreshold(60)
+		SetThreshold(60)
 		defer func() {
-			setThreshold(1024)
+			SetThreshold(1024)
 		}()
 
 		const arraySize = 256 * 256
@@ -475,9 +475,9 @@ func TestIterate(t *testing.T) {
 	})
 
 	t.Run("set", func(t *testing.T) {
-		setThreshold(60)
+		SetThreshold(60)
 		defer func() {
-			setThreshold(1024)
+			SetThreshold(1024)
 		}()
 
 		const arraySize = 256 * 256
@@ -512,9 +512,9 @@ func TestIterate(t *testing.T) {
 	})
 
 	t.Run("insert", func(t *testing.T) {
-		setThreshold(60)
+		SetThreshold(60)
 		defer func() {
-			setThreshold(1024)
+			SetThreshold(1024)
 		}()
 
 		const arraySize = 256 * 256
@@ -549,9 +549,9 @@ func TestIterate(t *testing.T) {
 	})
 
 	t.Run("remove", func(t *testing.T) {
-		setThreshold(60)
+		SetThreshold(60)
 		defer func() {
-			setThreshold(1024)
+			SetThreshold(1024)
 		}()
 
 		const arraySize = 256 * 256
@@ -659,9 +659,9 @@ func TestIterate(t *testing.T) {
 
 func TestDeepCopy(t *testing.T) {
 
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	const arraySize uint64 = 256 * 256
@@ -705,9 +705,9 @@ func TestDeepCopy(t *testing.T) {
 }
 
 func TestConstRootStorageID(t *testing.T) {
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	const arraySize = 256 * 256
@@ -745,9 +745,9 @@ func TestConstRootStorageID(t *testing.T) {
 
 func TestSetRandomValue(t *testing.T) {
 
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	const arraySize = 256 * 256
@@ -804,9 +804,9 @@ func TestSetRandomValue(t *testing.T) {
 
 func TestInsertRandomValue(t *testing.T) {
 
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	t.Run("insert-first", func(t *testing.T) {
@@ -938,9 +938,9 @@ func TestInsertRandomValue(t *testing.T) {
 
 func TestRemoveRandomElement(t *testing.T) {
 
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	const arraySize = 256 * 256
@@ -1004,9 +1004,9 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 		MaxAction
 	)
 
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	const actionCount = 256 * 256
@@ -1121,9 +1121,9 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 		MaxAction
 	)
 
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	const actionCount = 256 * 256
@@ -1246,9 +1246,9 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 		MaxType
 	)
 
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	const actionCount = 256 * 256
@@ -1360,9 +1360,9 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 func TestNestedArray(t *testing.T) {
 
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	t.Run("small", func(t *testing.T) {
@@ -1450,9 +1450,9 @@ func TestNestedArray(t *testing.T) {
 
 func TestEncode(t *testing.T) {
 
-	setThreshold(50)
+	SetThreshold(50)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	// Create and populate array in memory
@@ -1524,9 +1524,9 @@ func TestEncode(t *testing.T) {
 
 func TestDecodeEncode(t *testing.T) {
 
-	setThreshold(50)
+	SetThreshold(50)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	data := map[StorageID][]byte{
@@ -1628,9 +1628,9 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 		MaxType
 	)
 
-	setThreshold(60)
+	SetThreshold(60)
 	defer func() {
-		setThreshold(1024)
+		SetThreshold(1024)
 	}()
 
 	storage := NewBasicSlabStorage()

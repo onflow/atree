@@ -2,7 +2,7 @@
  * Copyright 2021 Dapper Labs, Inc.  All rights reserved.
  */
 
-package main
+package atree
 
 type StorageID uint64
 

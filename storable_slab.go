@@ -11,7 +11,47 @@ import (
 // (i.e. directly in slabs aka registers)
 //
 type StorableSlab struct {
-	Storable
+	StorageID StorageID
+	Storable Storable
+}
+
+var _ Slab = StorableSlab{}
+
+func (s StorableSlab) Encode(enc *Encoder) error {
+	// Encode version
+	enc.scratch[0] = 0
+
+	// Encode flag
+	enc.scratch[1] = flagStorable
+
+	const versionAndFlagSize = 2
+	_, err := enc.Write(enc.scratch[:versionAndFlagSize])
+	if err != nil {
+		return err
+	}
+
+	return s.Storable.Encode(enc)
+}
+
+func (s StorableSlab) ByteSize() uint32 {
+	const versionAndFlagSize = 2
+	return versionAndFlagSize + s.Storable.ByteSize()
+}
+
+func (s StorableSlab) ID() StorageID {
+	return s.StorageID
+}
+
+func (s StorableSlab) Mutable() bool {
+	return s.Storable.Mutable()
+}
+
+func (s StorableSlab) String() string {
+	return s.Storable.String()
+}
+
+func (s StorableSlab) Value(storage SlabStorage) (Value, error) {
+	return s.Storable.Value(storage)
 }
 
 func (StorableSlab) Split(_ SlabStorage) (Slab, Slab, error) {

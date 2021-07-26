@@ -9,8 +9,83 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/atree"
+	"github.com/fxamacker/cbor/v2"
 )
 
+const cborTagUInt64Value = 164
+
+type Uint64Value uint64
+
+var _ atree.Value = Uint64Value(0)
+var _ atree.Storable = Uint64Value(0)
+
+func (v Uint64Value) DeepCopy(_ atree.SlabStorage) (atree.Value, error) {
+	return v, nil
+}
+
+func (v Uint64Value) Value(_ atree.SlabStorage) (atree.Value, error) {
+	return v, nil
+}
+
+func (v Uint64Value) Storable() atree.Storable {
+	return v
+}
+
+// Encode encodes UInt64Value as
+// cbor.Tag{
+//		Number:  cborTagUInt64Value,
+//		Content: uint64(v),
+// }
+func (v Uint64Value) Encode(enc *atree.Encoder) error {
+	err := enc.CBOR.EncodeRawBytes([]byte{
+		// tag number
+		0xd8, cborTagUInt64Value,
+	})
+	if err != nil {
+		return err
+	}
+	return enc.CBOR.EncodeUint64(uint64(v))
+}
+
+// TODO: cache size
+func (v Uint64Value) ByteSize() uint32 {
+	// tag number (2 bytes) + encoded content
+	return 2 + atree.GetUintCBORSize(uint64(v))
+}
+
+func (v Uint64Value) Mutable() bool {
+	return false
+}
+
+func (v Uint64Value) ID() atree.StorageID {
+	return atree.StorageIDUndefined
+}
+
+func (v Uint64Value) String() string {
+	return fmt.Sprintf("%d", uint64(v))
+}
+
+func decodeStorable(dec *cbor.StreamDecoder) (atree.Storable, error) {
+	tagNumber, err := dec.DecodeTagNumber()
+	if err != nil {
+		return nil, err
+	}
+
+	switch tagNumber {
+	case atree.CBORTagStorageID:
+		return atree.DecodeStorageIDStorable(dec)
+
+	case cborTagUInt64Value:
+		n, err := dec.DecodeUint64()
+		if err != nil {
+			return nil, err
+		}
+		return Uint64Value(n), nil
+
+	default:
+		return nil, fmt.Errorf("invalid tag number %d", tagNumber)
+	}
+}
 
 // TODO: implement different slab size for metadata slab and data slab.
 func main() {
@@ -35,6 +110,7 @@ func main() {
 	)
 
 	storage := atree.NewBasicSlabStorage()
+	storage.DecodeStorable = decodeStorable
 
 	array, err := atree.NewArray(storage)
 	if err != nil {
@@ -43,7 +119,7 @@ func main() {
 	}
 
 	for i := uint64(0); i < numElements; i++ {
-		err := array.Append(atree.Uint64Value(i))
+		err := array.Append(Uint64Value(i))
 		if err != nil {
 			fmt.Println(err)
 			return

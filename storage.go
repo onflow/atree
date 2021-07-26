@@ -125,8 +125,9 @@ type SlabStorage interface {
 }
 
 type BasicSlabStorage struct {
-	slabs         map[StorageID]Slab
-	nextStorageID StorageID
+	slabs          map[StorageID]Slab
+	nextStorageID  StorageID
+	DecodeStorable StorableDecoder
 }
 
 func NewBasicSlabStorage() *BasicSlabStorage {
@@ -174,7 +175,7 @@ func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
 // This is currently used for testing.
 func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 	for id, data := range m {
-		slab, err := decodeSlab(id, data)
+		slab, err := decodeSlab(id, data, s.DecodeStorable)
 		if err != nil {
 			return err
 		}
@@ -184,11 +185,12 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 }
 
 type PersistentSlabStorage struct {
-	baseStorage   BaseStorage
-	cache         map[StorageID]Slab
-	deltas        map[StorageID]Slab
-	autoCommit    bool // flag to call commit after each opeartion
-	nextStorageID StorageID
+	baseStorage    BaseStorage
+	cache          map[StorageID]Slab
+	deltas         map[StorageID]Slab
+	autoCommit     bool // flag to call commit after each opeartion
+	nextStorageID  StorageID
+	DecodeStorable StorableDecoder
 }
 
 type StorageOption func(st *PersistentSlabStorage) *PersistentSlabStorage
@@ -271,7 +273,7 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	slab, err = decodeSlab(id, data)
+	slab, err = decodeSlab(id, data, s.DecodeStorable)
 	if err == nil {
 		// save decoded slab to cache
 		s.cache[id] = slab

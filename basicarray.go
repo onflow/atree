@@ -70,7 +70,7 @@ func NewBasicArrayDataSlab(storage SlabStorage) *BasicArrayDataSlab {
 	}
 }
 
-func newBasicArrayDataSlabFromData(id StorageID, data []byte) (*BasicArrayDataSlab, error) {
+func newBasicArrayDataSlabFromData(id StorageID, data []byte, decodeStorable StorableDecoder) (*BasicArrayDataSlab, error) {
 	if len(data) == 0 {
 		return nil, errors.New("data is too short for basic array")
 	}
@@ -121,10 +121,10 @@ func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode CBOR array size for 9 bytes
-	enc.scratch[0] = 0x80 | 27
-	binary.BigEndian.PutUint64(enc.scratch[1:], uint64(len(a.elements)))
+	enc.Scratch[0] = 0x80 | 27
+	binary.BigEndian.PutUint64(enc.Scratch[1:], uint64(len(a.elements)))
 
-	_, err = enc.Write(enc.scratch[:9])
+	_, err = enc.Write(enc.Scratch[:9])
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 			return err
 		}
 	}
-	err = enc.cbor.Flush()
+	err = enc.CBOR.Flush()
 	if err != nil {
 		return err
 	}

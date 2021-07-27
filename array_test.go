@@ -442,6 +442,24 @@ func TestSplit(t *testing.T) {
 }
 
 func TestIterate(t *testing.T) {
+
+	t.Run("empty", func(t *testing.T) {
+		baseStorage := NewInMemBaseStorage()
+
+		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+
+		array, err := NewArray(storage)
+		require.NoError(t, err)
+
+		i := uint64(0)
+		err = array.Iterate(func(v Value) (bool, error) {
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, i, uint64(0))
+	})
+
 	t.Run("append", func(t *testing.T) {
 		SetThreshold(60)
 		defer func() {

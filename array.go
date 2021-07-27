@@ -1624,45 +1624,88 @@ func (a *Array) Remove(index uint64) (Value, error) {
 	return storable.Value(a.storage)
 }
 
+type ArrayIterator struct {
+	array *Array
+	id   StorageID
+	dataSlab *ArrayDataSlab
+	index int
+}
+
+func (i *ArrayIterator) Next() (Value, error) {
+	if i.dataSlab == nil {
+		if i.id == StorageIDUndefined {
+			return nil, nil
+		}
+
+		slab, found, err := i.array.storage.Retrieve(i.id)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, fmt.Errorf("slab %d not found", i.id)
+		}
+
+		i.dataSlab = slab.(*ArrayDataSlab)
+		i.index = 0
+	}
+
+	var element Value
+	var err error
+	if i.index < len(i.dataSlab.elements) {
+		element, err = i.dataSlab.elements[i.index].Value(i.array.storage)
+		if err != nil {
+			return nil, err
+		}
+
+		i.index++
+	}
+
+	if i.index >= len(i.dataSlab.elements) {
+		i.id = i.dataSlab.next
+		i.dataSlab = nil
+	}
+
+	return element, nil
+}
+
+func (a *Array) Iterator() (*ArrayIterator, error) {
+	slab, err := firstArrayDataSlab(a.storage, a.root)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ArrayIterator{
+		array: a,
+		id: slab.ID(),
+	}, nil
+}
+
+
 type ArrayIterationFunc func(element Value) (resume bool, err error)
 
 func (a *Array) Iterate(fn ArrayIterationFunc) error {
-	slab, err := firstArrayDataSlab(a.storage, a.root)
+
+	iterator, err := a.Iterator()
 	if err != nil {
 		return err
 	}
 
-	id := slab.ID()
-
-	for id != StorageIDUndefined {
-		slab, found, err := a.storage.Retrieve(id)
+	for {
+		value, err := iterator.Next()
 		if err != nil {
 			return err
 		}
-		if !found {
-			return fmt.Errorf("slab %d not found", id)
+		if value == nil {
+			return nil
 		}
-
-		dataSlab := slab.(*ArrayDataSlab)
-
-		for i := 0; i < len(dataSlab.elements); i++ {
-			element, err := dataSlab.elements[i].Value(a.storage)
-			if err != nil {
-				return err
-			}
-			resume, err := fn(element)
-			if err != nil {
-				return err
-			}
-			if !resume {
-				return nil
-			}
+		resume, err := fn(value)
+		if err != nil {
+			return err
 		}
-
-		id = dataSlab.next
+		if !resume {
+			return nil
+		}
 	}
-
-	return nil
 }
 
 func (a *Array) DeepCopy(storage SlabStorage) (Value, error) {

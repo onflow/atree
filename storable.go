@@ -238,7 +238,7 @@ func (v Uint64Value) String() string {
 
 type StorageIDStorable StorageID
 
-var _ Storable = StorageIDStorable(0)
+var _ Storable = StorageIDStorable([16]byte{})
 
 func (v StorageIDStorable) Value(storage SlabStorage) (Value, error) {
 	id := StorageID(v)

@@ -4,9 +4,47 @@
 
 package atree
 
-type StorageID uint64
+import (
+	"encoding/binary"
+)
 
-const StorageIDUndefined = StorageID(0)
+type Account [8]byte
+type StorageIndex [8]byte
+type StorageID [16]byte
+
+func (s StorageID) Account() Account {
+	var arr [8]byte
+	copy(arr[:], s[:8])
+	return arr
+}
+
+func (s StorageID) StorageIndex() StorageIndex {
+	var arr [8]byte
+	copy(arr[:], s[8:])
+	return arr
+}
+
+func (s StorageID) Next() StorageID {
+	var index uint64
+	storageIndex := [8]byte(s.StorageIndex())
+	index = uint64(binary.LittleEndian.Uint64(storageIndex[:]))
+	index++
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(index))
+	var arr [8]byte
+	copy(arr[:], b[:])
+	return NewStorageID(s.Account(), arr)
+}
+
+func NewStorageID(account Account, index StorageIndex) StorageID {
+	var arr [16]byte
+	copy(arr[:8], account[:])
+	copy(arr[8:], index[:])
+	return arr
+}
+
+var EmptyAccount = [8]byte{}
+var StorageIDUndefined = StorageID([16]byte{})
 
 type BaseStorageUsageReporter interface {
 	BytesRetrieved() int
@@ -126,16 +164,22 @@ type SlabStorage interface {
 
 type BasicSlabStorage struct {
 	slabs         map[StorageID]Slab
-	nextStorageID StorageID
+	nextStorageID map[Account]StorageID
 }
 
 func NewBasicSlabStorage() *BasicSlabStorage {
 	return &BasicSlabStorage{slabs: make(map[StorageID]Slab)}
 }
 
-func (s *BasicSlabStorage) GenerateStorageID() StorageID {
-	s.nextStorageID++
-	return s.nextStorageID
+func (s *BasicSlabStorage) GenerateStorageID(account Account) StorageID {
+	v, ok := s.nextStorageID[account]
+	if !ok {
+		s.nextStorageID[account] = NewStorageID(account, [8]byte{})
+		return NewStorageID(account, [8]byte{})
+	}
+
+	s.nextStorageID[account] = v.Next()
+	return v
 }
 
 func (s *BasicSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
@@ -188,16 +232,17 @@ type PersistentSlabStorage struct {
 	cache         map[StorageID]Slab
 	deltas        map[StorageID]Slab
 	autoCommit    bool // flag to call commit after each opeartion
-	nextStorageID StorageID
+	nextStorageID map[Account]StorageID
 }
 
 type StorageOption func(st *PersistentSlabStorage) *PersistentSlabStorage
 
 func NewPersistentSlabStorage(base BaseStorage, opts ...StorageOption) *PersistentSlabStorage {
 	storage := &PersistentSlabStorage{baseStorage: base,
-		cache:      make(map[StorageID]Slab),
-		deltas:     make(map[StorageID]Slab),
-		autoCommit: true}
+		cache:         make(map[StorageID]Slab),
+		deltas:        make(map[StorageID]Slab),
+		nextStorageID: make(map[Account]StorageID),
+		autoCommit:    true}
 
 	for _, applyOption := range opts {
 		storage = applyOption(storage)
@@ -214,31 +259,39 @@ func WithNoAutoCommit() StorageOption {
 	}
 }
 
-func (s *PersistentSlabStorage) GenerateStorageID() StorageID {
-	s.nextStorageID++
-	return s.nextStorageID
+func (s *PersistentSlabStorage) GenerateStorageID(account Account) StorageID {
+	v, ok := s.nextStorageID[account]
+	if !ok {
+		s.nextStorageID[account] = NewStorageID(account, [8]byte{})
+		return NewStorageID(account, [8]byte{})
+	}
+
+	s.nextStorageID[account] = v.Next()
+	return v
 }
 
 func (s *PersistentSlabStorage) Commit() error {
 	for id, slab := range s.deltas {
-		// deleted slabs
-		if slab == nil {
-			s.baseStorage.Remove(id)
-			continue
-		}
+		if id.Account() != EmptyAccount {
+			// deleted slabs
+			if slab == nil {
+				s.baseStorage.Remove(id)
+				continue
+			}
 
-		// serialize
-		data, err := Encode(slab)
-		if err != nil {
-			return err
+			// serialize
+			data, err := Encode(slab)
+			if err != nil {
+				return err
+			}
+			// store
+			err = s.baseStorage.Store(id, data)
+			if err != nil {
+				return err
+			}
+			// add to read cache
+			s.cache[id] = slab
 		}
-		// store
-		err = s.baseStorage.Store(id, data)
-		if err != nil {
-			return err
-		}
-		// add to read cache
-		s.cache[id] = slab
 	}
 	// reset deltas
 	s.deltas = make(map[StorageID]Slab)

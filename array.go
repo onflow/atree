@@ -43,7 +43,7 @@ type ArrayDataSlab struct {
 	elements []Storable
 }
 
-func (a *ArrayDataSlab) Value(storage SlabStorage) (Value, error) {
+func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &Array{storage: storage, root: a}, nil
 }
 
@@ -61,12 +61,13 @@ type ArrayMetaDataSlab struct {
 
 var _ ArraySlab = &ArrayMetaDataSlab{}
 
-func (a *ArrayMetaDataSlab) Value(storage SlabStorage) (Value, error) {
+func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &Array{storage: storage, root: a}, nil
 }
 
 type ArraySlab interface {
 	Slab
+	fmt.Stringer
 
 	Get(storage SlabStorage, index uint64) (Storable, error)
 	Set(storage SlabStorage, index uint64, v Storable) error
@@ -99,7 +100,7 @@ func (a *Array) Value(_ SlabStorage) (Value, error) {
 	return a, nil
 }
 
-func (a *Array) Storable() Storable {
+func (a *Array) Storable(SlabStorage) Storable {
 	return a.root
 }
 
@@ -570,10 +571,6 @@ func (a *ArrayDataSlab) IsData() bool {
 	return true
 }
 
-func (a *ArrayDataSlab) Mutable() bool {
-	return true
-}
-
 func (a *ArrayDataSlab) ID() StorageID {
 	return a.header.id
 }
@@ -593,7 +590,7 @@ func (a *ArrayDataSlab) String() string {
 
 	var elemsStr []string
 	for _, e := range elements {
-		elemsStr = append(elemsStr, e.String())
+		elemsStr = append(elemsStr, fmt.Sprint(e))
 	}
 
 	if len(a.elements) > 6 {
@@ -1473,10 +1470,6 @@ func (a *ArrayMetaDataSlab) ByteSize() uint32 {
 	return a.header.size
 }
 
-func (a *ArrayMetaDataSlab) Mutable() bool {
-	return true
-}
-
 func (a *ArrayMetaDataSlab) ID() StorageID {
 	return a.header.id
 }
@@ -1517,14 +1510,11 @@ func (a *Array) Get(i uint64) (Value, error) {
 		return nil, err
 	}
 
-	return storable.Value(a.storage)
+	return storable.StoredValue(a.storage)
 }
 
 func (a *Array) Set(index uint64, value Value) error {
-	storable := value.Storable()
-	if storable.Mutable() || storable.ByteSize() > uint32(maxInlineElementSize) {
-		storable = StorageIDStorable(storable.ID())
-	}
+	storable := value.Storable(a.storage)
 	return a.root.Set(a.storage, index, storable)
 }
 
@@ -1533,10 +1523,7 @@ func (a *Array) Append(value Value) error {
 }
 
 func (a *Array) Insert(index uint64, value Value) error {
-	storable := value.Storable()
-	if storable.Mutable() || storable.ByteSize() > uint32(maxInlineElementSize) {
-		storable = StorageIDStorable(storable.ID())
-	}
+	storable := value.Storable(a.storage)
 
 	err := a.root.Insert(a.storage, index, storable)
 	if err != nil {
@@ -1621,7 +1608,7 @@ func (a *Array) Remove(index uint64) (Value, error) {
 		}
 	}
 
-	return storable.Value(a.storage)
+	return storable.StoredValue(a.storage)
 }
 
 type ArrayIterator struct {
@@ -1652,7 +1639,7 @@ func (i *ArrayIterator) Next() (Value, error) {
 	var element Value
 	var err error
 	if i.index < len(i.dataSlab.elements) {
-		element, err = i.dataSlab.elements[i.index].Value(i.array.storage)
+		element, err = i.dataSlab.elements[i.index].StoredValue(i.array.storage)
 		if err != nil {
 			return nil, err
 		}

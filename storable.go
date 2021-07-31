@@ -15,13 +15,8 @@ type Storable interface {
 	Encode(*Encoder) error
 
 	ByteSize() uint32
-	ID() StorageID
 
-	Mutable() bool
-
-	String() string
-
-	Value(storage SlabStorage) (Value, error)
+	StoredValue(storage SlabStorage) (Value, error)
 }
 
 const (
@@ -37,7 +32,7 @@ type StorageIDStorable StorageID
 
 var _ Storable = StorageIDStorable(0)
 
-func (v StorageIDStorable) Value(storage SlabStorage) (Value, error) {
+func (v StorageIDStorable) StoredValue(storage SlabStorage) (Value, error) {
 	id := StorageID(v)
 	if id == StorageIDUndefined {
 		return nil, fmt.Errorf("invalid storage id")
@@ -49,7 +44,7 @@ func (v StorageIDStorable) Value(storage SlabStorage) (Value, error) {
 	if !found {
 		return nil, fmt.Errorf("slab %d not found", id)
 	}
-	return slab.Value(storage)
+	return slab.StoredValue(storage)
 }
 
 // Encode encodes StorageIDStorable as
@@ -74,16 +69,28 @@ func (v StorageIDStorable) ByteSize() uint32 {
 	return 2 + GetUintCBORSize(uint64(v))
 }
 
-func (v StorageIDStorable) Mutable() bool {
-	return false
-}
-
-func (v StorageIDStorable) ID() StorageID {
-	return StorageID(v)
-}
-
 func (v StorageIDStorable) String() string {
-	return fmt.Sprintf("id(%d)", v)
+	return fmt.Sprintf("StorageIDStorable(%d)", v)
+}
+
+// NonStorable represents a value that cannot be stored
+//
+type NonStorable struct {
+	Value Value
+}
+
+var _ Storable = NonStorable{}
+
+func (n NonStorable) Encode(_ *Encoder) error {
+	return fmt.Errorf("value is non-storable")
+}
+
+func (n NonStorable) ByteSize() uint32 {
+	return 1
+}
+
+func (n NonStorable) StoredValue(_ SlabStorage) (Value, error) {
+	return n.Value, nil
 }
 
 // Encode is a wrapper for Storable.Encode()

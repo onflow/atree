@@ -42,16 +42,8 @@ func (s StorableSlab) ID() StorageID {
 	return s.StorageID
 }
 
-func (s StorableSlab) Mutable() bool {
-	return s.Storable.Mutable()
-}
-
-func (s StorableSlab) String() string {
-	return s.Storable.String()
-}
-
-func (s StorableSlab) Value(storage SlabStorage) (Value, error) {
-	return s.Storable.Value(storage)
+func (s StorableSlab) StoredValue(storage SlabStorage) (Value, error) {
+	return s.Storable.StoredValue(storage)
 }
 
 func (StorableSlab) Split(_ SlabStorage) (Slab, Slab, error) {

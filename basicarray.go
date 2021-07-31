@@ -22,7 +22,7 @@ type BasicArrayDataSlab struct {
 	elements []Storable
 }
 
-func (a *BasicArrayDataSlab) Value(storage SlabStorage) (Value, error) {
+func (a *BasicArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &BasicArray{storage: storage, root: a}, nil
 }
 
@@ -37,7 +37,7 @@ func (a *BasicArray) DeepCopy(storage SlabStorage) (Value, error) {
 	result := NewBasicArray(storage)
 
 	for i, element := range a.root.elements {
-		value, err := element.Value(storage)
+		value, err := element.StoredValue(storage)
 		if err != nil {
 			return nil, err
 		}
@@ -57,7 +57,7 @@ func (a *BasicArray) DeepCopy(storage SlabStorage) (Value, error) {
 }
 
 
-func (a *BasicArray) Storable() Storable {
+func (a *BasicArray) Storable(SlabStorage) Storable {
 	return a.root
 }
 
@@ -238,10 +238,6 @@ func (a *BasicArrayDataSlab) ID() StorageID {
 	return a.header.id
 }
 
-func (a *BasicArrayDataSlab) Mutable() bool {
-	return true
-}
-
 func (a *BasicArrayDataSlab) String() string {
 	return fmt.Sprintf("%v", a.elements)
 }
@@ -296,11 +292,11 @@ func (a *BasicArray) Get(index uint64) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	return storable.Value(a.storage)
+	return storable.StoredValue(a.storage)
 }
 
 func (a *BasicArray) Set(index uint64, v Value) error {
-	storable := v.Storable()
+	storable := v.Storable(a.storage)
 	return a.root.Set(a.storage, index, storable)
 }
 
@@ -310,7 +306,7 @@ func (a *BasicArray) Append(v Value) error {
 }
 
 func (a *BasicArray) Insert(index uint64, v Value) error {
-	storable := v.Storable()
+	storable := v.Storable(a.storage)
 	return a.root.Insert(a.storage, index, storable)
 }
 
@@ -319,7 +315,7 @@ func (a *BasicArray) Remove(index uint64) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	return storable.Value(a.storage)
+	return storable.StoredValue(a.storage)
 }
 
 func (a *BasicArray) Count() uint64 {

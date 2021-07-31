@@ -23,11 +23,11 @@ func (v Uint64Value) DeepCopy(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v Uint64Value) Value(_ atree.SlabStorage) (atree.Value, error) {
+func (v Uint64Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v Uint64Value) Storable() atree.Storable {
+func (v Uint64Value) Storable(atree.SlabStorage) atree.Storable {
 	return v
 }
 
@@ -51,14 +51,6 @@ func (v Uint64Value) Encode(enc *atree.Encoder) error {
 func (v Uint64Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + atree.GetUintCBORSize(uint64(v))
-}
-
-func (v Uint64Value) Mutable() bool {
-	return false
-}
-
-func (v Uint64Value) ID() atree.StorageID {
-	return atree.StorageIDUndefined
 }
 
 func (v Uint64Value) String() string {

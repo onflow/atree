@@ -30,11 +30,11 @@ func (v Uint8Value) DeepCopy(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint8Value) Value(_ SlabStorage) (Value, error) {
+func (v Uint8Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint8Value) Storable() Storable {
+func (v Uint8Value) Storable(SlabStorage) Storable {
 	return v
 }
 
@@ -60,14 +60,6 @@ func (v Uint8Value) ByteSize() uint32 {
 	return 2 + GetUintCBORSize(uint64(v))
 }
 
-func (v Uint8Value) Mutable() bool {
-	return false
-}
-
-func (v Uint8Value) ID() StorageID {
-	return StorageIDUndefined
-}
-
 func (v Uint8Value) String() string {
 	return fmt.Sprintf("%d", uint8(v))
 }
@@ -81,11 +73,11 @@ func (v Uint16Value) DeepCopy(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint16Value) Value(_ SlabStorage) (Value, error) {
+func (v Uint16Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint16Value) Storable() Storable {
+func (v Uint16Value) Storable(SlabStorage) Storable {
 	return v
 }
 
@@ -106,14 +98,6 @@ func (v Uint16Value) ByteSize() uint32 {
 	return 2 + GetUintCBORSize(uint64(v))
 }
 
-func (v Uint16Value) Mutable() bool {
-	return false
-}
-
-func (v Uint16Value) ID() StorageID {
-	return StorageIDUndefined
-}
-
 func (v Uint16Value) String() string {
 	return fmt.Sprintf("%d", uint16(v))
 }
@@ -127,11 +111,11 @@ func (v Uint32Value) DeepCopy(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint32Value) Value(_ SlabStorage) (Value, error) {
+func (v Uint32Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint32Value) Storable() Storable {
+func (v Uint32Value) Storable(SlabStorage) Storable {
 	return v
 }
 
@@ -157,14 +141,6 @@ func (v Uint32Value) ByteSize() uint32 {
 	return 2 + GetUintCBORSize(uint64(v))
 }
 
-func (v Uint32Value) Mutable() bool {
-	return false
-}
-
-func (v Uint32Value) ID() StorageID {
-	return StorageIDUndefined
-}
-
 func (v Uint32Value) String() string {
 	return fmt.Sprintf("%d", uint32(v))
 }
@@ -178,11 +154,11 @@ func (v Uint64Value) DeepCopy(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint64Value) Value(_ SlabStorage) (Value, error) {
+func (v Uint64Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint64Value) Storable() Storable {
+func (v Uint64Value) Storable(SlabStorage) Storable {
 	return v
 }
 
@@ -206,14 +182,6 @@ func (v Uint64Value) Encode(enc *Encoder) error {
 func (v Uint64Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + GetUintCBORSize(uint64(v))
-}
-
-func (v Uint64Value) Mutable() bool {
-	return false
-}
-
-func (v Uint64Value) ID() StorageID {
-	return StorageIDUndefined
 }
 
 func (v Uint64Value) String() string {

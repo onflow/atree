@@ -56,17 +56,7 @@ func benchmarkEncodeCBORArray(b *testing.B, values []Storable) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		var buf bytes.Buffer
-		enc := newEncoder(&buf)
-
-		enc.Scratch[0] = 0x80 | 27
-		binary.BigEndian.PutUint64(enc.Scratch[1:], uint64(len(values)))
-		enc.Write(enc.Scratch[:9])
-
-		for _, v := range values {
-			v.Encode(enc)
-		}
-		enc.CBOR.Flush()
+		encode(values)
 	}
 }
 
@@ -143,7 +133,7 @@ func getMixTypedValues() []Storable {
 
 func encode(values []Storable) []byte {
 	var buf bytes.Buffer
-	enc := newEncoder(&buf)
+	enc := newEncoder(&buf, nil)
 
 	enc.Scratch[0] = 0x80 | 27
 	binary.BigEndian.PutUint64(enc.Scratch[1:], uint64(len(values)))

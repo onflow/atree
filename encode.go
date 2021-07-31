@@ -16,13 +16,15 @@ import (
 // Encoder writes atree slabs to io.Writer.
 type Encoder struct {
 	io.Writer
+	Storage SlabStorage
 	CBOR    *cbor.StreamEncoder
 	Scratch [32]byte
 }
 
-func newEncoder(w io.Writer) *Encoder {
+func newEncoder(w io.Writer, storage SlabStorage) *Encoder {
 	return &Encoder{
 		Writer: w,
+		Storage: storage,
 		CBOR:   cbor.NewStreamEncoder(w),
 	}
 }

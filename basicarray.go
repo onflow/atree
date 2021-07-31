@@ -5,7 +5,6 @@
 package atree
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -100,17 +99,6 @@ func newBasicArrayDataSlabFromData(id StorageID, data []byte, decodeStorable Sto
 		header:   ArraySlabHeader{id: id, size: uint32(len(data)), count: uint32(elemCount)},
 		elements: elements,
 	}, nil
-}
-
-func (a *BasicArrayDataSlab) Bytes() ([]byte, error) {
-	var buf bytes.Buffer
-	enc := newEncoder(&buf)
-
-	err := a.Encode(enc)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }
 
 func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {

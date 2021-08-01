@@ -51,8 +51,8 @@ var _ ArraySlab = &ArrayDataSlab{}
 
 // ArrayMetaDataSlab is internal node, implementing ArraySlab.
 type ArrayMetaDataSlab struct {
-	header           ArraySlabHeader
-	childrenHeaders  []ArraySlabHeader
+	header          ArraySlabHeader
+	childrenHeaders []ArraySlabHeader
 	// Cumulative counts in the children.
 	// For example, if the counts in childrenHeaders are [10, 15, 12],
 	// childrenCountSum is [10, 25, 37]
@@ -80,8 +80,8 @@ type ArraySlab interface {
 
 	IsFull() bool
 	IsUnderflow() (uint32, bool)
-	CanLendToLeft(size uint32) bool
-	CanLendToRight(size uint32) bool
+	CanLendToLeft(size uint32, storage SlabStorage) bool
+	CanLendToRight(size uint32, storage SlabStorage) bool
 
 	SetID(StorageID)
 
@@ -279,9 +279,9 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error
 	if index >= uint64(len(a.elements)) {
 		return IndexOutOfRangeError{}
 	}
-	oldSize := a.elements[index].ByteSize()
+	oldSize := a.elements[index].ByteSize(storage)
 	a.elements[index] = v
-	a.header.size = a.header.size - oldSize + v.ByteSize()
+	a.header.size = a.header.size - oldSize + v.ByteSize(storage)
 
 	return storage.Store(a.header.id, a)
 }
@@ -299,7 +299,7 @@ func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) er
 	}
 
 	a.header.count++
-	a.header.size += v.ByteSize()
+	a.header.size += v.ByteSize(storage)
 
 	return storage.Store(a.header.id, a)
 }
@@ -323,7 +323,7 @@ func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, err
 	a.elements = a.elements[:lastIndex]
 
 	a.header.count--
-	a.header.size -= v.ByteSize()
+	a.header.size -= v.ByteSize(storage)
 
 	err := storage.Store(a.header.id, a)
 	if err != nil {
@@ -346,7 +346,7 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	leftSize := uint32(0)
 	leftCount := 0
 	for i, e := range a.elements {
-		elemSize := e.ByteSize()
+		elemSize := e.ByteSize(storage)
 		if leftSize+elemSize >= midPoint {
 			// i is mid point element.  Place i on the small side.
 			if leftSize <= dataSize-leftSize-elemSize {
@@ -389,7 +389,7 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	return a, rightSlab, nil
 }
 
-func (a *ArrayDataSlab) Merge(slab Slab) error {
+func (a *ArrayDataSlab) Merge(slab Slab, storage SlabStorage) error {
 	rightSlab := slab.(*ArrayDataSlab)
 	a.elements = append(a.elements, rightSlab.elements...)
 	a.header.size = a.header.size + rightSlab.header.size - arrayDataSlabPrefixSize
@@ -399,7 +399,7 @@ func (a *ArrayDataSlab) Merge(slab Slab) error {
 }
 
 // LendToRight rebalances slabs by moving elements from left slab to right slab
-func (a *ArrayDataSlab) LendToRight(slab Slab) error {
+func (a *ArrayDataSlab) LendToRight(slab Slab, storage SlabStorage) error {
 
 	rightSlab := slab.(*ArrayDataSlab)
 
@@ -413,7 +413,7 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 
 	// Left slab size is as close to midPoint as possible while right slab size >= minThreshold
 	for i := len(a.elements) - 1; i >= 0; i-- {
-		elemSize := a.elements[i].ByteSize()
+		elemSize := a.elements[i].ByteSize(storage)
 		if leftSize-elemSize < midPoint && size-leftSize >= uint32(minThreshold) {
 			break
 		}
@@ -446,7 +446,7 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 }
 
 // BorrowFromRight rebalances slabs by moving elements from right slab to left slab.
-func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
+func (a *ArrayDataSlab) BorrowFromRight(slab Slab, storage SlabStorage) error {
 	rightSlab := slab.(*ArrayDataSlab)
 
 	count := a.header.count + rightSlab.header.count
@@ -458,7 +458,7 @@ func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 	midPoint := (size + 1) >> 1
 
 	for _, e := range rightSlab.elements {
-		elemSize := e.ByteSize()
+		elemSize := e.ByteSize(storage)
 		if leftSize+elemSize > midPoint {
 			if size-leftSize-elemSize >= uint32(minThreshold) {
 				// Include this element in left slab
@@ -506,11 +506,10 @@ func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
 	return 0, false
 }
 
-
 // CanLendToLeft returns true if elements on the left of the slab could be removed
 // so that the slab still stores more than the min threshold.
 //
-func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
+func (a *ArrayDataSlab) CanLendToLeft(size uint32, storage SlabStorage) bool {
 	if len(a.elements) == 0 {
 		panic(fmt.Sprintf("empty data slab %d", a.header.id))
 	}
@@ -522,7 +521,7 @@ func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 	}
 	lendSize := uint32(0)
 	for i := 0; i < len(a.elements); i++ {
-		lendSize += a.elements[i].ByteSize()
+		lendSize += a.elements[i].ByteSize(storage)
 		if a.header.size-lendSize < uint32(minThreshold) {
 			return false
 		}
@@ -536,7 +535,7 @@ func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 // CanLendToRight returns true if elements on the right of the slab could be removed
 // so that the slab still stores more than the min threshold.
 //
-func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
+func (a *ArrayDataSlab) CanLendToRight(size uint32, storage SlabStorage) bool {
 	if len(a.elements) == 0 {
 		panic(fmt.Sprintf("empty data slab %d", a.header.id))
 	}
@@ -548,7 +547,7 @@ func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
 	}
 	lendSize := uint32(0)
 	for i := len(a.elements) - 1; i >= 0; i-- {
-		lendSize += a.elements[i].ByteSize()
+		lendSize += a.elements[i].ByteSize(storage)
 		if a.header.size-lendSize < uint32(minThreshold) {
 			return false
 		}
@@ -575,7 +574,7 @@ func (a *ArrayDataSlab) ID() StorageID {
 	return a.header.id
 }
 
-func (a *ArrayDataSlab) ByteSize() uint32 {
+func (a *ArrayDataSlab) ByteSize(_ SlabStorage) uint32 {
 	return a.header.size
 }
 
@@ -1030,8 +1029,8 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 	}
 
-	leftCanLend := leftSib != nil && leftSib.CanLendToRight(underflowSize)
-	rightCanLend := rightSib != nil && rightSib.CanLendToLeft(underflowSize)
+	leftCanLend := leftSib != nil && leftSib.CanLendToRight(underflowSize, storage)
+	rightCanLend := rightSib != nil && rightSib.CanLendToLeft(underflowSize, storage)
 
 	// Child can rebalance elements with at least one sibling.
 	if leftCanLend || rightCanLend {
@@ -1040,7 +1039,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		if !leftCanLend {
 			baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
 
-			err := child.BorrowFromRight(rightSib)
+			err := child.BorrowFromRight(rightSib, storage)
 			if err != nil {
 				return err
 			}
@@ -1067,7 +1066,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		if !rightCanLend {
 			baseCountSum := a.childrenCountSum[childHeaderIndex-1] - leftSib.Header().count
 
-			err := leftSib.LendToRight(child)
+			err := leftSib.LendToRight(child, storage)
 			if err != nil {
 				return err
 			}
@@ -1091,10 +1090,10 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Rebalance with bigger sib
-		if leftSib.ByteSize() > rightSib.ByteSize() {
+		if leftSib.ByteSize(storage) > rightSib.ByteSize(storage) {
 			baseCountSum := a.childrenCountSum[childHeaderIndex-1] - leftSib.Header().count
 
-			err := leftSib.LendToRight(child)
+			err := leftSib.LendToRight(child, storage)
 			if err != nil {
 				return err
 			}
@@ -1116,11 +1115,11 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 			}
 			return storage.Store(a.header.id, a)
 		} else {
-			// leftSib.ByteSize() <= rightSib.ByteSize
+			// leftSib ByteSize <= rightSib ByteSize
 
 			baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
 
-			err := child.BorrowFromRight(rightSib)
+			err := child.BorrowFromRight(rightSib, storage)
 			if err != nil {
 				return err
 			}
@@ -1153,7 +1152,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 	if leftSib == nil {
 
 		// Merge with right
-		err := child.Merge(rightSib)
+		err := child.Merge(rightSib, storage)
 		if err != nil {
 			return err
 		}
@@ -1189,7 +1188,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 	if rightSib == nil {
 
 		// Merge with left
-		err := leftSib.Merge(child)
+		err := leftSib.Merge(child, storage)
 		if err != nil {
 			return err
 		}
@@ -1223,8 +1222,8 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 	}
 
 	// Merge with smaller sib
-	if leftSib.ByteSize() < rightSib.ByteSize() {
-		err := leftSib.Merge(child)
+	if leftSib.ByteSize(storage) < rightSib.ByteSize(storage) {
+		err := leftSib.Merge(child, storage)
 		if err != nil {
 			return err
 		}
@@ -1256,9 +1255,9 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 
 		return nil
 	} else {
-		// leftSib.ByteSize() > rightSib.ByteSize
+		// leftSib ByteSize > rightSib ByteSize
 
-		err := child.Merge(rightSib)
+		err := child.Merge(rightSib, storage)
 		if err != nil {
 			return err
 		}
@@ -1292,7 +1291,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 	}
 }
 
-func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
+func (a *ArrayMetaDataSlab) Merge(slab Slab, _ SlabStorage) error {
 
 	// The assumption len > 0 holds in all cases except for the root slab
 
@@ -1332,7 +1331,7 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	rightSlab := &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
 			id:    storage.GenerateStorageID(),
-			size:    a.header.size - uint32(leftSize),
+			size:  a.header.size - uint32(leftSize),
 			count: a.header.count - leftCount,
 		},
 	}
@@ -1356,7 +1355,7 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	return a, rightSlab, nil
 }
 
-func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
+func (a *ArrayMetaDataSlab) LendToRight(slab Slab, storage SlabStorage) error {
 	rightSlab := slab.(*ArrayMetaDataSlab)
 
 	childrenHeadersLen := len(a.childrenHeaders) + len(rightSlab.childrenHeaders)
@@ -1397,7 +1396,7 @@ func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 	return nil
 }
 
-func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab) error {
+func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab, storage SlabStorage) error {
 	originalLeftSlabCountSum := a.header.count
 	originalLeftSlabHeaderLen := len(a.childrenHeaders)
 
@@ -1444,12 +1443,12 @@ func (a ArrayMetaDataSlab) IsUnderflow() (uint32, bool) {
 	return 0, false
 }
 
-func (a *ArrayMetaDataSlab) CanLendToLeft(size uint32) bool {
+func (a *ArrayMetaDataSlab) CanLendToLeft(size uint32, _ SlabStorage) bool {
 	n := uint32(math.Ceil(float64(size) / arraySlabHeaderSize))
 	return a.header.size-arraySlabHeaderSize*n > uint32(minThreshold)
 }
 
-func (a *ArrayMetaDataSlab) CanLendToRight(size uint32) bool {
+func (a *ArrayMetaDataSlab) CanLendToRight(size uint32, _ SlabStorage) bool {
 	n := uint32(math.Ceil(float64(size) / arraySlabHeaderSize))
 	return a.header.size-arraySlabHeaderSize*n > uint32(minThreshold)
 }
@@ -1466,7 +1465,7 @@ func (a *ArrayMetaDataSlab) Header() ArraySlabHeader {
 	return a.header
 }
 
-func (a *ArrayMetaDataSlab) ByteSize() uint32 {
+func (a *ArrayMetaDataSlab) ByteSize(_ SlabStorage) uint32 {
 	return a.header.size
 }
 
@@ -1612,10 +1611,10 @@ func (a *Array) Remove(index uint64) (Value, error) {
 }
 
 type ArrayIterator struct {
-	array *Array
-	id   StorageID
+	array    *Array
+	id       StorageID
 	dataSlab *ArrayDataSlab
-	index int
+	index    int
 }
 
 func (i *ArrayIterator) Next() (Value, error) {
@@ -1663,10 +1662,9 @@ func (a *Array) Iterator() (*ArrayIterator, error) {
 
 	return &ArrayIterator{
 		array: a,
-		id: slab.ID(),
+		id:    slab.ID(),
 	}, nil
 }
-
 
 type ArrayIterationFunc func(element Value) (resume bool, err error)
 
@@ -1700,7 +1698,6 @@ func (a *Array) DeepCopy(storage SlabStorage) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-
 
 	var index uint64
 	err = a.Iterate(func(element Value) (resume bool, err error) {

@@ -166,7 +166,7 @@ func (a *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 
 		computedSize := uint32(0)
 		for _, e := range dataSlab.elements {
-			computedSize += e.ByteSize()
+			computedSize += e.ByteSize(a.storage)
 		}
 
 		_, underflow := dataSlab.IsUnderflow()

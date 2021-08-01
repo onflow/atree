@@ -65,7 +65,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	// setup
 	for i := 0; i < initialArraySize; i++ {
 		v := RandomValue()
-		totalRawDataSize += v.Storable(storage).ByteSize()
+		totalRawDataSize += v.Storable(storage).ByteSize(storage)
 		err := array.Append(v)
 		require.NoError(b, err)
 	}
@@ -82,7 +82,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue()
-		totalRawDataSize += v.Storable(storage).ByteSize()
+		totalRawDataSize += v.Storable(storage).ByteSize(storage)
 		err := array.Append(v)
 		require.NoError(b, err)
 	}
@@ -99,7 +99,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 		ind := rand.Intn(int(array.Count()))
 		s, err := array.Remove(uint64(ind))
 		require.NoError(b, err)
-		totalRawDataSize -= s.Storable(storage).ByteSize()
+		totalRawDataSize -= s.Storable(storage).ByteSize(storage)
 	}
 	require.NoError(b, storage.Commit())
 	totalRemoveTime = time.Since(start)
@@ -113,7 +113,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		v := RandomValue()
-		totalRawDataSize += v.Storable(storage).ByteSize()
+		totalRawDataSize += v.Storable(storage).ByteSize(storage)
 		err := array.Insert(uint64(ind), v)
 		require.NoError(b, err)
 	}

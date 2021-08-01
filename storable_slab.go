@@ -12,7 +12,7 @@ import (
 //
 type StorableSlab struct {
 	StorageID StorageID
-	Storable Storable
+	Storable  Storable
 }
 
 var _ Slab = StorableSlab{}
@@ -33,9 +33,9 @@ func (s StorableSlab) Encode(enc *Encoder) error {
 	return s.Storable.Encode(enc)
 }
 
-func (s StorableSlab) ByteSize() uint32 {
+func (s StorableSlab) ByteSize(storage SlabStorage) uint32 {
 	const versionAndFlagSize = 2
-	return versionAndFlagSize + s.Storable.ByteSize()
+	return versionAndFlagSize + s.Storable.ByteSize(storage)
 }
 
 func (s StorableSlab) ID() StorageID {
@@ -50,15 +50,14 @@ func (StorableSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, errors.New("not applicable")
 }
 
-func (StorableSlab) Merge(Slab) error {
+func (StorableSlab) Merge(_ Slab, _ SlabStorage) error {
 	return errors.New("not applicable")
 }
 
-func (StorableSlab) LendToRight(Slab) error {
+func (StorableSlab) LendToRight(_ Slab, _ SlabStorage) error {
 	return errors.New("not applicable")
 }
 
-func (StorableSlab) BorrowFromRight(Slab) error {
+func (StorableSlab) BorrowFromRight(_ Slab, _ SlabStorage) error {
 	return errors.New("not applicable")
 }
-

@@ -11,7 +11,6 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-
 // This file contains value implementations for testing purposes
 
 const (
@@ -55,7 +54,7 @@ func (v Uint8Value) Encode(enc *Encoder) error {
 }
 
 // TODO: cache size
-func (v Uint8Value) ByteSize() uint32 {
+func (v Uint8Value) ByteSize(_ SlabStorage) uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + GetUintCBORSize(uint64(v))
 }
@@ -93,7 +92,7 @@ func (v Uint16Value) Encode(enc *Encoder) error {
 }
 
 // TODO: cache size
-func (v Uint16Value) ByteSize() uint32 {
+func (v Uint16Value) ByteSize(_ SlabStorage) uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + GetUintCBORSize(uint64(v))
 }
@@ -136,7 +135,7 @@ func (v Uint32Value) Encode(enc *Encoder) error {
 }
 
 // TODO: cache size
-func (v Uint32Value) ByteSize() uint32 {
+func (v Uint32Value) ByteSize(_ SlabStorage) uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + GetUintCBORSize(uint64(v))
 }
@@ -179,7 +178,7 @@ func (v Uint64Value) Encode(enc *Encoder) error {
 }
 
 // TODO: cache size
-func (v Uint64Value) ByteSize() uint32 {
+func (v Uint64Value) ByteSize(_ SlabStorage) uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + GetUintCBORSize(uint64(v))
 }

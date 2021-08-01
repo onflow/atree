@@ -55,7 +55,6 @@ func (a *BasicArray) DeepCopy(storage SlabStorage) (Value, error) {
 	return result, nil
 }
 
-
 func (a *BasicArray) Storable(SlabStorage) Storable {
 	return a.root
 }
@@ -148,7 +147,9 @@ func (a *BasicArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) 
 
 	a.elements[index] = v
 
-	a.header.size = a.header.size - oldElem.ByteSize() + v.ByteSize()
+	a.header.size = a.header.size -
+		oldElem.ByteSize(storage) +
+		v.ByteSize(storage)
 
 	err := storage.Store(a.header.id, a)
 	if err != nil {
@@ -172,7 +173,7 @@ func (a *BasicArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storabl
 	}
 
 	a.header.count++
-	a.header.size += v.ByteSize()
+	a.header.size += v.ByteSize(storage)
 
 	err := storage.Store(a.header.id, a)
 	if err != nil {
@@ -200,7 +201,7 @@ func (a *BasicArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable
 	}
 
 	a.header.count--
-	a.header.size -= v.ByteSize()
+	a.header.size -= v.ByteSize(storage)
 
 	err := storage.Store(a.header.id, a)
 	if err != nil {
@@ -218,7 +219,7 @@ func (a *BasicArrayDataSlab) Header() ArraySlabHeader {
 	return a.header
 }
 
-func (a *BasicArrayDataSlab) ByteSize() uint32 {
+func (a *BasicArrayDataSlab) ByteSize(_ SlabStorage) uint32 {
 	return a.header.size
 }
 
@@ -234,15 +235,15 @@ func (a *BasicArrayDataSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) Merge(Slab) error {
+func (a *BasicArrayDataSlab) Merge(_ Slab, _ SlabStorage) error {
 	return errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) LendToRight(Slab) error {
+func (a *BasicArrayDataSlab) LendToRight(_ Slab, _ SlabStorage) error {
 	return errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) BorrowFromRight(Slab) error {
+func (a *BasicArrayDataSlab) BorrowFromRight(_ Slab, _ SlabStorage) error {
 	return errors.New("not applicable")
 }
 

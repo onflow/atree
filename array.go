@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 const (
@@ -159,7 +161,7 @@ func newArrayDataSlabFromData(id StorageID, data []byte, decodeStorable Storable
 
 	// Decode content (CBOR array)
 	const contentOffset = nextStorageIDOffset + storageIDSize
-	cborDec := NewByteStreamDecoder(data[contentOffset:])
+	cborDec := cbor.NewByteStreamDecoder(data[contentOffset:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {

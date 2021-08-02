@@ -51,8 +51,8 @@ var _ ArraySlab = &ArrayDataSlab{}
 
 // ArrayMetaDataSlab is internal node, implementing ArraySlab.
 type ArrayMetaDataSlab struct {
-	header           ArraySlabHeader
-	childrenHeaders  []ArraySlabHeader
+	header          ArraySlabHeader
+	childrenHeaders []ArraySlabHeader
 	// Cumulative counts in the children.
 	// For example, if the counts in childrenHeaders are [10, 15, 12],
 	// childrenCountSum is [10, 25, 37]
@@ -505,7 +505,6 @@ func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
 	}
 	return 0, false
 }
-
 
 // CanLendToLeft returns true if elements on the left of the slab could be removed
 // so that the slab still stores more than the min threshold.
@@ -1332,7 +1331,7 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	rightSlab := &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
 			id:    storage.GenerateStorageID(),
-			size:    a.header.size - uint32(leftSize),
+			size:  a.header.size - uint32(leftSize),
 			count: a.header.count - leftCount,
 		},
 	}
@@ -1612,10 +1611,10 @@ func (a *Array) Remove(index uint64) (Value, error) {
 }
 
 type ArrayIterator struct {
-	array *Array
-	id   StorageID
+	storage  SlabStorage
+	id       StorageID
 	dataSlab *ArrayDataSlab
-	index int
+	index    int
 }
 
 func (i *ArrayIterator) Next() (Value, error) {
@@ -1624,7 +1623,7 @@ func (i *ArrayIterator) Next() (Value, error) {
 			return nil, nil
 		}
 
-		slab, found, err := i.array.storage.Retrieve(i.id)
+		slab, found, err := i.storage.Retrieve(i.id)
 		if err != nil {
 			return nil, err
 		}
@@ -1639,7 +1638,7 @@ func (i *ArrayIterator) Next() (Value, error) {
 	var element Value
 	var err error
 	if i.index < len(i.dataSlab.elements) {
-		element, err = i.dataSlab.elements[i.index].StoredValue(i.array.storage)
+		element, err = i.dataSlab.elements[i.index].StoredValue(i.storage)
 		if err != nil {
 			return nil, err
 		}
@@ -1662,11 +1661,10 @@ func (a *Array) Iterator() (*ArrayIterator, error) {
 	}
 
 	return &ArrayIterator{
-		array: a,
-		id: slab.ID(),
+		storage: a.storage,
+		id:      slab.ID(),
 	}, nil
 }
-
 
 type ArrayIterationFunc func(element Value) (resume bool, err error)
 
@@ -1700,7 +1698,6 @@ func (a *Array) DeepCopy(storage SlabStorage) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-
 
 	var index uint64
 	err = a.Iterate(func(element Value) (resume bool, err error) {

@@ -12,7 +12,7 @@ var (
 	minThreshold = targetThreshold / 2
 	maxThreshold = uint64(float64(targetThreshold) * 1.5)
 
-	maxInlineElementSize = targetThreshold / 2
+	MaxInlineElementSize = targetThreshold / 2
 )
 
 func SetThreshold(threshold uint64) (uint64, uint64, uint64) {
@@ -20,7 +20,7 @@ func SetThreshold(threshold uint64) (uint64, uint64, uint64) {
 	// minThreshold = targetThreshold / 4
 	minThreshold = targetThreshold / 2
 	maxThreshold = uint64(float64(targetThreshold) * 1.5)
-	maxInlineElementSize = targetThreshold / 2
+	MaxInlineElementSize = targetThreshold / 2
 
-	return minThreshold, maxThreshold, maxInlineElementSize
+	return minThreshold, maxThreshold, MaxInlineElementSize
 }

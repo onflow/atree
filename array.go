@@ -43,7 +43,7 @@ type ArrayDataSlab struct {
 	elements []Storable
 }
 
-func (a *ArrayDataSlab) Value(storage SlabStorage) (Value, error) {
+func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &Array{storage: storage, root: a}, nil
 }
 
@@ -61,12 +61,13 @@ type ArrayMetaDataSlab struct {
 
 var _ ArraySlab = &ArrayMetaDataSlab{}
 
-func (a *ArrayMetaDataSlab) Value(storage SlabStorage) (Value, error) {
+func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &Array{storage: storage, root: a}, nil
 }
 
 type ArraySlab interface {
 	Slab
+	fmt.Stringer
 
 	Get(storage SlabStorage, index uint64) (Storable, error)
 	Set(storage SlabStorage, index uint64, v Storable) error
@@ -99,7 +100,7 @@ func (a *Array) Value(_ SlabStorage) (Value, error) {
 	return a, nil
 }
 
-func (a *Array) Storable() Storable {
+func (a *Array) Storable(SlabStorage) Storable {
 	return a.root
 }
 
@@ -130,7 +131,7 @@ func newArrayDataSlab(storage SlabStorage) *ArrayDataSlab {
 	}
 }
 
-func newArrayDataSlabFromData(id StorageID, data []byte) (*ArrayDataSlab, error) {
+func newArrayDataSlabFromData(id StorageID, data []byte, decodeStorable StorableDecoder) (*ArrayDataSlab, error) {
 	// Check data length
 	if len(data) < arrayDataSlabPrefixSize {
 		return nil, errors.New("data is too short for array data slab")
@@ -203,42 +204,42 @@ func newArrayDataSlabFromData(id StorageID, data []byte) (*ArrayDataSlab, error)
 func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	// Encode version
-	enc.scratch[0] = 0
+	enc.Scratch[0] = 0
 
 	// Encode flag
-	enc.scratch[1] = flagDataSlab | flagArray
+	enc.Scratch[1] = flagDataSlab | flagArray
 
 	const versionAndFlagSize = 2
 
 	// Encode prev storage ID to scratch
 	const prevStorageIDOffset = versionAndFlagSize
 	binary.BigEndian.PutUint64(
-		enc.scratch[prevStorageIDOffset:],
+		enc.Scratch[prevStorageIDOffset:],
 		uint64(a.prev),
 	)
 
 	// Encode next storage ID to scratch
 	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
 	binary.BigEndian.PutUint64(
-		enc.scratch[nextStorageIDOffset:],
+		enc.Scratch[nextStorageIDOffset:],
 		uint64(a.next),
 	)
 
 	// Encode CBOR array size manually for fix-sized encoding
 	const contentOffset = nextStorageIDOffset + storageIDSize
 
-	enc.scratch[contentOffset] = 0x80 | 25
+	enc.Scratch[contentOffset] = 0x80 | 25
 
 	const countOffset = contentOffset + 1
 	const countSize = 2
 	binary.BigEndian.PutUint16(
-		enc.scratch[countOffset:],
+		enc.Scratch[countOffset:],
 		uint16(len(a.elements)),
 	)
 
 	// Write scratch content to encoder
 	const totalSize = countOffset + countSize
-	_, err := enc.Write(enc.scratch[:totalSize])
+	_, err := enc.Write(enc.Scratch[:totalSize])
 	if err != nil {
 		return err
 	}
@@ -251,7 +252,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 		}
 	}
 
-	return enc.cbor.Flush()
+	return enc.CBOR.Flush()
 }
 
 func (a *ArrayDataSlab) ShallowCloneWithNewID(storage SlabStorage) ArraySlab {
@@ -569,10 +570,6 @@ func (a *ArrayDataSlab) IsData() bool {
 	return true
 }
 
-func (a *ArrayDataSlab) Mutable() bool {
-	return true
-}
-
 func (a *ArrayDataSlab) ID() StorageID {
 	return a.header.id
 }
@@ -592,7 +589,7 @@ func (a *ArrayDataSlab) String() string {
 
 	var elemsStr []string
 	for _, e := range elements {
-		elemsStr = append(elemsStr, e.String())
+		elemsStr = append(elemsStr, fmt.Sprint(e))
 	}
 
 	if len(a.elements) > 6 {
@@ -603,7 +600,7 @@ func (a *ArrayDataSlab) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
-func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab, error) {
+func newArrayMetaDataSlabFromData(id StorageID, data []byte, decodeStorable StorableDecoder) (*ArrayMetaDataSlab, error) {
 	if len(data) < arrayMetaDataSlabPrefixSize {
 		return nil, errors.New("data is too short for array metadata slab")
 	}
@@ -690,39 +687,39 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
 	// Encode version
-	enc.scratch[0] = 0
+	enc.Scratch[0] = 0
 
 	// Encode flag
-	enc.scratch[1] = flagArray | flagMetaDataSlab
+	enc.Scratch[1] = flagArray | flagMetaDataSlab
 
 	const versionAndFlagSize = 2
 
 	// Encode child header count to scratch
 	const childHeaderCountOffset = versionAndFlagSize
 	binary.BigEndian.PutUint16(
-		enc.scratch[childHeaderCountOffset:],
+		enc.Scratch[childHeaderCountOffset:],
 		uint16(len(a.childrenHeaders)),
 	)
 
 	// Write scratch content to encoder
 	const totalSize = childHeaderCountOffset + 2
-	_, err := enc.Write(enc.scratch[:totalSize])
+	_, err := enc.Write(enc.Scratch[:totalSize])
 	if err != nil {
 		return err
 	}
 
 	// Encode children headers
 	for _, h := range a.childrenHeaders {
-		binary.BigEndian.PutUint64(enc.scratch[:], uint64(h.id))
+		binary.BigEndian.PutUint64(enc.Scratch[:], uint64(h.id))
 
 		const countOffset = storageIDSize
-		binary.BigEndian.PutUint32(enc.scratch[countOffset:], h.count)
+		binary.BigEndian.PutUint32(enc.Scratch[countOffset:], h.count)
 
 		const sizeOffset = countOffset + 4
-		binary.BigEndian.PutUint32(enc.scratch[sizeOffset:], h.size)
+		binary.BigEndian.PutUint32(enc.Scratch[sizeOffset:], h.size)
 
 		const totalSize = sizeOffset + 4
-		_, err = enc.Write(enc.scratch[:totalSize])
+		_, err = enc.Write(enc.Scratch[:totalSize])
 		if err != nil {
 			return err
 		}
@@ -1472,10 +1469,6 @@ func (a *ArrayMetaDataSlab) ByteSize() uint32 {
 	return a.header.size
 }
 
-func (a *ArrayMetaDataSlab) Mutable() bool {
-	return true
-}
-
 func (a *ArrayMetaDataSlab) ID() StorageID {
 	return a.header.id
 }
@@ -1516,14 +1509,11 @@ func (a *Array) Get(i uint64) (Value, error) {
 		return nil, err
 	}
 
-	return storable.Value(a.storage)
+	return storable.StoredValue(a.storage)
 }
 
 func (a *Array) Set(index uint64, value Value) error {
-	storable := value.Storable()
-	if storable.Mutable() || storable.ByteSize() > uint32(maxInlineElementSize) {
-		storable = StorageIDStorable(storable.ID())
-	}
+	storable := value.Storable(a.storage)
 	return a.root.Set(a.storage, index, storable)
 }
 
@@ -1532,10 +1522,7 @@ func (a *Array) Append(value Value) error {
 }
 
 func (a *Array) Insert(index uint64, value Value) error {
-	storable := value.Storable()
-	if storable.Mutable() || storable.ByteSize() > uint32(maxInlineElementSize) {
-		storable = StorageIDStorable(storable.ID())
-	}
+	storable := value.Storable(a.storage)
 
 	err := a.root.Insert(a.storage, index, storable)
 	if err != nil {
@@ -1620,7 +1607,7 @@ func (a *Array) Remove(index uint64) (Value, error) {
 		}
 	}
 
-	return storable.Value(a.storage)
+	return storable.StoredValue(a.storage)
 }
 
 type ArrayIterator struct {
@@ -1651,7 +1638,7 @@ func (i *ArrayIterator) Next() (Value, error) {
 	var element Value
 	var err error
 	if i.index < len(i.dataSlab.elements) {
-		element, err = i.dataSlab.elements[i.index].Value(i.storage)
+		element, err = i.dataSlab.elements[i.index].StoredValue(i.storage)
 		if err != nil {
 			return nil, err
 		}

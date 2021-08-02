@@ -21,6 +21,7 @@ func TestBasicArrayAppendAndGet(t *testing.T) {
 	//storage := NewPersistentSlabStorage(baseStorage)
 
 	storage := NewBasicSlabStorage()
+	storage.DecodeStorable = decodeStorable
 
 	array := NewBasicArray(storage)
 
@@ -48,6 +49,7 @@ func TestBasicArraySetAndGet(t *testing.T) {
 	//storage := NewPersistentSlabStorage(baseStorage)
 
 	storage := NewBasicSlabStorage()
+	storage.DecodeStorable = decodeStorable
 
 	array := NewBasicArray(storage)
 
@@ -81,6 +83,7 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 		//storage := NewPersistentSlabStorage(baseStorage)
 
 		storage := NewBasicSlabStorage()
+		storage.DecodeStorable = decodeStorable
 
 		array := NewBasicArray(storage)
 
@@ -108,6 +111,7 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 		//storage := NewPersistentSlabStorage(baseStorage)
 
 		storage := NewBasicSlabStorage()
+		storage.DecodeStorable = decodeStorable
 
 		array := NewBasicArray(storage)
 
@@ -135,6 +139,7 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 		//storage := NewPersistentSlabStorage(baseStorage)
 
 		storage := NewBasicSlabStorage()
+		storage.DecodeStorable = decodeStorable
 
 		array := NewBasicArray(storage)
 
@@ -170,6 +175,7 @@ func TestBasicArrayRemove(t *testing.T) {
 		//storage := NewPersistentSlabStorage(baseStorage)
 
 		storage := NewBasicSlabStorage()
+		storage.DecodeStorable = decodeStorable
 
 		array := NewBasicArray(storage)
 
@@ -203,6 +209,7 @@ func TestBasicArrayRemove(t *testing.T) {
 		//storage := NewPersistentSlabStorage(baseStorage)
 
 		storage := NewBasicSlabStorage()
+		storage.DecodeStorable = decodeStorable
 
 		array := NewBasicArray(storage)
 
@@ -236,6 +243,7 @@ func TestBasicArrayRemove(t *testing.T) {
 		//storage := NewPersistentSlabStorage(baseStorage)
 
 		storage := NewBasicSlabStorage()
+		storage.DecodeStorable = decodeStorable
 
 		array := NewBasicArray(storage)
 
@@ -293,6 +301,7 @@ func TestBasicArrayRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	//storage := NewPersistentSlabStorage(baseStorage)
 
 	storage := NewBasicSlabStorage()
+	storage.DecodeStorable = decodeStorable
 
 	array := NewBasicArray(storage)
 
@@ -381,6 +390,8 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 	)
 
 	storage := NewBasicSlabStorage()
+	storage.DecodeStorable = decodeStorable
+
 	array := NewBasicArray(storage)
 
 	const arraySize = 256 * 256
@@ -416,6 +427,8 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 
 	// Decode data to new storage
 	storage2 := NewBasicSlabStorage()
+	storage2.DecodeStorable = decodeStorable
+
 	err = storage2.Load(m1)
 	require.NoError(t, err)
 

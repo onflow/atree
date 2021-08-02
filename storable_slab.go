@@ -19,13 +19,13 @@ var _ Slab = StorableSlab{}
 
 func (s StorableSlab) Encode(enc *Encoder) error {
 	// Encode version
-	enc.scratch[0] = 0
+	enc.Scratch[0] = 0
 
 	// Encode flag
-	enc.scratch[1] = flagStorable
+	enc.Scratch[1] = flagStorable
 
 	const versionAndFlagSize = 2
-	_, err := enc.Write(enc.scratch[:versionAndFlagSize])
+	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
 	if err != nil {
 		return err
 	}
@@ -42,16 +42,8 @@ func (s StorableSlab) ID() StorageID {
 	return s.StorageID
 }
 
-func (s StorableSlab) Mutable() bool {
-	return s.Storable.Mutable()
-}
-
-func (s StorableSlab) String() string {
-	return s.Storable.String()
-}
-
-func (s StorableSlab) Value(storage SlabStorage) (Value, error) {
-	return s.Storable.Value(storage)
+func (s StorableSlab) StoredValue(storage SlabStorage) (Value, error) {
+	return s.Storable.StoredValue(storage)
 }
 
 func (StorableSlab) Split(_ SlabStorage) (Slab, Slab, error) {

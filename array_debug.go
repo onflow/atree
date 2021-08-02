@@ -107,7 +107,7 @@ func (a *Array) Print() {
 					if id, ok := e.(StorageIDStorable); ok {
 						overflowIDs.PushBack(StorageID(id))
 					}
-					elemsStr = append(elemsStr, e.String())
+					elemsStr = append(elemsStr, fmt.Sprint(e))
 				}
 
 				if len(dataSlab.elements) > 6 {

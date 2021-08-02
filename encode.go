@@ -41,6 +41,17 @@ func decodeSlab(id StorageID, data []byte) (Slab, error) {
 
 	} else if flag&flagBasicArray != 0 {
 		return newBasicArrayDataSlabFromData(id, data)
+	} else if flag&flagStorable != 0 {
+		const versionAndFlagSize = 2
+		cborDec := NewByteStreamDecoder(data[versionAndFlagSize:])
+		storable, err := decodeStorable(cborDec)
+		if err != nil {
+			return nil, err
+		}
+		return StorableSlab{
+			StorageID: id,
+			Storable:  storable,
+		}, nil
 	}
 	return nil, fmt.Errorf("data has invalid flag %x", flag)
 }

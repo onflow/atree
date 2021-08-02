@@ -48,7 +48,10 @@ func decodeSlab(id StorageID, data []byte) (Slab, error) {
 		if err != nil {
 			return nil, err
 		}
-		return StorableSlab{Storable: storable}, nil
+		return StorableSlab{
+			StorageID: id,
+			Storable:  storable,
+		}, nil
 	}
 	return nil, fmt.Errorf("data has invalid flag %x", flag)
 }

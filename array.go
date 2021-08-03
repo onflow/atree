@@ -1613,7 +1613,7 @@ func (a *Array) Remove(index uint64) (Value, error) {
 }
 
 type ArrayIterator struct {
-	array    *Array
+	storage  SlabStorage
 	id       StorageID
 	dataSlab *ArrayDataSlab
 	index    int
@@ -1625,7 +1625,7 @@ func (i *ArrayIterator) Next() (Value, error) {
 			return nil, nil
 		}
 
-		slab, found, err := i.array.storage.Retrieve(i.id)
+		slab, found, err := i.storage.Retrieve(i.id)
 		if err != nil {
 			return nil, err
 		}
@@ -1640,7 +1640,7 @@ func (i *ArrayIterator) Next() (Value, error) {
 	var element Value
 	var err error
 	if i.index < len(i.dataSlab.elements) {
-		element, err = i.dataSlab.elements[i.index].StoredValue(i.array.storage)
+		element, err = i.dataSlab.elements[i.index].StoredValue(i.storage)
 		if err != nil {
 			return nil, err
 		}
@@ -1663,8 +1663,8 @@ func (a *Array) Iterator() (*ArrayIterator, error) {
 	}
 
 	return &ArrayIterator{
-		array: a,
-		id:    slab.ID(),
+		storage: a.storage,
+		id:      slab.ID(),
 	}, nil
 }
 

@@ -18,18 +18,18 @@ type Encoder struct {
 	io.Writer
 	Storage SlabStorage
 	CBOR    *cbor.StreamEncoder
-	Scratch [32]byte
+	Scratch [64]byte
 }
 
 func newEncoder(w io.Writer, storage SlabStorage) *Encoder {
 	return &Encoder{
-		Writer: w,
+		Writer:  w,
 		Storage: storage,
-		CBOR:   cbor.NewStreamEncoder(w),
+		CBOR:    cbor.NewStreamEncoder(w),
 	}
 }
 
-type StorableDecoder func (*cbor.StreamDecoder) (Storable, error)
+type StorableDecoder func(*cbor.StreamDecoder) (Storable, error)
 
 func decodeSlab(id StorageID, data []byte, decodeStorable StorableDecoder) (Slab, error) {
 	if len(data) < 2 {
@@ -59,7 +59,6 @@ func decodeSlab(id StorageID, data []byte, decodeStorable StorableDecoder) (Slab
 	}
 	return nil, fmt.Errorf("data has invalid flag %x", flag)
 }
-
 
 // TODO: make it inline
 func GetUintCBORSize(n uint64) uint32 {

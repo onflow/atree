@@ -51,7 +51,9 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	array := NewBasicArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array := NewBasicArray(storage, account)
 
 	// TODO capture arrayID here ?
 

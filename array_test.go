@@ -18,8 +18,8 @@ import (
 
 // Seed only once and print seed for easier debugging.
 func init() {
-	seed := time.Now().UnixNano()
 	//seed := uint64(0x9E3779B97F4A7C15) // goldenRatio
+	seed := time.Now().UnixNano()
 	rand.Seed(seed)
 	fmt.Printf("seed: 0x%x\n", seed)
 }
@@ -35,7 +35,9 @@ func TestAppendAndGet(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array, err := NewArray(storage, account)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -75,7 +77,9 @@ func TestSetAndGet(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array, err := NewArray(storage, account)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -109,7 +113,7 @@ func TestSetAndGet(t *testing.T) {
 }
 
 func TestInsertAndGet(t *testing.T) {
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -123,7 +127,9 @@ func TestInsertAndGet(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -160,7 +166,9 @@ func TestInsertAndGet(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -197,7 +205,9 @@ func TestInsertAndGet(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i += 2 {
@@ -232,7 +242,7 @@ func TestInsertAndGet(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -245,7 +255,9 @@ func TestRemove(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -290,7 +302,9 @@ func TestRemove(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -335,7 +349,9 @@ func TestRemove(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -388,7 +404,9 @@ func TestSplit(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -408,7 +426,7 @@ func TestSplit(t *testing.T) {
 	})
 
 	t.Run("metdata slab as root", func(t *testing.T) {
-		SetThreshold(50)
+		SetThreshold(60)
 		defer func() {
 			SetThreshold(1024)
 		}()
@@ -420,7 +438,9 @@ func TestSplit(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -458,7 +478,9 @@ func TestIterate(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		i := uint64(0)
@@ -471,7 +493,7 @@ func TestIterate(t *testing.T) {
 	})
 
 	t.Run("append", func(t *testing.T) {
-		SetThreshold(60)
+		SetThreshold(100)
 		defer func() {
 			SetThreshold(1024)
 		}()
@@ -483,7 +505,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -504,7 +528,7 @@ func TestIterate(t *testing.T) {
 	})
 
 	t.Run("set", func(t *testing.T) {
-		SetThreshold(60)
+		SetThreshold(100)
 		defer func() {
 			SetThreshold(1024)
 		}()
@@ -516,7 +540,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -542,7 +568,7 @@ func TestIterate(t *testing.T) {
 	})
 
 	t.Run("insert", func(t *testing.T) {
-		SetThreshold(60)
+		SetThreshold(100)
 		defer func() {
 			SetThreshold(1024)
 		}()
@@ -554,7 +580,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i += 2 {
@@ -580,7 +608,7 @@ func TestIterate(t *testing.T) {
 	})
 
 	t.Run("remove", func(t *testing.T) {
-		SetThreshold(60)
+		SetThreshold(100)
 		defer func() {
 			SetThreshold(1024)
 		}()
@@ -592,7 +620,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -626,7 +656,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		const count = 10
@@ -660,7 +692,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		const count = 10
@@ -693,7 +727,7 @@ func TestIterate(t *testing.T) {
 
 func TestDeepCopy(t *testing.T) {
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -705,7 +739,9 @@ func TestDeepCopy(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account1 := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array, err := NewArray(storage, account1)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -713,7 +749,10 @@ func TestDeepCopy(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	copied, err := array.DeepCopy(storage)
+	account2 := Account([8]byte{11, 12, 13, 14, 15, 16, 17, 18})
+
+	copied, err := array.DeepCopy(storage, account2)
+	require.NoError(t, err)
 	require.IsType(t, &Array{}, copied)
 
 	arrayCopy := copied.(*Array)
@@ -740,7 +779,7 @@ func TestDeepCopy(t *testing.T) {
 }
 
 func TestConstRootStorageID(t *testing.T) {
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -752,7 +791,9 @@ func TestConstRootStorageID(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array, err := NewArray(storage, account)
 	require.NoError(t, err)
 
 	err = array.Append(Uint64Value(0))
@@ -781,7 +822,7 @@ func TestConstRootStorageID(t *testing.T) {
 
 func TestSetRandomValue(t *testing.T) {
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -793,7 +834,9 @@ func TestSetRandomValue(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array, err := NewArray(storage, account)
 	require.NoError(t, err)
 
 	values := make([]uint64, arraySize)
@@ -841,7 +884,7 @@ func TestSetRandomValue(t *testing.T) {
 
 func TestInsertRandomValue(t *testing.T) {
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -855,7 +898,9 @@ func TestInsertRandomValue(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
@@ -897,7 +942,9 @@ func TestInsertRandomValue(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
@@ -939,7 +986,9 @@ func TestInsertRandomValue(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		array, err := NewArray(storage)
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
@@ -978,7 +1027,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 func TestRemoveRandomElement(t *testing.T) {
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -990,7 +1039,9 @@ func TestRemoveRandomElement(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array, err := NewArray(storage, account)
 	require.NoError(t, err)
 
 	values := make([]uint64, arraySize)
@@ -1045,7 +1096,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 		MaxAction
 	)
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -1057,7 +1108,9 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array, err := NewArray(storage, account)
 	require.NoError(t, err)
 
 	values := make([]uint64, 0, actionCount)
@@ -1163,7 +1216,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 		MaxAction
 	)
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -1175,7 +1228,9 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array, err := NewArray(storage, account)
 	require.NoError(t, err)
 
 	values := make([]uint8, 0, actionCount)
@@ -1289,7 +1344,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 		MaxType
 	)
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -1301,7 +1356,9 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array, err := NewArray(storage, account)
 	require.NoError(t, err)
 
 	values := make([]Value, 0, actionCount)
@@ -1404,7 +1461,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 func TestNestedArray(t *testing.T) {
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -1418,9 +1475,11 @@ func TestNestedArray(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
 		nestedArrays := make([]*Array, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			nested, err := NewArray(storage)
+			nested, err := NewArray(storage, account)
 			require.NoError(t, err)
 
 			err = nested.Append(Uint64Value(i * 2))
@@ -1434,7 +1493,7 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested
 		}
 
-		array, err := NewArray(storage)
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 		for _, a := range nestedArrays {
 			err := array.Append(a)
@@ -1461,9 +1520,11 @@ func TestNestedArray(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
+		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
 		nestedArrays := make([]*Array, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			nested, err := NewArray(storage)
+			nested, err := NewArray(storage, account)
 			require.NoError(t, err)
 
 			for i := uint64(0); i < 50; i++ {
@@ -1475,7 +1536,7 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested
 		}
 
-		array, err := NewArray(storage)
+		array, err := NewArray(storage, account)
 		require.NoError(t, err)
 		for _, a := range nestedArrays {
 			err := array.Append(a)
@@ -1496,7 +1557,7 @@ func TestNestedArray(t *testing.T) {
 
 func TestEncode(t *testing.T) {
 
-	SetThreshold(50)
+	SetThreshold(60)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -1505,7 +1566,13 @@ func TestEncode(t *testing.T) {
 	storage := NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	id1 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 1}}
+	id2 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 2}}
+	id3 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 3}}
+
+	array, err := NewArray(storage, account)
 	require.NoError(t, err)
 
 	const arraySize = 20
@@ -1517,9 +1584,9 @@ func TestEncode(t *testing.T) {
 
 	// Expected serialized slab data with storage id
 	expected := map[StorageID][]byte{
-		1:
+
 		// (metadata slab) headers: [{id:2 size:50 count:10} {id:3 size:50 count:10} ]
-		{
+		id1: {
 			// version
 			0x00,
 			// array meta data slab flag
@@ -1527,41 +1594,63 @@ func TestEncode(t *testing.T) {
 			// child header count
 			0x00, 0x02,
 			// child header 1 (storage id, count, size)
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x33,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			0x00, 0x00, 0x00, 0x09,
+			0x00, 0x00, 0x00, 0x40,
 			// child header 2
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x33,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			0x00, 0x00, 0x00, 0x0b,
+			0x00, 0x00, 0x00, 0x46,
 		},
-		2:
+
 		// (data slab) prev: 0, next: 3, data: [0 1 2 ... 7 8 9]
-		{
+		id2: {
 			// version
 			0x00,
 			// array data slab flag
 			0x06,
 			// prev storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// next storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
 			// CBOR encoded array head (fixed size 3 byte)
-			0x99, 0x00, 0x0a,
+			0x99, 0x00, 0x09,
 			// CBOR encoded array elements
-			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x09,
+			0xd8, 0xa4, 0x00,
+			0xd8, 0xa4, 0x01,
+			0xd8, 0xa4, 0x02,
+			0xd8, 0xa4, 0x03,
+			0xd8, 0xa4, 0x04,
+			0xd8, 0xa4, 0x05,
+			0xd8, 0xa4, 0x06,
+			0xd8, 0xa4, 0x07,
+			0xd8, 0xa4, 0x08,
 		},
-		3:
+
 		// (data slab) prev: 2, next: 0, data: [10 11 12 ... 17 18 19]
-		{
+		id3: {
 			// version
 			0x00,
 			// array data slab flag
 			0x06,
 			// prev storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 			// next storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// CBOR encoded array head (fixed size 3 byte)
-			0x99, 0x00, 0x0a,
+			0x99, 0x00, 0x0b,
 			// CBOR encoded array elements
-			0xd8, 0xa4, 0x0a, 0xd8, 0xa4, 0x0b, 0xd8, 0xa4, 0x0c, 0xd8, 0xa4, 0x0d, 0xd8, 0xa4, 0x0e, 0xd8, 0xa4, 0x0f, 0xd8, 0xa4, 0x10, 0xd8, 0xa4, 0x11, 0xd8, 0xa4, 0x12, 0xd8, 0xa4, 0x13,
+			0xd8, 0xa4, 0x09,
+			0xd8, 0xa4, 0x0a,
+			0xd8, 0xa4, 0x0b,
+			0xd8, 0xa4, 0x0c,
+			0xd8, 0xa4, 0x0d,
+			0xd8, 0xa4, 0x0e,
+			0xd8, 0xa4, 0x0f,
+			0xd8, 0xa4, 0x10,
+			0xd8, 0xa4, 0x11,
+			0xd8, 0xa4, 0x12,
+			0xd8, 0xa4, 0x13,
 		},
 	}
 
@@ -1572,15 +1661,21 @@ func TestEncode(t *testing.T) {
 
 func TestDecodeEncode(t *testing.T) {
 
-	SetThreshold(50)
+	SetThreshold(60)
 	defer func() {
 		SetThreshold(1024)
 	}()
 
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	id1 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 1}}
+	id2 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 2}}
+	id3 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 3}}
+
 	data := map[StorageID][]byte{
-		1:
+
 		// (metadata slab) headers: [{id:2 size:50 count:10} {id:3 size:50 count:10} ]
-		{
+		id1: {
 			// version
 			0x00,
 			// array meta data slab flag
@@ -1588,41 +1683,63 @@ func TestDecodeEncode(t *testing.T) {
 			// child header count
 			0x00, 0x02,
 			// child header 1 (storage id, count, size)
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x33,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			0x00, 0x00, 0x00, 0x09,
+			0x00, 0x00, 0x00, 0x40,
 			// child header 2
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x33,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			0x00, 0x00, 0x00, 0x0b,
+			0x00, 0x00, 0x00, 0x46,
 		},
-		2:
+
 		// (data slab) prev: 0, next: 3, data: [0 1 2 ... 7 8 9]
-		{
+		id2: {
 			// version
 			0x00,
 			// array data slab flag
 			0x06,
 			// prev storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// next storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
 			// CBOR encoded array head (fixed size 3 byte)
-			0x99, 0x00, 0x0a,
+			0x99, 0x00, 0x09,
 			// CBOR encoded array elements
-			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x09,
+			0xd8, 0xa4, 0x00,
+			0xd8, 0xa4, 0x01,
+			0xd8, 0xa4, 0x02,
+			0xd8, 0xa4, 0x03,
+			0xd8, 0xa4, 0x04,
+			0xd8, 0xa4, 0x05,
+			0xd8, 0xa4, 0x06,
+			0xd8, 0xa4, 0x07,
+			0xd8, 0xa4, 0x08,
 		},
-		3:
+
 		// (data slab) prev: 2, next: 0, data: [10 11 12 ... 17 18 19]
-		{
+		id3: {
 			// version
 			0x00,
 			// array data slab flag
 			0x06,
 			// prev storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 			// next storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// CBOR encoded array head (fixed size 3 byte)
-			0x99, 0x00, 0x0a,
+			0x99, 0x00, 0x0b,
 			// CBOR encoded array elements
-			0xd8, 0xa4, 0x0a, 0xd8, 0xa4, 0x0b, 0xd8, 0xa4, 0x0c, 0xd8, 0xa4, 0x0d, 0xd8, 0xa4, 0x0e, 0xd8, 0xa4, 0x0f, 0xd8, 0xa4, 0x10, 0xd8, 0xa4, 0x11, 0xd8, 0xa4, 0x12, 0xd8, 0xa4, 0x13,
+			0xd8, 0xa4, 0x09,
+			0xd8, 0xa4, 0x0a,
+			0xd8, 0xa4, 0x0b,
+			0xd8, 0xa4, 0x0c,
+			0xd8, 0xa4, 0x0d,
+			0xd8, 0xa4, 0x0e,
+			0xd8, 0xa4, 0x0f,
+			0xd8, 0xa4, 0x10,
+			0xd8, 0xa4, 0x11,
+			0xd8, 0xa4, 0x12,
+			0xd8, 0xa4, 0x13,
 		},
 	}
 
@@ -1634,34 +1751,34 @@ func TestDecodeEncode(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check metadata slab (storage id 1)
-	slab, err := getArraySlab(storage, 1)
+	slab, err := getArraySlab(storage, id1)
 	require.NoError(t, err)
 	require.False(t, slab.IsData())
 
 	meta := slab.(*ArrayMetaDataSlab)
 	require.Equal(t, 2, len(meta.childrenHeaders))
-	require.Equal(t, StorageID(2), meta.childrenHeaders[0].id)
-	require.Equal(t, StorageID(3), meta.childrenHeaders[1].id)
+	require.Equal(t, id2, meta.childrenHeaders[0].id)
+	require.Equal(t, id3, meta.childrenHeaders[1].id)
 
 	// Check data slab (storage id 2)
-	slab, err = getArraySlab(storage, 2)
+	slab, err = getArraySlab(storage, id2)
 	require.NoError(t, err)
 	require.True(t, slab.IsData())
 
 	dataSlab := slab.(*ArrayDataSlab)
-	require.Equal(t, 10, len(dataSlab.elements))
+	require.Equal(t, 9, len(dataSlab.elements))
 	require.Equal(t, Uint64Value(0), dataSlab.elements[0])
-	require.Equal(t, Uint64Value(9), dataSlab.elements[9])
+	require.Equal(t, Uint64Value(8), dataSlab.elements[8])
 
 	// Check data slab (storage id 3)
-	slab, err = getArraySlab(storage, 3)
+	slab, err = getArraySlab(storage, id3)
 	require.NoError(t, err)
 	require.True(t, slab.IsData())
 
 	dataSlab = slab.(*ArrayDataSlab)
-	require.Equal(t, 10, len(dataSlab.elements))
-	require.Equal(t, Uint64Value(10), dataSlab.elements[0])
-	require.Equal(t, Uint64Value(19), dataSlab.elements[9])
+	require.Equal(t, 11, len(dataSlab.elements))
+	require.Equal(t, Uint64Value(9), dataSlab.elements[0])
+	require.Equal(t, Uint64Value(19), dataSlab.elements[10])
 
 	// Encode storaged slabs and compare encoded bytes
 	encodedData, err := storage.Encode()
@@ -1686,7 +1803,9 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	storage := NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array, err := NewArray(storage, account)
 	require.NoError(t, err)
 
 	const arraySize = 256 * 256
@@ -1750,7 +1869,9 @@ func TestEmptyArray(t *testing.T) {
 	storage := NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	array, err := NewArray(storage)
+	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+
+	array, err := NewArray(storage, account)
 	require.NoError(t, err)
 
 	rootID := array.root.Header().id
@@ -1807,7 +1928,9 @@ func TestEmptyArray(t *testing.T) {
 			0x06,
 			// prev storage id
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// next storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// CBOR encoded array head (fixed size 3 byte)
 			0x99, 0x00, 0x00,

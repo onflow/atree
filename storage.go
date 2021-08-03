@@ -4,9 +4,82 @@
 
 package atree
 
-type StorageID uint64
+import (
+	"encoding/binary"
+	"errors"
+	"fmt"
+)
 
-const StorageIDUndefined = StorageID(0)
+type (
+	Account      [8]byte
+	StorageIndex [8]byte
+
+	StorageID struct {
+		account Account
+		index   StorageIndex
+	}
+)
+
+var (
+	AccountUndefined      = Account{}
+	StorageIndexUndefined = StorageIndex{}
+	StorageIDUndefined    = StorageID{}
+)
+
+var (
+	ErrStorageID      = errors.New("invalid storage id")
+	ErrStorageAccount = errors.New("invalid storage account")
+	ErrStorageIndex   = errors.New("invalid storage index")
+)
+
+func (index StorageIndex) Next() StorageIndex {
+	i := binary.BigEndian.Uint64(index[:])
+
+	var next StorageIndex
+	binary.BigEndian.PutUint64(next[:], i+1)
+
+	return next
+}
+
+func NewStorageID(account Account, index StorageIndex) StorageID {
+	return StorageID{account, index}
+}
+
+func NewStorageIDFromRawBytes(b []byte) (StorageID, error) {
+	if len(b) != 16 {
+		return StorageID{}, fmt.Errorf("invalid storage id length %d", len(b))
+	}
+
+	var account Account
+	copy(account[:], b)
+
+	var index StorageIndex
+	copy(index[:], b[8:])
+
+	return StorageID{account, index}, nil
+}
+
+func (id StorageID) ToRawBytes(b []byte) (int, error) {
+	if len(b) < 16 {
+		return 0, fmt.Errorf("storage id raw buffer is too short")
+	}
+	copy(b, id.account[:])
+	copy(b[8:], id.index[:])
+	return 16, nil
+}
+
+func (id StorageID) Valid() error {
+	if id == StorageIDUndefined {
+		return ErrStorageID
+	}
+	if id.account == AccountUndefined {
+		return ErrStorageID
+	}
+	if id.index == StorageIndexUndefined {
+		return ErrStorageID
+	}
+	return nil
+}
 
 type BaseStorageUsageReporter interface {
 	BytesRetrieved() int
@@ -121,22 +194,28 @@ type SlabStorage interface {
 	Remove(StorageID)
 
 	Count() int
-	GenerateStorageID() StorageID
+	GenerateStorageID(acct Account) StorageID
 }
 
 type BasicSlabStorage struct {
 	slabs          map[StorageID]Slab
-	nextStorageID  StorageID
+	storageIndex   map[Account]StorageIndex
 	DecodeStorable StorableDecoder
 }
 
 func NewBasicSlabStorage() *BasicSlabStorage {
-	return &BasicSlabStorage{slabs: make(map[StorageID]Slab)}
+	return &BasicSlabStorage{
+		slabs:        make(map[StorageID]Slab),
+		storageIndex: make(map[Account]StorageIndex),
+	}
 }
 
-func (s *BasicSlabStorage) GenerateStorageID() StorageID {
-	s.nextStorageID++
-	return s.nextStorageID
+func (s *BasicSlabStorage) GenerateStorageID(acct Account) StorageID {
+	index := s.storageIndex[acct]
+	nextIndex := index.Next()
+
+	s.storageIndex[acct] = nextIndex
+	return NewStorageID(acct, nextIndex)
 }
 
 func (s *BasicSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
@@ -188,18 +267,20 @@ type PersistentSlabStorage struct {
 	baseStorage    BaseStorage
 	cache          map[StorageID]Slab
 	deltas         map[StorageID]Slab
-	autoCommit     bool // flag to call commit after each opeartion
-	nextStorageID  StorageID
+	storageIndex   map[Account]StorageIndex
 	DecodeStorable StorableDecoder
+	autoCommit     bool // flag to call commit after each opeartion
 }
 
 type StorageOption func(st *PersistentSlabStorage) *PersistentSlabStorage
 
 func NewPersistentSlabStorage(base BaseStorage, opts ...StorageOption) *PersistentSlabStorage {
 	storage := &PersistentSlabStorage{baseStorage: base,
-		cache:      make(map[StorageID]Slab),
-		deltas:     make(map[StorageID]Slab),
-		autoCommit: true}
+		cache:        make(map[StorageID]Slab),
+		deltas:       make(map[StorageID]Slab),
+		storageIndex: make(map[Account]StorageIndex),
+		autoCommit:   true,
+	}
 
 	for _, applyOption := range opts {
 		storage = applyOption(storage)
@@ -216,31 +297,38 @@ func WithNoAutoCommit() StorageOption {
 	}
 }
 
-func (s *PersistentSlabStorage) GenerateStorageID() StorageID {
-	s.nextStorageID++
-	return s.nextStorageID
+func (s *PersistentSlabStorage) GenerateStorageID(acct Account) StorageID {
+	index := s.storageIndex[acct]
+	nextIndex := index.Next()
+
+	s.storageIndex[acct] = nextIndex
+	return NewStorageID(acct, nextIndex)
 }
 
 func (s *PersistentSlabStorage) Commit() error {
 	for id, slab := range s.deltas {
-		// deleted slabs
-		if slab == nil {
-			s.baseStorage.Remove(id)
-			continue
-		}
+		if id.account != AccountUndefined {
+			// deleted slabs
+			if slab == nil {
+				s.baseStorage.Remove(id)
+				continue
+			}
 
-		// serialize
-		data, err := Encode(slab, s)
-		if err != nil {
-			return err
+			// serialize
+			data, err := Encode(slab, s)
+			if err != nil {
+				return err
+			}
+
+			// store
+			err = s.baseStorage.Store(id, data)
+			if err != nil {
+				return err
+			}
+
+			// add to read cache
+			s.cache[id] = slab
 		}
-		// store
-		err = s.baseStorage.Store(id, data)
-		if err != nil {
-			return err
-		}
-		// add to read cache
-		s.cache[id] = slab
 	}
 	// reset deltas
 	s.deltas = make(map[StorageID]Slab)

@@ -58,7 +58,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	array, err := NewArray(storage)
+	array, err := NewArray(storage, "[AnyType]")
 	require.NoError(b, err)
 
 	// array := NewBasicArray(storage)
@@ -177,7 +177,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 	rand.Seed(time.Now().UnixNano())
 	baseStorage := NewInMemBaseStorage()
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-	array, err := NewArray(storage)
+	array, err := NewArray(storage, "[AnyType]")
 	require.NoError(b, err)
 
 	var totalRawDataSize uint32

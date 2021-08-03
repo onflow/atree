@@ -104,7 +104,7 @@ func main() {
 	storage := atree.NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	array, err := atree.NewArray(storage)
+	array, err := atree.NewArray(storage, "[UInt64]")
 	if err != nil {
 		fmt.Println(err)
 		return

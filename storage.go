@@ -4,6 +4,10 @@
 
 package atree
 
+import (
+	"github.com/fxamacker/cbor/v2"
+)
+
 type StorageID uint64
 
 const StorageIDUndefined = StorageID(0)
@@ -122,16 +126,27 @@ type SlabStorage interface {
 
 	Count() int
 	GenerateStorageID() StorageID
+	CBOREncMode() cbor.EncMode
 }
 
 type BasicSlabStorage struct {
 	slabs          map[StorageID]Slab
 	nextStorageID  StorageID
 	DecodeStorable StorableDecoder
+	cborEncMode    cbor.EncMode
 }
 
-func NewBasicSlabStorage() *BasicSlabStorage {
-	return &BasicSlabStorage{slabs: make(map[StorageID]Slab)}
+var _ SlabStorage = &BasicSlabStorage{}
+
+func NewBasicSlabStorage(cborEncMode cbor.EncMode) *BasicSlabStorage {
+	return &BasicSlabStorage{
+		slabs:       make(map[StorageID]Slab),
+		cborEncMode: cborEncMode,
+	}
+}
+
+func (s *BasicSlabStorage) CBOREncMode() cbor.EncMode {
+	return s.cborEncMode
 }
 
 func (s *BasicSlabStorage) GenerateStorageID() StorageID {
@@ -191,15 +206,20 @@ type PersistentSlabStorage struct {
 	autoCommit     bool // flag to call commit after each opeartion
 	nextStorageID  StorageID
 	DecodeStorable StorableDecoder
+	cborEncMode    cbor.EncMode
 }
+
+var _ SlabStorage = &PersistentSlabStorage{}
 
 type StorageOption func(st *PersistentSlabStorage) *PersistentSlabStorage
 
-func NewPersistentSlabStorage(base BaseStorage, opts ...StorageOption) *PersistentSlabStorage {
+func NewPersistentSlabStorage(base BaseStorage, cborEncMode cbor.EncMode, opts ...StorageOption) *PersistentSlabStorage {
 	storage := &PersistentSlabStorage{baseStorage: base,
-		cache:      make(map[StorageID]Slab),
-		deltas:     make(map[StorageID]Slab),
-		autoCommit: true}
+		cache:       make(map[StorageID]Slab),
+		deltas:      make(map[StorageID]Slab),
+		cborEncMode: cborEncMode,
+		autoCommit:  true,
+	}
 
 	for _, applyOption := range opts {
 		storage = applyOption(storage)
@@ -214,6 +234,10 @@ func WithNoAutoCommit() StorageOption {
 		st.autoCommit = false
 		return st
 	}
+}
+
+func (s *PersistentSlabStorage) CBOREncMode() cbor.EncMode {
+	return s.cborEncMode
 }
 
 func (s *PersistentSlabStorage) GenerateStorageID() StorageID {

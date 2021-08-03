@@ -22,10 +22,11 @@ type Encoder struct {
 }
 
 func NewEncoder(w io.Writer, storage SlabStorage) *Encoder {
+	streamEncoder := storage.CBOREncMode().NewStreamEncoder(w)
 	return &Encoder{
 		Writer:  w,
 		Storage: storage,
-		CBOR:    cbor.NewStreamEncoder(w),
+		CBOR:    streamEncoder,
 	}
 }
 

@@ -9,19 +9,28 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
 )
 
-func TestBasicArrayAppendAndGet(t *testing.T) {
-
-	const arraySize = 1024 * 16
+func newTestBasicStorage(t *testing.T) *BasicSlabStorage {
+	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	require.NoError(t, err)
 
 	//baseStorage := NewInMemBaseStorage()
 
 	//storage := NewPersistentSlabStorage(baseStorage)
 
-	storage := NewBasicSlabStorage()
+	storage := NewBasicSlabStorage(encMode)
 	storage.DecodeStorable = decodeStorable
+	return storage
+}
+
+func TestBasicArrayAppendAndGet(t *testing.T) {
+
+	const arraySize = 1024 * 16
+
+	storage := newTestBasicStorage(t)
 
 	array := NewBasicArray(storage)
 
@@ -44,12 +53,7 @@ func TestBasicArraySetAndGet(t *testing.T) {
 
 	const arraySize = 1024 * 16
 
-	//baseStorage := NewInMemBaseStorage()
-
-	//storage := NewPersistentSlabStorage(baseStorage)
-
-	storage := NewBasicSlabStorage()
-	storage.DecodeStorable = decodeStorable
+	storage := newTestBasicStorage(t)
 
 	array := NewBasicArray(storage)
 
@@ -78,12 +82,7 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
-
-		//storage := NewPersistentSlabStorage(baseStorage)
-
-		storage := NewBasicSlabStorage()
-		storage.DecodeStorable = decodeStorable
+		storage := newTestBasicStorage(t)
 
 		array := NewBasicArray(storage)
 
@@ -106,12 +105,7 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
-
-		//storage := NewPersistentSlabStorage(baseStorage)
-
-		storage := NewBasicSlabStorage()
-		storage.DecodeStorable = decodeStorable
+		storage := newTestBasicStorage(t)
 
 		array := NewBasicArray(storage)
 
@@ -134,12 +128,7 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
-
-		//storage := NewPersistentSlabStorage(baseStorage)
-
-		storage := NewBasicSlabStorage()
-		storage.DecodeStorable = decodeStorable
+		storage := newTestBasicStorage(t)
 
 		array := NewBasicArray(storage)
 
@@ -170,12 +159,7 @@ func TestBasicArrayRemove(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
-
-		//storage := NewPersistentSlabStorage(baseStorage)
-
-		storage := NewBasicSlabStorage()
-		storage.DecodeStorable = decodeStorable
+		storage := newTestBasicStorage(t)
 
 		array := NewBasicArray(storage)
 
@@ -204,12 +188,7 @@ func TestBasicArrayRemove(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
-
-		//storage := NewPersistentSlabStorage(baseStorage)
-
-		storage := NewBasicSlabStorage()
-		storage.DecodeStorable = decodeStorable
+		storage := newTestBasicStorage(t)
 
 		array := NewBasicArray(storage)
 
@@ -238,12 +217,7 @@ func TestBasicArrayRemove(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
-
-		//storage := NewPersistentSlabStorage(baseStorage)
-
-		storage := NewBasicSlabStorage()
-		storage.DecodeStorable = decodeStorable
+		storage := newTestBasicStorage(t)
 
 		array := NewBasicArray(storage)
 
@@ -296,12 +270,7 @@ func TestBasicArrayRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	const actionCount = 1024 * 16
 
-	//baseStorage := NewInMemBaseStorage()
-
-	//storage := NewPersistentSlabStorage(baseStorage)
-
-	storage := NewBasicSlabStorage()
-	storage.DecodeStorable = decodeStorable
+	storage := newTestBasicStorage(t)
 
 	array := NewBasicArray(storage)
 
@@ -389,7 +358,10 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 		MaxType
 	)
 
-	storage := NewBasicSlabStorage()
+	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode)
 	storage.DecodeStorable = decodeStorable
 
 	array := NewBasicArray(storage)
@@ -426,7 +398,10 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decode data to new storage
-	storage2 := NewBasicSlabStorage()
+	encMode, err = cbor.CanonicalEncOptions().EncMode()
+	require.NoError(t, err)
+
+	storage2 := NewBasicSlabStorage(encMode)
 	storage2.DecodeStorable = decodeStorable
 
 	err = storage2.Load(m1)

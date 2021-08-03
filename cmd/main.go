@@ -101,7 +101,13 @@ func main() {
 		maxThreshold,
 	)
 
-	storage := atree.NewBasicSlabStorage()
+	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	storage := atree.NewBasicSlabStorage(encMode)
 	storage.DecodeStorable = decodeStorable
 
 	array, err := atree.NewArray(storage)

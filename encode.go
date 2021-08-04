@@ -49,7 +49,7 @@ func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable 
 		return newArrayDataSlabFromData(id, data, decMode, decodeStorable)
 
 	} else if flag&flagBasicArray != 0 {
-		return newBasicArrayDataSlabFromData(id, data, decodeStorable)
+		return newBasicArrayDataSlabFromData(id, data, decMode, decodeStorable)
 	} else if flag&flagStorable != 0 {
 		const versionAndFlagSize = 2
 		cborDec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])

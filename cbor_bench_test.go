@@ -37,34 +37,39 @@ func BenchmarkEncodeCBORArrayMixedTypes(b *testing.B) {
 
 func BenchmarkDecodeCBORArrayUint8(b *testing.B) {
 	values := getUint8Values()
-	data := encodeStorables(b, values)
-	benchmarkDecodeCBORArray(b, data)
+	storage := newTestBasicStorage(b)
+	data := encodeStorables(b, values, storage)
+	benchmarkDecodeCBORArray(b, data, storage)
 }
 
 func BenchmarkDecodeCBORArrayUint64(b *testing.B) {
 	values := getUint64Values()
-	data := encodeStorables(b, values)
-	benchmarkDecodeCBORArray(b, data)
+	storage := newTestBasicStorage(b)
+	data := encodeStorables(b, values, storage)
+	benchmarkDecodeCBORArray(b, data, storage)
 }
 
 func BenchmarkDecodeCBORArrayMixedTypes(b *testing.B) {
 	values := getMixTypedValues()
-	data := encodeStorables(b, values)
-	benchmarkDecodeCBORArray(b, data)
+	storage := newTestBasicStorage(b)
+	data := encodeStorables(b, values, storage)
+	benchmarkDecodeCBORArray(b, data, storage)
 }
 
 func benchmarkEncodeCBORArray(b *testing.B, values []Storable) {
 
 	b.Logf("Encoding array of %d elements", len(values))
 
+	storage := newTestBasicStorage(b)
+
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		encodeStorables(b, values)
+		encodeStorables(b, values, storage)
 	}
 }
 
-func benchmarkDecodeCBORArray(b *testing.B, data []byte) {
+func benchmarkDecodeCBORArray(b *testing.B, data []byte, storage SlabStorage) {
 
 	b.ResetTimer()
 
@@ -75,7 +80,7 @@ func benchmarkDecodeCBORArray(b *testing.B, data []byte) {
 
 		elements := make([]Storable, elemCount)
 		for i := 0; i < int(elemCount); i++ {
-			storable, _ := decodeStorable(cborDec)
+			storable, _ := decodeStorable(cborDec, StorageIDUndefined)
 			elements[i] = storable
 		}
 	}
@@ -137,9 +142,9 @@ func getMixTypedValues() []Storable {
 	return values
 }
 
-func encodeStorables(t testing.TB, values []Storable) []byte {
+func encodeStorables(t testing.TB, values []Storable, storage SlabStorage) []byte {
 	var buf bytes.Buffer
-	enc := NewEncoder(&buf, nil)
+	enc := NewEncoder(&buf, storage)
 
 	enc.Scratch[0] = 0x80 | 27
 	binary.BigEndian.PutUint64(enc.Scratch[1:], uint64(len(values)))

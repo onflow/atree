@@ -187,7 +187,7 @@ func (v Uint64Value) String() string {
 	return fmt.Sprintf("%d", uint64(v))
 }
 
-func decodeStorable(dec *cbor.StreamDecoder) (Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, _ StorageID) (Storable, error) {
 	tagNumber, err := dec.DecodeTagNumber()
 	if err != nil {
 		return nil, err

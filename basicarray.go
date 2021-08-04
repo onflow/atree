@@ -70,7 +70,14 @@ func NewBasicArrayDataSlab(storage SlabStorage, address Address) *BasicArrayData
 	}
 }
 
-func newBasicArrayDataSlabFromData(id StorageID, data []byte, decodeStorable StorableDecoder) (*BasicArrayDataSlab, error) {
+func newBasicArrayDataSlabFromData(
+	id StorageID,
+	data []byte,
+	decodeStorable StorableDecoder,
+) (
+	*BasicArrayDataSlab,
+	error,
+) {
 	if len(data) == 0 {
 		return nil, errors.New("data is too short for basic array")
 	}
@@ -89,7 +96,7 @@ func newBasicArrayDataSlabFromData(id StorageID, data []byte, decodeStorable Sto
 
 	elements := make([]Storable, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		storable, err := decodeStorable(cborDec)
+		storable, err := decodeStorable(cborDec, StorageIDUndefined)
 		if err != nil {
 			return nil, err
 		}

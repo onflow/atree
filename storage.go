@@ -8,6 +8,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 type (
@@ -195,19 +197,28 @@ type SlabStorage interface {
 
 	Count() int
 	GenerateStorageID(address Address) StorageID
+	CBOREncMode() cbor.EncMode
 }
 
 type BasicSlabStorage struct {
 	slabs          map[StorageID]Slab
 	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
+	cborEncMode    cbor.EncMode
 }
 
-func NewBasicSlabStorage() *BasicSlabStorage {
+var _ SlabStorage = &BasicSlabStorage{}
+
+func NewBasicSlabStorage(cborEncMode cbor.EncMode) *BasicSlabStorage {
 	return &BasicSlabStorage{
 		slabs:        make(map[StorageID]Slab),
 		storageIndex: make(map[Address]StorageIndex),
+		cborEncMode:  cborEncMode,
 	}
+}
+
+func (s *BasicSlabStorage) CBOREncMode() cbor.EncMode {
+	return s.cborEncMode
 }
 
 func (s *BasicSlabStorage) GenerateStorageID(address Address) StorageID {
@@ -269,16 +280,20 @@ type PersistentSlabStorage struct {
 	deltas         map[StorageID]Slab
 	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
+	cborEncMode    cbor.EncMode
 	autoCommit     bool // flag to call commit after each opeartion
 }
 
+var _ SlabStorage = &PersistentSlabStorage{}
+
 type StorageOption func(st *PersistentSlabStorage) *PersistentSlabStorage
 
-func NewPersistentSlabStorage(base BaseStorage, opts ...StorageOption) *PersistentSlabStorage {
+func NewPersistentSlabStorage(base BaseStorage, cborEncMode cbor.EncMode, opts ...StorageOption) *PersistentSlabStorage {
 	storage := &PersistentSlabStorage{baseStorage: base,
 		cache:        make(map[StorageID]Slab),
 		deltas:       make(map[StorageID]Slab),
 		storageIndex: make(map[Address]StorageIndex),
+		cborEncMode:  cborEncMode,
 		autoCommit:   true,
 	}
 
@@ -303,6 +318,10 @@ func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
 
 	s.storageIndex[address] = nextIndex
 	return NewStorageID(address, nextIndex)
+}
+
+func (s *PersistentSlabStorage) CBOREncMode() cbor.EncMode {
+	return s.cborEncMode
 }
 
 func (s *PersistentSlabStorage) Commit() error {

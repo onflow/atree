@@ -21,11 +21,12 @@ type Encoder struct {
 	Scratch [64]byte
 }
 
-func newEncoder(w io.Writer, storage SlabStorage) *Encoder {
+func NewEncoder(w io.Writer, storage SlabStorage) *Encoder {
+	streamEncoder := storage.CBOREncMode().NewStreamEncoder(w)
 	return &Encoder{
 		Writer:  w,
 		Storage: storage,
-		CBOR:    cbor.NewStreamEncoder(w),
+		CBOR:    streamEncoder,
 	}
 }
 
@@ -39,7 +40,7 @@ func decodeSlab(id StorageID, data []byte, decodeStorable StorableDecoder) (Slab
 	if flag&flagArray != 0 {
 
 		if flag&flagMetaDataSlab != 0 {
-			return newArrayMetaDataSlabFromData(id, data, decodeStorable)
+			return newArrayMetaDataSlabFromData(id, data)
 		}
 		return newArrayDataSlabFromData(id, data, decodeStorable)
 
@@ -47,7 +48,7 @@ func decodeSlab(id StorageID, data []byte, decodeStorable StorableDecoder) (Slab
 		return newBasicArrayDataSlabFromData(id, data, decodeStorable)
 	} else if flag&flagStorable != 0 {
 		const versionAndFlagSize = 2
-		cborDec := NewByteStreamDecoder(data[versionAndFlagSize:])
+		cborDec := cbor.NewByteStreamDecoder(data[versionAndFlagSize:])
 		storable, err := decodeStorable(cborDec)
 		if err != nil {
 			return nil, err

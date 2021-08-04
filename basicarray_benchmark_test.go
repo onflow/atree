@@ -47,9 +47,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	//fmt.Printf("benchmarkBasicArray seed: 0x%x\n", seed)
 	rand.Seed(seed)
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(b)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -137,7 +135,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	totalLookupTime = time.Since(start)
 
 	// random lookup
-	baseStorage.ResetReporter()
+	storage.baseStorage.ResetReporter()
 	storage.DropCache()
 	array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
@@ -145,12 +143,12 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	ind := rand.Intn(int(array.Count()))
 	_, err = array.Get(uint64(ind))
 	require.NoError(b, err)
-	storageOverheadRatio := float64(baseStorage.Size()) / float64(totalRawDataSize)
-	b.ReportMetric(float64(baseStorage.SegmentsTouched()), "segments_touched")
-	b.ReportMetric(float64(baseStorage.SegmentCounts()), "segments_total")
+	storageOverheadRatio := float64(storage.baseStorage.Size()) / float64(totalRawDataSize)
+	b.ReportMetric(float64(storage.baseStorage.SegmentsTouched()), "segments_touched")
+	b.ReportMetric(float64(storage.baseStorage.SegmentCounts()), "segments_total")
 	b.ReportMetric(float64(totalRawDataSize), "storage_raw_data_size")
-	b.ReportMetric(float64(baseStorage.Size()), "storage_stored_data_size")
-	b.ReportMetric(float64(baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
+	b.ReportMetric(float64(storage.baseStorage.Size()), "storage_stored_data_size")
+	b.ReportMetric(float64(storage.baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
 	b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
 	b.ReportMetric(float64(array.Count()), "number_of_elements")
 	b.ReportMetric(float64(int(totalAppendTime)), "append_100_time_(ns)")

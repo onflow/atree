@@ -237,15 +237,15 @@ func (a *BasicArrayDataSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) Merge(_ Slab, _ SlabStorage) error {
+func (a *BasicArrayDataSlab) Merge(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) LendToRight(_ Slab, _ SlabStorage) error {
+func (a *BasicArrayDataSlab) LendToRight(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) BorrowFromRight(_ Slab, _ SlabStorage) error {
+func (a *BasicArrayDataSlab) BorrowFromRight(_ Slab) error {
 	return errors.New("not applicable")
 }
 

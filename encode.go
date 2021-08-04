@@ -40,7 +40,7 @@ func decodeSlab(id StorageID, data []byte, decodeStorable StorableDecoder) (Slab
 	if flag&flagArray != 0 {
 
 		if flag&flagMetaDataSlab != 0 {
-			return newArrayMetaDataSlabFromData(id, data, decodeStorable)
+			return newArrayMetaDataSlabFromData(id, data)
 		}
 		return newArrayDataSlabFromData(id, data, decodeStorable)
 

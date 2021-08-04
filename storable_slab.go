@@ -50,14 +50,14 @@ func (StorableSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, errors.New("not applicable")
 }
 
-func (StorableSlab) Merge(_ Slab, _ SlabStorage) error {
+func (StorableSlab) Merge(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (StorableSlab) LendToRight(_ Slab, _ SlabStorage) error {
+func (StorableSlab) LendToRight(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (StorableSlab) BorrowFromRight(_ Slab, _ SlabStorage) error {
+func (StorableSlab) BorrowFromRight(_ Slab) error {
 	return errors.New("not applicable")
 }

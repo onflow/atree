@@ -197,8 +197,8 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 		switch rand.Intn(2) {
 		case 0: // remove
 			v, err := array.Remove(uint64(ind))
-			totalRawDataSize -= v.Storable(storage).ByteSize()
 			require.NoError(b, err)
+			totalRawDataSize -= v.Storable(storage).ByteSize()
 		case 1: // insert
 			v := RandomValue()
 			totalRawDataSize += v.Storable(storage).ByteSize()

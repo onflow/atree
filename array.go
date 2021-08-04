@@ -1117,7 +1117,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 			}
 			return storage.Store(a.header.id, a)
 		} else {
-			// leftSib ByteSize <= rightSib ByteSize
+			// leftSib.ByteSize() <= rightSib.ByteSize
 
 			baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
 
@@ -1257,7 +1257,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 
 		return nil
 	} else {
-		// leftSib ByteSize > rightSib ByteSize
+		// leftSib.ByteSize > rightSib.ByteSize
 
 		err := child.Merge(rightSib)
 		if err != nil {

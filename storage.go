@@ -48,7 +48,7 @@ func NewStorageID(address Address, index StorageIndex) StorageID {
 }
 
 func NewStorageIDFromRawBytes(b []byte) (StorageID, error) {
-	if len(b) < 16 {
+	if len(b) < storageIDSize {
 		return StorageID{}, fmt.Errorf("invalid storage id length %d", len(b))
 	}
 
@@ -62,12 +62,12 @@ func NewStorageIDFromRawBytes(b []byte) (StorageID, error) {
 }
 
 func (id StorageID) ToRawBytes(b []byte) (int, error) {
-	if len(b) < 16 {
+	if len(b) < storageIDSize {
 		return 0, fmt.Errorf("storage id raw buffer is too short")
 	}
 	copy(b, id.address[:])
 	copy(b[8:], id.index[:])
-	return 16, nil
+	return storageIDSize, nil
 }
 
 func (id StorageID) Valid() error {

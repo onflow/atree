@@ -65,12 +65,12 @@ func (v StorageIDStorable) Encode(enc *Encoder) error {
 	copy(enc.Scratch[:], v.address[:])
 	copy(enc.Scratch[8:], v.index[:])
 
-	return enc.CBOR.EncodeBytes(enc.Scratch[:16])
+	return enc.CBOR.EncodeBytes(enc.Scratch[:storageIDSize])
 }
 
 func (v StorageIDStorable) ByteSize() uint32 {
 	// tag number (2 bytes) + byte string header (1 byte) + storage id (16 bytes)
-	return 2 + 1 + 16
+	return 2 + 1 + storageIDSize
 }
 
 func (v StorageIDStorable) String() string {
@@ -121,7 +121,7 @@ func DecodeStorageIDStorable(dec *cbor.StreamDecoder) (Storable, error) {
 		return nil, err
 	}
 
-	if len(b) != 16 {
+	if len(b) != storageIDSize {
 		return nil, fmt.Errorf("invalid storage id buffer length %d", len(b))
 	}
 

@@ -6,5 +6,5 @@ package atree
 
 type Value interface {
 	Storable(SlabStorage) Storable
-	DeepCopy(SlabStorage, Account) (Value, error)
+	DeepCopy(SlabStorage, Address) (Value, error)
 }

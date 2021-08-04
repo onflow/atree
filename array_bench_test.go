@@ -81,9 +81,9 @@ func BenchmarkRemoveXXLArray(b *testing.B) {
 
 func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, error) {
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	if err != nil {
 		return nil, err
 	}

@@ -35,9 +35,9 @@ func TestAppendAndGet(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -77,9 +77,9 @@ func TestSetAndGet(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -127,9 +127,9 @@ func TestInsertAndGet(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -166,9 +166,9 @@ func TestInsertAndGet(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -205,9 +205,9 @@ func TestInsertAndGet(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i += 2 {
@@ -255,9 +255,9 @@ func TestRemove(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -302,9 +302,9 @@ func TestRemove(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -349,9 +349,9 @@ func TestRemove(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -404,9 +404,9 @@ func TestSplit(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -438,9 +438,9 @@ func TestSplit(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -478,9 +478,9 @@ func TestIterate(t *testing.T) {
 
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		i := uint64(0)
@@ -505,9 +505,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -540,9 +540,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -580,9 +580,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i += 2 {
@@ -620,9 +620,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -656,9 +656,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		const count = 10
@@ -692,9 +692,9 @@ func TestIterate(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		const count = 10
@@ -739,9 +739,9 @@ func TestDeepCopy(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	account1 := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address1 := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account1)
+	array, err := NewArray(storage, address1)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -749,9 +749,9 @@ func TestDeepCopy(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	account2 := Account([8]byte{11, 12, 13, 14, 15, 16, 17, 18})
+	address2 := Address([8]byte{11, 12, 13, 14, 15, 16, 17, 18})
 
-	copied, err := array.DeepCopy(storage, account2)
+	copied, err := array.DeepCopy(storage, address2)
 	require.NoError(t, err)
 	require.IsType(t, &Array{}, copied)
 
@@ -791,9 +791,9 @@ func TestConstRootStorageID(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	require.NoError(t, err)
 
 	err = array.Append(Uint64Value(0))
@@ -834,9 +834,9 @@ func TestSetRandomValue(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	require.NoError(t, err)
 
 	values := make([]uint64, arraySize)
@@ -898,9 +898,9 @@ func TestInsertRandomValue(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
@@ -942,9 +942,9 @@ func TestInsertRandomValue(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
@@ -986,9 +986,9 @@ func TestInsertRandomValue(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
@@ -1039,9 +1039,9 @@ func TestRemoveRandomElement(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	require.NoError(t, err)
 
 	values := make([]uint64, arraySize)
@@ -1108,9 +1108,9 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	require.NoError(t, err)
 
 	values := make([]uint64, 0, actionCount)
@@ -1228,9 +1228,9 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	require.NoError(t, err)
 
 	values := make([]uint8, 0, actionCount)
@@ -1356,9 +1356,9 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	require.NoError(t, err)
 
 	values := make([]Value, 0, actionCount)
@@ -1475,11 +1475,11 @@ func TestNestedArray(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
 		nestedArrays := make([]*Array, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			nested, err := NewArray(storage, account)
+			nested, err := NewArray(storage, address)
 			require.NoError(t, err)
 
 			err = nested.Append(Uint64Value(i * 2))
@@ -1493,7 +1493,7 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested
 		}
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 		for _, a := range nestedArrays {
 			err := array.Append(a)
@@ -1520,11 +1520,11 @@ func TestNestedArray(t *testing.T) {
 		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 		storage.DecodeStorable = decodeStorable
 
-		account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
 		nestedArrays := make([]*Array, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			nested, err := NewArray(storage, account)
+			nested, err := NewArray(storage, address)
 			require.NoError(t, err)
 
 			for i := uint64(0); i < 50; i++ {
@@ -1536,7 +1536,7 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested
 		}
 
-		array, err := NewArray(storage, account)
+		array, err := NewArray(storage, address)
 		require.NoError(t, err)
 		for _, a := range nestedArrays {
 			err := array.Append(a)
@@ -1566,13 +1566,13 @@ func TestEncode(t *testing.T) {
 	storage := NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	id1 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 1}}
-	id2 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 2}}
-	id3 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 3}}
+	id1 := StorageID{address: address, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 1}}
+	id2 := StorageID{address: address, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 2}}
+	id3 := StorageID{address: address, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 3}}
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	require.NoError(t, err)
 
 	const arraySize = 20
@@ -1666,11 +1666,11 @@ func TestDecodeEncode(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	id1 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 1}}
-	id2 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 2}}
-	id3 := StorageID{account: account, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 3}}
+	id1 := StorageID{address: address, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 1}}
+	id2 := StorageID{address: address, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 2}}
+	id3 := StorageID{address: address, index: [8]byte{0, 0, 0, 0, 0, 0, 0, 3}}
 
 	data := map[StorageID][]byte{
 
@@ -1803,9 +1803,9 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	storage := NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	require.NoError(t, err)
 
 	const arraySize = 256 * 256
@@ -1869,9 +1869,9 @@ func TestEmptyArray(t *testing.T) {
 	storage := NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	account := Account([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-	array, err := NewArray(storage, account)
+	array, err := NewArray(storage, address)
 	require.NoError(t, err)
 
 	rootID := array.root.Header().id

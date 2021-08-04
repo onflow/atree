@@ -11,24 +11,24 @@ import (
 )
 
 type (
-	Account      [8]byte
+	Address      [8]byte
 	StorageIndex [8]byte
 
 	StorageID struct {
-		account Account
+		address Address
 		index   StorageIndex
 	}
 )
 
 var (
-	AccountUndefined      = Account{}
+	AddressUndefined      = Address{}
 	StorageIndexUndefined = StorageIndex{}
 	StorageIDUndefined    = StorageID{}
 )
 
 var (
 	ErrStorageID      = errors.New("invalid storage id")
-	ErrStorageAccount = errors.New("invalid storage account")
+	ErrStorageAddress = errors.New("invalid storage address")
 	ErrStorageIndex   = errors.New("invalid storage index")
 )
 
@@ -41,8 +41,8 @@ func (index StorageIndex) Next() StorageIndex {
 	return next
 }
 
-func NewStorageID(account Account, index StorageIndex) StorageID {
-	return StorageID{account, index}
+func NewStorageID(address Address, index StorageIndex) StorageID {
+	return StorageID{address, index}
 }
 
 func NewStorageIDFromRawBytes(b []byte) (StorageID, error) {
@@ -50,20 +50,20 @@ func NewStorageIDFromRawBytes(b []byte) (StorageID, error) {
 		return StorageID{}, fmt.Errorf("invalid storage id length %d", len(b))
 	}
 
-	var account Account
-	copy(account[:], b)
+	var address Address
+	copy(address[:], b)
 
 	var index StorageIndex
 	copy(index[:], b[8:])
 
-	return StorageID{account, index}, nil
+	return StorageID{address, index}, nil
 }
 
 func (id StorageID) ToRawBytes(b []byte) (int, error) {
 	if len(b) < 16 {
 		return 0, fmt.Errorf("storage id raw buffer is too short")
 	}
-	copy(b, id.account[:])
+	copy(b, id.address[:])
 	copy(b[8:], id.index[:])
 	return 16, nil
 }
@@ -72,11 +72,11 @@ func (id StorageID) Valid() error {
 	if id == StorageIDUndefined {
 		return ErrStorageID
 	}
-	if id.account == AccountUndefined {
-		return ErrStorageID
+	if id.address == AddressUndefined {
+		return ErrStorageAddress
 	}
 	if id.index == StorageIndexUndefined {
-		return ErrStorageID
+		return ErrStorageIndex
 	}
 	return nil
 }
@@ -194,28 +194,28 @@ type SlabStorage interface {
 	Remove(StorageID)
 
 	Count() int
-	GenerateStorageID(acct Account) StorageID
+	GenerateStorageID(address Address) StorageID
 }
 
 type BasicSlabStorage struct {
 	slabs          map[StorageID]Slab
-	storageIndex   map[Account]StorageIndex
+	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
 }
 
 func NewBasicSlabStorage() *BasicSlabStorage {
 	return &BasicSlabStorage{
 		slabs:        make(map[StorageID]Slab),
-		storageIndex: make(map[Account]StorageIndex),
+		storageIndex: make(map[Address]StorageIndex),
 	}
 }
 
-func (s *BasicSlabStorage) GenerateStorageID(acct Account) StorageID {
-	index := s.storageIndex[acct]
+func (s *BasicSlabStorage) GenerateStorageID(address Address) StorageID {
+	index := s.storageIndex[address]
 	nextIndex := index.Next()
 
-	s.storageIndex[acct] = nextIndex
-	return NewStorageID(acct, nextIndex)
+	s.storageIndex[address] = nextIndex
+	return NewStorageID(address, nextIndex)
 }
 
 func (s *BasicSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
@@ -267,7 +267,7 @@ type PersistentSlabStorage struct {
 	baseStorage    BaseStorage
 	cache          map[StorageID]Slab
 	deltas         map[StorageID]Slab
-	storageIndex   map[Account]StorageIndex
+	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
 	autoCommit     bool // flag to call commit after each opeartion
 }
@@ -278,7 +278,7 @@ func NewPersistentSlabStorage(base BaseStorage, opts ...StorageOption) *Persiste
 	storage := &PersistentSlabStorage{baseStorage: base,
 		cache:        make(map[StorageID]Slab),
 		deltas:       make(map[StorageID]Slab),
-		storageIndex: make(map[Account]StorageIndex),
+		storageIndex: make(map[Address]StorageIndex),
 		autoCommit:   true,
 	}
 
@@ -297,17 +297,17 @@ func WithNoAutoCommit() StorageOption {
 	}
 }
 
-func (s *PersistentSlabStorage) GenerateStorageID(acct Account) StorageID {
-	index := s.storageIndex[acct]
+func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
+	index := s.storageIndex[address]
 	nextIndex := index.Next()
 
-	s.storageIndex[acct] = nextIndex
-	return NewStorageID(acct, nextIndex)
+	s.storageIndex[address] = nextIndex
+	return NewStorageID(address, nextIndex)
 }
 
 func (s *PersistentSlabStorage) Commit() error {
 	for id, slab := range s.deltas {
-		if id.account != AccountUndefined {
+		if id.address != AddressUndefined {
 			// deleted slabs
 			if slab == nil {
 				s.baseStorage.Remove(id)

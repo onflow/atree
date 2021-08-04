@@ -44,7 +44,7 @@ type ArrayDataSlab struct {
 }
 
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a, account: a.header.id.account}, nil
+	return &Array{storage: storage, root: a, address: a.header.id.address}, nil
 }
 
 var _ ArraySlab = &ArrayDataSlab{}
@@ -62,7 +62,7 @@ type ArrayMetaDataSlab struct {
 var _ ArraySlab = &ArrayMetaDataSlab{}
 
 func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a, account: a.header.id.account}, nil
+	return &Array{storage: storage, root: a, address: a.header.id.address}, nil
 }
 
 type ArraySlab interface {
@@ -89,7 +89,7 @@ type ArraySlab interface {
 // Array is tree
 type Array struct {
 	storage SlabStorage
-	account Account
+	address Address
 	root    ArraySlab
 }
 
@@ -121,10 +121,10 @@ func (e ArraySlabNotFoundError) Error() string {
 	return fmt.Sprintf("failed to retrieve ArraySlab %d: %v", e.id, e.err)
 }
 
-func newArrayDataSlab(storage SlabStorage, account Account) *ArrayDataSlab {
+func newArrayDataSlab(storage SlabStorage, address Address) *ArrayDataSlab {
 	return &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:   storage.GenerateStorageID(account),
+			id:   storage.GenerateStorageID(address),
 			size: arrayDataSlabPrefixSize,
 		},
 	}
@@ -357,7 +357,7 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	rightSlabCount := len(a.elements) - leftCount
 	rightSlab := &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(a.header.id.account),
+			id:    storage.GenerateStorageID(a.header.id.address),
 			size:  arrayDataSlabPrefixSize + dataSize - leftSize,
 			count: uint32(rightSlabCount),
 		},
@@ -1314,7 +1314,7 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	// Construct right slab
 	rightSlab := &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(a.header.id.account),
+			id:    storage.GenerateStorageID(a.header.id.address),
 			size:  a.header.size - uint32(leftSize),
 			count: a.header.count - leftCount,
 		},
@@ -1465,8 +1465,8 @@ func (a *ArrayMetaDataSlab) String() string {
 	return strings.Join(elemsStr, " ")
 }
 
-func NewArray(storage SlabStorage, account Account) (*Array, error) {
-	root := newArrayDataSlab(storage, account)
+func NewArray(storage SlabStorage, address Address) (*Array, error) {
+	root := newArrayDataSlab(storage, address)
 
 	err := storage.Store(root.header.id, root)
 	if err != nil {
@@ -1475,7 +1475,7 @@ func NewArray(storage SlabStorage, account Account) (*Array, error) {
 
 	return &Array{
 		storage: storage,
-		account: account,
+		address: address,
 		root:    root,
 	}, nil
 }
@@ -1521,7 +1521,7 @@ func (a *Array) Insert(index uint64, value Value) error {
 
 		// Assign a new storage id to old root before splitting it.
 		oldRoot := a.root
-		oldRoot.SetID(a.storage.GenerateStorageID(a.account))
+		oldRoot.SetID(a.storage.GenerateStorageID(a.address))
 
 		// Split old root
 		leftSlab, rightSlab, err := oldRoot.Split(a.storage)
@@ -1680,8 +1680,8 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	}
 }
 
-func (a *Array) DeepCopy(storage SlabStorage, account Account) (Value, error) {
-	result, err := NewArray(storage, account)
+func (a *Array) DeepCopy(storage SlabStorage, address Address) (Value, error) {
+	result, err := NewArray(storage, address)
 	if err != nil {
 		return nil, err
 	}
@@ -1689,7 +1689,7 @@ func (a *Array) DeepCopy(storage SlabStorage, account Account) (Value, error) {
 	var index uint64
 	err = a.Iterate(func(element Value) (resume bool, err error) {
 
-		elementCopy, err := element.DeepCopy(storage, account)
+		elementCopy, err := element.DeepCopy(storage, address)
 		if err != nil {
 			return false, err
 		}

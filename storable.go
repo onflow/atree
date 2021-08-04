@@ -62,7 +62,7 @@ func (v StorageIDStorable) Encode(enc *Encoder) error {
 		return err
 	}
 
-	copy(enc.Scratch[:], v.account[:])
+	copy(enc.Scratch[:], v.address[:])
 	copy(enc.Scratch[8:], v.index[:])
 
 	return enc.CBOR.EncodeBytes(enc.Scratch[:16])
@@ -119,12 +119,12 @@ func DecodeStorageIDStorable(dec *cbor.StreamDecoder) (Storable, error) {
 		return nil, fmt.Errorf("invalid storage id buffer length %d", len(b))
 	}
 
-	var acct Account
-	copy(acct[:], b)
+	var address Address
+	copy(address[:], b)
 
 	var index StorageIndex
 	copy(index[:], b[8:])
 
-	id := NewStorageID(acct, index)
+	id := NewStorageID(address, index)
 	return StorageIDStorable(id), nil
 }

@@ -51,7 +51,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
 
-	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	array := NewBasicArray(storage, address)
 

@@ -23,7 +23,7 @@ func TestBasicArrayAppendAndGet(t *testing.T) {
 	storage := NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	array := NewBasicArray(storage, address)
 
@@ -53,7 +53,7 @@ func TestBasicArraySetAndGet(t *testing.T) {
 	storage := NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	array := NewBasicArray(storage, address)
 
@@ -89,7 +89,7 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 		storage := NewBasicSlabStorage()
 		storage.DecodeStorable = decodeStorable
 
-		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		array := NewBasicArray(storage, address)
 
@@ -119,7 +119,7 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 		storage := NewBasicSlabStorage()
 		storage.DecodeStorable = decodeStorable
 
-		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		array := NewBasicArray(storage, address)
 
@@ -149,7 +149,7 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 		storage := NewBasicSlabStorage()
 		storage.DecodeStorable = decodeStorable
 
-		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		array := NewBasicArray(storage, address)
 
@@ -187,7 +187,7 @@ func TestBasicArrayRemove(t *testing.T) {
 		storage := NewBasicSlabStorage()
 		storage.DecodeStorable = decodeStorable
 
-		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		array := NewBasicArray(storage, address)
 
@@ -223,7 +223,7 @@ func TestBasicArrayRemove(t *testing.T) {
 		storage := NewBasicSlabStorage()
 		storage.DecodeStorable = decodeStorable
 
-		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		array := NewBasicArray(storage, address)
 
@@ -259,7 +259,7 @@ func TestBasicArrayRemove(t *testing.T) {
 		storage := NewBasicSlabStorage()
 		storage.DecodeStorable = decodeStorable
 
-		address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		array := NewBasicArray(storage, address)
 
@@ -319,7 +319,7 @@ func TestBasicArrayRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	storage := NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	array := NewBasicArray(storage, address)
 
@@ -410,7 +410,7 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 	storage := NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	address := Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	array := NewBasicArray(storage, address)
 

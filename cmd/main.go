@@ -104,7 +104,7 @@ func main() {
 	storage := atree.NewBasicSlabStorage()
 	storage.DecodeStorable = decodeStorable
 
-	address := atree.Address([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	array, err := atree.NewArray(storage, address)
 	if err != nil {

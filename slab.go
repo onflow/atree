@@ -9,9 +9,9 @@ type Slab interface {
 
 	ID() StorageID
 	Split(SlabStorage) (Slab, Slab, error)
-	Merge(Slab, SlabStorage) error
+	Merge(Slab) error
 	// LendToRight rebalances slabs by moving elements from left to right
-	LendToRight(Slab, SlabStorage) error
+	LendToRight(Slab) error
 	// BorrowFromRight rebalances slabs by moving elements from right to left
-	BorrowFromRight(Slab, SlabStorage) error
+	BorrowFromRight(Slab) error
 }

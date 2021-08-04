@@ -14,7 +14,7 @@ import (
 type Storable interface {
 	Encode(*Encoder) error
 
-	ByteSize(storage SlabStorage) uint32
+	ByteSize() uint32
 
 	StoredValue(storage SlabStorage) (Value, error)
 }
@@ -64,7 +64,7 @@ func (v StorageIDStorable) Encode(enc *Encoder) error {
 }
 
 // TODO: cache size
-func (v StorageIDStorable) ByteSize(_ SlabStorage) uint32 {
+func (v StorageIDStorable) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + GetUintCBORSize(uint64(v))
 }
@@ -85,7 +85,7 @@ func (n NonStorable) Encode(_ *Encoder) error {
 	return fmt.Errorf("value is non-storable")
 }
 
-func (n NonStorable) ByteSize(_ SlabStorage) uint32 {
+func (n NonStorable) ByteSize() uint32 {
 	return 1
 }
 

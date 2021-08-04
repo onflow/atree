@@ -80,7 +80,7 @@ func benchmarkDecodeCBORArray(b *testing.B, data []byte, storage SlabStorage) {
 
 		elements := make([]Storable, elemCount)
 		for i := 0; i < int(elemCount); i++ {
-			storable, _ := decodeStorable(cborDec, storage)
+			storable, _ := decodeStorable(cborDec, StorageIDUndefined, storage)
 			elements[i] = storable
 		}
 	}

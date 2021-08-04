@@ -30,7 +30,14 @@ func NewEncoder(w io.Writer, storage SlabStorage) *Encoder {
 	}
 }
 
-type StorableDecoder func(decoder *cbor.StreamDecoder, storage SlabStorage) (Storable, error)
+type StorableDecoder func(
+	decoder *cbor.StreamDecoder,
+	storableSlabStorageID StorageID,
+	storage SlabStorage,
+) (
+	Storable,
+	error,
+)
 
 func decodeSlab(storage SlabStorage, id StorageID, data []byte, decodeStorable StorableDecoder) (Slab, error) {
 	if len(data) < 2 {
@@ -49,7 +56,7 @@ func decodeSlab(storage SlabStorage, id StorageID, data []byte, decodeStorable S
 	} else if flag&flagStorable != 0 {
 		const versionAndFlagSize = 2
 		cborDec := cbor.NewByteStreamDecoder(data[versionAndFlagSize:])
-		storable, err := decodeStorable(cborDec, storage)
+		storable, err := decodeStorable(cborDec, id, storage)
 		if err != nil {
 			return nil, err
 		}

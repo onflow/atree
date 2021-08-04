@@ -133,7 +133,15 @@ func newArrayDataSlab(storage SlabStorage) *ArrayDataSlab {
 	}
 }
 
-func newArrayDataSlabFromData(id StorageID, data []byte, decodeStorable StorableDecoder) (*ArrayDataSlab, error) {
+func newArrayDataSlabFromData(
+	storage SlabStorage,
+	id StorageID,
+	data []byte,
+	decodeStorable StorableDecoder,
+) (
+	*ArrayDataSlab,
+	error,
+) {
 	// Check data length
 	if len(data) < arrayDataSlabPrefixSize {
 		return nil, errors.New("data is too short for array data slab")
@@ -170,7 +178,7 @@ func newArrayDataSlabFromData(id StorageID, data []byte, decodeStorable Storable
 
 	elements := make([]Storable, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		storable, err := decodeStorable(cborDec)
+		storable, err := decodeStorable(cborDec, storage)
 		if err != nil {
 			return nil, err
 		}

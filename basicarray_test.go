@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestBasicStorage(t *testing.T) *BasicSlabStorage {
+func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
 	encMode, err := cbor.CanonicalEncOptions().EncMode()
 	require.NoError(t, err)
 

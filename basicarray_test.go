@@ -14,14 +14,17 @@ import (
 )
 
 func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
-	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
 	//baseStorage := NewInMemBaseStorage()
 
 	//storage := NewPersistentSlabStorage(baseStorage)
 
-	storage := NewBasicSlabStorage(encMode)
+	storage := NewBasicSlabStorage(encMode, decMode)
 	storage.DecodeStorable = decodeStorable
 	return storage
 }
@@ -358,10 +361,13 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 		MaxType
 	)
 
-	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
 
-	storage := NewBasicSlabStorage(encMode)
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode, decMode)
 	storage.DecodeStorable = decodeStorable
 
 	array := NewBasicArray(storage)
@@ -398,10 +404,8 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decode data to new storage
-	encMode, err = cbor.CanonicalEncOptions().EncMode()
-	require.NoError(t, err)
 
-	storage2 := NewBasicSlabStorage(encMode)
+	storage2 := NewBasicSlabStorage(encMode, decMode)
 	storage2.DecodeStorable = decodeStorable
 
 	err = storage2.Load(m1)

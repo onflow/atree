@@ -16,16 +16,14 @@ import (
 // Encoder writes atree slabs to io.Writer.
 type Encoder struct {
 	io.Writer
-	Storage SlabStorage
 	CBOR    *cbor.StreamEncoder
 	Scratch [32]byte
 }
 
-func NewEncoder(w io.Writer, storage SlabStorage) *Encoder {
-	streamEncoder := storage.CBOREncMode().NewStreamEncoder(w)
+func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
+	streamEncoder := encMode.NewStreamEncoder(w)
 	return &Encoder{
 		Writer:  w,
-		Storage: storage,
 		CBOR:    streamEncoder,
 	}
 }
@@ -38,7 +36,7 @@ type StorableDecoder func(
 	error,
 )
 
-func decodeSlab(id StorageID, data []byte, decodeStorable StorableDecoder) (Slab, error) {
+func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable StorableDecoder) (Slab, error) {
 	if len(data) < 2 {
 		return nil, errors.New("data is too short")
 	}
@@ -48,13 +46,13 @@ func decodeSlab(id StorageID, data []byte, decodeStorable StorableDecoder) (Slab
 		if flag&flagMetaDataSlab != 0 {
 			return newArrayMetaDataSlabFromData(id, data)
 		}
-		return newArrayDataSlabFromData(id, data, decodeStorable)
+		return newArrayDataSlabFromData(id, data, decMode, decodeStorable)
 
 	} else if flag&flagBasicArray != 0 {
 		return newBasicArrayDataSlabFromData(id, data, decodeStorable)
 	} else if flag&flagStorable != 0 {
 		const versionAndFlagSize = 2
-		cborDec := cbor.NewByteStreamDecoder(data[versionAndFlagSize:])
+		cborDec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
 		storable, err := decodeStorable(cborDec, id)
 		if err != nil {
 			return nil, err

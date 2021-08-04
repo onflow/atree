@@ -136,6 +136,7 @@ func newArrayDataSlab(storage SlabStorage) *ArrayDataSlab {
 func newArrayDataSlabFromData(
 	id StorageID,
 	data []byte,
+	decMode cbor.DecMode,
 	decodeStorable StorableDecoder,
 ) (
 	*ArrayDataSlab,
@@ -168,7 +169,7 @@ func newArrayDataSlabFromData(
 
 	// Decode content (CBOR array)
 	const contentOffset = nextStorageIDOffset + storageIDSize
-	cborDec := cbor.NewByteStreamDecoder(data[contentOffset:])
+	cborDec := decMode.NewByteStreamDecoder(data[contentOffset:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {

@@ -86,10 +86,10 @@ func getUint8Values() []Storable {
 	size := 0
 	for {
 		v := Uint8Value(0)
-		if size+int(v.ByteSize(nil)) > cborArrayElementsTargetSize {
+		if size+int(v.ByteSize()) > cborArrayElementsTargetSize {
 			break
 		}
-		size += int(v.ByteSize(nil))
+		size += int(v.ByteSize())
 		values = append(values, v)
 	}
 	return values
@@ -100,10 +100,10 @@ func getUint64Values() []Storable {
 	size := 0
 	for {
 		v := Uint64Value(math.MaxUint64)
-		if size+int(v.ByteSize(nil)) > cborArrayElementsTargetSize {
+		if size+int(v.ByteSize()) > cborArrayElementsTargetSize {
 			break
 		}
-		size += int(v.ByteSize(nil))
+		size += int(v.ByteSize())
 		values = append(values, v)
 	}
 	return values
@@ -128,10 +128,10 @@ func getMixTypedValues() []Storable {
 			panic(fmt.Sprintf("missing case for %d", v))
 		}
 
-		if size+int(v.ByteSize(nil)) > cborArrayElementsTargetSize {
+		if size+int(v.ByteSize()) > cborArrayElementsTargetSize {
 			break
 		}
-		size += int(v.ByteSize(nil))
+		size += int(v.ByteSize())
 		values = append(values, v)
 	}
 	return values

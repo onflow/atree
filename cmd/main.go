@@ -48,7 +48,7 @@ func (v Uint64Value) Encode(enc *atree.Encoder) error {
 }
 
 // TODO: cache size
-func (v Uint64Value) ByteSize(_ atree.SlabStorage) uint32 {
+func (v Uint64Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + atree.GetUintCBORSize(uint64(v))
 }

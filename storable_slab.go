@@ -33,9 +33,9 @@ func (s StorableSlab) Encode(enc *Encoder) error {
 	return s.Storable.Encode(enc)
 }
 
-func (s StorableSlab) ByteSize(storage SlabStorage) uint32 {
+func (s StorableSlab) ByteSize() uint32 {
 	const versionAndFlagSize = 2
-	return versionAndFlagSize + s.Storable.ByteSize(storage)
+	return versionAndFlagSize + s.Storable.ByteSize()
 }
 
 func (s StorableSlab) ID() StorageID {

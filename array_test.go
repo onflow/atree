@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
 	//"golang.org/x/exp/rand"
 )
@@ -24,16 +25,24 @@ func init() {
 	fmt.Printf("seed: 0x%x\n", seed)
 }
 
+func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
+	baseStorage := NewInMemBaseStorage()
+
+	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	require.NoError(t, err)
+
+	storage := NewPersistentSlabStorage(baseStorage, encMode, WithNoAutoCommit())
+	storage.DecodeStorable = decodeStorable
+	return storage
+}
+
 func TestAppendAndGet(t *testing.T) {
 
 	t.Parallel()
 
 	const arraySize = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-	storage.DecodeStorable = decodeStorable
+	storage := newTestPersistentStorage(t)
 
 	array, err := NewArray(storage)
 	require.NoError(t, err)
@@ -66,14 +75,12 @@ func TestAppendAndGet(t *testing.T) {
 	)
 }
 
+
 func TestSetAndGet(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-	storage.DecodeStorable = decodeStorable
+	storage := newTestPersistentStorage(t)
 
 	array, err := NewArray(storage)
 	require.NoError(t, err)
@@ -118,10 +125,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -155,10 +159,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -192,10 +193,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -240,10 +238,7 @@ func TestRemove(t *testing.T) {
 	t.Run("remove-first", func(t *testing.T) {
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -285,10 +280,7 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -330,10 +322,7 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -383,10 +372,7 @@ func TestSplit(t *testing.T) {
 	t.Run("data slab as root", func(t *testing.T) {
 		const arraySize = 50
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -415,10 +401,7 @@ func TestSplit(t *testing.T) {
 
 		const arraySize = 50
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -454,9 +437,8 @@ func TestSplit(t *testing.T) {
 func TestIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		baseStorage := NewInMemBaseStorage()
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -478,10 +460,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -511,10 +490,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -549,10 +525,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -587,10 +560,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -621,10 +591,7 @@ func TestIterate(t *testing.T) {
 
 	t.Run("stop", func(t *testing.T) {
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -655,10 +622,7 @@ func TestIterate(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -700,10 +664,7 @@ func TestDeepCopy(t *testing.T) {
 
 	const arraySize uint64 = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-	storage.DecodeStorable = decodeStorable
+	storage := newTestPersistentStorage(t)
 
 	array, err := NewArray(storage)
 	require.NoError(t, err)
@@ -747,10 +708,7 @@ func TestConstRootStorageID(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-	storage.DecodeStorable = decodeStorable
+	storage := newTestPersistentStorage(t)
 
 	array, err := NewArray(storage)
 	require.NoError(t, err)
@@ -788,10 +746,7 @@ func TestSetRandomValue(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-	storage.DecodeStorable = decodeStorable
+	storage := newTestPersistentStorage(t)
 
 	array, err := NewArray(storage)
 	require.NoError(t, err)
@@ -850,10 +805,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -892,10 +844,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -934,10 +883,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		array, err := NewArray(storage)
 		require.NoError(t, err)
@@ -985,10 +931,7 @@ func TestRemoveRandomElement(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-	storage.DecodeStorable = decodeStorable
+	storage := newTestPersistentStorage(t)
 
 	array, err := NewArray(storage)
 	require.NoError(t, err)
@@ -1052,10 +995,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-	storage.DecodeStorable = decodeStorable
+	storage := newTestPersistentStorage(t)
 
 	array, err := NewArray(storage)
 	require.NoError(t, err)
@@ -1170,10 +1110,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-	storage.DecodeStorable = decodeStorable
+	storage := newTestPersistentStorage(t)
 
 	array, err := NewArray(storage)
 	require.NoError(t, err)
@@ -1296,10 +1233,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-	storage.DecodeStorable = decodeStorable
+	storage := newTestPersistentStorage(t)
 
 	array, err := NewArray(storage)
 	require.NoError(t, err)
@@ -1413,10 +1347,7 @@ func TestNestedArray(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		nestedArrays := make([]*Array, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
@@ -1456,10 +1387,7 @@ func TestNestedArray(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
-
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-		storage.DecodeStorable = decodeStorable
+		storage := newTestPersistentStorage(t)
 
 		nestedArrays := make([]*Array, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
@@ -1501,8 +1429,11 @@ func TestEncode(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
+	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	require.NoError(t, err)
+
 	// Create and populate array in memory
-	storage := NewBasicSlabStorage()
+	storage := NewBasicSlabStorage(encMode)
 	storage.DecodeStorable = decodeStorable
 
 	array, err := NewArray(storage)
@@ -1627,10 +1558,13 @@ func TestDecodeEncode(t *testing.T) {
 	}
 
 	// Decode serialized slabs and store them in storage
-	storage := NewBasicSlabStorage()
+	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode)
 	storage.DecodeStorable = decodeStorable
 
-	err := storage.Load(data)
+	err = storage.Load(data)
 	require.NoError(t, err)
 
 	// Check metadata slab (storage id 1)
@@ -1683,7 +1617,10 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	storage := NewBasicSlabStorage()
+	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode)
 	storage.DecodeStorable = decodeStorable
 
 	array, err := NewArray(storage)
@@ -1725,7 +1662,7 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decode data to new storage
-	storage2 := NewBasicSlabStorage()
+	storage2 := NewBasicSlabStorage(encMode)
 	storage2.DecodeStorable = decodeStorable
 
 	err = storage2.Load(m1)
@@ -1747,7 +1684,10 @@ func TestEmptyArray(t *testing.T) {
 
 	t.Parallel()
 
-	storage := NewBasicSlabStorage()
+	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode)
 	storage.DecodeStorable = decodeStorable
 
 	array, err := NewArray(storage)

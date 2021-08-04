@@ -21,15 +21,16 @@ type Encoder struct {
 	Scratch [32]byte
 }
 
-func newEncoder(w io.Writer, storage SlabStorage) *Encoder {
+func NewEncoder(w io.Writer, storage SlabStorage) *Encoder {
+	streamEncoder := storage.CBOREncMode().NewStreamEncoder(w)
 	return &Encoder{
-		Writer: w,
+		Writer:  w,
 		Storage: storage,
-		CBOR:   cbor.NewStreamEncoder(w),
+		CBOR:    streamEncoder,
 	}
 }
 
-type StorableDecoder func (*cbor.StreamDecoder) (Storable, error)
+type StorableDecoder func(*cbor.StreamDecoder) (Storable, error)
 
 func decodeSlab(id StorageID, data []byte, decodeStorable StorableDecoder) (Slab, error) {
 	if len(data) < 2 {
@@ -39,7 +40,7 @@ func decodeSlab(id StorageID, data []byte, decodeStorable StorableDecoder) (Slab
 	if flag&flagArray != 0 {
 
 		if flag&flagMetaDataSlab != 0 {
-			return newArrayMetaDataSlabFromData(id, data, decodeStorable)
+			return newArrayMetaDataSlabFromData(id, data)
 		}
 		return newArrayDataSlabFromData(id, data, decodeStorable)
 
@@ -47,7 +48,7 @@ func decodeSlab(id StorageID, data []byte, decodeStorable StorableDecoder) (Slab
 		return newBasicArrayDataSlabFromData(id, data, decodeStorable)
 	} else if flag&flagStorable != 0 {
 		const versionAndFlagSize = 2
-		cborDec := NewByteStreamDecoder(data[versionAndFlagSize:])
+		cborDec := cbor.NewByteStreamDecoder(data[versionAndFlagSize:])
 		storable, err := decodeStorable(cborDec)
 		if err != nil {
 			return nil, err
@@ -59,7 +60,6 @@ func decodeSlab(id StorageID, data []byte, decodeStorable StorableDecoder) (Slab
 	}
 	return nil, fmt.Errorf("data has invalid flag %x", flag)
 }
-
 
 // TODO: make it inline
 func GetUintCBORSize(n uint64) uint32 {

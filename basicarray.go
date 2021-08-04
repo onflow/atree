@@ -8,6 +8,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 const (
@@ -55,7 +57,6 @@ func (a *BasicArray) DeepCopy(storage SlabStorage) (Value, error) {
 	return result, nil
 }
 
-
 func (a *BasicArray) Storable(SlabStorage) Storable {
 	return a.root
 }
@@ -79,7 +80,7 @@ func newBasicArrayDataSlabFromData(id StorageID, data []byte, decodeStorable Sto
 		return nil, fmt.Errorf("data has invalid flag 0x%x, want 0x%x", data[0], flagBasicArray)
 	}
 
-	cborDec := NewByteStreamDecoder(data[1:])
+	cborDec := cbor.NewByteStreamDecoder(data[1:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
@@ -148,7 +149,9 @@ func (a *BasicArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) 
 
 	a.elements[index] = v
 
-	a.header.size = a.header.size - oldElem.ByteSize() + v.ByteSize()
+	a.header.size = a.header.size -
+		oldElem.ByteSize() +
+		v.ByteSize()
 
 	err := storage.Store(a.header.id, a)
 	if err != nil {
@@ -234,15 +237,15 @@ func (a *BasicArrayDataSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) Merge(Slab) error {
+func (a *BasicArrayDataSlab) Merge(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) LendToRight(Slab) error {
+func (a *BasicArrayDataSlab) LendToRight(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) BorrowFromRight(Slab) error {
+func (a *BasicArrayDataSlab) BorrowFromRight(_ Slab) error {
 	return errors.New("not applicable")
 }
 

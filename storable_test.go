@@ -11,7 +11,6 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-
 // This file contains value implementations for testing purposes
 
 const (

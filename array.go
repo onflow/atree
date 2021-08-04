@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 const (
@@ -159,7 +161,7 @@ func newArrayDataSlabFromData(id StorageID, data []byte, decodeStorable Storable
 
 	// Decode content (CBOR array)
 	const contentOffset = nextStorageIDOffset + storageIDSize
-	cborDec := NewByteStreamDecoder(data[contentOffset:])
+	cborDec := cbor.NewByteStreamDecoder(data[contentOffset:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
@@ -600,7 +602,7 @@ func (a *ArrayDataSlab) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
-func newArrayMetaDataSlabFromData(id StorageID, data []byte, decodeStorable StorableDecoder) (*ArrayMetaDataSlab, error) {
+func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab, error) {
 	if len(data) < arrayMetaDataSlabPrefixSize {
 		return nil, errors.New("data is too short for array metadata slab")
 	}
@@ -1255,7 +1257,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 
 		return nil
 	} else {
-		// leftSib.ByteSize() > rightSib.ByteSize
+		// leftSib.ByteSize > rightSib.ByteSize
 
 		err := child.Merge(rightSib)
 		if err != nil {

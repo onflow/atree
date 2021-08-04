@@ -150,14 +150,14 @@ func newArrayDataSlabFromData(id StorageID, data []byte, decodeStorable Storable
 
 	// Decode prev storage ID
 	const prevStorageIDOffset = versionAndFlagSize
-	prev, err := NewStorageIDFromRawBytes(data[prevStorageIDOffset : prevStorageIDOffset+storageIDSize])
+	prev, err := NewStorageIDFromRawBytes(data[prevStorageIDOffset:])
 	if err != nil {
 		return nil, err
 	}
 
 	// Decode next storage ID
 	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
-	next, err := NewStorageIDFromRawBytes(data[nextStorageIDOffset : nextStorageIDOffset+storageIDSize])
+	next, err := NewStorageIDFromRawBytes(data[nextStorageIDOffset:])
 	if err != nil {
 		return nil, err
 	}
@@ -629,7 +629,7 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte, decodeStorable Stor
 	offset := childHeaderCountOffset + 2
 
 	for i := 0; i < int(childHeaderCount); i++ {
-		storageID, err := NewStorageIDFromRawBytes(data[offset : offset+storageIDSize])
+		storageID, err := NewStorageIDFromRawBytes(data[offset:])
 		if err != nil {
 			return nil, err
 		}

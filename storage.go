@@ -46,7 +46,7 @@ func NewStorageID(address Address, index StorageIndex) StorageID {
 }
 
 func NewStorageIDFromRawBytes(b []byte) (StorageID, error) {
-	if len(b) != 16 {
+	if len(b) < 16 {
 		return StorageID{}, fmt.Errorf("invalid storage id length %d", len(b))
 	}
 

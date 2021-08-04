@@ -19,7 +19,7 @@ type Uint64Value uint64
 var _ atree.Value = Uint64Value(0)
 var _ atree.Storable = Uint64Value(0)
 
-func (v Uint64Value) DeepCopy(_ atree.SlabStorage) (atree.Value, error) {
+func (v Uint64Value) DeepCopy(_ atree.SlabStorage, _ atree.Address) (atree.Value, error) {
 	return v, nil
 }
 
@@ -110,7 +110,9 @@ func main() {
 	storage := atree.NewBasicSlabStorage(encMode)
 	storage.DecodeStorable = decodeStorable
 
-	array, err := atree.NewArray(storage)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := atree.NewArray(storage, address)
 	if err != nil {
 		fmt.Println(err)
 		return

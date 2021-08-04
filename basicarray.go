@@ -34,8 +34,8 @@ type BasicArray struct {
 
 var _ Value = &BasicArray{}
 
-func (a *BasicArray) DeepCopy(storage SlabStorage) (Value, error) {
-	result := NewBasicArray(storage)
+func (a *BasicArray) DeepCopy(storage SlabStorage, address Address) (Value, error) {
+	result := NewBasicArray(storage, address)
 
 	for i, element := range a.root.elements {
 		value, err := element.StoredValue(storage)
@@ -43,7 +43,7 @@ func (a *BasicArray) DeepCopy(storage SlabStorage) (Value, error) {
 			return nil, err
 		}
 
-		valueCopy, err := value.DeepCopy(storage)
+		valueCopy, err := value.DeepCopy(storage, address)
 		if err != nil {
 			return nil, err
 		}
@@ -61,10 +61,10 @@ func (a *BasicArray) Storable(SlabStorage) Storable {
 	return a.root
 }
 
-func NewBasicArrayDataSlab(storage SlabStorage) *BasicArrayDataSlab {
+func NewBasicArrayDataSlab(storage SlabStorage, address Address) *BasicArrayDataSlab {
 	return &BasicArrayDataSlab{
 		header: ArraySlabHeader{
-			id:   storage.GenerateStorageID(),
+			id:   storage.GenerateStorageID(address),
 			size: basicArrayDataSlabPrefixSize,
 		},
 	}
@@ -249,10 +249,10 @@ func (a *BasicArrayDataSlab) BorrowFromRight(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func NewBasicArray(storage SlabStorage) *BasicArray {
+func NewBasicArray(storage SlabStorage, address Address) *BasicArray {
 	return &BasicArray{
 		storage: storage,
-		root:    NewBasicArrayDataSlab(storage),
+		root:    NewBasicArrayDataSlab(storage, address),
 	}
 }
 

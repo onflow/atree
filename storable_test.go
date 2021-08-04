@@ -25,7 +25,7 @@ type Uint8Value uint8
 var _ Value = Uint8Value(0)
 var _ Storable = Uint8Value(0)
 
-func (v Uint8Value) DeepCopy(_ SlabStorage) (Value, error) {
+func (v Uint8Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
 }
 
@@ -68,7 +68,7 @@ type Uint16Value uint16
 var _ Value = Uint16Value(0)
 var _ Storable = Uint16Value(0)
 
-func (v Uint16Value) DeepCopy(_ SlabStorage) (Value, error) {
+func (v Uint16Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
 }
 
@@ -106,7 +106,7 @@ type Uint32Value uint32
 var _ Value = Uint32Value(0)
 var _ Storable = Uint32Value(0)
 
-func (v Uint32Value) DeepCopy(_ SlabStorage) (Value, error) {
+func (v Uint32Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
 }
 
@@ -149,7 +149,7 @@ type Uint64Value uint64
 var _ Value = Uint64Value(0)
 var _ Storable = Uint64Value(0)
 
-func (v Uint64Value) DeepCopy(_ SlabStorage) (Value, error) {
+func (v Uint64Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
 }
 

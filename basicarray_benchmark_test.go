@@ -49,7 +49,9 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	storage := newTestPersistentStorage(b)
 
-	array := NewBasicArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array := NewBasicArray(storage, address)
 
 	// TODO capture arrayID here ?
 

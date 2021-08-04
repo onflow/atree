@@ -18,7 +18,7 @@ type Encoder struct {
 	io.Writer
 	Storage SlabStorage
 	CBOR    *cbor.StreamEncoder
-	Scratch [32]byte
+	Scratch [64]byte
 }
 
 func NewEncoder(w io.Writer, storage SlabStorage) *Encoder {

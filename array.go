@@ -15,15 +15,15 @@ import (
 )
 
 const (
-	storageIDSize = 8
+	storageIDSize = 16
 
-	// slab header size: storage id (8 bytes) + count (4 bytes) + size (4 bytes)
+	// slab header size: storage id (16 bytes) + count (4 bytes) + size (4 bytes)
 	arraySlabHeaderSize = storageIDSize + 4 + 4
 
 	// meta data slab prefix size: version (1 byte) + flag (1 byte) + child header count (2 bytes)
 	arrayMetaDataSlabPrefixSize = 1 + 1 + 2
 
-	// version (1 byte) + flag (1 byte) + prev id (8 bytes) + next id (8 bytes) + CBOR array size (3 bytes)
+	// version (1 byte) + flag (1 byte) + prev id (16 bytes) + next id (16 bytes) + CBOR array size (3 bytes)
 	// (3 bytes of array size support up to 65535 array elements)
 	arrayDataSlabPrefixSize = 2 + storageIDSize + storageIDSize + 3
 
@@ -46,7 +46,7 @@ type ArrayDataSlab struct {
 }
 
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a}, nil
+	return &Array{storage: storage, root: a, address: a.header.id.address}, nil
 }
 
 var _ ArraySlab = &ArrayDataSlab{}
@@ -64,7 +64,7 @@ type ArrayMetaDataSlab struct {
 var _ ArraySlab = &ArrayMetaDataSlab{}
 
 func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a}, nil
+	return &Array{storage: storage, root: a, address: a.header.id.address}, nil
 }
 
 type ArraySlab interface {
@@ -75,8 +75,6 @@ type ArraySlab interface {
 	Set(storage SlabStorage, index uint64, v Storable) error
 	Insert(storage SlabStorage, index uint64, v Storable) error
 	Remove(storage SlabStorage, index uint64) (Storable, error)
-
-	ShallowCloneWithNewID(SlabStorage) ArraySlab
 
 	IsData() bool
 
@@ -93,6 +91,7 @@ type ArraySlab interface {
 // Array is tree
 type Array struct {
 	storage SlabStorage
+	address Address
 	root    ArraySlab
 }
 
@@ -103,7 +102,7 @@ func (a *Array) Value(_ SlabStorage) (Value, error) {
 }
 
 func (a *Array) Storable(SlabStorage) Storable {
-	return a.root
+	return StorageIDStorable(a.StorageID())
 }
 
 type IndexOutOfRangeError struct {
@@ -124,10 +123,10 @@ func (e ArraySlabNotFoundError) Error() string {
 	return fmt.Sprintf("failed to retrieve ArraySlab %d: %v", e.id, e.err)
 }
 
-func newArrayDataSlab(storage SlabStorage) *ArrayDataSlab {
+func newArrayDataSlab(storage SlabStorage, address Address) *ArrayDataSlab {
 	return &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:   storage.GenerateStorageID(),
+			id:   storage.GenerateStorageID(address),
 			size: arrayDataSlabPrefixSize,
 		},
 	}
@@ -153,11 +152,17 @@ func newArrayDataSlabFromData(id StorageID, data []byte, decodeStorable Storable
 
 	// Decode prev storage ID
 	const prevStorageIDOffset = versionAndFlagSize
-	prev := binary.BigEndian.Uint64(data[prevStorageIDOffset:])
+	prev, err := NewStorageIDFromRawBytes(data[prevStorageIDOffset:])
+	if err != nil {
+		return nil, err
+	}
 
 	// Decode next storage ID
 	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
-	next := binary.BigEndian.Uint64(data[nextStorageIDOffset:])
+	next, err := NewStorageIDFromRawBytes(data[nextStorageIDOffset:])
+	if err != nil {
+		return nil, err
+	}
 
 	// Decode content (CBOR array)
 	const contentOffset = nextStorageIDOffset + storageIDSize
@@ -196,7 +201,7 @@ func newArrayDataSlabFromData(id StorageID, data []byte, decodeStorable Storable
 // Header (18 bytes):
 //
 //   +-------------------------------+-------------------------------+-------------------------------+
-//   | slab version + flag (2 bytes) | prev sib storage ID (8 bytes) | next sib storage ID (8 bytes) |
+//   | slab version + flag (2 bytes) | prev sib storage ID (16 bytes) | next sib storage ID (16 bytes) |
 //   +-------------------------------+-------------------------------+-------------------------------+
 //
 // Content (for now):
@@ -215,17 +220,17 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	// Encode prev storage ID to scratch
 	const prevStorageIDOffset = versionAndFlagSize
-	binary.BigEndian.PutUint64(
-		enc.Scratch[prevStorageIDOffset:],
-		uint64(a.prev),
-	)
+	_, err := a.prev.ToRawBytes(enc.Scratch[prevStorageIDOffset:])
+	if err != nil {
+		return err
+	}
 
 	// Encode next storage ID to scratch
 	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
-	binary.BigEndian.PutUint64(
-		enc.Scratch[nextStorageIDOffset:],
-		uint64(a.next),
-	)
+	_, err = a.next.ToRawBytes(enc.Scratch[nextStorageIDOffset:])
+	if err != nil {
+		return err
+	}
 
 	// Encode CBOR array size manually for fix-sized encoding
 	const contentOffset = nextStorageIDOffset + storageIDSize
@@ -241,7 +246,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	// Write scratch content to encoder
 	const totalSize = countOffset + countSize
-	_, err := enc.Write(enc.Scratch[:totalSize])
+	_, err = enc.Write(enc.Scratch[:totalSize])
 	if err != nil {
 		return err
 	}
@@ -255,19 +260,6 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	}
 
 	return enc.CBOR.Flush()
-}
-
-func (a *ArrayDataSlab) ShallowCloneWithNewID(storage SlabStorage) ArraySlab {
-	return &ArrayDataSlab{
-		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(),
-			size:  a.header.size,
-			count: a.header.count,
-		},
-		elements: a.elements,
-		prev:     a.prev,
-		next:     a.next,
-	}
 }
 
 func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
@@ -367,7 +359,7 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	rightSlabCount := len(a.elements) - leftCount
 	rightSlab := &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(),
+			id:    storage.GenerateStorageID(a.header.id.address),
 			size:  arrayDataSlabPrefixSize + dataSize - leftSize,
 			count: uint32(rightSlabCount),
 		},
@@ -623,9 +615,7 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 	const childHeaderCountOffset = versionAndFlagSize
 	childHeaderCount := binary.BigEndian.Uint16(data[childHeaderCountOffset:])
 
-	const childHeaderSize = 16
-
-	expectedDataLength := arrayMetaDataSlabPrefixSize + childHeaderSize*int(childHeaderCount)
+	expectedDataLength := arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*int(childHeaderCount)
 	if len(data) != expectedDataLength {
 		return nil, fmt.Errorf(
 			"data has unexpected length %d, want %d",
@@ -641,7 +631,10 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 	offset := childHeaderCountOffset + 2
 
 	for i := 0; i < int(childHeaderCount); i++ {
-		storageID := binary.BigEndian.Uint64(data[offset:])
+		storageID, err := NewStorageIDFromRawBytes(data[offset:])
+		if err != nil {
+			return nil, err
+		}
 
 		countOffset := offset + storageIDSize
 		count := binary.BigEndian.Uint32(data[countOffset:])
@@ -658,7 +651,7 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 		}
 		childrenCountSum[i] = totalCount
 
-		offset += childHeaderSize
+		offset += arraySlabHeaderSize
 	}
 
 	header := ArraySlabHeader{
@@ -712,7 +705,10 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
 	// Encode children headers
 	for _, h := range a.childrenHeaders {
-		binary.BigEndian.PutUint64(enc.Scratch[:], uint64(h.id))
+		_, err := h.id.ToRawBytes(enc.Scratch[:])
+		if err != nil {
+			return err
+		}
 
 		const countOffset = storageIDSize
 		binary.BigEndian.PutUint32(enc.Scratch[countOffset:], h.count)
@@ -730,18 +726,6 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (a *ArrayMetaDataSlab) ShallowCloneWithNewID(storage SlabStorage) ArraySlab {
-	return &ArrayMetaDataSlab{
-		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(),
-			size:  a.header.size,
-			count: a.header.count,
-		},
-		childrenHeaders:  a.childrenHeaders,
-		childrenCountSum: a.childrenCountSum,
-	}
-}
-
 // TODO: improve naming
 func (a *ArrayMetaDataSlab) childSlabIndexInfo(
 	index uint64,
@@ -752,7 +736,7 @@ func (a *ArrayMetaDataSlab) childSlabIndexInfo(
 	err error,
 ) {
 	if index >= uint64(a.header.count) {
-		return 0, 0, 0, IndexOutOfRangeError{}
+		return 0, 0, StorageID{}, IndexOutOfRangeError{}
 	}
 
 	// Either perform a linear scan (for small number of children),
@@ -1332,7 +1316,7 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	// Construct right slab
 	rightSlab := &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(),
+			id:    storage.GenerateStorageID(a.header.id.address),
 			size:  a.header.size - uint32(leftSize),
 			count: a.header.count - leftCount,
 		},
@@ -1483,8 +1467,8 @@ func (a *ArrayMetaDataSlab) String() string {
 	return strings.Join(elemsStr, " ")
 }
 
-func NewArray(storage SlabStorage) (*Array, error) {
-	root := newArrayDataSlab(storage)
+func NewArray(storage SlabStorage, address Address) (*Array, error) {
+	root := newArrayDataSlab(storage, address)
 
 	err := storage.Store(root.header.id, root)
 	if err != nil {
@@ -1493,6 +1477,7 @@ func NewArray(storage SlabStorage) (*Array, error) {
 
 	return &Array{
 		storage: storage,
+		address: address,
 		root:    root,
 	}, nil
 }
@@ -1533,10 +1518,15 @@ func (a *Array) Insert(index uint64, value Value) error {
 
 	if a.root.IsFull() {
 
-		copiedRoot := a.root.ShallowCloneWithNewID(a.storage)
+		// Save root node id
+		rootID := a.root.ID()
 
-		// Split copied root
-		leftSlab, rightSlab, err := copiedRoot.Split(a.storage)
+		// Assign a new storage id to old root before splitting it.
+		oldRoot := a.root
+		oldRoot.SetID(a.storage.GenerateStorageID(a.address))
+
+		// Split old root
+		leftSlab, rightSlab, err := oldRoot.Split(a.storage)
 		if err != nil {
 			return err
 		}
@@ -1544,21 +1534,18 @@ func (a *Array) Insert(index uint64, value Value) error {
 		left := leftSlab.(ArraySlab)
 		right := rightSlab.(ArraySlab)
 
-		if a.root.IsData() {
-			// Create new ArrayMetaDataSlab with the same storage ID as root
-			rootID := a.root.ID()
-			a.root = &ArrayMetaDataSlab{
-				header: ArraySlabHeader{
-					id: rootID,
-				},
-			}
+		// Create new ArrayMetaDataSlab with the old root's storage ID
+		newRoot := &ArrayMetaDataSlab{
+			header: ArraySlabHeader{
+				id:    rootID,
+				count: left.Header().count + right.Header().count,
+				size:  arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*2,
+			},
+			childrenHeaders:  []ArraySlabHeader{left.Header(), right.Header()},
+			childrenCountSum: []uint32{left.Header().count, left.Header().count + right.Header().count},
 		}
 
-		root := a.root.(*ArrayMetaDataSlab)
-		root.childrenHeaders = []ArraySlabHeader{left.Header(), right.Header()}
-		root.childrenCountSum = []uint32{left.Header().count, left.Header().count + right.Header().count}
-		root.header.count = left.Header().count + right.Header().count
-		root.header.size = arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*uint32(len(root.childrenHeaders))
+		a.root = newRoot
 
 		err = a.storage.Store(left.ID(), left)
 		if err != nil {
@@ -1695,8 +1682,8 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	}
 }
 
-func (a *Array) DeepCopy(storage SlabStorage) (Value, error) {
-	result, err := NewArray(storage)
+func (a *Array) DeepCopy(storage SlabStorage, address Address) (Value, error) {
+	result, err := NewArray(storage, address)
 	if err != nil {
 		return nil, err
 	}
@@ -1704,7 +1691,7 @@ func (a *Array) DeepCopy(storage SlabStorage) (Value, error) {
 	var index uint64
 	err = a.Iterate(func(element Value) (resume bool, err error) {
 
-		elementCopy, err := element.DeepCopy(storage)
+		elementCopy, err := element.DeepCopy(storage, address)
 		if err != nil {
 			return false, err
 		}

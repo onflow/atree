@@ -134,7 +134,6 @@ func newArrayDataSlab(storage SlabStorage) *ArrayDataSlab {
 }
 
 func newArrayDataSlabFromData(
-	storage SlabStorage,
 	id StorageID,
 	data []byte,
 	decodeStorable StorableDecoder,
@@ -178,7 +177,7 @@ func newArrayDataSlabFromData(
 
 	elements := make([]Storable, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		storable, err := decodeStorable(cborDec, StorageIDUndefined, storage)
+		storable, err := decodeStorable(cborDec, StorageIDUndefined)
 		if err != nil {
 			return nil, err
 		}

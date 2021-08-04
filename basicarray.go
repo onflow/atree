@@ -71,7 +71,6 @@ func NewBasicArrayDataSlab(storage SlabStorage) *BasicArrayDataSlab {
 }
 
 func newBasicArrayDataSlabFromData(
-	storage SlabStorage,
 	id StorageID,
 	data []byte,
 	decodeStorable StorableDecoder,
@@ -97,7 +96,7 @@ func newBasicArrayDataSlabFromData(
 
 	elements := make([]Storable, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		storable, err := decodeStorable(cborDec, StorageIDUndefined, storage)
+		storable, err := decodeStorable(cborDec, StorageIDUndefined)
 		if err != nil {
 			return nil, err
 		}

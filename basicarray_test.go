@@ -9,20 +9,35 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
 )
 
-func TestBasicArrayAppendAndGet(t *testing.T) {
+func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
 
-	const arraySize = 1024 * 16
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
 
 	//baseStorage := NewInMemBaseStorage()
 
 	//storage := NewPersistentSlabStorage(baseStorage)
 
-	storage := NewBasicSlabStorage()
+	storage := NewBasicSlabStorage(encMode, decMode)
+	storage.DecodeStorable = decodeStorable
+	return storage
+}
 
-	array := NewBasicArray(storage)
+func TestBasicArrayAppendAndGet(t *testing.T) {
+
+	const arraySize = 1024 * 16
+
+	storage := newTestBasicStorage(t)
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array := NewBasicArray(storage, address)
 
 	for i := uint64(0); i < arraySize; i++ {
 		err := array.Append(Uint64Value(i))
@@ -43,13 +58,11 @@ func TestBasicArraySetAndGet(t *testing.T) {
 
 	const arraySize = 1024 * 16
 
-	//baseStorage := NewInMemBaseStorage()
+	storage := newTestBasicStorage(t)
 
-	//storage := NewPersistentSlabStorage(baseStorage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	storage := NewBasicSlabStorage()
-
-	array := NewBasicArray(storage)
+	array := NewBasicArray(storage, address)
 
 	for i := uint64(0); i < arraySize; i++ {
 		err := array.Append(Uint64Value(i))
@@ -76,13 +89,11 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
+		storage := newTestBasicStorage(t)
 
-		//storage := NewPersistentSlabStorage(baseStorage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		storage := NewBasicSlabStorage()
-
-		array := NewBasicArray(storage)
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Insert(0, Uint64Value(arraySize-i-1))
@@ -103,13 +114,11 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
+		storage := newTestBasicStorage(t)
 
-		//storage := NewPersistentSlabStorage(baseStorage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		storage := NewBasicSlabStorage()
-
-		array := NewBasicArray(storage)
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Insert(i, Uint64Value(i))
@@ -130,13 +139,11 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
+		storage := newTestBasicStorage(t)
 
-		//storage := NewPersistentSlabStorage(baseStorage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		storage := NewBasicSlabStorage()
-
-		array := NewBasicArray(storage)
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i += 2 {
 			err := array.Append(Uint64Value(i))
@@ -165,13 +172,11 @@ func TestBasicArrayRemove(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
+		storage := newTestBasicStorage(t)
 
-		//storage := NewPersistentSlabStorage(baseStorage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		storage := NewBasicSlabStorage()
-
-		array := NewBasicArray(storage)
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -198,13 +203,11 @@ func TestBasicArrayRemove(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
+		storage := newTestBasicStorage(t)
 
-		//storage := NewPersistentSlabStorage(baseStorage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		storage := NewBasicSlabStorage()
-
-		array := NewBasicArray(storage)
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -231,13 +234,11 @@ func TestBasicArrayRemove(t *testing.T) {
 
 		const arraySize = 1024 * 16
 
-		//baseStorage := NewInMemBaseStorage()
+		storage := newTestBasicStorage(t)
 
-		//storage := NewPersistentSlabStorage(baseStorage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		storage := NewBasicSlabStorage()
-
-		array := NewBasicArray(storage)
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -288,13 +289,11 @@ func TestBasicArrayRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	const actionCount = 1024 * 16
 
-	//baseStorage := NewInMemBaseStorage()
+	storage := newTestBasicStorage(t)
 
-	//storage := NewPersistentSlabStorage(baseStorage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	storage := NewBasicSlabStorage()
-
-	array := NewBasicArray(storage)
+	array := NewBasicArray(storage, address)
 
 	values := make([]Value, 0, actionCount)
 
@@ -380,8 +379,18 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 		MaxType
 	)
 
-	storage := NewBasicSlabStorage()
-	array := NewBasicArray(storage)
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode, decMode)
+	storage.DecodeStorable = decodeStorable
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array := NewBasicArray(storage, address)
 
 	const arraySize = 256 * 256
 	values := make([]Value, arraySize)
@@ -415,7 +424,10 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decode data to new storage
-	storage2 := NewBasicSlabStorage()
+
+	storage2 := NewBasicSlabStorage(encMode, decMode)
+	storage2.DecodeStorable = decodeStorable
+
 	err = storage2.Load(m1)
 	require.NoError(t, err)
 

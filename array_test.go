@@ -12,29 +12,58 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
 	//"golang.org/x/exp/rand"
 )
 
+var (
+	letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+)
+
 // Seed only once and print seed for easier debugging.
 func init() {
-	seed := time.Now().UnixNano()
 	//seed := uint64(0x9E3779B97F4A7C15) // goldenRatio
+	seed := time.Now().UnixNano()
 	rand.Seed(seed)
 	fmt.Printf("seed: 0x%x\n", seed)
+}
+
+func randStr(n int) string {
+	r := make([]rune, n)
+	for i := range r {
+		r[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(r)
+}
+
+func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
+	baseStorage := NewInMemBaseStorage()
+
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, WithNoAutoCommit())
+	storage.DecodeStorable = decodeStorable
+	return storage
 }
 
 func TestAppendAndGet(t *testing.T) {
 
 	t.Parallel()
 
+	const typeInfo = "[UInt64]"
+
 	const arraySize = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
+	storage := newTestPersistentStorage(t)
 
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	array, err := NewArray(storage)
+	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -51,7 +80,9 @@ func TestAppendAndGet(t *testing.T) {
 		require.Equal(t, i, uint64(v))
 	}
 
-	verified, err := array.valid()
+	require.Equal(t, typeInfo, array.Type())
+
+	verified, err := array.valid(typeInfo)
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -69,11 +100,13 @@ func TestSetAndGet(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
+	const typeInfo = "[UInt64]"
 
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(t)
 
-	array, err := NewArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -95,7 +128,9 @@ func TestSetAndGet(t *testing.T) {
 		require.Equal(t, i*10, uint64(v))
 	}
 
-	verified, err := array.valid()
+	require.Equal(t, typeInfo, array.Type())
+
+	verified, err := array.valid(typeInfo)
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -107,7 +142,7 @@ func TestSetAndGet(t *testing.T) {
 }
 
 func TestInsertAndGet(t *testing.T) {
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -116,11 +151,13 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -137,7 +174,9 @@ func TestInsertAndGet(t *testing.T) {
 			require.Equal(t, i, uint64(v))
 		}
 
-		verified, err := array.valid()
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -152,11 +191,13 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -173,7 +214,9 @@ func TestInsertAndGet(t *testing.T) {
 			require.Equal(t, i, uint64(v))
 		}
 
-		verified, err := array.valid()
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -188,11 +231,13 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i += 2 {
@@ -214,7 +259,9 @@ func TestInsertAndGet(t *testing.T) {
 			require.Equal(t, i, uint64(v))
 		}
 
-		verified, err := array.valid()
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -227,7 +274,7 @@ func TestInsertAndGet(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -235,11 +282,13 @@ func TestRemove(t *testing.T) {
 	t.Run("remove-first", func(t *testing.T) {
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -248,6 +297,8 @@ func TestRemove(t *testing.T) {
 		}
 
 		require.Equal(t, uint64(arraySize), array.Count())
+
+		require.Equal(t, typeInfo, array.Type())
 
 		for i := uint64(0); i < arraySize; i++ {
 			v, err := array.Remove(0)
@@ -259,8 +310,10 @@ func TestRemove(t *testing.T) {
 
 			require.Equal(t, arraySize-i-1, array.Count())
 
+			require.Equal(t, typeInfo, array.Type())
+
 			if i%256 == 0 {
-				verified, err := array.valid()
+				verified, err := array.valid(typeInfo)
 				require.NoError(t, err)
 				require.True(t, verified)
 			}
@@ -279,11 +332,13 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -292,6 +347,8 @@ func TestRemove(t *testing.T) {
 		}
 
 		require.Equal(t, uint64(arraySize), array.Count())
+
+		require.Equal(t, typeInfo, array.Type())
 
 		for i := arraySize - 1; i >= 0; i-- {
 			v, err := array.Remove(uint64(i))
@@ -303,8 +360,10 @@ func TestRemove(t *testing.T) {
 
 			require.Equal(t, uint64(i), array.Count())
 
+			require.Equal(t, typeInfo, array.Type())
+
 			if i%256 == 0 {
-				verified, err := array.valid()
+				verified, err := array.valid(typeInfo)
 				require.NoError(t, err)
 				require.True(t, verified)
 			}
@@ -323,11 +382,13 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -336,6 +397,8 @@ func TestRemove(t *testing.T) {
 		}
 
 		require.Equal(t, uint64(arraySize), array.Count())
+
+		require.Equal(t, typeInfo, array.Type())
 
 		// Remove every other elements
 		for i := uint64(0); i < array.Count(); i++ {
@@ -347,8 +410,10 @@ func TestRemove(t *testing.T) {
 
 			require.Equal(t, e, v)
 
+			require.Equal(t, typeInfo, array.Type())
+
 			if i%256 == 0 {
-				verified, err := array.valid()
+				verified, err := array.valid(typeInfo)
 				require.NoError(t, err)
 				require.True(t, verified)
 			}
@@ -375,11 +440,13 @@ func TestSplit(t *testing.T) {
 	t.Run("data slab as root", func(t *testing.T) {
 		const arraySize = 50
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -390,6 +457,7 @@ func TestSplit(t *testing.T) {
 		require.NotNil(t, array.root)
 		require.True(t, array.root.IsData())
 		require.Equal(t, uint32(50), array.root.Header().count)
+		require.Equal(t, typeInfo, array.Type())
 
 		err = storage.Commit()
 		require.NoError(t, err)
@@ -399,18 +467,20 @@ func TestSplit(t *testing.T) {
 	})
 
 	t.Run("metdata slab as root", func(t *testing.T) {
-		SetThreshold(50)
+		SetThreshold(60)
 		defer func() {
 			SetThreshold(1024)
 		}()
 
 		const arraySize = 50
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -421,6 +491,7 @@ func TestSplit(t *testing.T) {
 		require.NotNil(t, array.root)
 		require.False(t, array.root.IsData())
 		require.Equal(t, uint32(50), array.root.Header().count)
+		require.Equal(t, typeInfo, array.Type())
 
 		root := array.root.(*ArrayMetaDataSlab)
 		for _, h := range root.childrenHeaders {
@@ -442,19 +513,41 @@ func TestSplit(t *testing.T) {
 }
 
 func TestIterate(t *testing.T) {
+
+	t.Run("empty", func(t *testing.T) {
+		const typeInfo = "[AnyType]"
+
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		i := uint64(0)
+		err = array.Iterate(func(v Value) (bool, error) {
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, i, uint64(0))
+	})
+
 	t.Run("append", func(t *testing.T) {
-		SetThreshold(60)
+		SetThreshold(100)
 		defer func() {
 			SetThreshold(1024)
 		}()
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -475,18 +568,20 @@ func TestIterate(t *testing.T) {
 	})
 
 	t.Run("set", func(t *testing.T) {
-		SetThreshold(60)
+		SetThreshold(100)
 		defer func() {
 			SetThreshold(1024)
 		}()
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -512,18 +607,20 @@ func TestIterate(t *testing.T) {
 	})
 
 	t.Run("insert", func(t *testing.T) {
-		SetThreshold(60)
+		SetThreshold(100)
 		defer func() {
 			SetThreshold(1024)
 		}()
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i += 2 {
@@ -549,18 +646,20 @@ func TestIterate(t *testing.T) {
 	})
 
 	t.Run("remove", func(t *testing.T) {
-		SetThreshold(60)
+		SetThreshold(100)
 		defer func() {
 			SetThreshold(1024)
 		}()
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arraySize; i++ {
@@ -589,11 +688,13 @@ func TestIterate(t *testing.T) {
 
 	t.Run("stop", func(t *testing.T) {
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		const count = 10
@@ -622,11 +723,13 @@ func TestIterate(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		const count = 10
@@ -659,18 +762,20 @@ func TestIterate(t *testing.T) {
 
 func TestDeepCopy(t *testing.T) {
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
 
 	const arraySize uint64 = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
+	const typeInfo = "[UInt64]"
 
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(t)
 
-	array, err := NewArray(storage)
+	address1 := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address1, typeInfo)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -678,7 +783,12 @@ func TestDeepCopy(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	copied, err := array.DeepCopy(storage)
+	require.Equal(t, typeInfo, array.Type())
+
+	address2 := Address{11, 12, 13, 14, 15, 16, 17, 18}
+
+	copied, err := array.DeepCopy(storage, address2)
+	require.NoError(t, err)
 	require.IsType(t, &Array{}, copied)
 
 	arrayCopy := copied.(*Array)
@@ -695,7 +805,13 @@ func TestDeepCopy(t *testing.T) {
 		require.Equal(t, Uint64Value(i), value)
 	}
 
-	verified, err := array.valid()
+	require.Equal(t, typeInfo, arrayCopy.Type())
+
+	verified, err := array.valid(typeInfo)
+	require.NoError(t, err)
+	require.True(t, verified)
+
+	verified, err = arrayCopy.valid(typeInfo)
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -705,18 +821,20 @@ func TestDeepCopy(t *testing.T) {
 }
 
 func TestConstRootStorageID(t *testing.T) {
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
 
 	const arraySize = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
+	const typeInfo = "[UInt64]"
 
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(t)
 
-	array, err := NewArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
 	err = array.Append(Uint64Value(0))
@@ -732,6 +850,7 @@ func TestConstRootStorageID(t *testing.T) {
 
 	rootID := array.root.Header().id
 	require.Equal(t, savedRootID, rootID)
+	require.Equal(t, typeInfo, array.Type())
 
 	for i := uint64(0); i < arraySize; i++ {
 		e, err := array.Get(i)
@@ -745,18 +864,20 @@ func TestConstRootStorageID(t *testing.T) {
 
 func TestSetRandomValue(t *testing.T) {
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
 
 	const arraySize = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
+	const typeInfo = "[UInt64]"
 
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(t)
 
-	array, err := NewArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
 	values := make([]uint64, arraySize)
@@ -791,7 +912,9 @@ func TestSetRandomValue(t *testing.T) {
 		require.Equal(t, v, uint64(ev))
 	}
 
-	verified, err := array.valid()
+	require.Equal(t, typeInfo, array.Type())
+
+	verified, err := array.valid(typeInfo)
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -804,7 +927,7 @@ func TestSetRandomValue(t *testing.T) {
 
 func TestInsertRandomValue(t *testing.T) {
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -813,11 +936,13 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
@@ -839,7 +964,9 @@ func TestInsertRandomValue(t *testing.T) {
 			require.Equal(t, values[i], uint64(v))
 		}
 
-		verified, err := array.valid()
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -854,11 +981,13 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
@@ -880,7 +1009,9 @@ func TestInsertRandomValue(t *testing.T) {
 			require.Equal(t, values[i], uint64(v))
 		}
 
-		verified, err := array.valid()
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -895,11 +1026,13 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const typeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
 
-		array, err := NewArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		values := make([]uint64, arraySize)
@@ -924,7 +1057,9 @@ func TestInsertRandomValue(t *testing.T) {
 			require.Equal(t, v, uint64(ev))
 		}
 
-		verified, err := array.valid()
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -938,18 +1073,20 @@ func TestInsertRandomValue(t *testing.T) {
 
 func TestRemoveRandomElement(t *testing.T) {
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
 
 	const arraySize = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
+	const typeInfo = "[UInt64]"
 
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(t)
 
-	array, err := NewArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
 	values := make([]uint64, arraySize)
@@ -964,6 +1101,8 @@ func TestRemoveRandomElement(t *testing.T) {
 	}
 
 	require.Equal(t, uint64(arraySize), array.Count())
+
+	require.Equal(t, typeInfo, array.Type())
 
 	// Remove n elements at random index
 	for i := uint64(0); i < arraySize; i++ {
@@ -982,8 +1121,9 @@ func TestRemoveRandomElement(t *testing.T) {
 
 	require.Equal(t, uint64(0), array.Count())
 	require.Equal(t, uint64(0), uint64(len(values)))
+	require.Equal(t, typeInfo, array.Type())
 
-	verified, err := array.valid()
+	verified, err := array.valid(typeInfo)
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -1004,18 +1144,20 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 		MaxAction
 	)
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
 
 	const actionCount = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
+	const typeInfo = "[UInt64]"
 
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(t)
 
-	array, err := NewArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
 	values := make([]uint64, 0, actionCount)
@@ -1078,6 +1220,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 		}
 
 		require.Equal(t, array.Count(), uint64(len(values)))
+		require.Equal(t, typeInfo, array.Type())
 	}
 
 	for k, v := range values {
@@ -1100,7 +1243,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	verified, err := array.valid()
+	verified, err := array.valid(typeInfo)
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -1121,18 +1264,20 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 		MaxAction
 	)
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
 
 	const actionCount = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
+	const typeInfo = "[UInt8]"
 
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(t)
 
-	array, err := NewArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
 	values := make([]uint8, 0, actionCount)
@@ -1195,6 +1340,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 		}
 
 		require.Equal(t, array.Count(), uint64(len(values)))
+		require.Equal(t, typeInfo, array.Type())
 	}
 
 	for k, v := range values {
@@ -1217,7 +1363,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	verified, err := array.valid()
+	verified, err := array.valid(typeInfo)
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -1246,18 +1392,20 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 		MaxType
 	)
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
 
 	const actionCount = 256 * 256
 
-	baseStorage := NewInMemBaseStorage()
+	const typeInfo = "[AnyType]"
 
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(t)
 
-	array, err := NewArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
 	values := make([]Value, 0, actionCount)
@@ -1326,8 +1474,9 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 		}
 
 		require.Equal(t, array.Count(), uint64(len(values)))
+		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid()
+		verified, err := array.valid(typeInfo)
 		require.NoError(t, err)
 		require.True(t, verified)
 	}
@@ -1347,7 +1496,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	verified, err := array.valid()
+	verified, err := array.valid(typeInfo)
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -1360,7 +1509,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 func TestNestedArray(t *testing.T) {
 
-	SetThreshold(60)
+	SetThreshold(100)
 	defer func() {
 		SetThreshold(1024)
 	}()
@@ -1369,13 +1518,15 @@ func TestNestedArray(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const nestedTypeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		nestedArrays := make([]*Array, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			nested, err := NewArray(storage)
+			nested, err := NewArray(storage, address, nestedTypeInfo)
 			require.NoError(t, err)
 
 			err = nested.Append(Uint64Value(i * 2))
@@ -1389,7 +1540,9 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested
 		}
 
-		array, err := NewArray(storage)
+		const typeInfo = "[[UInt64]]"
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 		for _, a := range nestedArrays {
 			err := array.Append(a)
@@ -1402,7 +1555,9 @@ func TestNestedArray(t *testing.T) {
 			require.Equal(t, nestedArrays[i], e)
 		}
 
-		verified, err := array.valid()
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
 		require.NoError(t, err)
 		require.True(t, verified)
 	})
@@ -1411,13 +1566,15 @@ func TestNestedArray(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		baseStorage := NewInMemBaseStorage()
+		const nestedTypeInfo = "[UInt64]"
 
-		storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		nestedArrays := make([]*Array, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			nested, err := NewArray(storage)
+			nested, err := NewArray(storage, address, nestedTypeInfo)
 			require.NoError(t, err)
 
 			for i := uint64(0); i < 50; i++ {
@@ -1429,7 +1586,9 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested
 		}
 
-		array, err := NewArray(storage)
+		const typeInfo = "[[UInt64]]"
+
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 		for _, a := range nestedArrays {
 			err := array.Append(a)
@@ -1442,7 +1601,9 @@ func TestNestedArray(t *testing.T) {
 			require.Equal(t, nestedArrays[i], e)
 		}
 
-		verified, err := array.valid()
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
 		require.NoError(t, err)
 		require.True(t, verified)
 	})
@@ -1450,14 +1611,30 @@ func TestNestedArray(t *testing.T) {
 
 func TestEncode(t *testing.T) {
 
-	SetThreshold(50)
+	SetThreshold(60)
 	defer func() {
 		SetThreshold(1024)
 	}()
 
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	const typeInfo = "[UInt64]"
+
 	// Create and populate array in memory
-	storage := NewBasicSlabStorage()
-	array, err := NewArray(storage)
+	storage := NewBasicSlabStorage(encMode, decMode)
+	storage.DecodeStorable = decodeStorable
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+	id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+	id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+
+	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
 	const arraySize = 20
@@ -1469,9 +1646,19 @@ func TestEncode(t *testing.T) {
 
 	// Expected serialized slab data with storage id
 	expected := map[StorageID][]byte{
-		1:
+
 		// (metadata slab) headers: [{id:2 size:50 count:10} {id:3 size:50 count:10} ]
-		{
+		id1: {
+			// extra data
+			// version
+			0x00,
+			// extra data flag
+			0x45,
+			// array of extra data
+			0x81,
+			// type info "[UInt64]"
+			0x68, 0x5b, 0x55, 0x49, 0x6e, 0x74, 0x36, 0x34, 0x5d,
+
 			// version
 			0x00,
 			// array meta data slab flag
@@ -1479,41 +1666,63 @@ func TestEncode(t *testing.T) {
 			// child header count
 			0x00, 0x02,
 			// child header 1 (storage id, count, size)
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x33,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			0x00, 0x00, 0x00, 0x09,
+			0x00, 0x00, 0x00, 0x40,
 			// child header 2
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x33,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			0x00, 0x00, 0x00, 0x0b,
+			0x00, 0x00, 0x00, 0x46,
 		},
-		2:
+
 		// (data slab) prev: 0, next: 3, data: [0 1 2 ... 7 8 9]
-		{
+		id2: {
 			// version
 			0x00,
 			// array data slab flag
 			0x06,
 			// prev storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// next storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
 			// CBOR encoded array head (fixed size 3 byte)
-			0x99, 0x00, 0x0a,
+			0x99, 0x00, 0x09,
 			// CBOR encoded array elements
-			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x09,
+			0xd8, 0xa4, 0x00,
+			0xd8, 0xa4, 0x01,
+			0xd8, 0xa4, 0x02,
+			0xd8, 0xa4, 0x03,
+			0xd8, 0xa4, 0x04,
+			0xd8, 0xa4, 0x05,
+			0xd8, 0xa4, 0x06,
+			0xd8, 0xa4, 0x07,
+			0xd8, 0xa4, 0x08,
 		},
-		3:
+
 		// (data slab) prev: 2, next: 0, data: [10 11 12 ... 17 18 19]
-		{
+		id3: {
 			// version
 			0x00,
 			// array data slab flag
 			0x06,
 			// prev storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 			// next storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// CBOR encoded array head (fixed size 3 byte)
-			0x99, 0x00, 0x0a,
+			0x99, 0x00, 0x0b,
 			// CBOR encoded array elements
-			0xd8, 0xa4, 0x0a, 0xd8, 0xa4, 0x0b, 0xd8, 0xa4, 0x0c, 0xd8, 0xa4, 0x0d, 0xd8, 0xa4, 0x0e, 0xd8, 0xa4, 0x0f, 0xd8, 0xa4, 0x10, 0xd8, 0xa4, 0x11, 0xd8, 0xa4, 0x12, 0xd8, 0xa4, 0x13,
+			0xd8, 0xa4, 0x09,
+			0xd8, 0xa4, 0x0a,
+			0xd8, 0xa4, 0x0b,
+			0xd8, 0xa4, 0x0c,
+			0xd8, 0xa4, 0x0d,
+			0xd8, 0xa4, 0x0e,
+			0xd8, 0xa4, 0x0f,
+			0xd8, 0xa4, 0x10,
+			0xd8, 0xa4, 0x11,
+			0xd8, 0xa4, 0x12,
+			0xd8, 0xa4, 0x13,
 		},
 	}
 
@@ -1524,15 +1733,33 @@ func TestEncode(t *testing.T) {
 
 func TestDecodeEncode(t *testing.T) {
 
-	SetThreshold(50)
+	SetThreshold(60)
 	defer func() {
 		SetThreshold(1024)
 	}()
 
+	const typeInfo = "[UInt64]"
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+	id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+	id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+
 	data := map[StorageID][]byte{
-		1:
+
 		// (metadata slab) headers: [{id:2 size:50 count:10} {id:3 size:50 count:10} ]
-		{
+		id1: {
+			// extra data
+			// version
+			0x00,
+			// extra data flag
+			0x45,
+			// array of extra data
+			0x81,
+			// type info "[UInt64]"
+			0x68, 0x5b, 0x55, 0x49, 0x6e, 0x74, 0x36, 0x34, 0x5d,
+
 			// version
 			0x00,
 			// array meta data slab flag
@@ -1540,78 +1767,112 @@ func TestDecodeEncode(t *testing.T) {
 			// child header count
 			0x00, 0x02,
 			// child header 1 (storage id, count, size)
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x33,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			0x00, 0x00, 0x00, 0x09,
+			0x00, 0x00, 0x00, 0x40,
 			// child header 2
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x33,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			0x00, 0x00, 0x00, 0x0b,
+			0x00, 0x00, 0x00, 0x46,
 		},
-		2:
+
 		// (data slab) prev: 0, next: 3, data: [0 1 2 ... 7 8 9]
-		{
+		id2: {
 			// version
 			0x00,
 			// array data slab flag
 			0x06,
 			// prev storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// next storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
 			// CBOR encoded array head (fixed size 3 byte)
-			0x99, 0x00, 0x0a,
+			0x99, 0x00, 0x09,
 			// CBOR encoded array elements
-			0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x09,
+			0xd8, 0xa4, 0x00,
+			0xd8, 0xa4, 0x01,
+			0xd8, 0xa4, 0x02,
+			0xd8, 0xa4, 0x03,
+			0xd8, 0xa4, 0x04,
+			0xd8, 0xa4, 0x05,
+			0xd8, 0xa4, 0x06,
+			0xd8, 0xa4, 0x07,
+			0xd8, 0xa4, 0x08,
 		},
-		3:
+
 		// (data slab) prev: 2, next: 0, data: [10 11 12 ... 17 18 19]
-		{
+		id3: {
 			// version
 			0x00,
 			// array data slab flag
 			0x06,
 			// prev storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 			// next storage id
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// CBOR encoded array head (fixed size 3 byte)
-			0x99, 0x00, 0x0a,
+			0x99, 0x00, 0x0b,
 			// CBOR encoded array elements
-			0xd8, 0xa4, 0x0a, 0xd8, 0xa4, 0x0b, 0xd8, 0xa4, 0x0c, 0xd8, 0xa4, 0x0d, 0xd8, 0xa4, 0x0e, 0xd8, 0xa4, 0x0f, 0xd8, 0xa4, 0x10, 0xd8, 0xa4, 0x11, 0xd8, 0xa4, 0x12, 0xd8, 0xa4, 0x13,
+			0xd8, 0xa4, 0x09,
+			0xd8, 0xa4, 0x0a,
+			0xd8, 0xa4, 0x0b,
+			0xd8, 0xa4, 0x0c,
+			0xd8, 0xa4, 0x0d,
+			0xd8, 0xa4, 0x0e,
+			0xd8, 0xa4, 0x0f,
+			0xd8, 0xa4, 0x10,
+			0xd8, 0xa4, 0x11,
+			0xd8, 0xa4, 0x12,
+			0xd8, 0xa4, 0x13,
 		},
 	}
 
 	// Decode serialized slabs and store them in storage
-	storage := NewBasicSlabStorage()
-	err := storage.Load(data)
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode, decMode)
+	storage.DecodeStorable = decodeStorable
+
+	err = storage.Load(data)
 	require.NoError(t, err)
 
 	// Check metadata slab (storage id 1)
-	slab, err := getArraySlab(storage, 1)
+	slab, err := getArraySlab(storage, id1)
 	require.NoError(t, err)
 	require.False(t, slab.IsData())
+	require.NotNil(t, slab.ExtraData())
+	require.Equal(t, typeInfo, slab.ExtraData().TypeInfo)
 
 	meta := slab.(*ArrayMetaDataSlab)
 	require.Equal(t, 2, len(meta.childrenHeaders))
-	require.Equal(t, StorageID(2), meta.childrenHeaders[0].id)
-	require.Equal(t, StorageID(3), meta.childrenHeaders[1].id)
+	require.Equal(t, id2, meta.childrenHeaders[0].id)
+	require.Equal(t, id3, meta.childrenHeaders[1].id)
 
 	// Check data slab (storage id 2)
-	slab, err = getArraySlab(storage, 2)
+	slab, err = getArraySlab(storage, id2)
 	require.NoError(t, err)
 	require.True(t, slab.IsData())
+	require.Nil(t, slab.ExtraData())
 
 	dataSlab := slab.(*ArrayDataSlab)
-	require.Equal(t, 10, len(dataSlab.elements))
+	require.Equal(t, 9, len(dataSlab.elements))
 	require.Equal(t, Uint64Value(0), dataSlab.elements[0])
-	require.Equal(t, Uint64Value(9), dataSlab.elements[9])
+	require.Equal(t, Uint64Value(8), dataSlab.elements[8])
 
 	// Check data slab (storage id 3)
-	slab, err = getArraySlab(storage, 3)
+	slab, err = getArraySlab(storage, id3)
 	require.NoError(t, err)
 	require.True(t, slab.IsData())
+	require.Nil(t, slab.ExtraData())
 
 	dataSlab = slab.(*ArrayDataSlab)
-	require.Equal(t, 10, len(dataSlab.elements))
-	require.Equal(t, Uint64Value(10), dataSlab.elements[0])
-	require.Equal(t, Uint64Value(19), dataSlab.elements[9])
+	require.Equal(t, 11, len(dataSlab.elements))
+	require.Equal(t, Uint64Value(9), dataSlab.elements[0])
+	require.Equal(t, Uint64Value(19), dataSlab.elements[10])
 
 	// Encode storaged slabs and compare encoded bytes
 	encodedData, err := storage.Encode()
@@ -1633,8 +1894,20 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	storage := NewBasicSlabStorage()
-	array, err := NewArray(storage)
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	const typeInfo = "[AnyType]"
+
+	storage := NewBasicSlabStorage(encMode, decMode)
+	storage.DecodeStorable = decodeStorable
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
 	const arraySize = 256 * 256
@@ -1662,7 +1935,9 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	verified, err := array.valid()
+	require.Equal(t, typeInfo, array.Type())
+
+	verified, err := array.valid(typeInfo)
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -1673,13 +1948,17 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decode data to new storage
-	storage2 := NewBasicSlabStorage()
+	storage2 := NewBasicSlabStorage(encMode, decMode)
+	storage2.DecodeStorable = decodeStorable
+
 	err = storage2.Load(m1)
 	require.NoError(t, err)
 
 	// Create new array from new storage
 	array2, err := NewArrayWithRootID(storage2, rootID)
 	require.NoError(t, err)
+
+	require.Equal(t, typeInfo, array2.Type())
 
 	// Get and check every element from new array.
 	for i := uint64(0); i < arraySize; i++ {
@@ -1693,9 +1972,20 @@ func TestEmptyArray(t *testing.T) {
 
 	t.Parallel()
 
-	storage := NewBasicSlabStorage()
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
 
-	array, err := NewArray(storage)
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	const typeInfo = "[UInt64]"
+
+	storage := NewBasicSlabStorage(encMode, decMode)
+	storage.DecodeStorable = decodeStorable
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
 	rootID := array.root.Header().id
@@ -1737,6 +2027,10 @@ func TestEmptyArray(t *testing.T) {
 		require.Equal(t, uint64(0), count)
 	})
 
+	t.Run("type", func(t *testing.T) {
+		require.Equal(t, typeInfo, array.Type())
+	})
+
 	t.Run("encode", func(t *testing.T) {
 		m, err := storage.Encode()
 		require.NoError(t, err)
@@ -1746,13 +2040,25 @@ func TestEmptyArray(t *testing.T) {
 		require.True(t, ok)
 
 		expectedData := []byte{
+			// extra data
+			// version
+			0x00,
+			// extra data flag
+			0x46,
+			// array of extra data
+			0x81,
+			// type info "[UInt64]"
+			0x68, 0x5b, 0x55, 0x49, 0x6e, 0x74, 0x36, 0x34, 0x5d,
+
 			// version
 			0x00,
 			// array data slab flag
 			0x06,
 			// prev storage id
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// next storage id
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			// CBOR encoded array head (fixed size 3 byte)
 			0x99, 0x00, 0x00,
@@ -1766,6 +2072,114 @@ func TestEmptyArray(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, array2.root.IsData())
 		require.Equal(t, uint32(0), array2.root.Header().count)
+		require.Equal(t, typeInfo, array2.Type())
 		require.Equal(t, uint32(arrayDataSlabPrefixSize), array2.root.Header().size)
+	})
+}
+
+func TestStringElement(t *testing.T) {
+
+	t.Parallel()
+
+	t.Run("inline", func(t *testing.T) {
+
+		const typeInfo = "[string]"
+
+		const arraySize = 256 * 256
+
+		const stringSize = 32
+
+		strs := make([]string, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			s := randStr(stringSize)
+			strs[i] = s
+		}
+
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(NewStringValue(strs[i]))
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+
+			v, ok := e.(*StringValue)
+			require.True(t, ok)
+			require.Equal(t, strs[i], v.str)
+		}
+
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		stats, _ := array.Stats()
+		require.Equal(t,
+			stats.DataSlabCount+stats.MetaDataSlabCount,
+			uint64(array.storage.Count()),
+		)
+	})
+
+	t.Run("external slab", func(t *testing.T) {
+
+		const typeInfo = "[string]"
+
+		const arraySize = 256 * 256
+
+		const stringSize = 512
+
+		strs := make([]string, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			s := randStr(stringSize)
+			strs[i] = s
+		}
+
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(NewStringValue(strs[i]))
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+
+			v, ok := e.(*StringValue)
+			require.True(t, ok)
+			require.Equal(t, strs[i], v.str)
+		}
+
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		stats, _ := array.Stats()
+		require.Equal(t,
+			stats.DataSlabCount+stats.MetaDataSlabCount+arraySize,
+			uint64(array.storage.Count()),
+		)
 	})
 }

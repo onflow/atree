@@ -5,6 +5,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -27,31 +28,38 @@ var (
 	secretkey = [16]byte{
 		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 	}
-
-	letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 )
 
-func randStr(n int) string {
-	r := make([]rune, n)
-	for i := range r {
-		r[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(r)
+func newTestInMemoryStorage(t testing.TB) SlabStorage {
+
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode, decMode)
+	storage.DecodeStorable = decodeStorable
+
+	return storage
 }
 
+// TODO: use newTestPersistentStorage after serialization is implemented.
 func TestMapSetAndGet(t *testing.T) {
 
 	t.Run("unique keys", func(t *testing.T) {
 
 		const mapSize = 64 * 1024
 
-		storage := NewBasicSlabStorage()
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		storage := newTestInMemoryStorage(t)
 
 		uniqueKeyValues := make(map[MapKey]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
-				k := NewStringValue(storage, s)
+				k := NewStringValue(s)
 				if _, kExist := uniqueKeyValues[k]; !kExist {
 					uniqueKeyValues[k] = Uint64Value(i)
 					break
@@ -59,7 +67,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, &sipHash128{secretkey})
+		m, err := NewMap(storage, address, &sipHash128{secretkey})
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -88,13 +96,15 @@ func TestMapSetAndGet(t *testing.T) {
 
 		const mapSize = 64 * 1024
 
-		storage := NewBasicSlabStorage()
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		storage := newTestInMemoryStorage(t)
 
 		uniqueKeyValues := make(map[MapKey]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
-				k := NewStringValue(storage, s)
+				k := NewStringValue(s)
 				if _, kExist := uniqueKeyValues[k]; !kExist {
 					uniqueKeyValues[k] = Uint64Value(i)
 					break
@@ -102,7 +112,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, &sipHash128{secretkey})
+		m, err := NewMap(storage, address, &sipHash128{secretkey})
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -140,6 +150,8 @@ func TestMapSetAndGet(t *testing.T) {
 		const mapSize = 64 * 1024
 		const maxKeyLength = 224
 
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
 		uniqueKeyValues := make(map[string]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
@@ -153,13 +165,13 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		storage := NewBasicSlabStorage()
+		storage := newTestInMemoryStorage(t)
 
-		m, err := NewMap(storage, &sipHash128{secretkey})
+		m, err := NewMap(storage, address, &sipHash128{secretkey})
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
-			err := m.Set(NewStringValue(storage, k), v)
+			err := m.Set(NewStringValue(k), v)
 			require.NoError(t, err)
 		}
 
@@ -168,7 +180,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.True(t, verified)
 
 		for k, v := range uniqueKeyValues {
-			e, err := m.Get(NewStringValue(storage, k))
+			e, err := m.Get(NewStringValue(k))
 			require.NoError(t, err)
 			require.Equal(t, v, e)
 		}
@@ -182,7 +194,9 @@ func TestMapHas(t *testing.T) {
 
 	const mapSize = 64 * 1024
 
-	storage := NewBasicSlabStorage()
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	storage := newTestInMemoryStorage(t)
 
 	// Only first half of unique keys are inserted into the map.
 	uniqueKeyValues := make(map[MapKey]Uint64Value, mapSize*2)
@@ -190,8 +204,8 @@ func TestMapHas(t *testing.T) {
 	for i := uint64(0); i < mapSize*2; i++ {
 		for {
 			s := randStr(16)
-			if _, kExist := uniqueKeyValues[NewStringValue(storage, s)]; !kExist {
-				k := NewStringValue(storage, s)
+			if _, kExist := uniqueKeyValues[NewStringValue(s)]; !kExist {
+				k := NewStringValue(s)
 				uniqueKeyValues[k] = Uint64Value(i)
 				uniqueKeys[i] = k
 				break
@@ -199,7 +213,7 @@ func TestMapHas(t *testing.T) {
 		}
 	}
 
-	m, err := NewMap(storage, &sipHash128{secretkey})
+	m, err := NewMap(storage, address, &sipHash128{secretkey})
 	require.NoError(t, err)
 
 	for _, k := range uniqueKeys[:mapSize] {
@@ -230,7 +244,9 @@ func TestMapIterate(t *testing.T) {
 	t.Run("no collision", func(t *testing.T) {
 		const mapSize = 64 * 1024
 
-		storage := NewBasicSlabStorage()
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		storage := newTestInMemoryStorage(t)
 
 		hasher := &sipHash128{secretkey}
 
@@ -242,7 +258,7 @@ func TestMapIterate(t *testing.T) {
 			for {
 				s := randStr(16)
 				if _, kExist := uniqueKeyValues[s]; !kExist {
-					sortedKeys[i] = NewStringValue(storage, s)
+					sortedKeys[i] = NewStringValue(s)
 					uniqueKeyValues[s] = i
 					break
 				}
@@ -265,11 +281,11 @@ func TestMapIterate(t *testing.T) {
 			return i < j // sort by insertion order with hash collision
 		})
 
-		m, err := NewMap(storage, hasher)
+		m, err := NewMap(storage, address, hasher)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
-			err := m.Set(NewStringValue(storage, k), Uint64Value(v))
+			err := m.Set(NewStringValue(k), Uint64Value(v))
 			require.NoError(t, err)
 		}
 
@@ -294,10 +310,12 @@ func TestMapIterate(t *testing.T) {
 	t.Run("collision", func(t *testing.T) {
 		const mapSize = 1024
 
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
 		hasher := &mockHasher{}
 		hasher.On("DigestSize", mock.Anything).Return(16)
 
-		storage := NewBasicSlabStorage()
+		storage := newTestInMemoryStorage(t)
 
 		uniqueKeyValues := make(map[MapKey]Value, mapSize)
 
@@ -308,10 +326,10 @@ func TestMapIterate(t *testing.T) {
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
-				k := NewStringValue(storage, s)
+				k := NewStringValue(s)
 
 				if _, kExist := uniqueKeyValues[k]; !kExist {
-					v := NewStringValue(storage, randStr(16))
+					v := NewStringValue(randStr(16))
 
 					sortedKeys[i] = k
 					keys[i] = k
@@ -342,7 +360,7 @@ func TestMapIterate(t *testing.T) {
 			return i < j // sort by insertion order with hash collision
 		})
 
-		m, err := NewMap(storage, hasher)
+		m, err := NewMap(storage, address, hasher)
 		require.NoError(t, err)
 
 		for _, k := range keys {
@@ -373,18 +391,20 @@ func TestMapIterate(t *testing.T) {
 func TestMapHashCollision(t *testing.T) {
 	const mapSize = 2 * 1024
 
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
 	hasher := &mockHasher{}
 	hasher.On("DigestSize", mock.Anything).Return(16)
 
-	storage := NewBasicSlabStorage()
+	storage := newTestInMemoryStorage(t)
 
 	uniqueKeyValues := make(map[MapKey]Value, mapSize)
 	for i := uint64(0); i < mapSize; i++ {
 		for {
 			s := randStr(16)
-			k := NewStringValue(storage, s)
+			k := NewStringValue(s)
 			if _, kExist := uniqueKeyValues[k]; !kExist {
-				v := NewStringValue(storage, randStr(16))
+				v := NewStringValue(randStr(16))
 				uniqueKeyValues[k] = v
 
 				digest1 := rand.Intn(256)
@@ -397,7 +417,7 @@ func TestMapHashCollision(t *testing.T) {
 		}
 	}
 
-	m, err := NewMap(storage, hasher)
+	m, err := NewMap(storage, address, hasher)
 	require.NoError(t, err)
 
 	for k, v := range uniqueKeyValues {

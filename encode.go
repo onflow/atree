@@ -16,18 +16,27 @@ import (
 // Encoder writes atree slabs to io.Writer.
 type Encoder struct {
 	io.Writer
-	cbor    *cbor.StreamEncoder
-	scratch [32]byte
+	CBOR    *cbor.StreamEncoder
+	Scratch [64]byte
 }
 
-func newEncoder(w io.Writer) *Encoder {
+func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
+	streamEncoder := encMode.NewStreamEncoder(w)
 	return &Encoder{
-		Writer: w,
-		cbor:   cbor.NewStreamEncoder(w),
+		Writer:  w,
+		CBOR:    streamEncoder,
 	}
 }
 
-func decodeSlab(id StorageID, data []byte) (Slab, error) {
+type StorableDecoder func(
+	decoder *cbor.StreamDecoder,
+	storableSlabStorageID StorageID,
+) (
+	Storable,
+	error,
+)
+
+func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable StorableDecoder) (Slab, error) {
 	if len(data) < 2 {
 		return nil, errors.New("data is too short")
 	}
@@ -35,74 +44,29 @@ func decodeSlab(id StorageID, data []byte) (Slab, error) {
 	if flag&flagArray != 0 {
 
 		if flag&flagMetaDataSlab != 0 {
-			return newArrayMetaDataSlabFromData(id, data)
+			return newArrayMetaDataSlabFromData(id, data, decMode)
 		}
-		return newArrayDataSlabFromData(id, data)
+		return newArrayDataSlabFromData(id, data, decMode, decodeStorable)
 
 	} else if flag&flagBasicArray != 0 {
-		return newBasicArrayDataSlabFromData(id, data)
+		return newBasicArrayDataSlabFromData(id, data, decMode, decodeStorable)
+	} else if flag&flagStorable != 0 {
+		const versionAndFlagSize = 2
+		cborDec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
+		storable, err := decodeStorable(cborDec, id)
+		if err != nil {
+			return nil, err
+		}
+		return StorableSlab{
+			StorageID: id,
+			Storable:  storable,
+		}, nil
 	}
 	return nil, fmt.Errorf("data has invalid flag %x", flag)
 }
 
-func decodeStorable(dec *cbor.StreamDecoder) (Storable, error) {
-	tagNumber, err := dec.DecodeTagNumber()
-	if err != nil {
-		return nil, err
-	}
-
-	switch tagNumber {
-	case cborTagStorageID:
-		n, err := dec.DecodeUint64()
-		if err != nil {
-			return nil, err
-		}
-		return StorageIDStorable(n), nil
-
-	case cborTagUInt8Value:
-		n, err := dec.DecodeUint64()
-		if err != nil {
-			return nil, err
-		}
-		if n > math.MaxUint8 {
-			return nil, fmt.Errorf("invalid data, got %d, expected max %d", n, math.MaxUint8)
-		}
-		return Uint8Value(n), nil
-
-	case cborTagUInt16Value:
-		n, err := dec.DecodeUint64()
-		if err != nil {
-			return nil, err
-		}
-		if n > math.MaxUint16 {
-			return nil, fmt.Errorf("invalid data, got %d, expected max %d", n, math.MaxUint16)
-		}
-		return Uint16Value(n), nil
-
-	case cborTagUInt32Value:
-		n, err := dec.DecodeUint64()
-		if err != nil {
-			return nil, err
-		}
-		if n > math.MaxUint32 {
-			return nil, fmt.Errorf("invalid data, got %d, expected max %d", n, math.MaxUint32)
-		}
-		return Uint32Value(n), nil
-
-	case cborTagUInt64Value:
-		n, err := dec.DecodeUint64()
-		if err != nil {
-			return nil, err
-		}
-		return Uint64Value(n), nil
-
-	default:
-		return nil, fmt.Errorf("invalid tag number %d", tagNumber)
-	}
-}
-
 // TODO: make it inline
-func getUintCBORSize(n uint64) uint32 {
+func GetUintCBORSize(n uint64) uint32 {
 	if n <= 23 {
 		return 1
 	}

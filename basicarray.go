@@ -5,10 +5,11 @@
 package atree
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 const (
@@ -22,7 +23,7 @@ type BasicArrayDataSlab struct {
 	elements []Storable
 }
 
-func (a *BasicArrayDataSlab) Value(storage SlabStorage) (Value, error) {
+func (a *BasicArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &BasicArray{storage: storage, root: a}, nil
 }
 
@@ -33,16 +34,16 @@ type BasicArray struct {
 
 var _ Value = &BasicArray{}
 
-func (a *BasicArray) DeepCopy(storage SlabStorage) (Value, error) {
-	result := NewBasicArray(storage)
+func (a *BasicArray) DeepCopy(storage SlabStorage, address Address) (Value, error) {
+	result := NewBasicArray(storage, address)
 
 	for i, element := range a.root.elements {
-		value, err := element.Value(storage)
+		value, err := element.StoredValue(storage)
 		if err != nil {
 			return nil, err
 		}
 
-		valueCopy, err := value.DeepCopy(storage)
+		valueCopy, err := value.DeepCopy(storage, address)
 		if err != nil {
 			return nil, err
 		}
@@ -56,21 +57,28 @@ func (a *BasicArray) DeepCopy(storage SlabStorage) (Value, error) {
 	return result, nil
 }
 
-
-func (a *BasicArray) Storable() Storable {
-	return a.root
+func (a *BasicArray) Storable(_ SlabStorage, _ Address) (Storable, error) {
+	return a.root, nil
 }
 
-func NewBasicArrayDataSlab(storage SlabStorage) *BasicArrayDataSlab {
+func NewBasicArrayDataSlab(storage SlabStorage, address Address) *BasicArrayDataSlab {
 	return &BasicArrayDataSlab{
 		header: ArraySlabHeader{
-			id:   storage.GenerateStorageID(),
+			id:   storage.GenerateStorageID(address),
 			size: basicArrayDataSlabPrefixSize,
 		},
 	}
 }
 
-func newBasicArrayDataSlabFromData(id StorageID, data []byte) (*BasicArrayDataSlab, error) {
+func newBasicArrayDataSlabFromData(
+	id StorageID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeStorable StorableDecoder,
+) (
+	*BasicArrayDataSlab,
+	error,
+) {
 	if len(data) == 0 {
 		return nil, errors.New("data is too short for basic array")
 	}
@@ -80,7 +88,7 @@ func newBasicArrayDataSlabFromData(id StorageID, data []byte) (*BasicArrayDataSl
 		return nil, fmt.Errorf("data has invalid flag 0x%x, want 0x%x", data[0], flagBasicArray)
 	}
 
-	cborDec := NewByteStreamDecoder(data[1:])
+	cborDec := decMode.NewByteStreamDecoder(data[1:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
@@ -89,7 +97,7 @@ func newBasicArrayDataSlabFromData(id StorageID, data []byte) (*BasicArrayDataSl
 
 	elements := make([]Storable, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		storable, err := decodeStorable(cborDec)
+		storable, err := decodeStorable(cborDec, StorageIDUndefined)
 		if err != nil {
 			return nil, err
 		}
@@ -102,17 +110,6 @@ func newBasicArrayDataSlabFromData(id StorageID, data []byte) (*BasicArrayDataSl
 	}, nil
 }
 
-func (a *BasicArrayDataSlab) Bytes() ([]byte, error) {
-	var buf bytes.Buffer
-	enc := newEncoder(&buf)
-
-	err := a.Encode(enc)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
 func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 	// Encode flag
 	_, err := enc.Write([]byte{flagBasicArray})
@@ -121,10 +118,10 @@ func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode CBOR array size for 9 bytes
-	enc.scratch[0] = 0x80 | 27
-	binary.BigEndian.PutUint64(enc.scratch[1:], uint64(len(a.elements)))
+	enc.Scratch[0] = 0x80 | 27
+	binary.BigEndian.PutUint64(enc.Scratch[1:], uint64(len(a.elements)))
 
-	_, err = enc.Write(enc.scratch[:9])
+	_, err = enc.Write(enc.Scratch[:9])
 	if err != nil {
 		return err
 	}
@@ -135,7 +132,7 @@ func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 			return err
 		}
 	}
-	err = enc.cbor.Flush()
+	err = enc.CBOR.Flush()
 	if err != nil {
 		return err
 	}
@@ -160,7 +157,9 @@ func (a *BasicArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) 
 
 	a.elements[index] = v
 
-	a.header.size = a.header.size - oldElem.ByteSize() + v.ByteSize()
+	a.header.size = a.header.size -
+		oldElem.ByteSize() +
+		v.ByteSize()
 
 	err := storage.Store(a.header.id, a)
 	if err != nil {
@@ -238,10 +237,6 @@ func (a *BasicArrayDataSlab) ID() StorageID {
 	return a.header.id
 }
 
-func (a *BasicArrayDataSlab) Mutable() bool {
-	return true
-}
-
 func (a *BasicArrayDataSlab) String() string {
 	return fmt.Sprintf("%v", a.elements)
 }
@@ -250,27 +245,31 @@ func (a *BasicArrayDataSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) Merge(Slab) error {
+func (a *BasicArrayDataSlab) Merge(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) LendToRight(Slab) error {
+func (a *BasicArrayDataSlab) LendToRight(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (a *BasicArrayDataSlab) BorrowFromRight(Slab) error {
+func (a *BasicArrayDataSlab) BorrowFromRight(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func NewBasicArray(storage SlabStorage) *BasicArray {
+func NewBasicArray(storage SlabStorage, address Address) *BasicArray {
 	return &BasicArray{
 		storage: storage,
-		root:    NewBasicArrayDataSlab(storage),
+		root:    NewBasicArrayDataSlab(storage, address),
 	}
 }
 
 func (a *BasicArray) StorageID() StorageID {
 	return a.root.ID()
+}
+
+func (a *BasicArray) Address() Address {
+	return a.StorageID().Address
 }
 
 func NewBasicArrayWithRootID(storage SlabStorage, id StorageID) (*BasicArray, error) {
@@ -296,11 +295,14 @@ func (a *BasicArray) Get(index uint64) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	return storable.Value(a.storage)
+	return storable.StoredValue(a.storage)
 }
 
 func (a *BasicArray) Set(index uint64, v Value) error {
-	storable := v.Storable()
+	storable, err := v.Storable(a.storage, a.Address())
+	if err != nil {
+		return err
+	}
 	return a.root.Set(a.storage, index, storable)
 }
 
@@ -310,7 +312,10 @@ func (a *BasicArray) Append(v Value) error {
 }
 
 func (a *BasicArray) Insert(index uint64, v Value) error {
-	storable := v.Storable()
+	storable, err := v.Storable(a.storage, a.Address())
+	if err != nil {
+		return err
+	}
 	return a.root.Insert(a.storage, index, storable)
 }
 
@@ -319,7 +324,7 @@ func (a *BasicArray) Remove(index uint64) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	return storable.Value(a.storage)
+	return storable.StoredValue(a.storage)
 }
 
 func (a *BasicArray) Count() uint64 {

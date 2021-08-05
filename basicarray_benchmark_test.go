@@ -47,11 +47,11 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	//fmt.Printf("benchmarkBasicArray seed: 0x%x\n", seed)
 	rand.Seed(seed)
 
-	baseStorage := NewInMemBaseStorage()
+	storage := newTestPersistentStorage(b)
 
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	array := NewBasicArray(storage)
+	array := NewBasicArray(storage, address)
 
 	// TODO capture arrayID here ?
 
@@ -65,8 +65,10 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	// setup
 	for i := 0; i < initialArraySize; i++ {
 		v := RandomValue()
-		totalRawDataSize += v.Storable().ByteSize()
-		err := array.Append(v)
+		storable, err := v.Storable(storage, array.Address())
+		require.NoError(b, err)
+		totalRawDataSize += storable.ByteSize()
+		err = array.Append(v)
 		require.NoError(b, err)
 	}
 	require.NoError(b, storage.Commit())
@@ -82,8 +84,10 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue()
-		totalRawDataSize += v.Storable().ByteSize()
-		err := array.Append(v)
+		storable, err := v.Storable(storage, array.Address())
+		require.NoError(b, err)
+		totalRawDataSize += storable.ByteSize()
+		err = array.Append(v)
 		require.NoError(b, err)
 	}
 	require.NoError(b, storage.Commit())
@@ -99,7 +103,9 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 		ind := rand.Intn(int(array.Count()))
 		s, err := array.Remove(uint64(ind))
 		require.NoError(b, err)
-		totalRawDataSize -= s.Storable().ByteSize()
+		storable, err := s.Storable(storage, array.Address())
+		require.NoError(b, err)
+		totalRawDataSize -= storable.ByteSize()
 	}
 	require.NoError(b, storage.Commit())
 	totalRemoveTime = time.Since(start)
@@ -113,8 +119,10 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		v := RandomValue()
-		totalRawDataSize += v.Storable().ByteSize()
-		err := array.Insert(uint64(ind), v)
+		storable, err := v.Storable(storage, array.Address())
+		require.NoError(b, err)
+		totalRawDataSize += storable.ByteSize()
+		err = array.Insert(uint64(ind), v)
 		require.NoError(b, err)
 	}
 	require.NoError(b, storage.Commit())
@@ -135,7 +143,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	totalLookupTime = time.Since(start)
 
 	// random lookup
-	baseStorage.ResetReporter()
+	storage.baseStorage.ResetReporter()
 	storage.DropCache()
 	array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
@@ -143,12 +151,12 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	ind := rand.Intn(int(array.Count()))
 	_, err = array.Get(uint64(ind))
 	require.NoError(b, err)
-	storageOverheadRatio := float64(baseStorage.Size()) / float64(totalRawDataSize)
-	b.ReportMetric(float64(baseStorage.SegmentsTouched()), "segments_touched")
-	b.ReportMetric(float64(baseStorage.SegmentCounts()), "segments_total")
+	storageOverheadRatio := float64(storage.baseStorage.Size()) / float64(totalRawDataSize)
+	b.ReportMetric(float64(storage.baseStorage.SegmentsTouched()), "segments_touched")
+	b.ReportMetric(float64(storage.baseStorage.SegmentCounts()), "segments_total")
 	b.ReportMetric(float64(totalRawDataSize), "storage_raw_data_size")
-	b.ReportMetric(float64(baseStorage.Size()), "storage_stored_data_size")
-	b.ReportMetric(float64(baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
+	b.ReportMetric(float64(storage.baseStorage.Size()), "storage_stored_data_size")
+	b.ReportMetric(float64(storage.baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
 	b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
 	b.ReportMetric(float64(array.Count()), "number_of_elements")
 	b.ReportMetric(float64(int(totalAppendTime)), "append_100_time_(ns)")

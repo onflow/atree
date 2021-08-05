@@ -14,13 +14,13 @@ import (
 const (
 	digestKeySize = 8
 
-	// slab header size: storage id (8 bytes) + size (4 bytes) + hashed first key (8 bytes)
+	// slab header size: storage id (16 bytes) + size (4 bytes) + hashed first key (8 bytes)
 	mapSlabHeaderSize = storageIDSize + 4 + digestKeySize
 
 	// meta data slab prefix size: version (1 byte) + flag (1 byte) + child header count (2 bytes)
 	mapMetaDataSlabPrefixSize = 1 + 1 + 2
 
-	// version (1 byte) + flag (1 byte) + prev id (8 bytes) + next id (8 bytes) + CBOR array size (3 bytes) for keys and values
+	// version (1 byte) + flag (1 byte) + prev id (16 bytes) + next id (16 bytes) + CBOR array size (3 bytes) for keys and values
 	// (3 bytes of array size support up to 65535 array elements)
 	mapDataSlabPrefixSize = 2 + storageIDSize + storageIDSize + 3
 )
@@ -34,7 +34,7 @@ type MapKey interface {
 
 type MapValue Storable
 
-// element is one indivisible unit that must stay together (e.g. colllision group)
+// element is one indivisible unit that must stay together (e.g. collision group)
 type element interface {
 	Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error)
 
@@ -119,13 +119,12 @@ var _ MapSlab = &MapMetaDataSlab{}
 
 type MapSlab interface {
 	Slab
+	fmt.Stringer
 
 	Has(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (bool, error)
 	Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error)
 	Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error
 	Remove(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error)
-
-	ShallowCloneWithNewID(storage SlabStorage) MapSlab
 
 	IsData() bool
 
@@ -141,6 +140,7 @@ type MapSlab interface {
 
 type OrderedMap struct {
 	storage SlabStorage
+	address Address
 	root    MapSlab
 	hasher  Hasher
 }
@@ -268,9 +268,9 @@ func (e *inlineCollisionGroup) String() string {
 	return "inline [" + e.elements.String() + "]"
 }
 
-func newExternalCollisionGroup(storage SlabStorage, elems elements) (*externalCollisionGroup, error) {
+func newExternalCollisionGroup(storage SlabStorage, address Address, elems elements) (*externalCollisionGroup, error) {
 	// Create new any size MapDataSlab
-	slab := newMapDataSlab(storage, true)
+	slab := newMapDataSlab(storage, address, true)
 
 	// Set slab elements
 	// Copy isn't necessary because inline collision group is converted into external collision group
@@ -566,7 +566,7 @@ func (e *elements) Iterate(storage SlabStorage, fn MapIterationFunc) error {
 			if err != nil {
 				return err
 			}
-			kv, err := k.Value(storage)
+			kv, err := k.StoredValue(storage)
 			if err != nil {
 				return err
 			}
@@ -575,7 +575,7 @@ func (e *elements) Iterate(storage SlabStorage, fn MapIterationFunc) error {
 			if err != nil {
 				return err
 			}
-			vv, err := v.Value(storage)
+			vv, err := v.StoredValue(storage)
 			if err != nil {
 				return err
 			}
@@ -605,10 +605,10 @@ func (e *elements) String() string {
 	return strings.Join(s, " ")
 }
 
-func newMapDataSlab(storage SlabStorage, anySize bool) *MapDataSlab {
+func newMapDataSlab(storage SlabStorage, address Address, anySize bool) *MapDataSlab {
 	return &MapDataSlab{
 		header: MapSlabHeader{
-			id:   storage.GenerateStorageID(),
+			id:   storage.GenerateStorageID(address),
 			size: mapDataSlabPrefixSize,
 		},
 		anySize: anySize,
@@ -620,25 +620,12 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	return errors.New("not implemented")
 }
 
-func (m *MapDataSlab) ShallowCloneWithNewID(storage SlabStorage) MapSlab {
-	return &MapDataSlab{
-		header: MapSlabHeader{
-			id:       storage.GenerateStorageID(),
-			size:     m.header.size,
-			firstKey: m.header.firstKey,
-		},
-		prev:     m.prev,
-		next:     m.next,
-		elements: m.elements,
-		anySize:  m.anySize,
-	}
-}
-
 // TODO: need to set Hasher for OrderedMap
-func (m *MapDataSlab) Value(storage SlabStorage) (Value, error) {
+func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &OrderedMap{
 		storage: storage,
 		root:    m,
+		address: m.ID().Address,
 	}, nil
 }
 
@@ -660,7 +647,7 @@ func (m *MapDataSlab) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, 
 	// Separate inline collision group into any sized data slab if it's too large and data slab is size restricted.
 	if !m.anySize {
 		if group, ok := m.elements.elems[elemIndex].(elementGroup); ok {
-			if group.Inline() && group.Size() > uint32(maxInlineElementSize) {
+			if group.Inline() && group.Size() > uint32(MaxInlineElementSize) {
 
 				oldSize := m.elements.elems[elemIndex].Size()
 
@@ -669,7 +656,7 @@ func (m *MapDataSlab) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, 
 					return err
 				}
 
-				ext, err := newExternalCollisionGroup(storage, elements)
+				ext, err := newExternalCollisionGroup(storage, m.ID().Address, elements)
 				if err != nil {
 					return err
 				}
@@ -745,7 +732,7 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	// Create new right slab
 	rightSlab := &MapDataSlab{
 		header: MapSlabHeader{
-			id:       storage.GenerateStorageID(),
+			id:       storage.GenerateStorageID(m.ID().Address),
 			size:     mapDataSlabPrefixSize + rightElements.size,
 			firstKey: m.hkeys[leftCount],
 		},
@@ -859,10 +846,6 @@ func (m *MapDataSlab) IsData() bool {
 	return true
 }
 
-func (m *MapDataSlab) Mutable() bool {
-	return true
-}
-
 func (m *MapDataSlab) ID() StorageID {
 	return m.header.id
 }
@@ -899,19 +882,12 @@ func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 }
 
 // TODO: need to set Hasher for OrderedMap
-func (m *MapMetaDataSlab) Value(storage SlabStorage) (Value, error) {
-	return &OrderedMap{storage: storage, root: m}, nil
-}
-
-func (m *MapMetaDataSlab) ShallowCloneWithNewID(storage SlabStorage) MapSlab {
-	return &MapMetaDataSlab{
-		header: MapSlabHeader{
-			id:       storage.GenerateStorageID(),
-			size:     m.header.size,
-			firstKey: m.header.firstKey,
-		},
-		childrenHeaders: m.childrenHeaders,
-	}
+func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
+	return &OrderedMap{
+		storage: storage,
+		root:    m,
+		address: m.ID().Address,
+	}, nil
 }
 
 func (m *MapMetaDataSlab) Has(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (bool, error) {
@@ -1345,7 +1321,7 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	// Construct right slab
 	rightSlab := &MapMetaDataSlab{
 		header: MapSlabHeader{
-			id:       storage.GenerateStorageID(),
+			id:       storage.GenerateStorageID(m.ID().Address),
 			size:     m.header.size - uint32(leftSize),
 			firstKey: m.childrenHeaders[leftChildrenCount].firstKey,
 		},
@@ -1408,10 +1384,6 @@ func (m *MapMetaDataSlab) ByteSize() uint32 {
 	return m.header.size
 }
 
-func (m *MapMetaDataSlab) Mutable() bool {
-	return true
-}
-
 func (m *MapMetaDataSlab) ID() StorageID {
 	return m.header.id
 }
@@ -1424,8 +1396,8 @@ func (m *MapMetaDataSlab) String() string {
 	return strings.Join(hStr, " ")
 }
 
-func NewMap(storage SlabStorage, hasher Hasher) (*OrderedMap, error) {
-	root := newMapDataSlab(storage, false)
+func NewMap(storage SlabStorage, address Address, hasher Hasher) (*OrderedMap, error) {
+	root := newMapDataSlab(storage, address, false)
 
 	err := storage.Store(root.header.id, root)
 	if err != nil {
@@ -1434,6 +1406,7 @@ func NewMap(storage SlabStorage, hasher Hasher) (*OrderedMap, error) {
 
 	return &OrderedMap{
 		storage: storage,
+		address: address,
 		root:    root,
 		hasher:  hasher,
 	}, nil
@@ -1458,14 +1431,14 @@ func (m *OrderedMap) Get(key MapKey) (Value, error) {
 		return nil, err
 	}
 
-	return v.Value(m.storage)
+	return v.StoredValue(m.storage)
 }
 
 func (m *OrderedMap) Set(key MapKey, value Value) error {
 
-	storable := value.Storable()
-	if storable.Mutable() || storable.ByteSize() > uint32(maxInlineElementSize) {
-		storable = StorageIDStorable(storable.ID())
+	storable, err := value.Storable(m.storage, m.Address())
+	if err != nil {
+		return err
 	}
 
 	hkeys, err := m.hasher.Hash(key)
@@ -1480,10 +1453,15 @@ func (m *OrderedMap) Set(key MapKey, value Value) error {
 
 	if m.root.IsFull() {
 
-		copiedRoot := m.root.ShallowCloneWithNewID(m.storage)
+		// Save root node id
+		rootID := m.root.ID()
 
-		// Split copied root
-		leftSlab, rightSlab, err := copiedRoot.Split(m.storage)
+		// Assign a new storage id to old root before splitting it.
+		oldRoot := m.root
+		oldRoot.SetID(m.storage.GenerateStorageID(m.address))
+
+		// Split old root
+		leftSlab, rightSlab, err := oldRoot.Split(m.storage)
 		if err != nil {
 			return err
 		}
@@ -1491,20 +1469,17 @@ func (m *OrderedMap) Set(key MapKey, value Value) error {
 		left := leftSlab.(MapSlab)
 		right := rightSlab.(MapSlab)
 
-		if m.root.IsData() {
-			// Create new MapMetaDataSlab with the same storage ID as root
-			rootID := m.root.ID()
-			m.root = &MapMetaDataSlab{
-				header: MapSlabHeader{
-					id: rootID,
-				},
-			}
+		// Create new MapMetaDataSlab with the old root's storage ID
+		newRoot := &MapMetaDataSlab{
+			header: MapSlabHeader{
+				id:       rootID,
+				size:     mapMetaDataSlabPrefixSize + mapSlabHeaderSize*2,
+				firstKey: left.Header().firstKey,
+			},
+			childrenHeaders: []MapSlabHeader{left.Header(), right.Header()},
 		}
 
-		root := m.root.(*MapMetaDataSlab)
-		root.childrenHeaders = []MapSlabHeader{left.Header(), right.Header()}
-		root.header.size = mapMetaDataSlabPrefixSize + mapSlabHeaderSize*uint32(len(root.childrenHeaders))
-		root.header.firstKey = left.Header().firstKey
+		m.root = newRoot
 
 		err = m.storage.Store(left.ID(), left)
 		if err != nil {
@@ -1564,17 +1539,21 @@ func (m *OrderedMap) StorageID() StorageID {
 	return m.root.Header().id
 }
 
-func (m *OrderedMap) DeepCopy(storage SlabStorage) (Value, error) {
+func (m *OrderedMap) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	// TODO: implement me
 	return nil, errors.New("not implemented")
 }
 
-func (m *OrderedMap) Value(_ SlabStorage) (Value, error) {
+func (m *OrderedMap) StoredValue(_ SlabStorage) (Value, error) {
 	return m, nil
 }
 
-func (m *OrderedMap) Storable() Storable {
-	return m.root
+func (m *OrderedMap) Storable(_ SlabStorage, _ Address) (Storable, error) {
+	return StorageIDStorable(m.StorageID()), nil
+}
+
+func (m *OrderedMap) Address() Address {
+	return m.address
 }
 
 func (m *OrderedMap) String() string {

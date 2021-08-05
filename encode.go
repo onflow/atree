@@ -23,8 +23,8 @@ type Encoder struct {
 func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
 	streamEncoder := encMode.NewStreamEncoder(w)
 	return &Encoder{
-		Writer:  w,
-		CBOR:    streamEncoder,
+		Writer: w,
+		CBOR:   streamEncoder,
 	}
 }
 

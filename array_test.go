@@ -28,10 +28,13 @@ func init() {
 func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
 	baseStorage := NewInMemBaseStorage()
 
-	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
 
-	storage := NewPersistentSlabStorage(baseStorage, encMode, WithNoAutoCommit())
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, WithNoAutoCommit())
 	storage.DecodeStorable = decodeStorable
 	return storage
 }
@@ -1429,11 +1432,14 @@ func TestEncode(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
 	// Create and populate array in memory
-	storage := NewBasicSlabStorage(encMode)
+	storage := NewBasicSlabStorage(encMode, decMode)
 	storage.DecodeStorable = decodeStorable
 
 	array, err := NewArray(storage)
@@ -1558,10 +1564,13 @@ func TestDecodeEncode(t *testing.T) {
 	}
 
 	// Decode serialized slabs and store them in storage
-	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
 
-	storage := NewBasicSlabStorage(encMode)
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode, decMode)
 	storage.DecodeStorable = decodeStorable
 
 	err = storage.Load(data)
@@ -1617,10 +1626,13 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
 
-	storage := NewBasicSlabStorage(encMode)
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode, decMode)
 	storage.DecodeStorable = decodeStorable
 
 	array, err := NewArray(storage)
@@ -1662,7 +1674,7 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decode data to new storage
-	storage2 := NewBasicSlabStorage(encMode)
+	storage2 := NewBasicSlabStorage(encMode, decMode)
 	storage2.DecodeStorable = decodeStorable
 
 	err = storage2.Load(m1)
@@ -1684,10 +1696,13 @@ func TestEmptyArray(t *testing.T) {
 
 	t.Parallel()
 
-	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
 
-	storage := NewBasicSlabStorage(encMode)
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode, decMode)
 	storage.DecodeStorable = decodeStorable
 
 	array, err := NewArray(storage)

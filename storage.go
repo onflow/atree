@@ -30,7 +30,6 @@ var (
 
 var (
 	ErrStorageID      = errors.New("invalid storage id")
-	ErrStorageAddress = errors.New("invalid storage address")
 	ErrStorageIndex   = errors.New("invalid storage index")
 )
 
@@ -74,9 +73,6 @@ func (id StorageID) Valid() error {
 	if id == StorageIDUndefined {
 		return ErrStorageID
 	}
-	if id.address == AddressUndefined {
-		return ErrStorageAddress
-	}
 	if id.index == StorageIndexUndefined {
 		return ErrStorageIndex
 	}
@@ -111,12 +107,9 @@ type InMemBaseStorage struct {
 }
 
 func NewInMemBaseStorage() *InMemBaseStorage {
-	return &InMemBaseStorage{
-		segments:         make(map[StorageID][]byte),
-		segmentsReturned: make(map[StorageID]struct{}),
-		segmentsUpdated:  make(map[StorageID]struct{}),
-		segmentsTouched:  make(map[StorageID]struct{}),
-	}
+	return NewInMemBaseStorageFromMap(
+		make(map[StorageID][]byte),
+	)
 }
 
 func NewInMemBaseStorageFromMap(segments map[StorageID][]byte) *InMemBaseStorage {

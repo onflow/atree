@@ -37,7 +37,7 @@ func BenchmarkEncodeCBORArrayMixedTypes(b *testing.B) {
 
 func BenchmarkDecodeCBORArrayUint8(b *testing.B) {
 	values := getUint8Values()
-	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(b, err)
 	data := encodeStorables(b, values, encMode)
 	benchmarkDecodeCBORArray(b, data)
@@ -45,7 +45,7 @@ func BenchmarkDecodeCBORArrayUint8(b *testing.B) {
 
 func BenchmarkDecodeCBORArrayUint64(b *testing.B) {
 	values := getUint64Values()
-	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(b, err)
 	data := encodeStorables(b, values, encMode)
 	benchmarkDecodeCBORArray(b, data)
@@ -53,7 +53,7 @@ func BenchmarkDecodeCBORArrayUint64(b *testing.B) {
 
 func BenchmarkDecodeCBORArrayMixedTypes(b *testing.B) {
 	values := getMixTypedValues()
-	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(b, err)
 	data := encodeStorables(b, values, encMode)
 	benchmarkDecodeCBORArray(b, data)

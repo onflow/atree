@@ -5,6 +5,7 @@
 package atree
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -15,17 +16,20 @@ import (
 )
 
 const (
-	storageIDSize = 8
+	storageIDSize = 16
 
-	// slab header size: storage id (8 bytes) + count (4 bytes) + size (4 bytes)
+	// version and flag size: version (1 byte) + flag (1 byte)
+	versionAndFlagSize = 2
+
+	// slab header size: storage id (16 bytes) + count (4 bytes) + size (4 bytes)
 	arraySlabHeaderSize = storageIDSize + 4 + 4
 
 	// meta data slab prefix size: version (1 byte) + flag (1 byte) + child header count (2 bytes)
-	arrayMetaDataSlabPrefixSize = 1 + 1 + 2
+	arrayMetaDataSlabPrefixSize = versionAndFlagSize + 2
 
-	// version (1 byte) + flag (1 byte) + prev id (8 bytes) + next id (8 bytes) + CBOR array size (3 bytes)
+	// version (1 byte) + flag (1 byte) + prev id (16 bytes) + next id (16 bytes) + CBOR array size (3 bytes)
 	// (3 bytes of array size support up to 65535 array elements)
-	arrayDataSlabPrefixSize = 2 + storageIDSize + storageIDSize + 3
+	arrayDataSlabPrefixSize = versionAndFlagSize + storageIDSize + storageIDSize + 3
 
 	// 32 is faster than 24 and 40.
 	linearScanThreshold = 32
@@ -37,16 +41,25 @@ type ArraySlabHeader struct {
 	count uint32    // count is used to lookup element; leaf: number of elements; internal: number of elements in all its headers
 }
 
+type ArrayExtraData struct {
+	_        struct{} `cbor:",toarray"`
+	TypeInfo string   // array type
+}
+
 // ArrayDataSlab is leaf node, implementing ArraySlab.
 type ArrayDataSlab struct {
 	prev     StorageID
 	next     StorageID
 	header   ArraySlabHeader
 	elements []Storable
+
+	// extraData is data that is prepended to encoded slab data.
+	// It isn't included in slab size calculation for splitting and merging.
+	extraData *ArrayExtraData
 }
 
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a}, nil
+	return &Array{storage: storage, root: a, address: a.header.id.address}, nil
 }
 
 var _ ArraySlab = &ArrayDataSlab{}
@@ -59,12 +72,16 @@ type ArrayMetaDataSlab struct {
 	// For example, if the counts in childrenHeaders are [10, 15, 12],
 	// childrenCountSum is [10, 25, 37]
 	childrenCountSum []uint32
+
+	// extraData is data that is prepended to encoded slab data.
+	// It isn't included in slab size calculation for splitting and merging.
+	extraData *ArrayExtraData
 }
 
 var _ ArraySlab = &ArrayMetaDataSlab{}
 
 func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a}, nil
+	return &Array{storage: storage, root: a, address: a.header.id.address}, nil
 }
 
 type ArraySlab interface {
@@ -76,8 +93,6 @@ type ArraySlab interface {
 	Insert(storage SlabStorage, index uint64, v Storable) error
 	Remove(storage SlabStorage, index uint64) (Storable, error)
 
-	ShallowCloneWithNewID(SlabStorage) ArraySlab
-
 	IsData() bool
 
 	IsFull() bool
@@ -88,11 +103,16 @@ type ArraySlab interface {
 	SetID(StorageID)
 
 	Header() ArraySlabHeader
+
+	ExtraData() *ArrayExtraData
+	RemoveExtraData() *ArrayExtraData
+	SetExtraData(*ArrayExtraData)
 }
 
 // Array is tree
 type Array struct {
 	storage SlabStorage
+	address Address
 	root    ArraySlab
 }
 
@@ -103,7 +123,7 @@ func (a *Array) Value(_ SlabStorage) (Value, error) {
 }
 
 func (a *Array) Storable(SlabStorage) Storable {
-	return a.root
+	return StorageIDStorable(a.StorageID())
 }
 
 type IndexOutOfRangeError struct {
@@ -124,13 +144,71 @@ func (e ArraySlabNotFoundError) Error() string {
 	return fmt.Sprintf("failed to retrieve ArraySlab %d: %v", e.id, e.err)
 }
 
-func newArrayDataSlab(storage SlabStorage) *ArrayDataSlab {
-	return &ArrayDataSlab{
-		header: ArraySlabHeader{
-			id:   storage.GenerateStorageID(),
-			size: arrayDataSlabPrefixSize,
-		},
+func newArrayExtraDataFromData(data []byte, decMode cbor.DecMode) (*ArrayExtraData, []byte, error) {
+	// Check data length
+	if len(data) < versionAndFlagSize {
+		return nil, data, errors.New("data is too short for array extra data")
 	}
+
+	// Check flag
+	flag := data[1]
+	if flag&flagExtraData == 0 {
+		return nil, data, fmt.Errorf(
+			"data has invalid flag 0x%x, want 0x%x",
+			flag,
+			flagExtraData,
+		)
+	}
+
+	// Decode extra data
+
+	var extraData ArrayExtraData
+
+	r := bytes.NewReader(data[versionAndFlagSize:])
+	dec := decMode.NewDecoder(r)
+	err := dec.Decode(&extraData)
+	if err != nil {
+		return nil, data, err
+	}
+
+	// Reslice for remaining data
+	n := dec.NumBytesRead()
+	data = data[versionAndFlagSize+n:]
+
+	return &extraData, data, nil
+}
+
+// Encode encodes extra data to the given encoder.
+//
+// Header (2 bytes):
+//
+//     +-----------------------------+--------------------------+
+//     | extra data version (1 byte) | extra data flag (1 byte) |
+//     +-----------------------------+--------------------------+
+//
+// Content (for now):
+//
+//   CBOR encoded array of extra data: cborArray{type info}
+//
+// Extra data flag is flagExtraData + the slab flag.
+//
+func (a *ArrayExtraData) Encode(enc *Encoder, flag byte) error {
+	// Encode version
+	enc.Scratch[0] = 0
+
+	// Encode flag
+	enc.Scratch[1] = flag | flagExtraData
+
+	// Write scratch content to encoder
+	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
+	if err != nil {
+		return err
+	}
+
+	// TODO: use encoding options
+	// Encode extra data
+	cborEnc := cbor.NewEncoder(enc.Writer)
+	return cborEnc.Encode(a)
 }
 
 func newArrayDataSlabFromData(
@@ -142,7 +220,24 @@ func newArrayDataSlabFromData(
 	*ArrayDataSlab,
 	error,
 ) {
-	// Check data length
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, errors.New("data is too short for array data slab")
+	}
+
+	var extraData *ArrayExtraData
+
+	// Check flag for extra data
+	if data[1]&flagExtraData != 0 {
+		// Decode extra data
+		var err error
+		extraData, data, err = newArrayExtraDataFromData(data, decMode)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Check data length (after decoding extra data if present)
 	if len(data) < arrayDataSlabPrefixSize {
 		return nil, errors.New("data is too short for array data slab")
 	}
@@ -157,15 +252,19 @@ func newArrayDataSlabFromData(
 		)
 	}
 
-	const versionAndFlagSize = 2
-
 	// Decode prev storage ID
 	const prevStorageIDOffset = versionAndFlagSize
-	prev := binary.BigEndian.Uint64(data[prevStorageIDOffset:])
+	prev, err := NewStorageIDFromRawBytes(data[prevStorageIDOffset:])
+	if err != nil {
+		return nil, err
+	}
 
 	// Decode next storage ID
 	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
-	next := binary.BigEndian.Uint64(data[nextStorageIDOffset:])
+	next, err := NewStorageIDFromRawBytes(data[nextStorageIDOffset:])
+	if err != nil {
+		return nil, err
+	}
 
 	// Decode content (CBOR array)
 	const contentOffset = nextStorageIDOffset + storageIDSize
@@ -192,10 +291,11 @@ func newArrayDataSlabFromData(
 	}
 
 	return &ArrayDataSlab{
-		prev:     StorageID(prev),
-		next:     StorageID(next),
-		header:   header,
-		elements: elements,
+		prev:      prev,
+		next:      next,
+		header:    header,
+		elements:  elements,
+		extraData: extraData,
 	}, nil
 }
 
@@ -203,37 +303,48 @@ func newArrayDataSlabFromData(
 //
 // Header (18 bytes):
 //
-//   +-------------------------------+-------------------------------+-------------------------------+
-//   | slab version + flag (2 bytes) | prev sib storage ID (8 bytes) | next sib storage ID (8 bytes) |
-//   +-------------------------------+-------------------------------+-------------------------------+
+//   +-------------------------------+--------------------------------+--------------------------------+
+//   | slab version + flag (2 bytes) | prev sib storage ID (16 bytes) | next sib storage ID (16 bytes) |
+//   +-------------------------------+--------------------------------+--------------------------------+
 //
 // Content (for now):
 //
 //   CBOR encoded array of elements
 //
+// If this is root slab, extra data section is prepended to slab's encoded content.
+// See ArrayExtraData.Encode() for extra data section format.
+//
 func (a *ArrayDataSlab) Encode(enc *Encoder) error {
+
+	flag := flagDataSlab | flagArray
+
+	// Encode extra data if present
+	if a.extraData != nil {
+		err := a.extraData.Encode(enc, flag)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Encode version
 	enc.Scratch[0] = 0
 
 	// Encode flag
-	enc.Scratch[1] = flagDataSlab | flagArray
-
-	const versionAndFlagSize = 2
+	enc.Scratch[1] = flag
 
 	// Encode prev storage ID to scratch
 	const prevStorageIDOffset = versionAndFlagSize
-	binary.BigEndian.PutUint64(
-		enc.Scratch[prevStorageIDOffset:],
-		uint64(a.prev),
-	)
+	_, err := a.prev.ToRawBytes(enc.Scratch[prevStorageIDOffset:])
+	if err != nil {
+		return err
+	}
 
 	// Encode next storage ID to scratch
 	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
-	binary.BigEndian.PutUint64(
-		enc.Scratch[nextStorageIDOffset:],
-		uint64(a.next),
-	)
+	_, err = a.next.ToRawBytes(enc.Scratch[nextStorageIDOffset:])
+	if err != nil {
+		return err
+	}
 
 	// Encode CBOR array size manually for fix-sized encoding
 	const contentOffset = nextStorageIDOffset + storageIDSize
@@ -249,7 +360,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	// Write scratch content to encoder
 	const totalSize = countOffset + countSize
-	_, err := enc.Write(enc.Scratch[:totalSize])
+	_, err = enc.Write(enc.Scratch[:totalSize])
 	if err != nil {
 		return err
 	}
@@ -263,19 +374,6 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	}
 
 	return enc.CBOR.Flush()
-}
-
-func (a *ArrayDataSlab) ShallowCloneWithNewID(storage SlabStorage) ArraySlab {
-	return &ArrayDataSlab{
-		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(),
-			size:  a.header.size,
-			count: a.header.count,
-		},
-		elements: a.elements,
-		prev:     a.prev,
-		next:     a.next,
-	}
 }
 
 func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
@@ -375,7 +473,7 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	rightSlabCount := len(a.elements) - leftCount
 	rightSlab := &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(),
+			id:    storage.GenerateStorageID(a.header.id.address),
 			size:  arrayDataSlabPrefixSize + dataSize - leftSize,
 			count: uint32(rightSlabCount),
 		},
@@ -588,6 +686,20 @@ func (a *ArrayDataSlab) ByteSize() uint32 {
 	return a.header.size
 }
 
+func (a *ArrayDataSlab) ExtraData() *ArrayExtraData {
+	return a.extraData
+}
+
+func (a *ArrayDataSlab) RemoveExtraData() *ArrayExtraData {
+	extraData := a.extraData
+	a.extraData = nil
+	return extraData
+}
+
+func (a *ArrayDataSlab) SetExtraData(extraData *ArrayExtraData) {
+	a.extraData = extraData
+}
+
 func (a *ArrayDataSlab) String() string {
 	var elements []Storable
 	if len(a.elements) <= 6 {
@@ -610,7 +722,25 @@ func (a *ArrayDataSlab) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
-func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab, error) {
+func newArrayMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMode) (*ArrayMetaDataSlab, error) {
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, errors.New("data is too short for array metadata slab")
+	}
+
+	var extraData *ArrayExtraData
+
+	// Check flag for extra data
+	if data[1]&flagExtraData != 0 {
+		// Decode extra data
+		var err error
+		extraData, data, err = newArrayExtraDataFromData(data, decMode)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Check data length (after decoding extra data if present)
 	if len(data) < arrayMetaDataSlabPrefixSize {
 		return nil, errors.New("data is too short for array metadata slab")
 	}
@@ -625,15 +755,11 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 		)
 	}
 
-	const versionAndFlagSize = 2
-
 	// Decode number of child headers
 	const childHeaderCountOffset = versionAndFlagSize
 	childHeaderCount := binary.BigEndian.Uint16(data[childHeaderCountOffset:])
 
-	const childHeaderSize = 16
-
-	expectedDataLength := arrayMetaDataSlabPrefixSize + childHeaderSize*int(childHeaderCount)
+	expectedDataLength := arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*int(childHeaderCount)
 	if len(data) != expectedDataLength {
 		return nil, fmt.Errorf(
 			"data has unexpected length %d, want %d",
@@ -649,7 +775,10 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 	offset := childHeaderCountOffset + 2
 
 	for i := 0; i < int(childHeaderCount); i++ {
-		storageID := binary.BigEndian.Uint64(data[offset:])
+		storageID, err := NewStorageIDFromRawBytes(data[offset:])
+		if err != nil {
+			return nil, err
+		}
 
 		countOffset := offset + storageIDSize
 		count := binary.BigEndian.Uint32(data[countOffset:])
@@ -666,7 +795,7 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 		}
 		childrenCountSum[i] = totalCount
 
-		offset += childHeaderSize
+		offset += arraySlabHeaderSize
 	}
 
 	header := ArraySlabHeader{
@@ -679,6 +808,7 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 		header:           header,
 		childrenHeaders:  childrenHeaders,
 		childrenCountSum: childrenCountSum,
+		extraData:        extraData,
 	}, nil
 }
 
@@ -694,15 +824,26 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 //
 // 	[[count, size, storage id], ...]
 //
+// If this is root slab, extra data section is prepended to slab's encoded content.
+// See ArrayExtraData.Encode() for extra data section format.
+//
 func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
+
+	flag := flagArray | flagMetaDataSlab
+
+	// Encode extra data if present
+	if a.extraData != nil {
+		err := a.extraData.Encode(enc, flag)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Encode version
 	enc.Scratch[0] = 0
 
 	// Encode flag
-	enc.Scratch[1] = flagArray | flagMetaDataSlab
-
-	const versionAndFlagSize = 2
+	enc.Scratch[1] = flag
 
 	// Encode child header count to scratch
 	const childHeaderCountOffset = versionAndFlagSize
@@ -720,7 +861,10 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
 	// Encode children headers
 	for _, h := range a.childrenHeaders {
-		binary.BigEndian.PutUint64(enc.Scratch[:], uint64(h.id))
+		_, err := h.id.ToRawBytes(enc.Scratch[:])
+		if err != nil {
+			return err
+		}
 
 		const countOffset = storageIDSize
 		binary.BigEndian.PutUint32(enc.Scratch[countOffset:], h.count)
@@ -738,18 +882,6 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (a *ArrayMetaDataSlab) ShallowCloneWithNewID(storage SlabStorage) ArraySlab {
-	return &ArrayMetaDataSlab{
-		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(),
-			size:  a.header.size,
-			count: a.header.count,
-		},
-		childrenHeaders:  a.childrenHeaders,
-		childrenCountSum: a.childrenCountSum,
-	}
-}
-
 // TODO: improve naming
 func (a *ArrayMetaDataSlab) childSlabIndexInfo(
 	index uint64,
@@ -760,7 +892,7 @@ func (a *ArrayMetaDataSlab) childSlabIndexInfo(
 	err error,
 ) {
 	if index >= uint64(a.header.count) {
-		return 0, 0, 0, IndexOutOfRangeError{}
+		return 0, 0, StorageID{}, IndexOutOfRangeError{}
 	}
 
 	// Either perform a linear scan (for small number of children),
@@ -1340,7 +1472,7 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	// Construct right slab
 	rightSlab := &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(),
+			id:    storage.GenerateStorageID(a.header.id.address),
 			size:  a.header.size - uint32(leftSize),
 			count: a.header.count - leftCount,
 		},
@@ -1483,6 +1615,20 @@ func (a *ArrayMetaDataSlab) ID() StorageID {
 	return a.header.id
 }
 
+func (a *ArrayMetaDataSlab) ExtraData() *ArrayExtraData {
+	return a.extraData
+}
+
+func (a *ArrayMetaDataSlab) RemoveExtraData() *ArrayExtraData {
+	extraData := a.extraData
+	a.extraData = nil
+	return extraData
+}
+
+func (a *ArrayMetaDataSlab) SetExtraData(extraData *ArrayExtraData) {
+	a.extraData = extraData
+}
+
 func (a *ArrayMetaDataSlab) String() string {
 	var elemsStr []string
 	for _, h := range a.childrenHeaders {
@@ -1491,8 +1637,17 @@ func (a *ArrayMetaDataSlab) String() string {
 	return strings.Join(elemsStr, " ")
 }
 
-func NewArray(storage SlabStorage) (*Array, error) {
-	root := newArrayDataSlab(storage)
+func NewArray(storage SlabStorage, address Address, typeInfo string) (*Array, error) {
+
+	extraData := &ArrayExtraData{TypeInfo: typeInfo}
+
+	root := &ArrayDataSlab{
+		header: ArraySlabHeader{
+			id:   storage.GenerateStorageID(address),
+			size: arrayDataSlabPrefixSize,
+		},
+		extraData: extraData,
+	}
 
 	err := storage.Store(root.header.id, root)
 	if err != nil {
@@ -1501,6 +1656,7 @@ func NewArray(storage SlabStorage) (*Array, error) {
 
 	return &Array{
 		storage: storage,
+		address: address,
 		root:    root,
 	}, nil
 }
@@ -1541,10 +1697,18 @@ func (a *Array) Insert(index uint64, value Value) error {
 
 	if a.root.IsFull() {
 
-		copiedRoot := a.root.ShallowCloneWithNewID(a.storage)
+		// Get old root's extra data and reset it to nil in old root
+		extraData := a.root.RemoveExtraData()
 
-		// Split copied root
-		leftSlab, rightSlab, err := copiedRoot.Split(a.storage)
+		// Save root node id
+		rootID := a.root.ID()
+
+		// Assign a new storage id to old root before splitting it.
+		oldRoot := a.root
+		oldRoot.SetID(a.storage.GenerateStorageID(a.address))
+
+		// Split old root
+		leftSlab, rightSlab, err := oldRoot.Split(a.storage)
 		if err != nil {
 			return err
 		}
@@ -1552,21 +1716,19 @@ func (a *Array) Insert(index uint64, value Value) error {
 		left := leftSlab.(ArraySlab)
 		right := rightSlab.(ArraySlab)
 
-		if a.root.IsData() {
-			// Create new ArrayMetaDataSlab with the same storage ID as root
-			rootID := a.root.ID()
-			a.root = &ArrayMetaDataSlab{
-				header: ArraySlabHeader{
-					id: rootID,
-				},
-			}
+		// Create new ArrayMetaDataSlab with the old root's storage ID
+		newRoot := &ArrayMetaDataSlab{
+			header: ArraySlabHeader{
+				id:    rootID,
+				count: left.Header().count + right.Header().count,
+				size:  arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*2,
+			},
+			childrenHeaders:  []ArraySlabHeader{left.Header(), right.Header()},
+			childrenCountSum: []uint32{left.Header().count, left.Header().count + right.Header().count},
+			extraData:        extraData,
 		}
 
-		root := a.root.(*ArrayMetaDataSlab)
-		root.childrenHeaders = []ArraySlabHeader{left.Header(), right.Header()}
-		root.childrenCountSum = []uint32{left.Header().count, left.Header().count + right.Header().count}
-		root.header.count = left.Header().count + right.Header().count
-		root.header.size = arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*uint32(len(root.childrenHeaders))
+		a.root = newRoot
 
 		err = a.storage.Store(left.ID(), left)
 		if err != nil {
@@ -1596,6 +1758,8 @@ func (a *Array) Remove(index uint64) (Value, error) {
 		root := a.root.(*ArrayMetaDataSlab)
 		if len(root.childrenHeaders) == 1 {
 
+			extraData := root.RemoveExtraData()
+
 			rootID := root.header.id
 
 			childID := root.childrenHeaders[0].id
@@ -1608,6 +1772,8 @@ func (a *Array) Remove(index uint64) (Value, error) {
 			a.root = child
 
 			a.root.SetID(rootID)
+
+			a.root.SetExtraData(extraData)
 
 			err = a.storage.Store(rootID, a.root)
 			if err != nil {
@@ -1703,8 +1869,8 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	}
 }
 
-func (a *Array) DeepCopy(storage SlabStorage) (Value, error) {
-	result, err := NewArray(storage)
+func (a *Array) DeepCopy(storage SlabStorage, address Address) (Value, error) {
+	result, err := NewArray(storage, address, a.Type())
 	if err != nil {
 		return nil, err
 	}
@@ -1712,7 +1878,7 @@ func (a *Array) DeepCopy(storage SlabStorage) (Value, error) {
 	var index uint64
 	err = a.Iterate(func(element Value) (resume bool, err error) {
 
-		elementCopy, err := element.DeepCopy(storage)
+		elementCopy, err := element.DeepCopy(storage, address)
 		if err != nil {
 			return false, err
 		}
@@ -1739,6 +1905,13 @@ func (a *Array) Count() uint64 {
 
 func (a *Array) StorageID() StorageID {
 	return a.root.ID()
+}
+
+func (a *Array) Type() string {
+	if extraData := a.root.ExtraData(); extraData != nil {
+		return extraData.TypeInfo
+	}
+	return ""
 }
 
 func (a *Array) String() string {

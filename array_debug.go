@@ -6,6 +6,7 @@ package atree
 
 import (
 	"container/list"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -145,7 +146,17 @@ func (a *Array) Print() {
 	}
 }
 
-func (a *Array) valid() (bool, error) {
+func (a *Array) valid(typeInfo string) (bool, error) {
+
+	// Verify that root has type information
+	extraData := a.root.ExtraData()
+	if extraData == nil {
+		return false, errors.New("root slab doesn't have extra data")
+	}
+	if extraData.TypeInfo != typeInfo {
+		return false, fmt.Errorf("type information is %s, want %s", extraData.TypeInfo, typeInfo)
+	}
+
 	verified, _, err := a._valid(a.root.Header().id, 0)
 	return verified, err
 }
@@ -156,6 +167,13 @@ func (a *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 	if err != nil {
 		return false, 0, err
 	}
+
+	if level > 0 {
+		if slab.ExtraData() != nil {
+			return false, 0, errors.New("non-root slab has extra data")
+		}
+	}
+
 	if slab.IsData() {
 		dataSlab, ok := slab.(*ArrayDataSlab)
 		if !ok {

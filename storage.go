@@ -5,12 +5,83 @@
 package atree
 
 import (
+	"encoding/binary"
+	"errors"
+	"fmt"
+
 	"github.com/fxamacker/cbor/v2"
 )
 
-type StorageID uint64
+type (
+	Address      [8]byte
+	StorageIndex [8]byte
 
-const StorageIDUndefined = StorageID(0)
+	StorageID struct {
+		address Address
+		index   StorageIndex
+	}
+)
+
+var (
+	AddressUndefined      = Address{}
+	StorageIndexUndefined = StorageIndex{}
+	StorageIDUndefined    = StorageID{}
+)
+
+var (
+	ErrStorageID      = errors.New("invalid storage id")
+	ErrStorageAddress = errors.New("invalid storage address")
+	ErrStorageIndex   = errors.New("invalid storage index")
+)
+
+func (index StorageIndex) Next() StorageIndex {
+	i := binary.BigEndian.Uint64(index[:])
+
+	var next StorageIndex
+	binary.BigEndian.PutUint64(next[:], i+1)
+
+	return next
+}
+
+func NewStorageID(address Address, index StorageIndex) StorageID {
+	return StorageID{address, index}
+}
+
+func NewStorageIDFromRawBytes(b []byte) (StorageID, error) {
+	if len(b) < storageIDSize {
+		return StorageID{}, fmt.Errorf("invalid storage id length %d", len(b))
+	}
+
+	var address Address
+	copy(address[:], b)
+
+	var index StorageIndex
+	copy(index[:], b[8:])
+
+	return StorageID{address, index}, nil
+}
+
+func (id StorageID) ToRawBytes(b []byte) (int, error) {
+	if len(b) < storageIDSize {
+		return 0, fmt.Errorf("storage id raw buffer is too short")
+	}
+	copy(b, id.address[:])
+	copy(b[8:], id.index[:])
+	return storageIDSize, nil
+}
+
+func (id StorageID) Valid() error {
+	if id == StorageIDUndefined {
+		return ErrStorageID
+	}
+	if id.address == AddressUndefined {
+		return ErrStorageAddress
+	}
+	if id.index == StorageIndexUndefined {
+		return ErrStorageIndex
+	}
+	return nil
+}
 
 type BaseStorageUsageReporter interface {
 	BytesRetrieved() int
@@ -125,12 +196,12 @@ type SlabStorage interface {
 	Remove(StorageID)
 
 	Count() int
-	GenerateStorageID() StorageID
+	GenerateStorageID(address Address) StorageID
 }
 
 type BasicSlabStorage struct {
 	slabs          map[StorageID]Slab
-	nextStorageID  StorageID
+	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
 	cborEncMode    cbor.EncMode
 	cborDecMode    cbor.DecMode
@@ -141,14 +212,18 @@ var _ SlabStorage = &BasicSlabStorage{}
 func NewBasicSlabStorage(cborEncMode cbor.EncMode, cborDecMode cbor.DecMode) *BasicSlabStorage {
 	return &BasicSlabStorage{
 		slabs:       make(map[StorageID]Slab),
+		storageIndex: make(map[Address]StorageIndex),
 		cborEncMode: cborEncMode,
 		cborDecMode: cborDecMode,
 	}
 }
 
-func (s *BasicSlabStorage) GenerateStorageID() StorageID {
-	s.nextStorageID++
-	return s.nextStorageID
+func (s *BasicSlabStorage) GenerateStorageID(address Address) StorageID {
+	index := s.storageIndex[address]
+	nextIndex := index.Next()
+
+	s.storageIndex[address] = nextIndex
+	return NewStorageID(address, nextIndex)
 }
 
 func (s *BasicSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
@@ -200,11 +275,11 @@ type PersistentSlabStorage struct {
 	baseStorage    BaseStorage
 	cache          map[StorageID]Slab
 	deltas         map[StorageID]Slab
-	autoCommit     bool // flag to call commit after each opeartion
-	nextStorageID  StorageID
+	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
 	cborEncMode    cbor.EncMode
 	cborDecMode cbor.DecMode
+	autoCommit     bool // flag to call commit after each operation
 }
 
 var _ SlabStorage = &PersistentSlabStorage{}
@@ -218,11 +293,12 @@ func NewPersistentSlabStorage(
 	opts ...StorageOption,
 ) *PersistentSlabStorage {
 	storage := &PersistentSlabStorage{baseStorage: base,
-		cache:       make(map[StorageID]Slab),
-		deltas:      make(map[StorageID]Slab),
-		cborEncMode: cborEncMode,
+		cache:        make(map[StorageID]Slab),
+		deltas:       make(map[StorageID]Slab),
+		storageIndex: make(map[Address]StorageIndex),
+		cborEncMode:  cborEncMode,
 		cborDecMode: cborDecMode,
-		autoCommit:  true,
+		autoCommit:   true,
 	}
 
 	for _, applyOption := range opts {
@@ -240,31 +316,39 @@ func WithNoAutoCommit() StorageOption {
 	}
 }
 
-func (s *PersistentSlabStorage) GenerateStorageID() StorageID {
-	s.nextStorageID++
-	return s.nextStorageID
+
+func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
+	index := s.storageIndex[address]
+	nextIndex := index.Next()
+
+	s.storageIndex[address] = nextIndex
+	return NewStorageID(address, nextIndex)
 }
 
 func (s *PersistentSlabStorage) Commit() error {
 	for id, slab := range s.deltas {
-		// deleted slabs
-		if slab == nil {
-			s.baseStorage.Remove(id)
-			continue
-		}
+		if id.address != AddressUndefined {
+			// deleted slabs
+			if slab == nil {
+				s.baseStorage.Remove(id)
+				continue
+			}
 
-		// serialize
-		data, err := Encode(slab, s.cborEncMode)
-		if err != nil {
-			return err
+			// serialize
+			data, err := Encode(slab, s.cborEncMode)
+			if err != nil {
+				return err
+			}
+
+			// store
+			err = s.baseStorage.Store(id, data)
+			if err != nil {
+				return err
+			}
+
+			// add to read cache
+			s.cache[id] = slab
 		}
-		// store
-		err = s.baseStorage.Store(id, data)
-		if err != nil {
-			return err
-		}
-		// add to read cache
-		s.cache[id] = slab
 	}
 	// reset deltas
 	s.deltas = make(map[StorageID]Slab)

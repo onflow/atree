@@ -17,7 +17,7 @@ import (
 type Encoder struct {
 	io.Writer
 	CBOR    *cbor.StreamEncoder
-	Scratch [32]byte
+	Scratch [64]byte
 }
 
 func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
@@ -44,7 +44,7 @@ func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable 
 	if flag&flagArray != 0 {
 
 		if flag&flagMetaDataSlab != 0 {
-			return newArrayMetaDataSlabFromData(id, data)
+			return newArrayMetaDataSlabFromData(id, data, decMode)
 		}
 		return newArrayDataSlabFromData(id, data, decMode, decodeStorable)
 

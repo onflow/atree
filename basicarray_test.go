@@ -35,7 +35,9 @@ func TestBasicArrayAppendAndGet(t *testing.T) {
 
 	storage := newTestBasicStorage(t)
 
-	array := NewBasicArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array := NewBasicArray(storage, address)
 
 	for i := uint64(0); i < arraySize; i++ {
 		err := array.Append(Uint64Value(i))
@@ -58,7 +60,9 @@ func TestBasicArraySetAndGet(t *testing.T) {
 
 	storage := newTestBasicStorage(t)
 
-	array := NewBasicArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array := NewBasicArray(storage, address)
 
 	for i := uint64(0); i < arraySize; i++ {
 		err := array.Append(Uint64Value(i))
@@ -87,7 +91,9 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 
 		storage := newTestBasicStorage(t)
 
-		array := NewBasicArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Insert(0, Uint64Value(arraySize-i-1))
@@ -110,7 +116,9 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 
 		storage := newTestBasicStorage(t)
 
-		array := NewBasicArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Insert(i, Uint64Value(i))
@@ -133,7 +141,9 @@ func TestBasicArrayInsertAndGet(t *testing.T) {
 
 		storage := newTestBasicStorage(t)
 
-		array := NewBasicArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i += 2 {
 			err := array.Append(Uint64Value(i))
@@ -164,7 +174,9 @@ func TestBasicArrayRemove(t *testing.T) {
 
 		storage := newTestBasicStorage(t)
 
-		array := NewBasicArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -193,7 +205,9 @@ func TestBasicArrayRemove(t *testing.T) {
 
 		storage := newTestBasicStorage(t)
 
-		array := NewBasicArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -222,7 +236,9 @@ func TestBasicArrayRemove(t *testing.T) {
 
 		storage := newTestBasicStorage(t)
 
-		array := NewBasicArray(storage)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array := NewBasicArray(storage, address)
 
 		for i := uint64(0); i < arraySize; i++ {
 			err := array.Append(Uint64Value(i))
@@ -275,7 +291,9 @@ func TestBasicArrayRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	storage := newTestBasicStorage(t)
 
-	array := NewBasicArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array := NewBasicArray(storage, address)
 
 	values := make([]Value, 0, actionCount)
 
@@ -370,7 +388,9 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 	storage := NewBasicSlabStorage(encMode, decMode)
 	storage.DecodeStorable = decodeStorable
 
-	array := NewBasicArray(storage)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array := NewBasicArray(storage, address)
 
 	const arraySize = 256 * 256
 	values := make([]Value, arraySize)

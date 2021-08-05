@@ -178,17 +178,19 @@ func newArrayExtraDataFromData(data []byte) (*ArrayExtraData, []byte, error) {
 	return &extraData, data, nil
 }
 
-// Encode encodes this array extra data to the given encoder.
+// Encode encodes extra data to the given encoder.
 //
 // Header (2 bytes):
 //
-//     +-----------------------+--------------------+
-//     | slab version (1 byte) | slab flag (1 byte) |
-//     +-----------------------+--------------------+
+//     +-----------------------------+--------------------------+
+//     | extra data version (1 byte) | extra data flag (1 byte) |
+//     +-----------------------------+--------------------------+
 //
 // Content (for now):
 //
 //   CBOR encoded array of extra data: cborArray{type info}
+//
+// Extra data flag is flagExtraData + the slab flag.
 //
 func (a *ArrayExtraData) Encode(enc *Encoder, flag byte) error {
 	// Encode version
@@ -300,13 +302,16 @@ func newArrayDataSlabFromData(
 //
 // Header (18 bytes):
 //
-//   +-------------------------------+-------------------------------+-------------------------------+
+//   +-------------------------------+--------------------------------+--------------------------------+
 //   | slab version + flag (2 bytes) | prev sib storage ID (16 bytes) | next sib storage ID (16 bytes) |
-//   +-------------------------------+-------------------------------+-------------------------------+
+//   +-------------------------------+--------------------------------+--------------------------------+
 //
 // Content (for now):
 //
 //   CBOR encoded array of elements
+//
+// If this is root slab, extra data section is prepended to slab's encoded content.
+// See ArrayExtraData.Encode() for extra data section format.
 //
 func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
@@ -817,6 +822,9 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 // Content (n * 16 bytes):
 //
 // 	[[count, size, storage id], ...]
+//
+// If this is root slab, extra data section is prepended to slab's encoded content.
+// See ArrayExtraData.Encode() for extra data section format.
 //
 func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 

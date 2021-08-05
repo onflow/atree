@@ -17,12 +17,24 @@ import (
 	//"golang.org/x/exp/rand"
 )
 
+var (
+	letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+)
+
 // Seed only once and print seed for easier debugging.
 func init() {
 	//seed := uint64(0x9E3779B97F4A7C15) // goldenRatio
 	seed := time.Now().UnixNano()
 	rand.Seed(seed)
 	fmt.Printf("seed: 0x%x\n", seed)
+}
+
+func randStr(n int) string {
+	r := make([]rune, n)
+	for i := range r {
+		r[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(r)
 }
 
 func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
@@ -2062,5 +2074,112 @@ func TestEmptyArray(t *testing.T) {
 		require.Equal(t, uint32(0), array2.root.Header().count)
 		require.Equal(t, typeInfo, array2.Type())
 		require.Equal(t, uint32(arrayDataSlabPrefixSize), array2.root.Header().size)
+	})
+}
+
+func TestStringElement(t *testing.T) {
+
+	t.Parallel()
+
+	t.Run("inline", func(t *testing.T) {
+
+		const typeInfo = "[string]"
+
+		const arraySize = 256 * 256
+
+		const stringSize = 32
+
+		strs := make([]string, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			s := randStr(stringSize)
+			strs[i] = s
+		}
+
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(NewStringValue(strs[i]))
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+
+			v, ok := e.(*StringValue)
+			require.True(t, ok)
+			require.Equal(t, strs[i], v.str)
+		}
+
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		stats, _ := array.Stats()
+		require.Equal(t,
+			stats.DataSlabCount+stats.MetaDataSlabCount,
+			uint64(array.storage.Count()),
+		)
+	})
+
+	t.Run("external slab", func(t *testing.T) {
+
+		const typeInfo = "[string]"
+
+		const arraySize = 256 * 256
+
+		const stringSize = 512
+
+		strs := make([]string, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			s := randStr(stringSize)
+			strs[i] = s
+		}
+
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(NewStringValue(strs[i]))
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+
+			v, ok := e.(*StringValue)
+			require.True(t, ok)
+			require.Equal(t, strs[i], v.str)
+		}
+
+		require.Equal(t, typeInfo, array.Type())
+
+		verified, err := array.valid(typeInfo)
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		stats, _ := array.Stats()
+		require.Equal(t,
+			stats.DataSlabCount+stats.MetaDataSlabCount+arraySize,
+			uint64(array.storage.Count()),
+		)
 	})
 }

@@ -33,8 +33,8 @@ func (v Uint8Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint8Value) Storable(_ SlabStorage, _ Address) Storable {
-	return v
+func (v Uint8Value) Storable(_ SlabStorage, _ Address) (Storable, error) {
+	return v, nil
 }
 
 // Encode encodes UInt8Value as
@@ -76,8 +76,8 @@ func (v Uint16Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint16Value) Storable(_ SlabStorage, _ Address) Storable {
-	return v
+func (v Uint16Value) Storable(_ SlabStorage, _ Address) (Storable, error) {
+	return v, nil
 }
 
 func (v Uint16Value) Encode(enc *Encoder) error {
@@ -114,8 +114,8 @@ func (v Uint32Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint32Value) Storable(_ SlabStorage, _ Address) Storable {
-	return v
+func (v Uint32Value) Storable(_ SlabStorage, _ Address) (Storable, error) {
+	return v, nil
 }
 
 // Encode encodes UInt32Value as
@@ -157,8 +157,8 @@ func (v Uint64Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint64Value) Storable(_ SlabStorage, _ Address) Storable {
-	return v
+func (v Uint64Value) Storable(_ SlabStorage, _ Address) (Storable, error) {
+	return v, nil
 }
 
 // Encode encodes UInt64Value as
@@ -187,54 +187,127 @@ func (v Uint64Value) String() string {
 	return fmt.Sprintf("%d", uint64(v))
 }
 
+type StringValue struct {
+	str  string
+	size uint32
+}
+
+var _ Value = &StringValue{}
+var _ Storable = &StringValue{}
+
+func NewStringValue(s string) *StringValue {
+	size := GetUintCBORSize(uint64(len(s))) + uint32(len(s))
+	return &StringValue{str: s, size: size}
+}
+
+func (v *StringValue) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
+	return v, nil
+}
+
+func (v *StringValue) StoredValue(_ SlabStorage) (Value, error) {
+	return v, nil
+}
+
+func (v *StringValue) Storable(storage SlabStorage, address Address) (Storable, error) {
+	if v.ByteSize() > uint32(MaxInlineElementSize) {
+
+		// Create StorableSlab
+		id := storage.GenerateStorageID(address)
+		slab := &StorableSlab{
+			StorageID: id,
+			Storable:  v,
+		}
+
+		// Store StorableSlab in storage
+		err := storage.Store(id, slab)
+		if err != nil {
+			return nil, err
+		}
+
+		// Return storage id as storable
+		return StorageIDStorable(id), nil
+	}
+
+	return v, nil
+}
+
+func (v *StringValue) Encode(enc *Encoder) error {
+	return enc.CBOR.EncodeString(v.str)
+}
+
+func (v *StringValue) ByteSize() uint32 {
+	return v.size
+}
+
+func (v *StringValue) String() string {
+	return v.str
+}
+
 func decodeStorable(dec *cbor.StreamDecoder, _ StorageID) (Storable, error) {
-	tagNumber, err := dec.DecodeTagNumber()
+	t, err := dec.NextType()
 	if err != nil {
 		return nil, err
 	}
 
-	switch tagNumber {
-	case CBORTagStorageID:
-		return DecodeStorageIDStorable(dec)
-
-	case cborTagUInt8Value:
-		n, err := dec.DecodeUint64()
+	switch t {
+	case cbor.TextStringType:
+		s, err := dec.DecodeString()
 		if err != nil {
 			return nil, err
 		}
-		if n > math.MaxUint8 {
-			return nil, fmt.Errorf("invalid data, got %d, expected max %d", n, math.MaxUint8)
-		}
-		return Uint8Value(n), nil
+		return NewStringValue(s), nil
 
-	case cborTagUInt16Value:
-		n, err := dec.DecodeUint64()
+	case cbor.TagType:
+		tagNumber, err := dec.DecodeTagNumber()
 		if err != nil {
 			return nil, err
 		}
-		if n > math.MaxUint16 {
-			return nil, fmt.Errorf("invalid data, got %d, expected max %d", n, math.MaxUint16)
-		}
-		return Uint16Value(n), nil
 
-	case cborTagUInt32Value:
-		n, err := dec.DecodeUint64()
-		if err != nil {
-			return nil, err
-		}
-		if n > math.MaxUint32 {
-			return nil, fmt.Errorf("invalid data, got %d, expected max %d", n, math.MaxUint32)
-		}
-		return Uint32Value(n), nil
+		switch tagNumber {
+		case CBORTagStorageID:
+			return DecodeStorageIDStorable(dec)
 
-	case cborTagUInt64Value:
-		n, err := dec.DecodeUint64()
-		if err != nil {
-			return nil, err
-		}
-		return Uint64Value(n), nil
+		case cborTagUInt8Value:
+			n, err := dec.DecodeUint64()
+			if err != nil {
+				return nil, err
+			}
+			if n > math.MaxUint8 {
+				return nil, fmt.Errorf("invalid data, got %d, expected max %d", n, math.MaxUint8)
+			}
+			return Uint8Value(n), nil
 
+		case cborTagUInt16Value:
+			n, err := dec.DecodeUint64()
+			if err != nil {
+				return nil, err
+			}
+			if n > math.MaxUint16 {
+				return nil, fmt.Errorf("invalid data, got %d, expected max %d", n, math.MaxUint16)
+			}
+			return Uint16Value(n), nil
+
+		case cborTagUInt32Value:
+			n, err := dec.DecodeUint64()
+			if err != nil {
+				return nil, err
+			}
+			if n > math.MaxUint32 {
+				return nil, fmt.Errorf("invalid data, got %d, expected max %d", n, math.MaxUint32)
+			}
+			return Uint32Value(n), nil
+
+		case cborTagUInt64Value:
+			n, err := dec.DecodeUint64()
+			if err != nil {
+				return nil, err
+			}
+			return Uint64Value(n), nil
+
+		default:
+			return nil, fmt.Errorf("invalid tag number %d", tagNumber)
+		}
 	default:
-		return nil, fmt.Errorf("invalid tag number %d", tagNumber)
+		return nil, fmt.Errorf("invalid cbor type %s for storable", t)
 	}
 }

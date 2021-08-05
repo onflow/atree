@@ -97,6 +97,11 @@ type MapSlabHeader struct {
 	firstKey uint64    // firstKey (first hashed key) is used to lookup value
 }
 
+type MapExtraData struct {
+	_        struct{} `cbor:",toarray"`
+	TypeInfo string
+}
+
 // MapDataSlab is leaf node, implementing MapSlab.
 // anySize is true for data slab that isn't restricted by size requirement.
 type MapDataSlab struct {
@@ -105,6 +110,10 @@ type MapDataSlab struct {
 	header MapSlabHeader
 	elements
 	anySize bool
+
+	// extraData is data that is prepended to encoded slab data.
+	// It isn't included in slab size calculation for splitting and merging.
+	extraData *MapExtraData
 }
 
 var _ MapSlab = &MapDataSlab{}
@@ -113,6 +122,10 @@ var _ MapSlab = &MapDataSlab{}
 type MapMetaDataSlab struct {
 	header          MapSlabHeader
 	childrenHeaders []MapSlabHeader
+
+	// extraData is data that is prepended to encoded slab data.
+	// It isn't included in slab size calculation for splitting and merging.
+	extraData *MapExtraData
 }
 
 var _ MapSlab = &MapMetaDataSlab{}
@@ -136,6 +149,10 @@ type MapSlab interface {
 	SetID(StorageID)
 
 	Header() MapSlabHeader
+
+	ExtraData() *MapExtraData
+	RemoveExtraData() *MapExtraData
+	SetExtraData(*MapExtraData)
 }
 
 type OrderedMap struct {
@@ -270,14 +287,15 @@ func (e *inlineCollisionGroup) String() string {
 
 func newExternalCollisionGroup(storage SlabStorage, address Address, elems elements) (*externalCollisionGroup, error) {
 	// Create new any size MapDataSlab
-	slab := newMapDataSlab(storage, address, true)
-
-	// Set slab elements
-	// Copy isn't necessary because inline collision group is converted into external collision group
-	slab.elements = elems
-
-	// Adjust slab size and first key
-	slab.header.size += elems.size
+	slab := &MapDataSlab{
+		header: MapSlabHeader{
+			id:   storage.GenerateStorageID(address),
+			size: mapDataSlabPrefixSize + elems.size,
+		},
+		// elems shouldn't be copied because inline collision group is converted into external collision group
+		elements: elems,
+		anySize:  true,
+	}
 
 	if len(elems.hkeys) > 0 {
 		slab.header.firstKey = elems.hkeys[0]
@@ -605,6 +623,7 @@ func (e *elements) String() string {
 	return strings.Join(s, " ")
 }
 
+/*
 func newMapDataSlab(storage SlabStorage, address Address, anySize bool) *MapDataSlab {
 	return &MapDataSlab{
 		header: MapSlabHeader{
@@ -614,7 +633,7 @@ func newMapDataSlab(storage SlabStorage, address Address, anySize bool) *MapData
 		anySize: anySize,
 	}
 }
-
+*/
 func (m *MapDataSlab) Encode(enc *Encoder) error {
 	// TODO: implement me
 	return errors.New("not implemented")
@@ -852,6 +871,20 @@ func (m *MapDataSlab) ID() StorageID {
 
 func (m *MapDataSlab) ByteSize() uint32 {
 	return m.header.size
+}
+
+func (m *MapDataSlab) ExtraData() *MapExtraData {
+	return m.extraData
+}
+
+func (m *MapDataSlab) RemoveExtraData() *MapExtraData {
+	extraData := m.extraData
+	m.extraData = nil
+	return extraData
+}
+
+func (m *MapDataSlab) SetExtraData(extraData *MapExtraData) {
+	m.extraData = extraData
 }
 
 func (m *MapDataSlab) String() string {
@@ -1388,6 +1421,20 @@ func (m *MapMetaDataSlab) ID() StorageID {
 	return m.header.id
 }
 
+func (m *MapMetaDataSlab) ExtraData() *MapExtraData {
+	return m.extraData
+}
+
+func (m *MapMetaDataSlab) RemoveExtraData() *MapExtraData {
+	extraData := m.extraData
+	m.extraData = nil
+	return extraData
+}
+
+func (m *MapMetaDataSlab) SetExtraData(extraData *MapExtraData) {
+	m.extraData = extraData
+}
+
 func (m *MapMetaDataSlab) String() string {
 	var hStr []string
 	for _, h := range m.childrenHeaders {
@@ -1396,8 +1443,17 @@ func (m *MapMetaDataSlab) String() string {
 	return strings.Join(hStr, " ")
 }
 
-func NewMap(storage SlabStorage, address Address, hasher Hasher) (*OrderedMap, error) {
-	root := newMapDataSlab(storage, address, false)
+func NewMap(storage SlabStorage, address Address, hasher Hasher, typeInfo string) (*OrderedMap, error) {
+
+	extraData := &MapExtraData{TypeInfo: typeInfo}
+
+	root := &MapDataSlab{
+		header: MapSlabHeader{
+			id:   storage.GenerateStorageID(address),
+			size: mapDataSlabPrefixSize,
+		},
+		extraData: extraData,
+	}
 
 	err := storage.Store(root.header.id, root)
 	if err != nil {
@@ -1453,6 +1509,9 @@ func (m *OrderedMap) Set(key MapKey, value Value) error {
 
 	if m.root.IsFull() {
 
+		// Get old root's extra data and reset it to nil in old root
+		extraData := m.root.RemoveExtraData()
+
 		// Save root node id
 		rootID := m.root.ID()
 
@@ -1477,6 +1536,7 @@ func (m *OrderedMap) Set(key MapKey, value Value) error {
 				firstKey: left.Header().firstKey,
 			},
 			childrenHeaders: []MapSlabHeader{left.Header(), right.Header()},
+			extraData:       extraData,
 		}
 
 		m.root = newRoot
@@ -1554,6 +1614,13 @@ func (m *OrderedMap) Storable(_ SlabStorage, _ Address) (Storable, error) {
 
 func (m *OrderedMap) Address() Address {
 	return m.address
+}
+
+func (m *OrderedMap) Type() string {
+	if extraData := m.root.ExtraData(); extraData != nil {
+		return extraData.TypeInfo
+	}
+	return ""
 }
 
 func (m *OrderedMap) String() string {

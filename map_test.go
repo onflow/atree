@@ -51,6 +51,8 @@ func TestMapSetAndGet(t *testing.T) {
 
 		const mapSize = 64 * 1024
 
+		const typeInfo = "map[String]Uint64"
+
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		storage := newTestInMemoryStorage(t)
@@ -67,7 +69,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, &sipHash128{secretkey})
+		m, err := NewMap(storage, address, &sipHash128{secretkey}, typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -88,6 +90,8 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Equal(t, v, e)
 		}
 
+		require.Equal(t, typeInfo, m.Type())
+
 		stats, _ := m.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
 	})
@@ -95,6 +99,8 @@ func TestMapSetAndGet(t *testing.T) {
 	t.Run("replicate keys", func(t *testing.T) {
 
 		const mapSize = 64 * 1024
+
+		const typeInfo = "map[String]Uint64"
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -112,7 +118,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, &sipHash128{secretkey})
+		m, err := NewMap(storage, address, &sipHash128{secretkey}, typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -140,6 +146,8 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Equal(t, v, e)
 		}
 
+		require.Equal(t, typeInfo, m.Type())
+
 		stats, _ := m.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
 	})
@@ -149,6 +157,8 @@ func TestMapSetAndGet(t *testing.T) {
 
 		const mapSize = 64 * 1024
 		const maxKeyLength = 224
+
+		const typeInfo = "map[String]AnyType"
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -167,7 +177,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		m, err := NewMap(storage, address, &sipHash128{secretkey})
+		m, err := NewMap(storage, address, &sipHash128{secretkey}, typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -185,6 +195,8 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Equal(t, v, e)
 		}
 
+		require.Equal(t, typeInfo, m.Type())
+
 		stats, _ := m.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
 	})
@@ -193,6 +205,8 @@ func TestMapSetAndGet(t *testing.T) {
 func TestMapHas(t *testing.T) {
 
 	const mapSize = 64 * 1024
+
+	const typeInfo = "map[String]Uint64"
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -213,7 +227,7 @@ func TestMapHas(t *testing.T) {
 		}
 	}
 
-	m, err := NewMap(storage, address, &sipHash128{secretkey})
+	m, err := NewMap(storage, address, &sipHash128{secretkey}, typeInfo)
 	require.NoError(t, err)
 
 	for _, k := range uniqueKeys[:mapSize] {
@@ -238,11 +252,15 @@ func TestMapHas(t *testing.T) {
 			require.Equal(t, false, exist)
 		}
 	}
+
+	require.Equal(t, typeInfo, m.Type())
 }
 
 func TestMapIterate(t *testing.T) {
 	t.Run("no collision", func(t *testing.T) {
 		const mapSize = 64 * 1024
+
+		const typeInfo = "map[String]Uint64"
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -281,7 +299,7 @@ func TestMapIterate(t *testing.T) {
 			return i < j // sort by insertion order with hash collision
 		})
 
-		m, err := NewMap(storage, address, hasher)
+		m, err := NewMap(storage, address, hasher, typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -303,12 +321,17 @@ func TestMapIterate(t *testing.T) {
 
 			return true, nil
 		})
+
 		require.NoError(t, err)
 		require.Equal(t, i, uint64(mapSize))
+
+		require.Equal(t, typeInfo, m.Type())
 	})
 
 	t.Run("collision", func(t *testing.T) {
 		const mapSize = 1024
+
+		const typeInfo = "map[String]String"
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -360,7 +383,7 @@ func TestMapIterate(t *testing.T) {
 			return i < j // sort by insertion order with hash collision
 		})
 
-		m, err := NewMap(storage, address, hasher)
+		m, err := NewMap(storage, address, hasher, typeInfo)
 		require.NoError(t, err)
 
 		for _, k := range keys {
@@ -385,11 +408,15 @@ func TestMapIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, i, uint64(mapSize))
+
+		require.Equal(t, typeInfo, m.Type())
 	})
 }
 
 func TestMapHashCollision(t *testing.T) {
 	const mapSize = 2 * 1024
+
+	const typeInfo = "map[String]String"
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -417,7 +444,7 @@ func TestMapHashCollision(t *testing.T) {
 		}
 	}
 
-	m, err := NewMap(storage, address, hasher)
+	m, err := NewMap(storage, address, hasher, typeInfo)
 	require.NoError(t, err)
 
 	for k, v := range uniqueKeyValues {
@@ -437,6 +464,8 @@ func TestMapHashCollision(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, v, e)
 	}
+
+	require.Equal(t, typeInfo, m.Type())
 
 	stats, _ := m.Stats()
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))

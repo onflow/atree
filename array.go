@@ -144,7 +144,7 @@ func (e ArraySlabNotFoundError) Error() string {
 	return fmt.Sprintf("failed to retrieve ArraySlab %d: %v", e.id, e.err)
 }
 
-func newArrayExtraDataFromData(data []byte) (*ArrayExtraData, []byte, error) {
+func newArrayExtraDataFromData(data []byte, decMode cbor.DecMode) (*ArrayExtraData, []byte, error) {
 	// Check data length
 	if len(data) < versionAndFlagSize {
 		return nil, data, errors.New("data is too short for array extra data")
@@ -165,7 +165,7 @@ func newArrayExtraDataFromData(data []byte) (*ArrayExtraData, []byte, error) {
 	var extraData ArrayExtraData
 
 	r := bytes.NewReader(data[versionAndFlagSize:])
-	dec := cbor.NewDecoder(r)
+	dec := decMode.NewDecoder(r)
 	err := dec.Decode(&extraData)
 	if err != nil {
 		return nil, data, err
@@ -214,6 +214,7 @@ func (a *ArrayExtraData) Encode(enc *Encoder, flag byte) error {
 func newArrayDataSlabFromData(
 	id StorageID,
 	data []byte,
+	decMode cbor.DecMode,
 	decodeStorable StorableDecoder,
 ) (
 	*ArrayDataSlab,
@@ -230,7 +231,7 @@ func newArrayDataSlabFromData(
 	if data[1]&flagExtraData != 0 {
 		// Decode extra data
 		var err error
-		extraData, data, err = newArrayExtraDataFromData(data)
+		extraData, data, err = newArrayExtraDataFromData(data, decMode)
 		if err != nil {
 			return nil, err
 		}
@@ -267,7 +268,7 @@ func newArrayDataSlabFromData(
 
 	// Decode content (CBOR array)
 	const contentOffset = nextStorageIDOffset + storageIDSize
-	cborDec := cbor.NewByteStreamDecoder(data[contentOffset:])
+	cborDec := decMode.NewByteStreamDecoder(data[contentOffset:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
@@ -290,8 +291,8 @@ func newArrayDataSlabFromData(
 	}
 
 	return &ArrayDataSlab{
-		prev:      StorageID(prev),
-		next:      StorageID(next),
+		prev:      prev,
+		next:      next,
 		header:    header,
 		elements:  elements,
 		extraData: extraData,
@@ -721,7 +722,7 @@ func (a *ArrayDataSlab) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
-func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab, error) {
+func newArrayMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMode) (*ArrayMetaDataSlab, error) {
 	// Check minimum data length
 	if len(data) < versionAndFlagSize {
 		return nil, errors.New("data is too short for array metadata slab")
@@ -733,7 +734,7 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte) (*ArrayMetaDataSlab
 	if data[1]&flagExtraData != 0 {
 		// Decode extra data
 		var err error
-		extraData, data, err = newArrayExtraDataFromData(data)
+		extraData, data, err = newArrayExtraDataFromData(data, decMode)
 		if err != nil {
 			return nil, err
 		}

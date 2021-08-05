@@ -73,6 +73,7 @@ func NewBasicArrayDataSlab(storage SlabStorage, address Address) *BasicArrayData
 func newBasicArrayDataSlabFromData(
 	id StorageID,
 	data []byte,
+	decMode cbor.DecMode,
 	decodeStorable StorableDecoder,
 ) (
 	*BasicArrayDataSlab,
@@ -87,7 +88,7 @@ func newBasicArrayDataSlabFromData(
 		return nil, fmt.Errorf("data has invalid flag 0x%x, want 0x%x", data[0], flagBasicArray)
 	}
 
-	cborDec := cbor.NewByteStreamDecoder(data[1:])
+	cborDec := decMode.NewByteStreamDecoder(data[1:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {

@@ -99,9 +99,9 @@ func (n NonStorable) StoredValue(_ SlabStorage) (Value, error) {
 }
 
 // Encode is a wrapper for Storable.Encode()
-func Encode(storable Storable, storage SlabStorage) ([]byte, error) {
+func Encode(storable Storable, encMode cbor.EncMode) ([]byte, error) {
 	var buf bytes.Buffer
-	enc := NewEncoder(&buf, storage)
+	enc := NewEncoder(&buf, encMode)
 
 	err := storable.Encode(enc)
 	if err != nil {

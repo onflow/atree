@@ -197,7 +197,6 @@ type SlabStorage interface {
 
 	Count() int
 	GenerateStorageID(address Address) StorageID
-	CBOREncMode() cbor.EncMode
 }
 
 type BasicSlabStorage struct {
@@ -205,20 +204,18 @@ type BasicSlabStorage struct {
 	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
 	cborEncMode    cbor.EncMode
+	cborDecMode    cbor.DecMode
 }
 
 var _ SlabStorage = &BasicSlabStorage{}
 
-func NewBasicSlabStorage(cborEncMode cbor.EncMode) *BasicSlabStorage {
+func NewBasicSlabStorage(cborEncMode cbor.EncMode, cborDecMode cbor.DecMode) *BasicSlabStorage {
 	return &BasicSlabStorage{
-		slabs:        make(map[StorageID]Slab),
+		slabs:       make(map[StorageID]Slab),
 		storageIndex: make(map[Address]StorageIndex),
-		cborEncMode:  cborEncMode,
+		cborEncMode: cborEncMode,
+		cborDecMode: cborDecMode,
 	}
-}
-
-func (s *BasicSlabStorage) CBOREncMode() cbor.EncMode {
-	return s.cborEncMode
 }
 
 func (s *BasicSlabStorage) GenerateStorageID(address Address) StorageID {
@@ -252,7 +249,7 @@ func (s *BasicSlabStorage) Count() int {
 func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
 	m := make(map[StorageID][]byte)
 	for id, slab := range s.slabs {
-		b, err := Encode(slab, s)
+		b, err := Encode(slab, s.cborEncMode)
 		if err != nil {
 			return nil, err
 		}
@@ -265,7 +262,7 @@ func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
 // This is currently used for testing.
 func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 	for id, data := range m {
-		slab, err := decodeSlab(id, data, s.DecodeStorable)
+		slab, err := decodeSlab(id, data, s.cborDecMode, s.DecodeStorable)
 		if err != nil {
 			return err
 		}
@@ -281,19 +278,26 @@ type PersistentSlabStorage struct {
 	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
 	cborEncMode    cbor.EncMode
-	autoCommit     bool // flag to call commit after each opeartion
+	cborDecMode cbor.DecMode
+	autoCommit     bool // flag to call commit after each operation
 }
 
 var _ SlabStorage = &PersistentSlabStorage{}
 
 type StorageOption func(st *PersistentSlabStorage) *PersistentSlabStorage
 
-func NewPersistentSlabStorage(base BaseStorage, cborEncMode cbor.EncMode, opts ...StorageOption) *PersistentSlabStorage {
+func NewPersistentSlabStorage(
+	base BaseStorage,
+	cborEncMode cbor.EncMode,
+	cborDecMode cbor.DecMode,
+	opts ...StorageOption,
+) *PersistentSlabStorage {
 	storage := &PersistentSlabStorage{baseStorage: base,
 		cache:        make(map[StorageID]Slab),
 		deltas:       make(map[StorageID]Slab),
 		storageIndex: make(map[Address]StorageIndex),
 		cborEncMode:  cborEncMode,
+		cborDecMode: cborDecMode,
 		autoCommit:   true,
 	}
 
@@ -312,16 +316,13 @@ func WithNoAutoCommit() StorageOption {
 	}
 }
 
+
 func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
 	index := s.storageIndex[address]
 	nextIndex := index.Next()
 
 	s.storageIndex[address] = nextIndex
 	return NewStorageID(address, nextIndex)
-}
-
-func (s *PersistentSlabStorage) CBOREncMode() cbor.EncMode {
-	return s.cborEncMode
 }
 
 func (s *PersistentSlabStorage) Commit() error {
@@ -334,7 +335,7 @@ func (s *PersistentSlabStorage) Commit() error {
 			}
 
 			// serialize
-			data, err := Encode(slab, s)
+			data, err := Encode(slab, s.cborEncMode)
 			if err != nil {
 				return err
 			}
@@ -380,7 +381,7 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	slab, err = decodeSlab(id, data, s.DecodeStorable)
+	slab, err = decodeSlab(id, data, s.cborDecMode, s.DecodeStorable)
 	if err == nil {
 		// save decoded slab to cache
 		s.cache[id] = slab
@@ -390,7 +391,7 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 
 func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {
 	if s.autoCommit {
-		data, err := Encode(slab, s)
+		data, err := Encode(slab, s.cborEncMode)
 		if err != nil {
 			return err
 		}

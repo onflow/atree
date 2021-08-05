@@ -126,8 +126,8 @@ func (a *Array) Value(_ SlabStorage) (Value, error) {
 	return a, nil
 }
 
-func (a *Array) Storable(_ SlabStorage, _ Address) Storable {
-	return StorageIDStorable(a.StorageID())
+func (a *Array) Storable(_ SlabStorage, _ Address) (Storable, error) {
+	return StorageIDStorable(a.StorageID()), nil
 }
 
 type IndexOutOfRangeError struct {
@@ -1683,7 +1683,10 @@ func (a *Array) Get(i uint64) (Value, error) {
 }
 
 func (a *Array) Set(index uint64, value Value) error {
-	storable := value.Storable(a.storage, a.Address())
+	storable, err := value.Storable(a.storage, a.Address())
+	if err != nil {
+		return err
+	}
 	return a.root.Set(a.storage, index, storable)
 }
 
@@ -1692,9 +1695,12 @@ func (a *Array) Append(value Value) error {
 }
 
 func (a *Array) Insert(index uint64, value Value) error {
-	storable := value.Storable(a.storage, a.Address())
+	storable, err := value.Storable(a.storage, a.Address())
+	if err != nil {
+		return err
+	}
 
-	err := a.root.Insert(a.storage, index, storable)
+	err = a.root.Insert(a.storage, index, storable)
 	if err != nil {
 		return err
 	}

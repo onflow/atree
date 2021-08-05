@@ -58,7 +58,10 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	array, err := NewArray(storage, address)
+	const typeInfo = "[AnyType]"
+
+	array, err := NewArray(storage, address, typeInfo)
+
 	require.NoError(b, err)
 
 	// array := NewBasicArray(storage)
@@ -180,7 +183,10 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	array, err := NewArray(storage, address)
+	const typeInfo = "[AnyType]"
+
+	array, err := NewArray(storage, address, typeInfo)
+
 	require.NoError(b, err)
 
 	var totalRawDataSize uint32

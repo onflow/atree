@@ -83,7 +83,9 @@ func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, e
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	array, err := NewArray(storage, address)
+	const typeInfo = "[AnyType]"
+
+	array, err := NewArray(storage, address, typeInfo)
 	if err != nil {
 		return nil, err
 	}

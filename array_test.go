@@ -1618,9 +1618,9 @@ func TestEncode(t *testing.T) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	id1 := StorageID{address: address, index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-	id2 := StorageID{address: address, index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-	id3 := StorageID{address: address, index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+	id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+	id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+	id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
 	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
@@ -1730,9 +1730,9 @@ func TestDecodeEncode(t *testing.T) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	id1 := StorageID{address: address, index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-	id2 := StorageID{address: address, index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-	id3 := StorageID{address: address, index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+	id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+	id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+	id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
 	data := map[StorageID][]byte{
 

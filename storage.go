@@ -17,8 +17,8 @@ type (
 	StorageIndex [8]byte
 
 	StorageID struct {
-		address Address
-		index   StorageIndex
+		Address Address
+		Index   StorageIndex
 	}
 )
 
@@ -64,8 +64,8 @@ func (id StorageID) ToRawBytes(b []byte) (int, error) {
 	if len(b) < storageIDSize {
 		return 0, fmt.Errorf("storage id raw buffer is too short")
 	}
-	copy(b, id.address[:])
-	copy(b[8:], id.index[:])
+	copy(b, id.Address[:])
+	copy(b[8:], id.Index[:])
 	return storageIDSize, nil
 }
 
@@ -73,7 +73,7 @@ func (id StorageID) Valid() error {
 	if id == StorageIDUndefined {
 		return ErrStorageID
 	}
-	if id.index == StorageIndexUndefined {
+	if id.Index == StorageIndexUndefined {
 		return ErrStorageIndex
 	}
 	return nil
@@ -320,7 +320,7 @@ func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
 
 func (s *PersistentSlabStorage) Commit() error {
 	for id, slab := range s.deltas {
-		if id.address != AddressUndefined {
+		if id.Address != AddressUndefined {
 			// deleted slabs
 			if slab == nil {
 				s.baseStorage.Remove(id)

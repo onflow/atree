@@ -59,7 +59,7 @@ type ArrayDataSlab struct {
 }
 
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a, address: a.header.id.address}, nil
+	return &Array{storage: storage, root: a, address: a.header.id.Address}, nil
 }
 
 var _ ArraySlab = &ArrayDataSlab{}
@@ -81,7 +81,7 @@ type ArrayMetaDataSlab struct {
 var _ ArraySlab = &ArrayMetaDataSlab{}
 
 func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a, address: a.header.id.address}, nil
+	return &Array{storage: storage, root: a, address: a.header.id.Address}, nil
 }
 
 type ArraySlab interface {
@@ -477,7 +477,7 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	rightSlabCount := len(a.elements) - leftCount
 	rightSlab := &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(a.header.id.address),
+			id:    storage.GenerateStorageID(a.header.id.Address),
 			size:  arrayDataSlabPrefixSize + dataSize - leftSize,
 			count: uint32(rightSlabCount),
 		},
@@ -1476,7 +1476,7 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	// Construct right slab
 	rightSlab := &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(a.header.id.address),
+			id:    storage.GenerateStorageID(a.header.id.Address),
 			size:  a.header.size - uint32(leftSize),
 			count: a.header.count - leftCount,
 		},

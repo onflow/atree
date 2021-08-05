@@ -12,7 +12,7 @@ import (
 //
 type StorableSlab struct {
 	StorageID StorageID
-	Storable Storable
+	Storable  Storable
 }
 
 var _ Slab = StorableSlab{}
@@ -50,15 +50,14 @@ func (StorableSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, errors.New("not applicable")
 }
 
-func (StorableSlab) Merge(Slab) error {
+func (StorableSlab) Merge(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (StorableSlab) LendToRight(Slab) error {
+func (StorableSlab) LendToRight(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (StorableSlab) BorrowFromRight(Slab) error {
+func (StorableSlab) BorrowFromRight(_ Slab) error {
 	return errors.New("not applicable")
 }
-

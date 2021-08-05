@@ -19,7 +19,7 @@ type Uint64Value uint64
 var _ atree.Value = Uint64Value(0)
 var _ atree.Storable = Uint64Value(0)
 
-func (v Uint64Value) DeepCopy(_ atree.SlabStorage) (atree.Value, error) {
+func (v Uint64Value) DeepCopy(_ atree.SlabStorage, _ atree.Address) (atree.Value, error) {
 	return v, nil
 }
 
@@ -57,7 +57,7 @@ func (v Uint64Value) String() string {
 	return fmt.Sprintf("%d", uint64(v))
 }
 
-func decodeStorable(dec *cbor.StreamDecoder) (atree.Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, _ atree.StorageID) (atree.Storable, error) {
 	tagNumber, err := dec.DecodeTagNumber()
 	if err != nil {
 		return nil, err
@@ -101,10 +101,21 @@ func main() {
 		maxThreshold,
 	)
 
-	storage := atree.NewBasicSlabStorage()
+	encMode, err := cbor.CanonicalEncOptions().EncMode()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	storage := atree.NewBasicSlabStorage(encMode)
 	storage.DecodeStorable = decodeStorable
 
-	array, err := atree.NewArray(storage, "[UInt64]")
+	const typeInfo = "[UInt64]"
+
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := atree.NewArray(storage, address, typeInfo)
+
 	if err != nil {
 		fmt.Println(err)
 		return

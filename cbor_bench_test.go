@@ -7,9 +7,13 @@ package atree
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/rand"
 	"testing"
+
+	"github.com/fxamacker/cbor/v2"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -33,45 +37,50 @@ func BenchmarkEncodeCBORArrayMixedTypes(b *testing.B) {
 
 func BenchmarkDecodeCBORArrayUint8(b *testing.B) {
 	values := getUint8Values()
-	data := encode(values)
-	benchmarkDecodeCBORArray(b, data)
+	storage := newTestBasicStorage(b)
+	data := encodeStorables(b, values, storage)
+	benchmarkDecodeCBORArray(b, data, storage)
 }
 
 func BenchmarkDecodeCBORArrayUint64(b *testing.B) {
 	values := getUint64Values()
-	data := encode(values)
-	benchmarkDecodeCBORArray(b, data)
+	storage := newTestBasicStorage(b)
+	data := encodeStorables(b, values, storage)
+	benchmarkDecodeCBORArray(b, data, storage)
 }
 
 func BenchmarkDecodeCBORArrayMixedTypes(b *testing.B) {
 	values := getMixTypedValues()
-	data := encode(values)
-	benchmarkDecodeCBORArray(b, data)
+	storage := newTestBasicStorage(b)
+	data := encodeStorables(b, values, storage)
+	benchmarkDecodeCBORArray(b, data, storage)
 }
 
 func benchmarkEncodeCBORArray(b *testing.B, values []Storable) {
 
 	b.Logf("Encoding array of %d elements", len(values))
 
+	storage := newTestBasicStorage(b)
+
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		encode(values)
+		encodeStorables(b, values, storage)
 	}
 }
 
-func benchmarkDecodeCBORArray(b *testing.B, data []byte) {
+func benchmarkDecodeCBORArray(b *testing.B, data []byte, storage SlabStorage) {
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		cborDec := NewByteStreamDecoder(data)
+		cborDec := cbor.NewByteStreamDecoder(data)
 
 		elemCount, _ := cborDec.DecodeArrayHead()
 
 		elements := make([]Storable, elemCount)
 		for i := 0; i < int(elemCount); i++ {
-			storable, _ := decodeStorable(cborDec)
+			storable, _ := decodeStorable(cborDec, StorageIDUndefined)
 			elements[i] = storable
 		}
 	}
@@ -120,6 +129,8 @@ func getMixTypedValues() []Storable {
 			v = Uint32Value(rand.Intn(math.MaxUint32))
 		case 3:
 			v = Uint64Value(rand.Intn(1844674407370955161))
+		default:
+			panic(fmt.Sprintf("missing case for %d", v))
 		}
 
 		if size+int(v.ByteSize()) > cborArrayElementsTargetSize {
@@ -131,17 +142,22 @@ func getMixTypedValues() []Storable {
 	return values
 }
 
-func encode(values []Storable) []byte {
+func encodeStorables(t testing.TB, values []Storable, storage SlabStorage) []byte {
 	var buf bytes.Buffer
-	enc := newEncoder(&buf, nil)
+	enc := NewEncoder(&buf, storage)
 
 	enc.Scratch[0] = 0x80 | 27
 	binary.BigEndian.PutUint64(enc.Scratch[1:], uint64(len(values)))
-	enc.Write(enc.Scratch[:9])
+	_, err := enc.Write(enc.Scratch[:9])
+	require.NoError(t, err)
 
 	for _, v := range values {
-		v.Encode(enc)
+		err = v.Encode(enc)
+		require.NoError(t, err)
 	}
-	enc.CBOR.Flush()
+
+	err = enc.CBOR.Flush()
+	require.NoError(t, err)
+
 	return buf.Bytes()
 }

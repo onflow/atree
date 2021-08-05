@@ -54,11 +54,14 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	rand.Seed(time.Now().UnixNano())
 
-	baseStorage := NewInMemBaseStorage()
+	storage := newTestPersistentStorage(b)
 
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	array, err := NewArray(storage, "[AnyType]")
+	const typeInfo = "[AnyType]"
+
+	array, err := NewArray(storage, address, typeInfo)
+
 	require.NoError(b, err)
 
 	// array := NewBasicArray(storage)
@@ -146,7 +149,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	totalLookupTime = time.Since(start)
 
 	// random lookup
-	baseStorage.ResetReporter()
+	storage.baseStorage.ResetReporter()
 	storage.DropCache()
 	array, err = NewArrayWithRootID(storage, arrayID)
 	// array, err = NewBasicArrayWithRootID(storage, arrayID)
@@ -155,13 +158,13 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	ind := rand.Intn(int(array.Count()))
 	_, err = array.Get(uint64(ind))
 	require.NoError(b, err)
-	storageOverheadRatio := float64(baseStorage.Size()) / float64(totalRawDataSize)
-	b.ReportMetric(float64(baseStorage.SegmentsTouched()), "segments_touched")
-	b.ReportMetric(float64(baseStorage.SegmentCounts()), "segments_total")
+	storageOverheadRatio := float64(storage.baseStorage.Size()) / float64(totalRawDataSize)
+	b.ReportMetric(float64(storage.baseStorage.SegmentsTouched()), "segments_touched")
+	b.ReportMetric(float64(storage.baseStorage.SegmentCounts()), "segments_total")
 	b.ReportMetric(float64(totalRawDataSize), "storage_raw_data_size")
-	b.ReportMetric(float64(baseStorage.Size()), "storage_stored_data_size")
+	b.ReportMetric(float64(storage.baseStorage.Size()), "storage_stored_data_size")
 	b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
-	b.ReportMetric(float64(baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
+	b.ReportMetric(float64(storage.baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
 	// b.ReportMetric(float64(array.Count()), "number_of_elements")
 	b.ReportMetric(float64(int(totalAppendTime)), "append_100_time_(ns)")
 	b.ReportMetric(float64(int(totalRemoveTime)), "remove_100_time_(ns)")
@@ -175,9 +178,15 @@ func BenchmarkLArrayMemoryImpact(b *testing.B) { benchmarkLongTermImpactOnMemory
 func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps int) {
 
 	rand.Seed(time.Now().UnixNano())
-	baseStorage := NewInMemBaseStorage()
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
-	array, err := NewArray(storage, "[AnyType]")
+
+	storage := newTestPersistentStorage(b)
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	const typeInfo = "[AnyType]"
+
+	array, err := NewArray(storage, address, typeInfo)
+
 	require.NoError(b, err)
 
 	var totalRawDataSize uint32
@@ -198,8 +207,8 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 		switch rand.Intn(2) {
 		case 0: // remove
 			v, err := array.Remove(uint64(ind))
-			totalRawDataSize -= v.Storable(storage).ByteSize()
 			require.NoError(b, err)
+			totalRawDataSize -= v.Storable(storage).ByteSize()
 		case 1: // insert
 			v := RandomValue()
 			totalRawDataSize += v.Storable(storage).ByteSize()
@@ -209,10 +218,10 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 	}
 	require.NoError(b, storage.Commit())
 
-	storageOverheadRatio := float64(baseStorage.Size()) / float64(totalRawDataSize)
-	b.ReportMetric(float64(baseStorage.SegmentsTouched()), "segments_touched")
-	b.ReportMetric(float64(baseStorage.SegmentCounts()), "segments_total")
+	storageOverheadRatio := float64(storage.baseStorage.Size()) / float64(totalRawDataSize)
+	b.ReportMetric(float64(storage.baseStorage.SegmentsTouched()), "segments_touched")
+	b.ReportMetric(float64(storage.baseStorage.SegmentCounts()), "segments_total")
 	b.ReportMetric(float64(totalRawDataSize), "storage_raw_data_size")
-	b.ReportMetric(float64(baseStorage.Size()), "storage_stored_data_size")
+	b.ReportMetric(float64(storage.baseStorage.Size()), "storage_stored_data_size")
 	b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
 }

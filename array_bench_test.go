@@ -81,7 +81,11 @@ func BenchmarkRemoveXXLArray(b *testing.B) {
 
 func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, error) {
 
-	array, err := NewArray(storage, "[AnyType]")
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	const typeInfo = "[AnyType]"
+
+	array, err := NewArray(storage, address, typeInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -115,9 +119,7 @@ func benchmarkGet(b *testing.B, initialArraySize, numberOfElements int) {
 
 	b.StopTimer()
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(b)
 
 	array, err := setupArray(storage, initialArraySize)
 	require.NoError(b, err)
@@ -141,9 +143,7 @@ func benchmarkInsert(b *testing.B, initialArraySize, numberOfElements int) {
 
 	b.StopTimer()
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(b)
 
 	for i := 0; i < b.N; i++ {
 
@@ -157,7 +157,7 @@ func benchmarkInsert(b *testing.B, initialArraySize, numberOfElements int) {
 		for i := 0; i < numberOfElements; i++ {
 			index := rand.Intn(int(array.Count()))
 			v := RandomValue()
-			array.Insert(uint64(index), v)
+			_ = array.Insert(uint64(index), v)
 		}
 	}
 }
@@ -166,9 +166,7 @@ func benchmarkRemove(b *testing.B, initialArraySize, numberOfElements int) {
 
 	b.StopTimer()
 
-	baseStorage := NewInMemBaseStorage()
-
-	storage := NewPersistentSlabStorage(baseStorage, WithNoAutoCommit())
+	storage := newTestPersistentStorage(b)
 
 	for i := 0; i < b.N; i++ {
 
@@ -181,7 +179,7 @@ func benchmarkRemove(b *testing.B, initialArraySize, numberOfElements int) {
 
 		for i := 0; i < numberOfElements; i++ {
 			index := rand.Intn(int(array.Count()))
-			array.Remove(uint64(index))
+			_, _ = array.Remove(uint64(index))
 		}
 	}
 }

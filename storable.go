@@ -31,13 +31,14 @@ const CBORTagStorageID = 255
 
 type StorageIDStorable StorageID
 
-var _ Storable = StorageIDStorable(0)
+var _ Storable = StorageIDStorable{}
 
 func (v StorageIDStorable) StoredValue(storage SlabStorage) (Value, error) {
 	id := StorageID(v)
-	if id == StorageIDUndefined {
-		return nil, fmt.Errorf("invalid storage id")
+	if err := id.Valid(); err != nil {
+		return nil, err
 	}
+
 	slab, found, err := storage.Retrieve(id)
 	if err != nil {
 		return nil, err
@@ -51,7 +52,7 @@ func (v StorageIDStorable) StoredValue(storage SlabStorage) (Value, error) {
 // Encode encodes StorageIDStorable as
 // cbor.Tag{
 //		Number:  cborTagStorageID,
-//		Content: uint64(v),
+//		Content: byte(v),
 // }
 func (v StorageIDStorable) Encode(enc *Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
@@ -61,13 +62,16 @@ func (v StorageIDStorable) Encode(enc *Encoder) error {
 	if err != nil {
 		return err
 	}
-	return enc.CBOR.EncodeUint64(uint64(v))
+
+	copy(enc.Scratch[:], v.address[:])
+	copy(enc.Scratch[8:], v.index[:])
+
+	return enc.CBOR.EncodeBytes(enc.Scratch[:storageIDSize])
 }
 
-// TODO: cache size
 func (v StorageIDStorable) ByteSize() uint32 {
-	// tag number (2 bytes) + encoded content
-	return 2 + GetUintCBORSize(uint64(v))
+	// tag number (2 bytes) + byte string header (1 byte) + storage id (16 bytes)
+	return 2 + 1 + storageIDSize
 }
 
 func (v StorageIDStorable) String() string {
@@ -97,19 +101,37 @@ func (n NonStorable) StoredValue(_ SlabStorage) (Value, error) {
 // Encode is a wrapper for Storable.Encode()
 func Encode(storable Storable, storage SlabStorage) ([]byte, error) {
 	var buf bytes.Buffer
-	enc := newEncoder(&buf, storage)
+	enc := NewEncoder(&buf, storage)
 
 	err := storable.Encode(enc)
 	if err != nil {
 		return nil, err
 	}
+
+	err = enc.CBOR.Flush()
+	if err != nil {
+		return nil, err
+	}
+
 	return buf.Bytes(), nil
 }
 
 func DecodeStorageIDStorable(dec *cbor.StreamDecoder) (Storable, error) {
-	n, err := dec.DecodeUint64()
+	b, err := dec.DecodeBytes()
 	if err != nil {
 		return nil, err
 	}
-	return StorageIDStorable(n), nil
+
+	if len(b) != storageIDSize {
+		return nil, fmt.Errorf("invalid storage id buffer length %d", len(b))
+	}
+
+	var address Address
+	copy(address[:], b)
+
+	var index StorageIndex
+	copy(index[:], b[8:])
+
+	id := NewStorageID(address, index)
+	return StorageIDStorable(id), nil
 }

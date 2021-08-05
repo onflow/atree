@@ -5,6 +5,6 @@
 package atree
 
 type Value interface {
-	Storable(SlabStorage) Storable
+	Storable(SlabStorage, Address) Storable
 	DeepCopy(SlabStorage, Address) (Value, error)
 }

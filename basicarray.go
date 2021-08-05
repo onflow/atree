@@ -57,7 +57,7 @@ func (a *BasicArray) DeepCopy(storage SlabStorage, address Address) (Value, erro
 	return result, nil
 }
 
-func (a *BasicArray) Storable(SlabStorage) Storable {
+func (a *BasicArray) Storable(_ SlabStorage, _ Address) Storable {
 	return a.root
 }
 
@@ -268,6 +268,10 @@ func (a *BasicArray) StorageID() StorageID {
 	return a.root.ID()
 }
 
+func (a *BasicArray) Address() Address {
+	return a.StorageID().address
+}
+
 func NewBasicArrayWithRootID(storage SlabStorage, id StorageID) (*BasicArray, error) {
 	if id == StorageIDUndefined {
 		return nil, fmt.Errorf("invalid storage id")
@@ -295,9 +299,10 @@ func (a *BasicArray) Get(index uint64) (Value, error) {
 }
 
 func (a *BasicArray) Set(index uint64, v Value) error {
-	storable := v.Storable(a.storage)
+	storable := v.Storable(a.storage, a.Address())
 	return a.root.Set(a.storage, index, storable)
 }
+
 
 func (a *BasicArray) Append(v Value) error {
 	index := uint64(a.root.header.count)
@@ -305,7 +310,7 @@ func (a *BasicArray) Append(v Value) error {
 }
 
 func (a *BasicArray) Insert(index uint64, v Value) error {
-	storable := v.Storable(a.storage)
+	storable := v.Storable(a.storage, a.Address())
 	return a.root.Insert(a.storage, index, storable)
 }
 

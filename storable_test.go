@@ -33,7 +33,7 @@ func (v Uint8Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint8Value) Storable(SlabStorage) Storable {
+func (v Uint8Value) Storable(_ SlabStorage, _ Address) Storable {
 	return v
 }
 
@@ -76,7 +76,7 @@ func (v Uint16Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint16Value) Storable(SlabStorage) Storable {
+func (v Uint16Value) Storable(_ SlabStorage, _ Address) Storable {
 	return v
 }
 
@@ -114,7 +114,7 @@ func (v Uint32Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint32Value) Storable(SlabStorage) Storable {
+func (v Uint32Value) Storable(_ SlabStorage, _ Address) Storable {
 	return v
 }
 
@@ -157,7 +157,7 @@ func (v Uint64Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v Uint64Value) Storable(SlabStorage) Storable {
+func (v Uint64Value) Storable(_ SlabStorage, _ Address) Storable {
 	return v
 }
 

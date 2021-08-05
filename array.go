@@ -118,11 +118,15 @@ type Array struct {
 
 var _ Value = &Array{}
 
+func (a *Array) Address() Address {
+	return a.address
+}
+
 func (a *Array) Value(_ SlabStorage) (Value, error) {
 	return a, nil
 }
 
-func (a *Array) Storable(SlabStorage) Storable {
+func (a *Array) Storable(_ SlabStorage, _ Address) Storable {
 	return StorageIDStorable(a.StorageID())
 }
 
@@ -1679,7 +1683,7 @@ func (a *Array) Get(i uint64) (Value, error) {
 }
 
 func (a *Array) Set(index uint64, value Value) error {
-	storable := value.Storable(a.storage)
+	storable := value.Storable(a.storage, a.Address())
 	return a.root.Set(a.storage, index, storable)
 }
 
@@ -1688,7 +1692,7 @@ func (a *Array) Append(value Value) error {
 }
 
 func (a *Array) Insert(index uint64, value Value) error {
-	storable := value.Storable(a.storage)
+	storable := value.Storable(a.storage, a.Address())
 
 	err := a.root.Insert(a.storage, index, storable)
 	if err != nil {

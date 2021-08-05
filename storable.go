@@ -63,8 +63,8 @@ func (v StorageIDStorable) Encode(enc *Encoder) error {
 		return err
 	}
 
-	copy(enc.Scratch[:], v.address[:])
-	copy(enc.Scratch[8:], v.index[:])
+	copy(enc.Scratch[:], v.Address[:])
+	copy(enc.Scratch[8:], v.Index[:])
 
 	return enc.CBOR.EncodeBytes(enc.Scratch[:storageIDSize])
 }

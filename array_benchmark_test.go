@@ -76,7 +76,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	// setup
 	for i := 0; i < initialArraySize; i++ {
 		v := RandomValue()
-		totalRawDataSize += v.Storable(storage).ByteSize()
+		totalRawDataSize += v.Storable(storage, array.Address()).ByteSize()
 		err := array.Append(v)
 		require.NoError(b, err)
 	}
@@ -93,7 +93,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	require.NoError(b, err)
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue()
-		totalRawDataSize += v.Storable(storage).ByteSize()
+		totalRawDataSize += v.Storable(storage, array.Address()).ByteSize()
 		err := array.Append(v)
 		require.NoError(b, err)
 	}
@@ -111,7 +111,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 		ind := rand.Intn(int(array.Count()))
 		s, err := array.Remove(uint64(ind))
 		require.NoError(b, err)
-		totalRawDataSize -= s.Storable(storage).ByteSize()
+		totalRawDataSize -= s.Storable(storage, array.Address()).ByteSize()
 	}
 	require.NoError(b, storage.Commit())
 	totalRemoveTime = time.Since(start)
@@ -126,7 +126,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		v := RandomValue()
-		totalRawDataSize += v.Storable(storage).ByteSize()
+		totalRawDataSize += v.Storable(storage, array.Address()).ByteSize()
 		err := array.Insert(uint64(ind), v)
 		require.NoError(b, err)
 	}
@@ -194,7 +194,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 	// setup
 	for i := 0; i < initialArraySize; i++ {
 		v := RandomValue()
-		totalRawDataSize += v.Storable(storage).ByteSize()
+		totalRawDataSize += v.Storable(storage, array.Address()).ByteSize()
 		err := array.Append(v)
 		require.NoError(b, err)
 	}
@@ -208,10 +208,10 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 		case 0: // remove
 			v, err := array.Remove(uint64(ind))
 			require.NoError(b, err)
-			totalRawDataSize -= v.Storable(storage).ByteSize()
+			totalRawDataSize -= v.Storable(storage, array.Address()).ByteSize()
 		case 1: // insert
 			v := RandomValue()
-			totalRawDataSize += v.Storable(storage).ByteSize()
+			totalRawDataSize += v.Storable(storage, array.Address()).ByteSize()
 			err := array.Insert(uint64(ind), v)
 			require.NoError(b, err)
 		}

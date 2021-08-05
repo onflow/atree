@@ -27,7 +27,7 @@ func (v Uint64Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v Uint64Value) Storable(atree.SlabStorage) atree.Storable {
+func (v Uint64Value) Storable(_ atree.SlabStorage, _ atree.Address) atree.Storable {
 	return v
 }
 

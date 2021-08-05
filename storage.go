@@ -17,8 +17,8 @@ type (
 	StorageIndex [8]byte
 
 	StorageID struct {
-		address Address
-		index   StorageIndex
+		Address Address
+		Index   StorageIndex
 	}
 )
 
@@ -30,7 +30,6 @@ var (
 
 var (
 	ErrStorageID      = errors.New("invalid storage id")
-	ErrStorageAddress = errors.New("invalid storage address")
 	ErrStorageIndex   = errors.New("invalid storage index")
 )
 
@@ -65,8 +64,8 @@ func (id StorageID) ToRawBytes(b []byte) (int, error) {
 	if len(b) < storageIDSize {
 		return 0, fmt.Errorf("storage id raw buffer is too short")
 	}
-	copy(b, id.address[:])
-	copy(b[8:], id.index[:])
+	copy(b, id.Address[:])
+	copy(b[8:], id.Index[:])
 	return storageIDSize, nil
 }
 
@@ -74,10 +73,7 @@ func (id StorageID) Valid() error {
 	if id == StorageIDUndefined {
 		return ErrStorageID
 	}
-	if id.address == AddressUndefined {
-		return ErrStorageAddress
-	}
-	if id.index == StorageIndexUndefined {
+	if id.Index == StorageIndexUndefined {
 		return ErrStorageIndex
 	}
 	return nil
@@ -111,12 +107,9 @@ type InMemBaseStorage struct {
 }
 
 func NewInMemBaseStorage() *InMemBaseStorage {
-	return &InMemBaseStorage{
-		segments:         make(map[StorageID][]byte),
-		segmentsReturned: make(map[StorageID]struct{}),
-		segmentsUpdated:  make(map[StorageID]struct{}),
-		segmentsTouched:  make(map[StorageID]struct{}),
-	}
+	return NewInMemBaseStorageFromMap(
+		make(map[StorageID][]byte),
+	)
 }
 
 func NewInMemBaseStorageFromMap(segments map[StorageID][]byte) *InMemBaseStorage {
@@ -327,7 +320,7 @@ func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
 
 func (s *PersistentSlabStorage) Commit() error {
 	for id, slab := range s.deltas {
-		if id.address != AddressUndefined {
+		if id.Address != AddressUndefined {
 			// deleted slabs
 			if slab == nil {
 				s.baseStorage.Remove(id)

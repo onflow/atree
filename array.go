@@ -59,7 +59,7 @@ type ArrayDataSlab struct {
 }
 
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a, address: a.header.id.address}, nil
+	return &Array{storage: storage, root: a, address: a.header.id.Address}, nil
 }
 
 var _ ArraySlab = &ArrayDataSlab{}
@@ -81,7 +81,7 @@ type ArrayMetaDataSlab struct {
 var _ ArraySlab = &ArrayMetaDataSlab{}
 
 func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a, address: a.header.id.address}, nil
+	return &Array{storage: storage, root: a, address: a.header.id.Address}, nil
 }
 
 type ArraySlab interface {
@@ -118,11 +118,15 @@ type Array struct {
 
 var _ Value = &Array{}
 
+func (a *Array) Address() Address {
+	return a.address
+}
+
 func (a *Array) Value(_ SlabStorage) (Value, error) {
 	return a, nil
 }
 
-func (a *Array) Storable(SlabStorage) Storable {
+func (a *Array) Storable(_ SlabStorage, _ Address) Storable {
 	return StorageIDStorable(a.StorageID())
 }
 
@@ -473,7 +477,7 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	rightSlabCount := len(a.elements) - leftCount
 	rightSlab := &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(a.header.id.address),
+			id:    storage.GenerateStorageID(a.header.id.Address),
 			size:  arrayDataSlabPrefixSize + dataSize - leftSize,
 			count: uint32(rightSlabCount),
 		},
@@ -1472,7 +1476,7 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	// Construct right slab
 	rightSlab := &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(a.header.id.address),
+			id:    storage.GenerateStorageID(a.header.id.Address),
 			size:  a.header.size - uint32(leftSize),
 			count: a.header.count - leftCount,
 		},
@@ -1679,7 +1683,7 @@ func (a *Array) Get(i uint64) (Value, error) {
 }
 
 func (a *Array) Set(index uint64, value Value) error {
-	storable := value.Storable(a.storage)
+	storable := value.Storable(a.storage, a.Address())
 	return a.root.Set(a.storage, index, storable)
 }
 
@@ -1688,7 +1692,7 @@ func (a *Array) Append(value Value) error {
 }
 
 func (a *Array) Insert(index uint64, value Value) error {
-	storable := value.Storable(a.storage)
+	storable := value.Storable(a.storage, a.Address())
 
 	err := a.root.Insert(a.storage, index, storable)
 	if err != nil {

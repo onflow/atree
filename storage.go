@@ -29,8 +29,8 @@ var (
 )
 
 var (
-	ErrStorageID      = errors.New("invalid storage id")
-	ErrStorageIndex   = errors.New("invalid storage index")
+	ErrStorageID    = errors.New("invalid storage id")
+	ErrStorageIndex = errors.New("invalid storage index")
 )
 
 func (index StorageIndex) Next() StorageIndex {
@@ -204,10 +204,10 @@ var _ SlabStorage = &BasicSlabStorage{}
 
 func NewBasicSlabStorage(cborEncMode cbor.EncMode, cborDecMode cbor.DecMode) *BasicSlabStorage {
 	return &BasicSlabStorage{
-		slabs:       make(map[StorageID]Slab),
+		slabs:        make(map[StorageID]Slab),
 		storageIndex: make(map[Address]StorageIndex),
-		cborEncMode: cborEncMode,
-		cborDecMode: cborDecMode,
+		cborEncMode:  cborEncMode,
+		cborDecMode:  cborDecMode,
 	}
 }
 
@@ -235,6 +235,14 @@ func (s *BasicSlabStorage) Remove(id StorageID) {
 
 func (s *BasicSlabStorage) Count() int {
 	return len(s.slabs)
+}
+
+func (s *BasicSlabStorage) StorageIDs() []StorageID {
+	result := make([]StorageID, 0, len(s.slabs))
+	for storageID := range s.slabs {
+		result = append(result, storageID)
+	}
+	return result
 }
 
 // Encode returns serialized slabs in storage.
@@ -271,7 +279,7 @@ type PersistentSlabStorage struct {
 	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
 	cborEncMode    cbor.EncMode
-	cborDecMode cbor.DecMode
+	cborDecMode    cbor.DecMode
 	autoCommit     bool // flag to call commit after each operation
 }
 
@@ -290,7 +298,7 @@ func NewPersistentSlabStorage(
 		deltas:       make(map[StorageID]Slab),
 		storageIndex: make(map[Address]StorageIndex),
 		cborEncMode:  cborEncMode,
-		cborDecMode: cborDecMode,
+		cborDecMode:  cborDecMode,
 		autoCommit:   true,
 	}
 
@@ -308,7 +316,6 @@ func WithNoAutoCommit() StorageOption {
 		return st
 	}
 }
-
 
 func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
 	index := s.storageIndex[address]

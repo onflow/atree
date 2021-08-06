@@ -59,7 +59,7 @@ type ArrayDataSlab struct {
 }
 
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a, address: a.header.id.Address}, nil
+	return &Array{storage: storage, root: a}, nil
 }
 
 var _ ArraySlab = &ArrayDataSlab{}
@@ -81,7 +81,7 @@ type ArrayMetaDataSlab struct {
 var _ ArraySlab = &ArrayMetaDataSlab{}
 
 func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a, address: a.header.id.Address}, nil
+	return &Array{storage: storage, root: a}, nil
 }
 
 type ArraySlab interface {
@@ -112,14 +112,13 @@ type ArraySlab interface {
 // Array is tree
 type Array struct {
 	storage SlabStorage
-	address Address
 	root    ArraySlab
 }
 
 var _ Value = &Array{}
 
 func (a *Array) Address() Address {
-	return a.address
+	return a.root.ID().Address
 }
 
 func (a *Array) Value(_ SlabStorage) (Value, error) {
@@ -1660,7 +1659,6 @@ func NewArray(storage SlabStorage, address Address, typeInfo string) (*Array, er
 
 	return &Array{
 		storage: storage,
-		address: address,
 		root:    root,
 	}, nil
 }
@@ -1715,7 +1713,7 @@ func (a *Array) Insert(index uint64, value Value) error {
 
 		// Assign a new storage id to old root before splitting it.
 		oldRoot := a.root
-		oldRoot.SetID(a.storage.GenerateStorageID(a.address))
+		oldRoot.SetID(a.storage.GenerateStorageID(a.Address()))
 
 		// Split old root
 		leftSlab, rightSlab, err := oldRoot.Split(a.storage)

@@ -95,8 +95,12 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	require.NoError(b, err)
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue()
+
 		storable, err := v.Storable(storage, array.Address())
+		require.NoError(b, err)
+
 		totalRawDataSize += storable.ByteSize()
+
 		err = array.Append(v)
 		require.NoError(b, err)
 	}
@@ -131,8 +135,12 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		v := RandomValue()
+
 		storable, err := v.Storable(storage, array.Address())
+		require.NoError(b, err)
+
 		totalRawDataSize += storable.ByteSize()
+
 		err = array.Insert(uint64(ind), v)
 		require.NoError(b, err)
 	}
@@ -200,8 +208,12 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 	// setup
 	for i := 0; i < initialArraySize; i++ {
 		v := RandomValue()
+
 		storable, err := v.Storable(storage, array.Address())
+		require.NoError(b, err)
+
 		totalRawDataSize += storable.ByteSize()
+
 		err = array.Append(v)
 		require.NoError(b, err)
 	}
@@ -220,8 +232,12 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 			totalRawDataSize -= storable.ByteSize()
 		case 1: // insert
 			v := RandomValue()
+
 			storable, err := v.Storable(storage, array.Address())
+			require.NoError(b, err)
+
 			totalRawDataSize += storable.ByteSize()
+
 			err = array.Insert(uint64(ind), v)
 			require.NoError(b, err)
 		}

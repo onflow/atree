@@ -1,0 +1,37 @@
+# GitHub Actions - CI for Go to build & test.
+# Copied from https://github.com/fxamacker/cbor/workflows/ci.yml
+# 2021-08-06:  speed up CI by removing go 1.14, go 1.15, and windows-latest
+name: ci
+on: [push]
+jobs:
+
+  # Test on various OS with default Go version. 
+  tests:
+    name: Test on ${{matrix.os}}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        go-version: [1.16.x]
+        
+    steps:
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go-version }}
+        
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+        
+    - name: Get dependencies
+      run: go get -v -t -d ./...
+      
+    - name: Build project
+      run: go build ./...
+      
+    - name: Run tests
+      run: |
+        go version
+        go test -race -v ./...

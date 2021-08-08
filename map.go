@@ -36,20 +36,15 @@ type MapValue Storable
 
 // element is one indivisible unit that must stay together (e.g. collision group)
 type element interface {
+	fmt.Stringer
+
 	Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error)
 
 	// Set returns updated element, which may be a different type of element because of hash collision.
 	// Caller needs to save returned element.
-	Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error)
-
-	Equal(MapKey) bool // elementGroup returns false
-
-	MapKey() (MapKey, error)     // elementGroup returns nil and error
-	MapValue() (MapValue, error) // elementGroup returns nil and error
+	Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error)
 
 	Size() uint32
-
-	String() string
 }
 
 // elementGroup is a group of elements that must stay together during splitting or rebalancing.
@@ -58,9 +53,27 @@ type elementGroup interface {
 
 	Inline() bool
 
-	// Elements returns underlying elements and their meta data.
-	// Returned elements are no longer treated as a group.
+	// Elements returns underlying elements.
 	Elements(storage SlabStorage) (elements, error)
+}
+
+// elements is a list of elements.
+type elements interface {
+	fmt.Stringer
+
+	Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error)
+	Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error
+
+	Merge(elements) error
+	Split() (elements, elements, error)
+
+	Element(int) (element, error)
+
+	firstKey() uint64
+
+	Count() uint32
+
+	Size() uint32
 }
 
 type singleElement struct {
@@ -84,12 +97,22 @@ type externalCollisionGroup struct {
 
 var _ elementGroup = &externalCollisionGroup{}
 
-type elements struct {
+type hkeyElements struct {
 	hkeyPrefixes []uint64  // all elements share the same hkeyPrefixes
 	hkeys        []uint64  // sorted list of unique hashed keys
-	elems        []element // key+value pairs corresponding to hkeys
-	size         uint32    // total key+value byte sizes
+	elems        []element // elements corresponding to hkeys
+	size         uint32    // total byte sizes
 }
+
+var _ elements = &hkeyElements{}
+
+type singleElements struct {
+	hkeyPrefixes []uint64         // all elements share the same hkeyPrefixes
+	elems        []*singleElement // list of key+value pairs
+	size         uint32           // total key+value byte sizes
+}
+
+var _ elements = &singleElements{}
 
 type MapSlabHeader struct {
 	id       StorageID // id is used to retrieve slab from storage
@@ -108,12 +131,14 @@ type MapDataSlab struct {
 	prev   StorageID
 	next   StorageID
 	header MapSlabHeader
+
 	elements
-	anySize bool
 
 	// extraData is data that is prepended to encoded slab data.
 	// It isn't included in slab size calculation for splitting and merging.
 	extraData *MapExtraData
+
+	anySize bool
 }
 
 var _ MapSlab = &MapDataSlab{}
@@ -157,7 +182,6 @@ type MapSlab interface {
 
 type OrderedMap struct {
 	storage SlabStorage
-	address Address
 	root    MapSlab
 	hasher  Hasher
 }
@@ -192,7 +216,7 @@ func (e *singleElement) Get(_ SlabStorage, _ Hasher, _ []uint64, _ []uint64, key
 // NOTE: Existing key needs to be rehashed because we store minimum digest for non-collision element.
 //       Rehashing only happens when we create new inlineCollisionGroup.
 //       Adding new element to existing inlineCollisionGroup doesn't require rehashing.
-func (e *singleElement) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error) {
+func (e *singleElement) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error) {
 	if e.key.Equal(key) {
 		e.value = value
 		e.size = e.key.ByteSize() + e.value.ByteSize()
@@ -201,11 +225,7 @@ func (e *singleElement) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64
 
 	// Hash collision detected
 
-	// Adjust hkeyPrefixes and hkeys for new inlineCollisionGroup
-	hkeyPrefixes = append(hkeyPrefixes, hkeys[0])
-	hkeys = hkeys[1:]
-
-	// Rehash existing key if needed
+	// Rehash existing key if needed (see function comment)
 	var existingKeyHkey []uint64
 	if len(hkeys) > 0 {
 		v, err := h.Hash(e.key)
@@ -215,24 +235,33 @@ func (e *singleElement) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64
 		existingKeyHkey = v[len(hkeyPrefixes):]
 	}
 
+	// Collision group's hkeyPrefixes includes hkeyPrefixes + collided hkey[0].
+	collisionHkeyPrefixes := append(hkeyPrefixes, hkeys[0])
+
 	// Create collision group with existing and new elements
-	inlineCollisionGroup := newInlineCollisionGroup(hkeyPrefixes)
-	inlineCollisionGroup.Set(storage, h, hkeyPrefixes, existingKeyHkey, e.key, e.value)
-	inlineCollisionGroup.Set(storage, h, hkeyPrefixes, hkeys, key, value)
+	var elements elements
+	if len(hkeys) == 1 {
+		elements = &singleElements{hkeyPrefixes: collisionHkeyPrefixes}
+	} else {
+		elements = &hkeyElements{hkeyPrefixes: collisionHkeyPrefixes}
+	}
 
-	return inlineCollisionGroup, nil
-}
+	var err error
+	var newElem element
 
-func (e *singleElement) Equal(key MapKey) bool {
-	return e.key.Equal(key)
-}
+	newElem = &inlineCollisionGroup{elements: elements}
 
-func (e *singleElement) MapKey() (MapKey, error) {
-	return e.key, nil
-}
+	newElem, err = newElem.Set(storage, address, h, hkeyPrefixes, existingKeyHkey, e.key, e.value)
+	if err != nil {
+		return nil, err
+	}
 
-func (e *singleElement) MapValue() (MapValue, error) {
-	return e.value, nil
+	newElem, err = newElem.Set(storage, address, h, hkeyPrefixes, hkeys, key, value)
+	if err != nil {
+		return nil, err
+	}
+
+	return newElem, nil
 }
 
 func (e *singleElement) Size() uint32 {
@@ -243,34 +272,63 @@ func (e *singleElement) String() string {
 	return fmt.Sprintf("%s:%s", e.key, e.value)
 }
 
-func newInlineCollisionGroup(prefix []uint64) *inlineCollisionGroup {
-	return &inlineCollisionGroup{
-		elements: elements{hkeyPrefixes: prefix},
-	}
+func (e *inlineCollisionGroup) Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error) {
+
+	// Adjust hkeyPrefixes and hkey for collision group
+	hkeyPrefixes = append(hkeyPrefixes, hkeys[0])
+	hkeys = hkeys[1:]
+
+	// Search key in collision group with adjusted hkeyPrefix and hkey
+	return e.elements.Get(storage, h, hkeyPrefixes, hkeys, key)
 }
 
-func (e *inlineCollisionGroup) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error) {
-	_, err := e.elements.Set(storage, h, hkeyPrefixes, hkeys, key, value)
+func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error) {
+
+	// Adjust hkeyPrefixes and hkey for collision group
+	hkeyPrefixes = append(hkeyPrefixes, hkeys[0])
+	hkeys = hkeys[1:]
+
+	err := e.elements.Set(storage, address, h, hkeyPrefixes, hkeys, key, value)
 	if err != nil {
 		return nil, err
 	}
+
+	if len(hkeyPrefixes) == 1 {
+		// Export oversized inline collision group to separete slab (external collision group)
+		// for first level collision.
+		if e.elements.Size() > uint32(MaxInlineElementSize) {
+
+			id := storage.GenerateStorageID(address)
+
+			// Create MapDataSlab
+			slab := &MapDataSlab{
+				header: MapSlabHeader{
+					id:       id,
+					size:     mapDataSlabPrefixSize + e.elements.Size(),
+					firstKey: e.elements.firstKey(),
+				},
+				elements: e.elements, // elems shouldn't be copied
+				anySize:  true,
+			}
+
+			err := storage.Store(id, slab)
+			if err != nil {
+				return nil, err
+			}
+
+			// Create and return externalCollisionGroup (wrapper of newly created MapDataSlab)
+			return &externalCollisionGroup{
+				id:   id,
+				size: StorageIDStorable(id).ByteSize(),
+			}, nil
+		}
+	}
+
 	return e, nil
 }
 
-func (e *inlineCollisionGroup) Equal(MapKey) bool {
-	return false
-}
-
-func (e *inlineCollisionGroup) MapKey() (MapKey, error) {
-	return nil, errors.New("not applicable")
-}
-
-func (e *inlineCollisionGroup) MapValue() (MapValue, error) {
-	return nil, errors.New("not applicable")
-}
-
 func (e *inlineCollisionGroup) Size() uint32 {
-	return e.elements.size
+	return e.elements.Size()
 }
 
 func (e *inlineCollisionGroup) Inline() bool {
@@ -285,66 +343,35 @@ func (e *inlineCollisionGroup) String() string {
 	return "inline [" + e.elements.String() + "]"
 }
 
-func newExternalCollisionGroup(storage SlabStorage, address Address, elems elements) (*externalCollisionGroup, error) {
-	// Create new any size MapDataSlab
-	slab := &MapDataSlab{
-		header: MapSlabHeader{
-			id:   storage.GenerateStorageID(address),
-			size: mapDataSlabPrefixSize + elems.size,
-		},
-		// elems shouldn't be copied because inline collision group is converted into external collision group
-		elements: elems,
-		anySize:  true,
-	}
-
-	if len(elems.hkeys) > 0 {
-		slab.header.firstKey = elems.hkeys[0]
-	}
-
-	id := slab.ID()
-
-	err := storage.Store(id, slab)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create and return wrapper (extCollisionGroup) of any size MapDataSlab
-	return &externalCollisionGroup{
-		id:   id,
-		size: StorageIDStorable(id).ByteSize(),
-	}, nil
-}
-
 func (e *externalCollisionGroup) Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error) {
 	slab, err := getMapSlab(storage, e.id)
 	if err != nil {
 		return nil, err
 	}
+
+	// Adjust hkeyPrefixes and hkey for collision group
+	hkeyPrefixes = append(hkeyPrefixes, hkeys[0])
+	hkeys = hkeys[1:]
+
+	// Search key in collision group with adjusted hkeyPrefix and hkey
 	return slab.Get(storage, h, hkeyPrefixes, hkeys, key)
 }
 
-func (e *externalCollisionGroup) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error) {
+func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error) {
 	slab, err := getMapSlab(storage, e.id)
 	if err != nil {
 		return nil, err
 	}
+
+	// Adjust hkeyPrefixes and hkey for collision group
+	hkeyPrefixes = append(hkeyPrefixes, hkeys[0])
+	hkeys = hkeys[1:]
+
 	err = slab.Set(storage, h, hkeyPrefixes, hkeys, key, value)
 	if err != nil {
 		return nil, err
 	}
 	return e, nil
-}
-
-func (e *externalCollisionGroup) Equal(_ MapKey) bool {
-	return false
-}
-
-func (e *externalCollisionGroup) MapKey() (MapKey, error) {
-	return nil, errors.New("not applicable")
-}
-
-func (e *externalCollisionGroup) MapValue() (MapValue, error) {
-	return nil, errors.New("not applicable")
 }
 
 func (e *externalCollisionGroup) Size() uint32 {
@@ -358,11 +385,11 @@ func (e *externalCollisionGroup) Inline() bool {
 func (e *externalCollisionGroup) Elements(storage SlabStorage) (elements, error) {
 	slab, err := getMapSlab(storage, e.id)
 	if err != nil {
-		return elements{}, err
+		return nil, err
 	}
 	dataSlab, ok := slab.(*MapDataSlab)
 	if !ok {
-		return elements{}, fmt.Errorf("expect MapDataSlab, got %T", slab)
+		return nil, fmt.Errorf("expect MapDataSlab, got %T", slab)
 	}
 	return dataSlab.elements, nil
 }
@@ -371,25 +398,11 @@ func (e *externalCollisionGroup) String() string {
 	return fmt.Sprintf("external group(%d)", e.id)
 }
 
-func (e *elements) Get(storage SlabStorage, h Hasher, hkeyPrefixes, hkeys []uint64, key MapKey) (MapValue, error) {
+func (e *hkeyElements) Get(storage SlabStorage, h Hasher, hkeyPrefixes, hkeys []uint64, key MapKey) (MapValue, error) {
 
-	// Check for mismatch between hkeyPrefixes/hkeys and elements' state
-	if len(hkeys) == 0 && len(e.hkeys) > 0 {
-		panic(fmt.Sprintf("elements.Get(hkeyPrefixes %v, hkeys %v) internal hkeys are not empty", hkeyPrefixes, hkeys))
-	}
-	if len(hkeys) > 0 && len(e.hkeys) == 0 {
-		panic(fmt.Sprintf("elements.Get(hkeyPrefixes %v, hkeys %v) internal hkeys are empty", hkeyPrefixes, hkeys))
-	}
-
+	// Check hkeys are not empty
 	if len(hkeys) == 0 {
-		// linear search by key
-		for _, elem := range e.elems {
-			if elem.Equal(key) {
-				return elem.MapValue()
-			}
-		}
-
-		return nil, fmt.Errorf("key %s not found", key)
+		panic(fmt.Sprintf("hkeyElements.Get(%v, %v) hkeys are empty", hkeyPrefixes, hkeys))
 	}
 
 	hkey := hkeys[0]
@@ -418,51 +431,17 @@ func (e *elements) Get(storage SlabStorage, h Hasher, hkeyPrefixes, hkeys []uint
 
 	elem := e.elems[equalIndex]
 
-	if group, ok := elem.(elementGroup); ok {
-		// Search key in collision group with adjusted hkeyPrefix and hkey
-		return group.Get(storage, h, append(hkeyPrefixes, hkey), hkeys[1:], key)
-	}
-
 	return elem.Get(storage, h, hkeyPrefixes, hkeys, key)
 }
 
-// Set returns updated element index in e.elems.
-// Caller can separate modified element into a separate slab.
-func (e *elements) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (int, error) {
+func (e *hkeyElements) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error {
 
-	// Check for mismatch between hkeyPrefixes/hkeys and elements' state
-	if len(hkeys) == 0 && len(e.hkeys) > 0 {
-		panic(fmt.Sprintf("elements.Set(hkeyPrefixes %v, hkeys %v) internal hkeys are not empty", hkeyPrefixes, hkeys))
-	}
-	if len(hkeys) > 0 && len(e.hkeys) == 0 && len(e.elems) > 0 {
-		panic(fmt.Sprintf("elements.Set(hkeyPrefixes %v, hkeys %v) elements internal hkeys are empty", hkeyPrefixes, hkeys))
+	// Check hkeys are not empty
+	if len(hkeys) == 0 {
+		panic(fmt.Sprintf("hkeyElements.Set(%v, %v) hkeys are empty", hkeyPrefixes, hkeys))
 	}
 
 	newElem := newSingleElement(key, value)
-
-	if len(hkeys) == 0 {
-		// linear search key and update value
-		for i := 0; i < len(e.elems); i++ {
-			elem := e.elems[i]
-			if elem.Equal(key) {
-				oldSize := elem.Size()
-
-				elem, err := elem.Set(storage, h, hkeyPrefixes, hkeys, key, value)
-				if err != nil {
-					return 0, err
-				}
-
-				e.elems[i] = elem
-				e.size += elem.Size() - oldSize
-				return i, nil
-			}
-		}
-
-		// no matching key, append new element to the end.
-		e.elems = append(e.elems, newElem)
-		e.size += newElem.size
-		return len(e.elems) - 1, nil
-	}
 
 	hkey := hkeys[0]
 
@@ -475,7 +454,7 @@ func (e *elements) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hke
 
 		e.size += newElem.size
 
-		return 0, nil
+		return nil
 	}
 
 	if hkey < e.hkeys[0] {
@@ -491,7 +470,7 @@ func (e *elements) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hke
 
 		e.size += newElem.size
 
-		return 0, nil
+		return nil
 	}
 
 	if hkey > e.hkeys[len(e.hkeys)-1] {
@@ -503,7 +482,7 @@ func (e *elements) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hke
 
 		e.size += newElem.size
 
-		return len(e.elems) - 1, nil
+		return nil
 	}
 
 	equalIndex := -1   // first index that m.hkeys[h] == hkey
@@ -529,22 +508,16 @@ func (e *elements) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hke
 
 		oldElemSize := elem.Size()
 
-		if _, ok := elem.(elementGroup); ok {
-			// Adjust hkeyPrefixes and hkey for collision group
-			hkeyPrefixes = append(hkeyPrefixes, hkeys[0])
-			hkeys = hkeys[1:]
-		}
-
-		elem, err := elem.Set(storage, h, hkeyPrefixes, hkeys, key, value)
+		elem, err := elem.Set(storage, address, h, hkeyPrefixes, hkeys, key, value)
 		if err != nil {
-			return 0, err
+			return err
 		}
 
 		e.elems[equalIndex] = elem
 
 		e.size += elem.Size() - oldElemSize
 
-		return equalIndex, nil
+		return nil
 	}
 
 	// No matching hkey
@@ -561,162 +534,49 @@ func (e *elements) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hke
 
 	e.size += newElem.Size()
 
-	return lessThanIndex, nil
-}
-
-func (e *elements) Iterate(storage SlabStorage, fn MapIterationFunc) error {
-	for _, e := range e.elems {
-
-		if c, ok := e.(elementGroup); ok {
-
-			elem, err := c.Elements(storage)
-			if err != nil {
-				return err
-			}
-			err = elem.Iterate(storage, fn)
-			if err != nil {
-				return err
-			}
-
-		} else {
-
-			k, err := e.MapKey()
-			if err != nil {
-				return err
-			}
-			kv, err := k.StoredValue(storage)
-			if err != nil {
-				return err
-			}
-
-			v, err := e.MapValue()
-			if err != nil {
-				return err
-			}
-			vv, err := v.StoredValue(storage)
-			if err != nil {
-				return err
-			}
-
-			resume, err := fn(kv, vv)
-			if err != nil {
-				return err
-			}
-			if !resume {
-				return nil
-			}
-		}
-	}
 	return nil
 }
 
-func (e *elements) String() string {
-	var s []string
-	s = append(s, fmt.Sprintf("(prefix %v)", e.hkeyPrefixes))
-	for i := 0; i < len(e.elems); i++ {
-		if len(e.hkeys) > 0 {
-			s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
-		} else {
-			s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
-		}
+func (e *hkeyElements) Element(i int) (element, error) {
+	if i >= len(e.elems) {
+		return nil, errors.New("index out of bounds")
 	}
-	return strings.Join(s, " ")
+	return e.elems[i], nil
 }
 
-/*
-func newMapDataSlab(storage SlabStorage, address Address, anySize bool) *MapDataSlab {
-	return &MapDataSlab{
-		header: MapSlabHeader{
-			id:   storage.GenerateStorageID(address),
-			size: mapDataSlabPrefixSize,
-		},
-		anySize: anySize,
-	}
-}
-*/
-func (m *MapDataSlab) Encode(enc *Encoder) error {
-	// TODO: implement me
-	return errors.New("not implemented")
-}
+func (e *hkeyElements) Merge(elems elements) error {
+	// TODO: verify that both elements have the same hkey prefixes
 
-// TODO: need to set Hasher for OrderedMap
-func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &OrderedMap{
-		storage: storage,
-		root:    m,
-		address: m.ID().Address,
-	}, nil
-}
-
-func (m *MapDataSlab) Has(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (bool, error) {
-	_, err := m.Get(storage, h, hkeyPrefixes, hkeys, key)
-	if err != nil {
-		return false, nil
-	}
-	return true, nil
-}
-
-func (m *MapDataSlab) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error {
-
-	elemIndex, err := m.elements.Set(storage, h, hkeyPrefixes, hkeys, key, value)
-	if err != nil {
-		return err
+	rElems, ok := elems.(*hkeyElements)
+	if !ok {
+		panic(fmt.Sprintf("hkeyElements.Merge() elems type %T, want *hkeyElements", elems))
 	}
 
-	// Separate inline collision group into any sized data slab if it's too large and data slab is size restricted.
-	if !m.anySize {
-		if group, ok := m.elements.elems[elemIndex].(elementGroup); ok {
-			if group.Inline() && group.Size() > uint32(MaxInlineElementSize) {
+	e.hkeys = append(e.hkeys, rElems.hkeys...)
+	e.elems = append(e.elems, rElems.elems...)
+	e.size += rElems.size
 
-				oldSize := m.elements.elems[elemIndex].Size()
-
-				elements, err := group.Elements(storage)
-				if err != nil {
-					return err
-				}
-
-				ext, err := newExternalCollisionGroup(storage, m.ID().Address, elements)
-				if err != nil {
-					return err
-				}
-
-				m.elements.elems[elemIndex] = ext
-
-				m.elements.size += ext.Size() - oldSize
-			}
-		}
+	// Set merged elements to nil to prevent memory leak
+	for i := 0; i < len(rElems.elems); i++ {
+		rElems.elems[i] = nil
 	}
 
-	// Adjust header's first key
-	if elemIndex == 0 {
-		m.header.firstKey = m.elements.hkeys[0]
-	}
-
-	// Adjust header's slab size
-	m.header.size = mapDataSlabPrefixSize + m.elements.size
-
-	// Store modified slab
-	return storage.Store(m.header.id, m)
+	return nil
 }
 
-func (m *MapDataSlab) Remove(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error) {
-	// TODO: implement me
-	return nil, errors.New("not implemented")
-}
-
-func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
-	if len(m.elems) < 2 {
+func (e *hkeyElements) Split() (elements, elements, error) {
+	if len(e.elems) < 2 {
 		// Can't split slab with less than two elements
-		return nil, nil, fmt.Errorf("can't split slab with less than 2 elements")
+		return nil, nil, fmt.Errorf("can't split elements with less than 2 elements")
 	}
 
 	// This computes the ceil of split to give the first slab more elements.
-	dataSize := m.elements.size
+	dataSize := e.size
 	midPoint := (dataSize + 1) >> 1
 
 	leftSize := uint32(0)
 	leftCount := 0
-	for i, e := range m.elements.elems {
+	for i, e := range e.elems {
 		elemSize := e.Size()
 		if leftSize+elemSize >= midPoint {
 			// i is mid point element.  Place i on the small side.
@@ -732,28 +592,288 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		leftSize += elemSize
 	}
 
-	rightCount := len(m.elems) - leftCount
+	rightCount := len(e.elems) - leftCount
 
 	// Create right slab elements
-	rightElements := elements{}
+	rightElements := &hkeyElements{}
 
-	rightElements.hkeyPrefixes = make([]uint64, len(m.hkeyPrefixes))
-	copy(rightElements.hkeyPrefixes, m.hkeyPrefixes)
+	rightElements.hkeyPrefixes = make([]uint64, len(e.hkeyPrefixes))
+	copy(rightElements.hkeyPrefixes, e.hkeyPrefixes)
 
 	rightElements.hkeys = make([]uint64, rightCount)
-	copy(rightElements.hkeys, m.hkeys[leftCount:])
+	copy(rightElements.hkeys, e.hkeys[leftCount:])
 
 	rightElements.elems = make([]element, rightCount)
-	copy(rightElements.elems, m.elements.elems[leftCount:])
+	copy(rightElements.elems, e.elems[leftCount:])
 
 	rightElements.size = dataSize - leftSize
+
+	e.hkeys = e.hkeys[:leftCount]
+	e.elems = e.elems[:leftCount]
+	e.size = leftSize
+
+	// NOTE: prevent memory leak
+	for i := leftCount; i < len(e.hkeys); i++ {
+		e.elems[i] = nil
+	}
+
+	return e, rightElements, nil
+}
+
+func (e *hkeyElements) Size() uint32 {
+	return e.size
+}
+
+func (e *hkeyElements) Count() uint32 {
+	return uint32(len(e.elems))
+}
+
+func (e *hkeyElements) firstKey() uint64 {
+	if len(e.hkeys) > 0 {
+		return e.hkeys[0]
+	}
+	return 0
+}
+
+func (e *hkeyElements) String() string {
+	var s []string
+	s = append(s, fmt.Sprintf("(prefix %v)", e.hkeyPrefixes))
+	if len(e.elems) <= 6 {
+		var s []string
+		for i := 0; i < len(e.elems); i++ {
+			s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
+		}
+		return strings.Join(s, " ")
+	}
+
+	for i := 0; i < 3; i++ {
+		s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
+	}
+
+	s = append(s, "...")
+
+	elemLength := len(e.elems)
+	for i := elemLength - 3; i < elemLength; i++ {
+		s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
+	}
+
+	return strings.Join(s, " ")
+}
+
+func (e *singleElements) Get(storage SlabStorage, h Hasher, hkeyPrefixes, hkeys []uint64, key MapKey) (MapValue, error) {
+
+	if len(hkeys) > 0 {
+		panic(fmt.Sprintf("singleElements.Get(%v, %v) hkeys are not empty", hkeyPrefixes, hkeys))
+	}
+
+	// linear search by key
+	for _, elem := range e.elems {
+		if elem.key.Equal(key) {
+			return elem.value, nil
+		}
+	}
+
+	return nil, fmt.Errorf("key %s not found", key)
+}
+
+func (e *singleElements) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error {
+
+	if len(hkeys) > 0 {
+		panic(fmt.Sprintf("singleElements.Set(%v, %v) hkeys are not empty", hkeyPrefixes, hkeys))
+	}
+
+	// linear search key and update value
+	for i := 0; i < len(e.elems); i++ {
+		elem := e.elems[i]
+		if elem.key.Equal(key) {
+			oldSize := elem.Size()
+
+			elem.value = value
+			elem.size = elem.key.ByteSize() + elem.value.ByteSize()
+
+			e.size += elem.Size() - oldSize
+
+			return nil
+		}
+	}
+
+	// no matching key, append new element to the end.
+	newElem := newSingleElement(key, value)
+	e.elems = append(e.elems, newElem)
+	e.size += newElem.size
+
+	return nil
+}
+
+func (e *singleElements) Element(i int) (element, error) {
+	if i >= len(e.elems) {
+		return nil, errors.New("index out of bounds")
+	}
+	return e.elems[i], nil
+}
+
+func (e *singleElements) Merge(elems elements) error {
+	// TODO: verify that both elements have the same hkey prefixes
+
+	mElems, ok := elems.(*singleElements)
+	if !ok {
+		panic(fmt.Sprintf("singleElements.Merge() elems type %T, want *hkeyElements", elems))
+	}
+
+	e.elems = append(e.elems, mElems.elems...)
+	e.size += mElems.size
+
+	// Set merged elements to nil to prevent memory leak
+	for i := 0; i < len(mElems.elems); i++ {
+		mElems.elems[i] = nil
+	}
+
+	return nil
+}
+
+func (e *singleElements) Split() (elements, elements, error) {
+	if len(e.elems) < 2 {
+		// Can't split slab with less than two elements
+		return nil, nil, fmt.Errorf("can't split elements with less than 2 elements")
+	}
+
+	// This computes the ceil of split to give the first slab more elements.
+	dataSize := e.size
+	midPoint := (dataSize + 1) >> 1
+
+	leftSize := uint32(0)
+	leftCount := 0
+	for i, e := range e.elems {
+		elemSize := e.Size()
+		if leftSize+elemSize >= midPoint {
+			// i is mid point element.  Place i on the small side.
+			if leftSize <= dataSize-leftSize-elemSize {
+				leftSize += elemSize
+				leftCount = i + 1
+			} else {
+				leftCount = i
+			}
+			break
+		}
+		// left slab size < midPoint
+		leftSize += elemSize
+	}
+
+	rightCount := len(e.elems) - leftCount
+
+	// Create right slab elements
+	rightElements := &singleElements{}
+
+	rightElements.hkeyPrefixes = make([]uint64, len(e.hkeyPrefixes))
+	copy(rightElements.hkeyPrefixes, e.hkeyPrefixes)
+
+	rightElements.elems = make([]*singleElement, rightCount)
+	copy(rightElements.elems, e.elems[leftCount:])
+
+	rightElements.size = dataSize - leftSize
+
+	e.elems = e.elems[:leftCount]
+	e.size = leftSize
+
+	// NOTE: prevent memory leak
+	for i := leftCount; i < len(e.elems); i++ {
+		e.elems[i] = nil
+	}
+
+	return e, rightElements, nil
+}
+
+func (e *singleElements) Count() uint32 {
+	return uint32(len(e.elems))
+}
+
+func (e *singleElements) firstKey() uint64 {
+	return 0
+}
+
+func (e *singleElements) Size() uint32 {
+	return e.size
+}
+
+func (e *singleElements) String() string {
+	if len(e.elems) <= 6 {
+		var s []string
+		for i := 0; i < len(e.elems); i++ {
+			s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
+		}
+		return strings.Join(s, " ")
+	}
+
+	var s []string
+	for i := 0; i < 3; i++ {
+		s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
+	}
+
+	s = append(s, "...")
+
+	elemLength := len(e.elems)
+	for i := elemLength - 3; i < elemLength; i++ {
+		s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
+	}
+
+	return strings.Join(s, " ")
+}
+
+func (m *MapDataSlab) Encode(enc *Encoder) error {
+	// TODO: implement me
+	return errors.New("not implemented")
+}
+
+// TODO: need to set Hasher for OrderedMap
+func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
+	return &OrderedMap{
+		storage: storage,
+		root:    m,
+	}, nil
+}
+
+func (m *MapDataSlab) Has(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (bool, error) {
+	_, err := m.Get(storage, h, hkeyPrefixes, hkeys, key)
+	if err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (m *MapDataSlab) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error {
+
+	err := m.elements.Set(storage, m.ID().Address, h, hkeyPrefixes, hkeys, key, value)
+	if err != nil {
+		return err
+	}
+
+	// Adjust header's first key
+	m.header.firstKey = m.elements.firstKey()
+
+	// Adjust header's slab size
+	m.header.size = mapDataSlabPrefixSize + m.elements.Size()
+
+	// Store modified slab
+	return storage.Store(m.header.id, m)
+}
+
+func (m *MapDataSlab) Remove(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error) {
+	// TODO: implement me
+	return nil, errors.New("not implemented")
+}
+
+func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
+	leftElements, rightElements, err := m.elements.Split()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// Create new right slab
 	rightSlab := &MapDataSlab{
 		header: MapSlabHeader{
 			id:       storage.GenerateStorageID(m.ID().Address),
-			size:     mapDataSlabPrefixSize + rightElements.size,
-			firstKey: m.hkeys[leftCount],
+			size:     mapDataSlabPrefixSize + rightElements.Size(),
+			firstKey: rightElements.firstKey(),
 		},
 		prev:     m.header.id,
 		next:     m.next,
@@ -762,38 +882,23 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	}
 
 	// Modify left (original) slab
-	m.header.size = mapDataSlabPrefixSize + leftSize
+	m.header.size = mapDataSlabPrefixSize + leftElements.Size()
 	m.next = rightSlab.header.id
-	m.elements.hkeys = m.elements.hkeys[:leftCount]
-	m.elements.elems = m.elements.elems[:leftCount]
-	m.elements.size = leftSize
-
-	// NOTE: prevent memory leak
-	for i := leftCount; i < len(m.elements.hkeys); i++ {
-		m.elements.hkeys[i] = 0
-	}
-	for i := leftCount; i < len(m.elements.elems); i++ {
-		m.elements.elems[i] = nil
-	}
+	m.elements = leftElements
 
 	return m, rightSlab, nil
 }
 
 func (m *MapDataSlab) Merge(slab Slab) error {
-	// TODO: verify that both slabs have the same hkeyPrefixes
 
 	rightSlab := slab.(*MapDataSlab)
 
-	m.elements.hkeys = append(m.elements.hkeys, rightSlab.elements.hkeys...)
-	m.elements.elems = append(m.elements.elems, rightSlab.elements.elems...)
-	m.elements.size += rightSlab.elements.size
-
-	m.header.size = mapDataSlabPrefixSize + m.elements.size
-
-	// Set right slab elements to nil to prevent memory leak
-	for i := 0; i < len(rightSlab.elems); i++ {
-		rightSlab.elems[i] = nil
+	err := m.elements.Merge(rightSlab.elements)
+	if err != nil {
+		return err
 	}
+
+	m.header.size = mapDataSlabPrefixSize + m.elements.Size()
 
 	m.next = rightSlab.next
 
@@ -888,25 +993,7 @@ func (m *MapDataSlab) SetExtraData(extraData *MapExtraData) {
 }
 
 func (m *MapDataSlab) String() string {
-	elems := m.elements.elems
-
-	if len(elems) <= 6 {
-		return m.elements.String()
-	}
-
-	var str []string
-	for i := 0; i < 3; i++ {
-		str = append(str, elems[i].String())
-	}
-
-	str = append(str, "...")
-
-	elemLength := len(elems)
-	for i := elemLength - 3; i < elemLength; i++ {
-		str = append(str, elems[i].String())
-	}
-
-	return fmt.Sprintf("{%s}", strings.Join(str, " "))
+	return fmt.Sprintf("{%s}", m.elements.String())
 }
 
 func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
@@ -919,7 +1006,6 @@ func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &OrderedMap{
 		storage: storage,
 		root:    m,
-		address: m.ID().Address,
 	}, nil
 }
 
@@ -1452,6 +1538,7 @@ func NewMap(storage SlabStorage, address Address, hasher Hasher, typeInfo string
 			id:   storage.GenerateStorageID(address),
 			size: mapDataSlabPrefixSize,
 		},
+		elements:  &hkeyElements{},
 		extraData: extraData,
 	}
 
@@ -1462,7 +1549,6 @@ func NewMap(storage SlabStorage, address Address, hasher Hasher, typeInfo string
 
 	return &OrderedMap{
 		storage: storage,
-		address: address,
 		root:    root,
 		hasher:  hasher,
 	}, nil
@@ -1507,6 +1593,37 @@ func (m *OrderedMap) Set(key MapKey, value Value) error {
 		return err
 	}
 
+	if !m.root.IsData() {
+		// Set root to its child slab if root has one child slab.
+		root := m.root.(*MapMetaDataSlab)
+		if len(root.childrenHeaders) == 1 {
+
+			extraData := root.RemoveExtraData()
+
+			rootID := root.header.id
+
+			childID := root.childrenHeaders[0].id
+
+			child, err := getMapSlab(m.storage, childID)
+			if err != nil {
+				return err
+			}
+
+			m.root = child
+
+			m.root.SetID(rootID)
+
+			m.root.SetExtraData(extraData)
+
+			err = m.storage.Store(rootID, m.root)
+			if err != nil {
+				return err
+			}
+
+			m.storage.Remove(childID)
+		}
+	}
+
 	if m.root.IsFull() {
 
 		// Get old root's extra data and reset it to nil in old root
@@ -1517,7 +1634,7 @@ func (m *OrderedMap) Set(key MapKey, value Value) error {
 
 		// Assign a new storage id to old root before splitting it.
 		oldRoot := m.root
-		oldRoot.SetID(m.storage.GenerateStorageID(m.address))
+		oldRoot.SetID(m.storage.GenerateStorageID(m.Address()))
 
 		// Split old root
 		leftSlab, rightSlab, err := oldRoot.Split(m.storage)
@@ -1563,38 +1680,6 @@ func (m *OrderedMap) Remove(key MapKey) (Value, error) {
 	return nil, errors.New("not implemented")
 }
 
-type MapIterationFunc func(Value, Value) (resume bool, err error)
-
-func (m *OrderedMap) Iterate(fn MapIterationFunc) error {
-	slab, err := firstMapDataSlab(m.storage, m.root)
-	if err != nil {
-		return err
-	}
-
-	id := slab.ID()
-
-	for id != StorageIDUndefined {
-		slab, found, err := m.storage.Retrieve(id)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("slab %d not found", id)
-		}
-
-		dataSlab := slab.(*MapDataSlab)
-
-		err = dataSlab.elements.Iterate(m.storage, fn)
-		if err != nil {
-			return err
-		}
-
-		id = dataSlab.next
-	}
-
-	return nil
-}
-
 func (m *OrderedMap) StorageID() StorageID {
 	return m.root.Header().id
 }
@@ -1613,7 +1698,7 @@ func (m *OrderedMap) Storable(_ SlabStorage, _ Address) (Storable, error) {
 }
 
 func (m *OrderedMap) Address() Address {
-	return m.address
+	return m.root.ID().Address
 }
 
 func (m *OrderedMap) Type() string {
@@ -1671,4 +1756,148 @@ func firstMapDataSlab(storage SlabStorage, slab MapSlab) (MapSlab, error) {
 		return nil, err
 	}
 	return firstMapDataSlab(storage, firstChild)
+}
+
+type MapElementIterator struct {
+	storage        SlabStorage
+	elements       elements
+	index          int
+	nestedIterator *MapElementIterator
+}
+
+var ErrEOE = errors.New("end of elements")
+
+func (i *MapElementIterator) Next() (key Value, value Value, err error) {
+
+	if i.nestedIterator != nil {
+		key, value, err = i.nestedIterator.Next()
+		if err != ErrEOE {
+			return key, value, err
+		}
+		i.nestedIterator = nil
+	}
+
+	if i.index >= int(i.elements.Count()) {
+		return nil, nil, ErrEOE
+	}
+
+	e, err := i.elements.Element(i.index)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if group, ok := e.(elementGroup); ok {
+
+		elems, err := group.Elements(i.storage)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		i.nestedIterator = &MapElementIterator{
+			storage:  i.storage,
+			elements: elems,
+		}
+
+		i.index++
+
+		return i.nestedIterator.Next()
+	}
+
+	se, ok := e.(*singleElement)
+	if !ok {
+		panic("iterate over an element that is not a elementGroup and not a singleElement")
+	}
+
+	k, err := se.key.StoredValue(i.storage)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	v, err := se.value.StoredValue(i.storage)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	i.index++
+
+	return k, v, nil
+}
+
+type MapIterationFunc func(Value, Value) (resume bool, err error)
+
+type MapIterator struct {
+	storage      SlabStorage
+	id           StorageID
+	elemIterator *MapElementIterator
+}
+
+func (i *MapIterator) Next() (key Value, value Value, err error) {
+	if i.elemIterator == nil {
+		if i.id == StorageIDUndefined {
+			return nil, nil, nil
+		}
+
+		slab, found, err := i.storage.Retrieve(i.id)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !found {
+			return nil, nil, fmt.Errorf("slab %d not found", i.id)
+		}
+
+		dataSlab := slab.(*MapDataSlab)
+
+		i.id = dataSlab.next
+
+		i.elemIterator = &MapElementIterator{
+			storage:  i.storage,
+			elements: dataSlab.elements,
+		}
+	}
+
+	key, value, err = i.elemIterator.Next()
+	if err != ErrEOE {
+		return key, value, err
+	}
+
+	i.elemIterator = nil
+
+	return i.Next()
+}
+
+func (m *OrderedMap) Iterator() (*MapIterator, error) {
+	slab, err := firstMapDataSlab(m.storage, m.root)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MapIterator{
+		storage: m.storage,
+		id:      slab.ID(),
+	}, nil
+}
+
+func (m *OrderedMap) Iterate(fn MapIterationFunc) error {
+
+	iterator, err := m.Iterator()
+	if err != nil {
+		return err
+	}
+
+	for {
+		key, value, err := iterator.Next()
+		if err != nil {
+			return err
+		}
+		if key == nil {
+			return nil
+		}
+		resume, err := fn(key, value)
+		if err != nil {
+			return err
+		}
+		if !resume {
+			return nil
+		}
+	}
 }

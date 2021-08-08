@@ -7,8 +7,8 @@ package atree
 import (
 	"container/list"
 	"fmt"
+	"reflect"
 	"sort"
-	"strings"
 )
 
 type mapStats struct {
@@ -50,7 +50,11 @@ func (m *OrderedMap) Stats() (mapStats, error) {
 				dataSlabCount++
 				dataSlabSize += uint64(leaf.header.size)
 
-				for _, elem := range leaf.elements.elems {
+				for i := 0; i < int(leaf.elements.Count()); i++ {
+					elem, err := leaf.elements.Element(i)
+					if err != nil {
+						return mapStats{}, err
+					}
 					if group, ok := elem.(elementGroup); ok {
 						if !group.Inline() {
 							collisionDataSlabCount++
@@ -103,45 +107,15 @@ func (m *OrderedMap) Print() {
 
 			if slab.IsData() {
 				dataSlab := slab.(*MapDataSlab)
-				fmt.Printf("level %d, leaf (%+v): (prefix %v)", level+1, dataSlab.header, dataSlab.hkeyPrefixes)
+				fmt.Printf("level %d, leaf (%+v): %s\n", level+1, dataSlab.header, dataSlab.String())
 
-				var kvStr []string
-				if len(dataSlab.elems) <= 6 {
-					for i := 0; i < len(dataSlab.elements.elems); i++ {
-						elem := dataSlab.elements.elems[i]
-						if len(dataSlab.elements.hkeys) == 0 {
-							kvStr = append(kvStr, elem.String())
-						} else {
-							kvStr = append(kvStr,
-								fmt.Sprintf("%d:%s", dataSlab.elements.hkeys[i], elem.String()))
-						}
+				for i := 0; i < int(dataSlab.elements.Count()); i++ {
+					elem, err := dataSlab.elements.Element(i)
+					if err != nil {
+						fmt.Println(err)
+						return
 					}
-				} else {
-					for i := 0; i < 3; i++ {
-						elem := dataSlab.elements.elems[i]
-						if len(dataSlab.elements.hkeys) == 0 {
-							kvStr = append(kvStr, elem.String())
-						} else {
-							kvStr = append(kvStr,
-								fmt.Sprintf("%d:%s", dataSlab.elements.hkeys[i], elem.String()))
-						}
-					}
-					kvStr = append(kvStr, "...")
-					for i := len(dataSlab.hkeys) - 3; i < len(dataSlab.hkeys); i++ {
-						elem := dataSlab.elements.elems[i]
-						if len(dataSlab.elements.hkeys) == 0 {
-							kvStr = append(kvStr, elem.String())
-						} else {
-							kvStr = append(kvStr,
-								fmt.Sprintf("%d:%s", dataSlab.elements.hkeys[i], elem.String()))
-						}
-					}
-				}
-
-				fmt.Printf("{%s}\n", strings.Join(kvStr, " "))
-
-				for _, e := range dataSlab.elements.elems {
-					if group, ok := e.(elementGroup); ok {
+					if group, ok := elem.(elementGroup); ok {
 						if !group.Inline() {
 							extSlab := group.(*externalCollisionGroup)
 							collisionSlabIDs.PushBack(extSlab.id)
@@ -182,40 +156,43 @@ func (m *OrderedMap) valid() (bool, error) {
 }
 
 func (m *OrderedMap) _validElements(id StorageID, h Hasher, elements elements, level int) (uint32, error) {
-	// For digest size 16:
-	//   level 0: hkey prefix len == 0, hkey length == element length
-	//   level 1: hkey prefix len == 1, hkey length == element length
-	//   level 2: hkey prefix len == 2, hkey length == 0
 
 	hkeyLen := h.DigestSize() / 8
+
+	if level < hkeyLen {
+		elems, ok := elements.(*hkeyElements)
+		if !ok {
+			return 0, fmt.Errorf("slab %d, element level %d, elements is wrong type %T, expect *hkeyElements",
+				id, level, elements)
+		}
+		return m._validHkeyElements(id, h, elems, level)
+	}
+
+	elems, ok := elements.(*singleElements)
+	if !ok {
+		return 0, fmt.Errorf("slab %d, element level %d, elements is wrong type %T, expect *singlElements",
+			id, level, elements)
+	}
+	return m._validSingleElements(id, h, elems, level)
+}
+
+func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyElements, level int) (uint32, error) {
 
 	if level != len(elements.hkeyPrefixes) {
 		return 0, fmt.Errorf("slab %d, element level %d, hkeyPrefixes is wrong length %d, expect %d",
 			id, level, len(elements.hkeyPrefixes), level)
 	}
 
-	if level < hkeyLen && len(elements.hkeys) != len(elements.elems) {
+	if len(elements.hkeys) != len(elements.elems) {
 		return 0, fmt.Errorf("slab %d, element level %d, hkeys is wrong length %d, expect %d",
 			id, level, len(elements.hkeys), len(elements.elems))
 	}
 
-	if level == hkeyLen && len(elements.hkeys) != 0 {
-		return 0, fmt.Errorf("slab %d, element level %d, hkeys is wrong length %d, expect %d",
-			id, level, len(elements.hkeys), 0)
-	}
-
-	if len(elements.hkeys) > 0 {
-		if len(elements.hkeys) != len(elements.elems) {
-			return 0, fmt.Errorf("slab %d, element level %d, hkeys is wrong length %d, expect %d",
-				id, level, len(elements.hkeys), len(elements.elems))
-		}
-
-		if !sort.SliceIsSorted(elements.hkeys, func(i, j int) bool {
-			return elements.hkeys[i] < elements.hkeys[j]
-		}) {
-			return 0, fmt.Errorf("slab %d, element level %d, hkeys is not sorted %v",
-				id, level, elements.hkeys)
-		}
+	if !sort.SliceIsSorted(elements.hkeys, func(i, j int) bool {
+		return elements.hkeys[i] < elements.hkeys[j]
+	}) {
+		return 0, fmt.Errorf("slab %d, element level %d, hkeys is not sorted %v",
+			id, level, elements.hkeys)
 	}
 
 	size := uint32(0)
@@ -237,51 +214,76 @@ func (m *OrderedMap) _validElements(id StorageID, h Hasher, elements elements, l
 
 		} else {
 
-			k, err := e.MapKey()
-			if err != nil {
-				return 0, err
-			}
-
-			v, err := e.MapValue()
-			if err != nil {
-				return 0, err
+			se, ok := e.(*singleElement)
+			if !ok {
+				return 0, fmt.Errorf("got element %T, expect *singleElement", e)
 			}
 
 			// Verify single element size
-			computedSize := k.ByteSize() + v.ByteSize()
+			computedSize := se.key.ByteSize() + se.value.ByteSize()
 			if computedSize != e.Size() {
 				return 0, fmt.Errorf("slab %d, element level %d, element %s, size %d, computed size %d",
 					id, level, elements.String(), e.Size(), computedSize)
 			}
 
 			// Verify single element hashed value
-			computedHkey, err := h.Hash(k)
+			computedHkey, err := h.Hash(se.key)
 			if err != nil {
 				return 0, err
 			}
 
 			// Combine element's hkeyPrefixes with hkey
-			hkeys := make([]uint64, len(elements.hkeyPrefixes))
-			copy(hkeys, elements.hkeyPrefixes)
+			hkeys := make([]uint64, 0, len(elements.hkeyPrefixes)+1)
+			hkeys = append(hkeys, elements.hkeyPrefixes...)
+			hkeys = append(hkeys, elements.hkeys[i])
 
-			if len(elements.hkeys) > 0 {
-				hkeys = append(hkeys, elements.hkeys[i])
-			}
-
-			if len(computedHkey) < len(hkeys) {
+			if !reflect.DeepEqual(hkeys, computedHkey[:len(hkeys)]) {
 				return 0, fmt.Errorf("slab %d, element level %d, element %s, hkey %v, computed hkeys %d",
 					id, level, elements.String(), hkeys, computedHkey)
 			}
 
-			for j := 0; j < len(hkeys); j++ {
-				if hkeys[j] != computedHkey[j] {
-					return 0, fmt.Errorf("slab %d, element level %d, element %s, hkey %v, computed hkeys %d",
-						id, level, elements.String(), hkeys, computedHkey)
-				}
-			}
-
 			size += computedSize
 		}
+	}
+
+	if size != elements.size {
+		return 0, fmt.Errorf("slab %d, element level %d, elements size %d, computed size %d",
+			id, level, elements.size, size)
+	}
+
+	return size, nil
+}
+
+func (m *OrderedMap) _validSingleElements(id StorageID, h Hasher, elements *singleElements, level int) (uint32, error) {
+
+	if level != len(elements.hkeyPrefixes) {
+		return 0, fmt.Errorf("slab %d, element level %d, hkeyPrefixes is wrong length %d, expect %d",
+			id, level, len(elements.hkeyPrefixes), level)
+	}
+
+	size := uint32(0)
+
+	for _, e := range elements.elems {
+
+		// Verify single element size
+		computedSize := e.key.ByteSize() + e.value.ByteSize()
+		if computedSize != e.Size() {
+			return 0, fmt.Errorf("slab %d, element level %d, element %s, size %d, computed size %d",
+				id, level, elements.String(), e.Size(), computedSize)
+		}
+
+		// Verify single element hashed value
+		computedHkey, err := h.Hash(e.key)
+		if err != nil {
+			return 0, err
+		}
+
+		if !reflect.DeepEqual(elements.hkeyPrefixes, computedHkey[:len(elements.hkeyPrefixes)]) {
+			return 0, fmt.Errorf("slab %d, element level %d, element %s, hkey %v, computed hkeys %d",
+				id, level, elements.String(), elements.hkeyPrefixes, computedHkey)
+		}
+
+		size += computedSize
 	}
 
 	if size != elements.size {
@@ -314,7 +316,7 @@ func (m *OrderedMap) _valid(id StorageID, level int) (bool, error) {
 		_, underflow := dataSlab.IsUnderflow()
 		validFill := (level == 0) || (!dataSlab.IsFull() && !underflow)
 
-		validFirstKey := dataSlab.hkeys[0] == dataSlab.header.firstKey
+		validFirstKey := dataSlab.elements.firstKey() == dataSlab.header.firstKey
 
 		validSize := computedSize == dataSlab.header.size
 

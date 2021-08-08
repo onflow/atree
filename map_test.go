@@ -414,59 +414,131 @@ func TestMapIterate(t *testing.T) {
 }
 
 func TestMapHashCollision(t *testing.T) {
-	const mapSize = 2 * 1024
 
-	const typeInfo = "map[String]String"
+	t.Run("deterministic", func(t *testing.T) {
+		const mapSize = 2 * 1024
 
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		const mockDigestCount = 8
 
-	hasher := &mockHasher{}
-	hasher.On("DigestSize", mock.Anything).Return(16)
+		const typeInfo = "map[String]String"
 
-	storage := newTestInMemoryStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	uniqueKeyValues := make(map[MapKey]Value, mapSize)
-	for i := uint64(0); i < mapSize; i++ {
-		for {
-			s := randStr(16)
-			k := NewStringValue(s)
-			if _, kExist := uniqueKeyValues[k]; !kExist {
-				v := NewStringValue(randStr(16))
-				uniqueKeyValues[k] = v
+		hasher := &mockHasher{}
+		hasher.On("DigestSize", mock.Anything).Return(16)
 
-				digest1 := rand.Intn(256)
-				digest2 := rand.Intn(256)
+		digests := make([][]uint64, 0, mockDigestCount)
+		for i := 0; i < mockDigestCount; i++ {
+			digest1 := uint64(rand.Intn(256))
+			digest2 := uint64(rand.Intn(256))
+			digests = append(digests, []uint64{digest1, digest2})
+		}
 
-				hasher.On("Hash", k).Return([]uint64{uint64(digest1), uint64(digest2)})
+		storage := newTestInMemoryStorage(t)
 
-				break
+		uniqueKeyValues := make(map[MapKey]Value, mapSize)
+		for i := uint64(0); i < mapSize; i++ {
+			for {
+				s := randStr(16)
+				k := NewStringValue(s)
+				if _, kExist := uniqueKeyValues[k]; !kExist {
+					v := NewStringValue(randStr(16))
+					uniqueKeyValues[k] = v
+
+					digest := digests[i%mockDigestCount]
+
+					hasher.On("Hash", k).Return(digest)
+
+					break
+				}
 			}
 		}
-	}
 
-	m, err := NewMap(storage, address, hasher, typeInfo)
-	require.NoError(t, err)
-
-	for k, v := range uniqueKeyValues {
-		err := m.Set(k, v)
+		m, err := NewMap(storage, address, hasher, typeInfo)
 		require.NoError(t, err)
-	}
 
-	verified, err := m.valid()
-	if !verified {
-		m.Print()
-	}
-	require.NoError(t, err)
-	require.True(t, verified)
+		for k, v := range uniqueKeyValues {
+			err := m.Set(k, v)
+			require.NoError(t, err)
+		}
 
-	for k, v := range uniqueKeyValues {
-		e, err := m.Get(k)
+		verified, err := m.valid()
+		if !verified {
+			m.Print()
+		}
 		require.NoError(t, err)
-		require.Equal(t, v, e)
-	}
+		require.True(t, verified)
 
-	require.Equal(t, typeInfo, m.Type())
+		for k, v := range uniqueKeyValues {
+			e, err := m.Get(k)
+			require.NoError(t, err)
+			require.Equal(t, v, e)
+		}
 
-	stats, _ := m.Stats()
-	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
+		require.Equal(t, typeInfo, m.Type())
+
+		stats, _ := m.Stats()
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
+		require.Equal(t, uint64(0), stats.MetaDataSlabCount)
+		require.Equal(t, uint64(1), stats.DataSlabCount)
+		require.Equal(t, uint64(mockDigestCount), stats.CollisionDataSlabCount)
+	})
+
+	t.Run("random", func(t *testing.T) {
+		const mapSize = 2 * 1024
+
+		const typeInfo = "map[String]String"
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		hasher := &mockHasher{}
+		hasher.On("DigestSize", mock.Anything).Return(16)
+
+		storage := newTestInMemoryStorage(t)
+
+		uniqueKeyValues := make(map[MapKey]Value, mapSize)
+		for i := uint64(0); i < mapSize; i++ {
+			for {
+				s := randStr(16)
+				k := NewStringValue(s)
+				if _, kExist := uniqueKeyValues[k]; !kExist {
+					v := NewStringValue(randStr(16))
+					uniqueKeyValues[k] = v
+
+					digest1 := rand.Intn(256)
+					digest2 := rand.Intn(256)
+
+					hasher.On("Hash", k).Return([]uint64{uint64(digest1), uint64(digest2)})
+
+					break
+				}
+			}
+		}
+
+		m, err := NewMap(storage, address, hasher, typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range uniqueKeyValues {
+			err := m.Set(k, v)
+			require.NoError(t, err)
+		}
+
+		verified, err := m.valid()
+		if !verified {
+			m.Print()
+		}
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		for k, v := range uniqueKeyValues {
+			e, err := m.Get(k)
+			require.NoError(t, err)
+			require.Equal(t, v, e)
+		}
+
+		require.Equal(t, typeInfo, m.Type())
+
+		stats, _ := m.Stats()
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
+	})
 }

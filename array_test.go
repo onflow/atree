@@ -838,7 +838,9 @@ func TestDeepRemove(t *testing.T) {
 	err = array1.Append(Uint64Value(42))
 	require.NoError(t, err)
 
-	err = array1.Append(NewStringValue("42 - 1"))
+	const stringSize = 256 * 256
+
+	err = array1.Append(NewStringValue(randStr(stringSize)))
 	require.NoError(t, err)
 
 	const typeInfo2 = "[AnyStruct]"
@@ -846,7 +848,7 @@ func TestDeepRemove(t *testing.T) {
 	array2, err := NewArray(storage, address, typeInfo2)
 	require.NoError(t, err)
 
-	err = array1.Append(NewStringValue("42 - 2"))
+	err = array2.Append(NewStringValue(randStr(stringSize)))
 	require.NoError(t, err)
 
 	err = array1.Append(array2)
@@ -867,7 +869,7 @@ func TestDeepRemove(t *testing.T) {
 	err = storage.Commit()
 	require.NoError(t, err)
 
-	require.Equal(t, 2, storage.Count())
+	require.Equal(t, 4, storage.Count())
 
 	err = array1.DeepRemove(storage)
 	require.NoError(t, err)

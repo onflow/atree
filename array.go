@@ -66,7 +66,7 @@ func (a *ArrayDataSlab) DeepRemove(storage SlabStorage) error {
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &Array{
 		Storage: storage,
-		root: a,
+		root:    a,
 	}, nil
 }
 
@@ -91,7 +91,7 @@ var _ ArraySlab = &ArrayMetaDataSlab{}
 func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &Array{
 		Storage: storage,
-		root: a,
+		root:    a,
 	}, nil
 }
 
@@ -99,7 +99,6 @@ func (a *ArrayMetaDataSlab) DeepRemove(storage SlabStorage) error {
 	storage.Remove(a.ID())
 	return nil
 }
-
 
 type ArraySlab interface {
 	Slab
@@ -1687,7 +1686,7 @@ func NewArrayWithRootID(storage SlabStorage, rootID StorageID) (*Array, error) {
 	}
 	return &Array{
 		Storage: storage,
-		root: root,
+		root:    root,
 	}, nil
 }
 

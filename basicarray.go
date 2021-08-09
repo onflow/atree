@@ -32,7 +32,6 @@ func (a *BasicArrayDataSlab) DeepRemove(storage SlabStorage) error {
 	return nil
 }
 
-
 type BasicArray struct {
 	storage SlabStorage
 	root    *BasicArrayDataSlab

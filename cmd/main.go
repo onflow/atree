@@ -36,7 +36,6 @@ func (v Uint64Value) DeepRemove(_ atree.SlabStorage) error {
 	return nil
 }
 
-
 // Encode encodes UInt64Value as
 // cbor.Tag{
 //		Number:  cborTagUInt64Value,

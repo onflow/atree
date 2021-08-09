@@ -1929,6 +1929,7 @@ func (a *Array) DeepCopy(storage SlabStorage, address Address) (Value, error) {
 func (a *Array) DeepRemove(storage SlabStorage) error {
 	count := a.Count()
 
+	// TODO: use backward iterator
 	for prevIndex := count; prevIndex > 0; prevIndex-- {
 		index := prevIndex - 1
 

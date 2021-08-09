@@ -38,7 +38,7 @@ func (a *Array) Stats() (Stats, error) {
 		for e := ids.Front(); e != nil; e = e.Next() {
 			id := e.Value.(StorageID)
 
-			slab, err := getArraySlab(a.storage, id)
+			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
 				return Stats{}, err
 			}
@@ -85,7 +85,7 @@ func (a *Array) Print() {
 		for e := ids.Front(); e != nil; e = e.Next() {
 			id := e.Value.(StorageID)
 
-			slab, err := getArraySlab(a.storage, id)
+			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
 				fmt.Println(err)
 				return
@@ -136,7 +136,7 @@ func (a *Array) Print() {
 			id := e.Value.(StorageID)
 
 			// TODO: expand this to include other types
-			slab, err := getArraySlab(a.storage, id)
+			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
@@ -163,7 +163,7 @@ func (a *Array) valid(typeInfo string) (bool, error) {
 
 func (a *Array) _valid(id StorageID, level int) (bool, uint32, error) {
 
-	slab, err := getArraySlab(a.storage, id)
+	slab, err := getArraySlab(a.Storage, id)
 	if err != nil {
 		return false, 0, err
 	}

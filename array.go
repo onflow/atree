@@ -59,7 +59,10 @@ type ArrayDataSlab struct {
 }
 
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a}, nil
+	return &Array{
+		Storage: storage,
+		root: a,
+	}, nil
 }
 
 var _ ArraySlab = &ArrayDataSlab{}
@@ -81,7 +84,10 @@ type ArrayMetaDataSlab struct {
 var _ ArraySlab = &ArrayMetaDataSlab{}
 
 func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &Array{storage: storage, root: a}, nil
+	return &Array{
+		Storage: storage,
+		root: a,
+	}, nil
 }
 
 type ArraySlab interface {
@@ -111,7 +117,7 @@ type ArraySlab interface {
 
 // Array is tree
 type Array struct {
-	storage SlabStorage
+	Storage SlabStorage
 	root    ArraySlab
 }
 
@@ -1658,7 +1664,7 @@ func NewArray(storage SlabStorage, address Address, typeInfo string) (*Array, er
 	}
 
 	return &Array{
-		storage: storage,
+		Storage: storage,
 		root:    root,
 	}, nil
 }
@@ -1668,24 +1674,27 @@ func NewArrayWithRootID(storage SlabStorage, rootID StorageID) (*Array, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Array{storage: storage, root: root}, nil
+	return &Array{
+		Storage: storage,
+		root: root,
+	}, nil
 }
 
 func (a *Array) Get(i uint64) (Value, error) {
-	storable, err := a.root.Get(a.storage, i)
+	storable, err := a.root.Get(a.Storage, i)
 	if err != nil {
 		return nil, err
 	}
 
-	return storable.StoredValue(a.storage)
+	return storable.StoredValue(a.Storage)
 }
 
 func (a *Array) Set(index uint64, value Value) error {
-	storable, err := value.Storable(a.storage, a.Address())
+	storable, err := value.Storable(a.Storage, a.Address())
 	if err != nil {
 		return err
 	}
-	return a.root.Set(a.storage, index, storable)
+	return a.root.Set(a.Storage, index, storable)
 }
 
 func (a *Array) Append(value Value) error {
@@ -1693,12 +1702,12 @@ func (a *Array) Append(value Value) error {
 }
 
 func (a *Array) Insert(index uint64, value Value) error {
-	storable, err := value.Storable(a.storage, a.Address())
+	storable, err := value.Storable(a.Storage, a.Address())
 	if err != nil {
 		return err
 	}
 
-	err = a.root.Insert(a.storage, index, storable)
+	err = a.root.Insert(a.Storage, index, storable)
 	if err != nil {
 		return err
 	}
@@ -1713,10 +1722,10 @@ func (a *Array) Insert(index uint64, value Value) error {
 
 		// Assign a new storage id to old root before splitting it.
 		oldRoot := a.root
-		oldRoot.SetID(a.storage.GenerateStorageID(a.Address()))
+		oldRoot.SetID(a.Storage.GenerateStorageID(a.Address()))
 
 		// Split old root
-		leftSlab, rightSlab, err := oldRoot.Split(a.storage)
+		leftSlab, rightSlab, err := oldRoot.Split(a.Storage)
 		if err != nil {
 			return err
 		}
@@ -1738,15 +1747,15 @@ func (a *Array) Insert(index uint64, value Value) error {
 
 		a.root = newRoot
 
-		err = a.storage.Store(left.ID(), left)
+		err = a.Storage.Store(left.ID(), left)
 		if err != nil {
 			return err
 		}
-		err = a.storage.Store(right.ID(), right)
+		err = a.Storage.Store(right.ID(), right)
 		if err != nil {
 			return err
 		}
-		err = a.storage.Store(a.root.ID(), a.root)
+		err = a.Storage.Store(a.root.ID(), a.root)
 		if err != nil {
 			return err
 		}
@@ -1756,7 +1765,7 @@ func (a *Array) Insert(index uint64, value Value) error {
 }
 
 func (a *Array) Remove(index uint64) (Value, error) {
-	storable, err := a.root.Remove(a.storage, index)
+	storable, err := a.root.Remove(a.Storage, index)
 	if err != nil {
 		return nil, err
 	}
@@ -1772,7 +1781,7 @@ func (a *Array) Remove(index uint64) (Value, error) {
 
 			childID := root.childrenHeaders[0].id
 
-			child, err := getArraySlab(a.storage, childID)
+			child, err := getArraySlab(a.Storage, childID)
 			if err != nil {
 				return nil, err
 			}
@@ -1783,15 +1792,15 @@ func (a *Array) Remove(index uint64) (Value, error) {
 
 			a.root.SetExtraData(extraData)
 
-			err = a.storage.Store(rootID, a.root)
+			err = a.Storage.Store(rootID, a.root)
 			if err != nil {
 				return nil, err
 			}
-			a.storage.Remove(childID)
+			a.Storage.Remove(childID)
 		}
 	}
 
-	return storable.StoredValue(a.storage)
+	return storable.StoredValue(a.Storage)
 }
 
 type ArrayIterator struct {
@@ -1839,13 +1848,13 @@ func (i *ArrayIterator) Next() (Value, error) {
 }
 
 func (a *Array) Iterator() (*ArrayIterator, error) {
-	slab, err := firstArrayDataSlab(a.storage, a.root)
+	slab, err := firstArrayDataSlab(a.Storage, a.root)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ArrayIterator{
-		storage: a.storage,
+		storage: a.Storage,
 		id:      slab.ID(),
 	}, nil
 }
@@ -1934,7 +1943,7 @@ func (a *Array) string(meta *ArrayMetaDataSlab) string {
 	var elemsStr []string
 
 	for _, h := range meta.childrenHeaders {
-		child, err := getArraySlab(a.storage, h.id)
+		child, err := getArraySlab(a.Storage, h.id)
 		if err != nil {
 			return err.Error()
 		}

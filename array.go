@@ -58,10 +58,15 @@ type ArrayDataSlab struct {
 	extraData *ArrayExtraData
 }
 
+func (a *ArrayDataSlab) DeepRemove(storage SlabStorage) error {
+	storage.Remove(a.ID())
+	return nil
+}
+
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &Array{
 		Storage: storage,
-		root: a,
+		root:    a,
 	}, nil
 }
 
@@ -86,8 +91,13 @@ var _ ArraySlab = &ArrayMetaDataSlab{}
 func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &Array{
 		Storage: storage,
-		root: a,
+		root:    a,
 	}, nil
+}
+
+func (a *ArrayMetaDataSlab) DeepRemove(storage SlabStorage) error {
+	storage.Remove(a.ID())
+	return nil
 }
 
 type ArraySlab interface {
@@ -1676,7 +1686,7 @@ func NewArrayWithRootID(storage SlabStorage, rootID StorageID) (*Array, error) {
 	}
 	return &Array{
 		Storage: storage,
-		root: root,
+		root:    root,
 	}, nil
 }
 
@@ -1914,6 +1924,37 @@ func (a *Array) DeepCopy(storage SlabStorage, address Address) (Value, error) {
 	}
 
 	return result, nil
+}
+
+func (a *Array) DeepRemove(storage SlabStorage) error {
+	count := a.Count()
+
+	// TODO: use backward iterator
+	for prevIndex := count; prevIndex > 0; prevIndex-- {
+		index := prevIndex - 1
+
+		storable, err := a.root.Get(storage, index)
+		if err != nil {
+			return err
+		}
+
+		value, err := a.Remove(index)
+		if err != nil {
+			return err
+		}
+
+		err = value.DeepRemove(storage)
+		if err != nil {
+			return err
+		}
+
+		err = storable.DeepRemove(storage)
+		if err != nil {
+			return err
+		}
+	}
+
+	return a.root.DeepRemove(storage)
 }
 
 func (a *Array) Count() uint64 {

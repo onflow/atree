@@ -817,7 +817,67 @@ func TestDeepCopy(t *testing.T) {
 
 	err = storage.Commit()
 	require.NoError(t, err)
+}
 
+func TestDeepRemove(t *testing.T) {
+
+	SetThreshold(100)
+	defer func() {
+		SetThreshold(1024)
+	}()
+
+	const typeInfo1 = "[AnyStruct]"
+
+	storage := newTestPersistentStorage(t)
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array1, err := NewArray(storage, address, typeInfo1)
+	require.NoError(t, err)
+
+	err = array1.Append(Uint64Value(42))
+	require.NoError(t, err)
+
+	const stringSize = 256 * 256
+
+	err = array1.Append(NewStringValue(randStr(stringSize)))
+	require.NoError(t, err)
+
+	const typeInfo2 = "[AnyStruct]"
+
+	array2, err := NewArray(storage, address, typeInfo2)
+	require.NoError(t, err)
+
+	err = array2.Append(NewStringValue(randStr(stringSize)))
+	require.NoError(t, err)
+
+	err = array1.Append(array2)
+	require.NoError(t, err)
+
+	require.Equal(t, typeInfo1, array1.Type())
+
+	require.Equal(t, typeInfo2, array2.Type())
+
+	verified, err := array1.valid(typeInfo1)
+	require.NoError(t, err)
+	require.True(t, verified)
+
+	verified, err = array2.valid(typeInfo2)
+	require.NoError(t, err)
+	require.True(t, verified)
+
+	err = storage.Commit()
+	require.NoError(t, err)
+
+	require.Equal(t, 4, storage.Count())
+
+	err = array1.DeepRemove(storage)
+	require.NoError(t, err)
+
+	err = storage.Commit()
+	require.NoError(t, err)
+
+	require.Equal(t, 0, storage.Count())
 }
 
 func TestConstRootStorageID(t *testing.T) {

@@ -31,6 +31,11 @@ func (v Uint64Value) Storable(_ atree.SlabStorage, _ atree.Address) (atree.Stora
 	return v, nil
 }
 
+func (v Uint64Value) DeepRemove(_ atree.SlabStorage) error {
+	// NO-OP
+	return nil
+}
+
 // Encode encodes UInt64Value as
 // cbor.Tag{
 //		Number:  cborTagUInt64Value,

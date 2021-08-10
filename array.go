@@ -58,8 +58,8 @@ type ArrayDataSlab struct {
 	extraData *ArrayExtraData
 }
 
-func (a *ArrayDataSlab) DeepRemove(storage SlabStorage) error {
-	storage.Remove(a.ID())
+func (a *ArrayDataSlab) DeepRemove(_ SlabStorage) error {
+	// Slab will be removed by parent
 	return nil
 }
 
@@ -95,8 +95,8 @@ func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	}, nil
 }
 
-func (a *ArrayMetaDataSlab) DeepRemove(storage SlabStorage) error {
-	storage.Remove(a.ID())
+func (a *ArrayMetaDataSlab) DeepRemove(_ SlabStorage) error {
+	// Slab will be removed by parent
 	return nil
 }
 

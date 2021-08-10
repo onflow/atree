@@ -219,6 +219,16 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyEl
 				return 0, fmt.Errorf("got element %T, expect *singleElement", e)
 			}
 
+			ks, err := se.key.StoredValue(m.storage)
+			if err != nil {
+				return 0, err
+			}
+
+			ck, ok := ks.(ComparableValue)
+			if !ok {
+				return 0, fmt.Errorf("key %s doesn't implement ComparableValue", ks)
+			}
+
 			// Verify single element size
 			computedSize := se.key.ByteSize() + se.value.ByteSize()
 			if computedSize != e.Size() {
@@ -227,7 +237,7 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyEl
 			}
 
 			// Verify single element hashed value
-			computedHkey, err := h.Hash(se.key)
+			computedHkey, err := h.Hash(ck)
 			if err != nil {
 				return 0, err
 			}
@@ -265,6 +275,16 @@ func (m *OrderedMap) _validSingleElements(id StorageID, h Hasher, elements *sing
 
 	for _, e := range elements.elems {
 
+		ks, err := e.key.StoredValue(m.storage)
+		if err != nil {
+			return 0, err
+		}
+
+		ck, ok := ks.(ComparableValue)
+		if !ok {
+			return 0, fmt.Errorf("key %s doesn't implement ComparableValue", ks)
+		}
+
 		// Verify single element size
 		computedSize := e.key.ByteSize() + e.value.ByteSize()
 		if computedSize != e.Size() {
@@ -273,7 +293,7 @@ func (m *OrderedMap) _validSingleElements(id StorageID, h Hasher, elements *sing
 		}
 
 		// Verify single element hashed value
-		computedHkey, err := h.Hash(e.key)
+		computedHkey, err := h.Hash(ck)
 		if err != nil {
 			return 0, err
 		}

@@ -25,12 +25,7 @@ const (
 	mapDataSlabPrefixSize = 2 + storageIDSize + storageIDSize + 3
 )
 
-type MapKey interface {
-	Storable
-	Value
-	Hashable
-	Equal(other Storable) bool
-}
+type MapKey Storable
 
 type MapValue Storable
 
@@ -38,11 +33,11 @@ type MapValue Storable
 type element interface {
 	fmt.Stringer
 
-	Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error)
+	Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue) (MapValue, error)
 
 	// Set returns updated element, which may be a different type of element because of hash collision.
 	// Caller needs to save returned element.
-	Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error)
+	Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue, value MapValue) (element, error)
 
 	Size() uint32
 }
@@ -61,8 +56,8 @@ type elementGroup interface {
 type elements interface {
 	fmt.Stringer
 
-	Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error)
-	Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error
+	Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue) (MapValue, error)
+	Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue, value MapValue) error
 
 	Merge(elements) error
 	Split() (elements, elements, error)
@@ -88,6 +83,7 @@ type inlineCollisionGroup struct {
 	elements
 }
 
+var _ element = &inlineCollisionGroup{}
 var _ elementGroup = &inlineCollisionGroup{}
 
 type externalCollisionGroup struct {
@@ -95,6 +91,7 @@ type externalCollisionGroup struct {
 	size uint32
 }
 
+var _ element = &externalCollisionGroup{}
 var _ elementGroup = &externalCollisionGroup{}
 
 type hkeyElements struct {
@@ -159,10 +156,9 @@ type MapSlab interface {
 	Slab
 	fmt.Stringer
 
-	Has(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (bool, error)
-	Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error)
-	Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error
-	Remove(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error)
+	Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue) (MapValue, error)
+	Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue, value MapValue) error
+	Remove(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue) (MapValue, error)
 
 	IsData() bool
 
@@ -205,8 +201,13 @@ func newSingleElement(key MapKey, value MapValue) *singleElement {
 	}
 }
 
-func (e *singleElement) Get(_ SlabStorage, _ Hasher, _ []uint64, _ []uint64, key MapKey) (MapValue, error) {
-	if e.key.Equal(key) {
+func (e *singleElement) Get(storage SlabStorage, _ Hasher, _ []uint64, _ []uint64, key ComparableValue) (MapValue, error) {
+	kv, err := e.key.StoredValue(storage)
+	if err != nil {
+		return nil, err
+	}
+
+	if key.Equal(kv) {
 		return e.value, nil
 	}
 	return nil, fmt.Errorf("key %s not found", key)
@@ -216,8 +217,19 @@ func (e *singleElement) Get(_ SlabStorage, _ Hasher, _ []uint64, _ []uint64, key
 // NOTE: Existing key needs to be rehashed because we store minimum digest for non-collision element.
 //       Rehashing only happens when we create new inlineCollisionGroup.
 //       Adding new element to existing inlineCollisionGroup doesn't require rehashing.
-func (e *singleElement) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error) {
-	if e.key.Equal(key) {
+func (e *singleElement) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue, value MapValue) (element, error) {
+
+	v, err := e.key.StoredValue(storage)
+	if err != nil {
+		return nil, err
+	}
+
+	kv, ok := v.(ComparableValue)
+	if !ok {
+		return nil, errors.New("existing key doesn't implement ComparableValue interface")
+	}
+
+	if key.Equal(kv) {
 		e.value = value
 		e.size = e.key.ByteSize() + e.value.ByteSize()
 		return e, nil
@@ -228,10 +240,11 @@ func (e *singleElement) Set(storage SlabStorage, address Address, h Hasher, hkey
 	// Rehash existing key if needed (see function comment)
 	var existingKeyHkey []uint64
 	if len(hkeys) > 0 {
-		v, err := h.Hash(e.key)
+		v, err := h.Hash(kv)
 		if err != nil {
 			return nil, err
 		}
+
 		existingKeyHkey = v[len(hkeyPrefixes):]
 	}
 
@@ -246,12 +259,11 @@ func (e *singleElement) Set(storage SlabStorage, address Address, h Hasher, hkey
 		elements = &hkeyElements{hkeyPrefixes: collisionHkeyPrefixes}
 	}
 
-	var err error
 	var newElem element
 
 	newElem = &inlineCollisionGroup{elements: elements}
 
-	newElem, err = newElem.Set(storage, address, h, hkeyPrefixes, existingKeyHkey, e.key, e.value)
+	newElem, err = newElem.Set(storage, address, h, hkeyPrefixes, existingKeyHkey, kv, e.value)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +284,7 @@ func (e *singleElement) String() string {
 	return fmt.Sprintf("%s:%s", e.key, e.value)
 }
 
-func (e *inlineCollisionGroup) Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error) {
+func (e *inlineCollisionGroup) Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue) (MapValue, error) {
 
 	// Adjust hkeyPrefixes and hkey for collision group
 	hkeyPrefixes = append(hkeyPrefixes, hkeys[0])
@@ -282,7 +294,7 @@ func (e *inlineCollisionGroup) Get(storage SlabStorage, h Hasher, hkeyPrefixes [
 	return e.elements.Get(storage, h, hkeyPrefixes, hkeys, key)
 }
 
-func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error) {
+func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue, value MapValue) (element, error) {
 
 	// Adjust hkeyPrefixes and hkey for collision group
 	hkeyPrefixes = append(hkeyPrefixes, hkeys[0])
@@ -343,7 +355,7 @@ func (e *inlineCollisionGroup) String() string {
 	return "inline [" + e.elements.String() + "]"
 }
 
-func (e *externalCollisionGroup) Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error) {
+func (e *externalCollisionGroup) Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue) (MapValue, error) {
 	slab, err := getMapSlab(storage, e.id)
 	if err != nil {
 		return nil, err
@@ -357,7 +369,7 @@ func (e *externalCollisionGroup) Get(storage SlabStorage, h Hasher, hkeyPrefixes
 	return slab.Get(storage, h, hkeyPrefixes, hkeys, key)
 }
 
-func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) (element, error) {
+func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue, value MapValue) (element, error) {
 	slab, err := getMapSlab(storage, e.id)
 	if err != nil {
 		return nil, err
@@ -398,7 +410,7 @@ func (e *externalCollisionGroup) String() string {
 	return fmt.Sprintf("external group(%d)", e.id)
 }
 
-func (e *hkeyElements) Get(storage SlabStorage, h Hasher, hkeyPrefixes, hkeys []uint64, key MapKey) (MapValue, error) {
+func (e *hkeyElements) Get(storage SlabStorage, h Hasher, hkeyPrefixes, hkeys []uint64, key ComparableValue) (MapValue, error) {
 
 	// Check hkeys are not empty
 	if len(hkeys) == 0 {
@@ -434,14 +446,19 @@ func (e *hkeyElements) Get(storage SlabStorage, h Hasher, hkeyPrefixes, hkeys []
 	return elem.Get(storage, h, hkeyPrefixes, hkeys, key)
 }
 
-func (e *hkeyElements) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error {
+func (e *hkeyElements) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue, value MapValue) error {
 
 	// Check hkeys are not empty
 	if len(hkeys) == 0 {
 		panic(fmt.Sprintf("hkeyElements.Set(%v, %v) hkeys are empty", hkeyPrefixes, hkeys))
 	}
 
-	newElem := newSingleElement(key, value)
+	ks, err := key.Storable(storage, address)
+	if err != nil {
+		return err
+	}
+
+	newElem := newSingleElement(ks, value)
 
 	hkey := hkeys[0]
 
@@ -660,7 +677,7 @@ func (e *hkeyElements) String() string {
 	return strings.Join(s, " ")
 }
 
-func (e *singleElements) Get(storage SlabStorage, h Hasher, hkeyPrefixes, hkeys []uint64, key MapKey) (MapValue, error) {
+func (e *singleElements) Get(storage SlabStorage, h Hasher, hkeyPrefixes, hkeys []uint64, key ComparableValue) (MapValue, error) {
 
 	if len(hkeys) > 0 {
 		panic(fmt.Sprintf("singleElements.Get(%v, %v) hkeys are not empty", hkeyPrefixes, hkeys))
@@ -668,7 +685,11 @@ func (e *singleElements) Get(storage SlabStorage, h Hasher, hkeyPrefixes, hkeys 
 
 	// linear search by key
 	for _, elem := range e.elems {
-		if elem.key.Equal(key) {
+		ek, err := elem.key.StoredValue(storage)
+		if err != nil {
+			return nil, err
+		}
+		if key.Equal(ek) {
 			return elem.value, nil
 		}
 	}
@@ -676,7 +697,7 @@ func (e *singleElements) Get(storage SlabStorage, h Hasher, hkeyPrefixes, hkeys 
 	return nil, fmt.Errorf("key %s not found", key)
 }
 
-func (e *singleElements) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error {
+func (e *singleElements) Set(storage SlabStorage, address Address, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue, value MapValue) error {
 
 	if len(hkeys) > 0 {
 		panic(fmt.Sprintf("singleElements.Set(%v, %v) hkeys are not empty", hkeyPrefixes, hkeys))
@@ -685,7 +706,11 @@ func (e *singleElements) Set(storage SlabStorage, address Address, h Hasher, hke
 	// linear search key and update value
 	for i := 0; i < len(e.elems); i++ {
 		elem := e.elems[i]
-		if elem.key.Equal(key) {
+		ek, err := elem.key.StoredValue(storage)
+		if err != nil {
+			return err
+		}
+		if key.Equal(ek) {
 			oldSize := elem.Size()
 
 			elem.value = value
@@ -697,8 +722,13 @@ func (e *singleElements) Set(storage SlabStorage, address Address, h Hasher, hke
 		}
 	}
 
+	ks, err := key.Storable(storage, address)
+	if err != nil {
+		return err
+	}
+
 	// no matching key, append new element to the end.
-	newElem := newSingleElement(key, value)
+	newElem := newSingleElement(ks, value)
 	e.elems = append(e.elems, newElem)
 	e.size += newElem.size
 
@@ -832,15 +862,7 @@ func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	}, nil
 }
 
-func (m *MapDataSlab) Has(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (bool, error) {
-	_, err := m.Get(storage, h, hkeyPrefixes, hkeys, key)
-	if err != nil {
-		return false, nil
-	}
-	return true, nil
-}
-
-func (m *MapDataSlab) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error {
+func (m *MapDataSlab) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue, value MapValue) error {
 
 	err := m.elements.Set(storage, m.ID().Address, h, hkeyPrefixes, hkeys, key, value)
 	if err != nil {
@@ -857,7 +879,7 @@ func (m *MapDataSlab) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, 
 	return storage.Store(m.header.id, m)
 }
 
-func (m *MapDataSlab) Remove(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error) {
+func (m *MapDataSlab) Remove(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue) (MapValue, error) {
 	// TODO: implement me
 	return nil, errors.New("not implemented")
 }
@@ -1009,15 +1031,7 @@ func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	}, nil
 }
 
-func (m *MapMetaDataSlab) Has(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (bool, error) {
-	_, err := m.Get(storage, h, hkeyPrefixes, hkeys, key)
-	if err != nil {
-		return false, nil
-	}
-	return true, nil
-}
-
-func (m *MapMetaDataSlab) Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error) {
+func (m *MapMetaDataSlab) Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue) (MapValue, error) {
 	if len(hkeys) == 0 {
 		panic("MapMetaDataSlab.Get() hkeys is empty")
 	}
@@ -1052,7 +1066,7 @@ func (m *MapMetaDataSlab) Get(storage SlabStorage, h Hasher, hkeyPrefixes []uint
 	return child.Get(storage, h, hkeyPrefixes, hkeys, key)
 }
 
-func (m *MapMetaDataSlab) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey, value MapValue) error {
+func (m *MapMetaDataSlab) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue, value MapValue) error {
 	if len(hkeys) == 0 {
 		panic("MapMetaDataSlab.Set() hkeys is empty")
 	}
@@ -1103,7 +1117,7 @@ func (m *MapMetaDataSlab) Set(storage SlabStorage, h Hasher, hkeyPrefixes []uint
 	return storage.Store(m.header.id, m)
 }
 
-func (m *MapMetaDataSlab) Remove(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key MapKey) (MapValue, error) {
+func (m *MapMetaDataSlab) Remove(storage SlabStorage, h Hasher, hkeyPrefixes []uint64, hkeys []uint64, key ComparableValue) (MapValue, error) {
 	// TODO: implement me
 	return nil, errors.New("not implemented")
 }
@@ -1554,15 +1568,16 @@ func NewMap(storage SlabStorage, address Address, hasher Hasher, typeInfo string
 	}, nil
 }
 
-func (m *OrderedMap) Has(key MapKey) (bool, error) {
-	hkeys, err := m.hasher.Hash(key)
+func (m *OrderedMap) Has(key ComparableValue) (bool, error) {
+	_, err := m.Get(key)
 	if err != nil {
-		return false, err
+		return false, nil
 	}
-	return m.root.Has(m.storage, m.hasher, nil, hkeys, key)
+	return true, nil
 }
 
-func (m *OrderedMap) Get(key MapKey) (Value, error) {
+func (m *OrderedMap) Get(key ComparableValue) (Value, error) {
+
 	hkeys, err := m.hasher.Hash(key)
 	if err != nil {
 		return nil, err
@@ -1576,19 +1591,19 @@ func (m *OrderedMap) Get(key MapKey) (Value, error) {
 	return v.StoredValue(m.storage)
 }
 
-func (m *OrderedMap) Set(key MapKey, value Value) error {
-
-	storable, err := value.Storable(m.storage, m.Address())
-	if err != nil {
-		return err
-	}
+func (m *OrderedMap) Set(key ComparableValue, value Value) error {
 
 	hkeys, err := m.hasher.Hash(key)
 	if err != nil {
 		return err
 	}
 
-	err = m.root.Set(m.storage, m.hasher, nil, hkeys, key, storable)
+	valueStorable, err := value.Storable(m.storage, m.Address())
+	if err != nil {
+		return err
+	}
+
+	err = m.root.Set(m.storage, m.hasher, nil, hkeys, key, valueStorable)
 	if err != nil {
 		return err
 	}
@@ -1675,7 +1690,7 @@ func (m *OrderedMap) Set(key MapKey, value Value) error {
 	return nil
 }
 
-func (m *OrderedMap) Remove(key MapKey) (Value, error) {
+func (m *OrderedMap) Remove(key ComparableValue) (Value, error) {
 	// TODO: implement me
 	return nil, errors.New("not implemented")
 }

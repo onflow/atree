@@ -25,7 +25,7 @@ type Uint8Value uint8
 
 var _ Value = Uint8Value(0)
 var _ Storable = Uint8Value(0)
-var _ MapKey = Uint8Value(0)
+var _ ComparableValue = Uint8Value(0)
 
 func (v Uint8Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
@@ -74,7 +74,7 @@ func (v Uint8Value) HashCode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (v Uint8Value) Equal(other Storable) bool {
+func (v Uint8Value) Equal(other Value) bool {
 	otherUint8, ok := other.(Uint8Value)
 	if !ok {
 		return false
@@ -96,7 +96,7 @@ type Uint16Value uint16
 
 var _ Value = Uint16Value(0)
 var _ Storable = Uint16Value(0)
-var _ MapKey = Uint16Value(0)
+var _ ComparableValue = Uint16Value(0)
 
 func (v Uint16Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
@@ -139,7 +139,7 @@ func (v Uint16Value) HashCode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (v Uint16Value) Equal(other Storable) bool {
+func (v Uint16Value) Equal(other Value) bool {
 	otherUint16, ok := other.(Uint16Value)
 	if !ok {
 		return false
@@ -161,7 +161,7 @@ type Uint32Value uint32
 
 var _ Value = Uint32Value(0)
 var _ Storable = Uint32Value(0)
-var _ MapKey = Uint32Value(0)
+var _ ComparableValue = Uint32Value(0)
 
 func (v Uint32Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
@@ -209,7 +209,7 @@ func (v Uint32Value) HashCode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (v Uint32Value) Equal(other Storable) bool {
+func (v Uint32Value) Equal(other Value) bool {
 	otherUint32, ok := other.(Uint32Value)
 	if !ok {
 		return false
@@ -231,7 +231,7 @@ type Uint64Value uint64
 
 var _ Value = Uint64Value(0)
 var _ Storable = Uint64Value(0)
-var _ MapKey = Uint64Value(0)
+var _ ComparableValue = Uint64Value(0)
 
 func (v Uint64Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
@@ -279,7 +279,7 @@ func (v Uint64Value) HashCode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (v Uint64Value) Equal(other Storable) bool {
+func (v Uint64Value) Equal(other Value) bool {
 	otherUint64, ok := other.(Uint64Value)
 	if !ok {
 		return false
@@ -304,7 +304,7 @@ type StringValue struct {
 
 var _ Value = &StringValue{}
 var _ Storable = &StringValue{}
-var _ MapKey = &StringValue{}
+var _ ComparableValue = &StringValue{}
 
 func NewStringValue(s string) *StringValue {
 	size := GetUintCBORSize(uint64(len(s))) + uint32(len(s))
@@ -364,7 +364,7 @@ func (v *StringValue) HashCode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (v *StringValue) Equal(other Storable) bool {
+func (v *StringValue) Equal(other Value) bool {
 	otherString, ok := other.(*StringValue)
 	if !ok {
 		return false

@@ -57,7 +57,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		uniqueKeyValues := make(map[MapKey]Value, mapSize)
+		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
@@ -106,7 +106,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		uniqueKeyValues := make(map[MapKey]Value, mapSize)
+		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
@@ -213,8 +213,8 @@ func TestMapHas(t *testing.T) {
 	storage := newTestInMemoryStorage(t)
 
 	// Only first half of unique keys are inserted into the map.
-	uniqueKeyValues := make(map[MapKey]Uint64Value, mapSize*2)
-	uniqueKeys := make([]MapKey, mapSize*2)
+	uniqueKeyValues := make(map[ComparableValue]Uint64Value, mapSize*2)
+	uniqueKeys := make([]ComparableValue, mapSize*2)
 	for i := uint64(0); i < mapSize*2; i++ {
 		for {
 			s := randStr(16)
@@ -340,11 +340,11 @@ func TestMapIterate(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		uniqueKeyValues := make(map[MapKey]Value, mapSize)
+		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
 
-		sortedKeys := make([]MapKey, mapSize)
+		sortedKeys := make([]ComparableValue, mapSize)
 
-		keys := make([]MapKey, mapSize)
+		keys := make([]ComparableValue, mapSize)
 
 		for i := uint64(0); i < mapSize; i++ {
 			for {
@@ -398,7 +398,7 @@ func TestMapIterate(t *testing.T) {
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
 			require.Equal(t, sortedKeys[i], k)
 
-			mk, ok := k.(MapKey)
+			mk, ok := k.(ComparableValue)
 			require.True(t, ok)
 			require.Equal(t, uniqueKeyValues[mk], v)
 
@@ -436,7 +436,7 @@ func TestMapHashCollision(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		uniqueKeyValues := make(map[MapKey]Value, mapSize)
+		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
@@ -496,7 +496,7 @@ func TestMapHashCollision(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		uniqueKeyValues := make(map[MapKey]Value, mapSize)
+		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)

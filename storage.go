@@ -22,6 +22,14 @@ type (
 	}
 )
 
+func (id StorageID) String() string {
+	return fmt.Sprintf(
+		"0x%x.%d",
+		binary.BigEndian.Uint64(id.Address[:]),
+		binary.BigEndian.Uint64(id.Index[:]),
+	)
+}
+
 var (
 	AddressUndefined      = Address{}
 	StorageIndexUndefined = StorageIndex{}

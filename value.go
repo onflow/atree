@@ -7,6 +7,7 @@ package atree
 type Value interface {
 	Storable(SlabStorage, Address) (Storable, error)
 	DeepCopy(SlabStorage, Address) (Value, error)
+	DeepRemove(storage SlabStorage) error
 }
 
 type ComparableValue interface {

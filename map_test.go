@@ -546,3 +546,56 @@ func TestMapHashCollision(t *testing.T) {
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
 	})
 }
+
+func TestMapLargeElement(t *testing.T) {
+
+	SetThreshold(512)
+	defer func() {
+		SetThreshold(1024)
+	}()
+
+	const typeInfo = "map[string]string"
+
+	const mapSize = 2 * 1024
+
+	const keySize = 512
+	const valueSize = 512
+
+	strs := make(map[string]string, mapSize)
+	for i := uint64(0); i < mapSize; i++ {
+		k := randStr(keySize)
+		v := randStr(valueSize)
+		strs[k] = v
+	}
+
+	storage := newTestInMemoryStorage(t)
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	m, err := NewMap(storage, address, &sipHash128{secretkey}, typeInfo)
+	require.NoError(t, err)
+
+	for k, v := range strs {
+		err := m.Set(NewStringValue(k), NewStringValue(v))
+		require.NoError(t, err)
+	}
+
+	for k, v := range strs {
+		e, err := m.Get(NewStringValue(k))
+		require.NoError(t, err)
+
+		sv, ok := e.(*StringValue)
+		require.True(t, ok)
+		require.Equal(t, v, sv.str)
+	}
+
+	require.Equal(t, typeInfo, m.Type())
+	require.Equal(t, uint64(mapSize), m.Count())
+
+	verified, err := m.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
+
+	stats, _ := m.Stats()
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+mapSize*2, uint64(m.storage.Count()))
+}

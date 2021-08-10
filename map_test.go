@@ -1,6 +1,7 @@
 package atree
 
 import (
+	"fmt"
 	"math/rand"
 	"sort"
 	"testing"
@@ -14,14 +15,40 @@ type mockHasher struct {
 	mock.Mock
 }
 
-func (h *mockHasher) Hash(hashable Hashable) ([]uint64, error) {
+type mockHasherDigest struct {
+	d []uint64
+}
+
+func (h *mockHasher) Digest(hashable Hashable) (Digest, error) {
 	args := h.Called(hashable)
-	return args.Get(0).([]uint64), nil
+	return args.Get(0).(mockHasherDigest), nil
 }
 
 func (h *mockHasher) DigestSize() int {
 	args := h.Called()
 	return args.Get(0).(int)
+}
+
+func (d mockHasherDigest) DigestPrefix(level int) ([]uint64, error) {
+	if level > len(d.d) {
+		return nil, fmt.Errorf("digest level %d out of bounds", level)
+	}
+	return d.d[:level], nil
+}
+
+func (d mockHasherDigest) Digest(level int) (uint64, error) {
+	if level >= len(d.d) {
+		return 0, fmt.Errorf("digest level %d out of bounds", level)
+	}
+	return d.d[level], nil
+}
+
+func (d mockHasherDigest) Size() int {
+	return 8 * len(d.d)
+}
+
+func (d mockHasherDigest) Levels() int {
+	return len(d.d)
 }
 
 var (
@@ -289,10 +316,16 @@ func TestMapIterate(t *testing.T) {
 
 		// Sort keys by hashed value
 		sort.SliceStable(sortedKeys, func(i, j int) bool {
-			digest1, err := hasher.Hash(sortedKeys[i])
+			d1, err := hasher.Digest(sortedKeys[i])
 			require.NoError(t, err)
 
-			digest2, err := hasher.Hash(sortedKeys[j])
+			digest1, err := d1.DigestPrefix(d1.Levels())
+			require.NoError(t, err)
+
+			d2, err := hasher.Digest(sortedKeys[j])
+			require.NoError(t, err)
+
+			digest2, err := d2.DigestPrefix(d2.Levels())
 			require.NoError(t, err)
 
 			for z := 0; z < len(digest1); z++ {
@@ -365,7 +398,7 @@ func TestMapIterate(t *testing.T) {
 					digest1 := rand.Intn(256)
 					digest2 := rand.Intn(256)
 
-					hasher.On("Hash", k).Return([]uint64{uint64(digest1), uint64(digest2)})
+					hasher.On("Digest", k).Return(mockHasherDigest{[]uint64{uint64(digest1), uint64(digest2)}})
 					break
 				}
 			}
@@ -373,10 +406,17 @@ func TestMapIterate(t *testing.T) {
 
 		// Sort keys by hashed value
 		sort.SliceStable(sortedKeys, func(i, j int) bool {
-			digest1, err := hasher.Hash(sortedKeys[i])
+
+			d1, err := hasher.Digest(sortedKeys[i])
 			require.NoError(t, err)
 
-			digest2, err := hasher.Hash(sortedKeys[j])
+			digest1, err := d1.DigestPrefix(d1.Levels())
+			require.NoError(t, err)
+
+			d2, err := hasher.Digest(sortedKeys[j])
+			require.NoError(t, err)
+
+			digest2, err := d2.DigestPrefix(d2.Levels())
 			require.NoError(t, err)
 
 			for z := 0; z < len(digest1); z++ {
@@ -419,6 +459,11 @@ func TestMapIterate(t *testing.T) {
 
 func TestMapHashCollision(t *testing.T) {
 
+	SetThreshold(512)
+	defer func() {
+		SetThreshold(1024)
+	}()
+
 	t.Run("deterministic", func(t *testing.T) {
 		const mapSize = 2 * 1024
 
@@ -451,7 +496,7 @@ func TestMapHashCollision(t *testing.T) {
 
 					digest := digests[i%mockDigestCount]
 
-					hasher.On("Hash", k).Return(digest)
+					hasher.On("Digest", k).Return(mockHasherDigest{digest})
 
 					break
 				}
@@ -512,7 +557,7 @@ func TestMapHashCollision(t *testing.T) {
 					digest1 := rand.Intn(256)
 					digest2 := rand.Intn(256)
 
-					hasher.On("Hash", k).Return([]uint64{uint64(digest1), uint64(digest2)})
+					hasher.On("Digest", k).Return(mockHasherDigest{[]uint64{uint64(digest1), uint64(digest2)}})
 
 					break
 				}

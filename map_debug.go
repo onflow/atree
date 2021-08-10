@@ -155,7 +155,7 @@ func (m *OrderedMap) valid() (bool, error) {
 	return m._valid(m.root.Header().id, 0)
 }
 
-func (m *OrderedMap) _validElements(id StorageID, h Hasher, elements elements, level int) (uint32, error) {
+func (m *OrderedMap) _validElements(id StorageID, h Hasher, elements elements, level int, hkeyPrefixes []uint64) (uint32, error) {
 
 	hkeyLen := h.DigestSize() / 8
 
@@ -165,7 +165,7 @@ func (m *OrderedMap) _validElements(id StorageID, h Hasher, elements elements, l
 			return 0, fmt.Errorf("slab %d, element level %d, elements is wrong type %T, expect *hkeyElements",
 				id, level, elements)
 		}
-		return m._validHkeyElements(id, h, elems, level)
+		return m._validHkeyElements(id, h, elems, level, hkeyPrefixes)
 	}
 
 	elems, ok := elements.(*singleElements)
@@ -173,14 +173,14 @@ func (m *OrderedMap) _validElements(id StorageID, h Hasher, elements elements, l
 		return 0, fmt.Errorf("slab %d, element level %d, elements is wrong type %T, expect *singlElements",
 			id, level, elements)
 	}
-	return m._validSingleElements(id, h, elems, level)
+	return m._validSingleElements(id, h, elems, level, hkeyPrefixes)
 }
 
-func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyElements, level int) (uint32, error) {
+func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyElements, level int, hkeyPrefixes []uint64) (uint32, error) {
 
-	if level != len(elements.hkeyPrefixes) {
-		return 0, fmt.Errorf("slab %d, element level %d, hkeyPrefixes is wrong length %d, expect %d",
-			id, level, len(elements.hkeyPrefixes), level)
+	if level != elements.level {
+		return 0, fmt.Errorf("slab %d, level %d, expect %d",
+			id, elements.level, level)
 	}
 
 	if len(elements.hkeys) != len(elements.elems) {
@@ -205,7 +205,11 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyEl
 				return 0, err
 			}
 
-			_, err = m._validElements(id, h, ge, level+1)
+			var prefixes []uint64
+			prefixes = append(prefixes, hkeyPrefixes...)
+			prefixes = append(prefixes, elements.hkeys[i])
+
+			_, err = m._validElements(id, h, ge, level+1, prefixes)
 			if err != nil {
 				return 0, err
 			}
@@ -237,14 +241,17 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyEl
 			}
 
 			// Verify single element hashed value
-			computedHkey, err := h.Hash(ck)
+			d, err := h.Digest(ck)
+			if err != nil {
+				return 0, err
+			}
+			computedHkey, err := d.DigestPrefix(d.Levels())
 			if err != nil {
 				return 0, err
 			}
 
-			// Combine element's hkeyPrefixes with hkey
-			hkeys := make([]uint64, 0, len(elements.hkeyPrefixes)+1)
-			hkeys = append(hkeys, elements.hkeyPrefixes...)
+			var hkeys []uint64
+			hkeys = append(hkeys, hkeyPrefixes...)
 			hkeys = append(hkeys, elements.hkeys[i])
 
 			if !reflect.DeepEqual(hkeys, computedHkey[:len(hkeys)]) {
@@ -264,11 +271,11 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyEl
 	return size, nil
 }
 
-func (m *OrderedMap) _validSingleElements(id StorageID, h Hasher, elements *singleElements, level int) (uint32, error) {
+func (m *OrderedMap) _validSingleElements(id StorageID, h Hasher, elements *singleElements, level int, hkeyPrefixes []uint64) (uint32, error) {
 
-	if level != len(elements.hkeyPrefixes) {
-		return 0, fmt.Errorf("slab %d, element level %d, hkeyPrefixes is wrong length %d, expect %d",
-			id, level, len(elements.hkeyPrefixes), level)
+	if level != elements.level {
+		return 0, fmt.Errorf("slab %d, level %d, expect %d",
+			id, elements.level, level)
 	}
 
 	size := uint32(0)
@@ -293,14 +300,18 @@ func (m *OrderedMap) _validSingleElements(id StorageID, h Hasher, elements *sing
 		}
 
 		// Verify single element hashed value
-		computedHkey, err := h.Hash(ck)
+		digest, err := h.Digest(ck)
+		if err != nil {
+			return 0, err
+		}
+		computedHkey, err := digest.DigestPrefix(digest.Levels())
 		if err != nil {
 			return 0, err
 		}
 
-		if !reflect.DeepEqual(elements.hkeyPrefixes, computedHkey[:len(elements.hkeyPrefixes)]) {
+		if !reflect.DeepEqual(hkeyPrefixes, computedHkey) {
 			return 0, fmt.Errorf("slab %d, element level %d, element %s, hkey %v, computed hkeys %d",
-				id, level, elements.String(), elements.hkeyPrefixes, computedHkey)
+				id, level, elements.String(), hkeyPrefixes, computedHkey)
 		}
 
 		size += computedSize
@@ -326,18 +337,17 @@ func (m *OrderedMap) _valid(id StorageID, level int) (bool, error) {
 			return false, fmt.Errorf("slab %d is not MapDataSlab", id)
 		}
 
-		elementSize, err := m._validElements(id, m.hasher, dataSlab.elements, 0)
+		elementSize, err := m._validElements(id, m.hasher, dataSlab.elements, 0, nil)
 		if err != nil {
 			return false, err
 		}
-
-		computedSize := uint32(mapDataSlabPrefixSize) + elementSize
 
 		_, underflow := dataSlab.IsUnderflow()
 		validFill := (level == 0) || (!dataSlab.IsFull() && !underflow)
 
 		validFirstKey := dataSlab.elements.firstKey() == dataSlab.header.firstKey
 
+		computedSize := uint32(mapDataSlabPrefixSize) + elementSize
 		validSize := computedSize == dataSlab.header.size
 
 		return validFill && validFirstKey && validSize, nil
@@ -358,14 +368,14 @@ func (m *OrderedMap) _valid(id StorageID, level int) (bool, error) {
 	_, underflow := meta.IsUnderflow()
 	validFill := (level == 0) || (!meta.IsFull() && !underflow)
 
-	computedSize := uint32(len(meta.childrenHeaders)*mapSlabHeaderSize) + mapMetaDataSlabPrefixSize
-	validSize := computedSize == meta.header.size
-
 	validFirstKey := meta.childrenHeaders[0].firstKey == meta.header.firstKey
 
 	sortedHKey := sort.SliceIsSorted(meta.childrenHeaders, func(i, j int) bool {
 		return meta.childrenHeaders[i].firstKey < meta.childrenHeaders[j].firstKey
 	})
+
+	computedSize := uint32(len(meta.childrenHeaders)*mapSlabHeaderSize) + mapMetaDataSlabPrefixSize
+	validSize := computedSize == meta.header.size
 
 	return validFill && validFirstKey && sortedHKey && validSize, nil
 }

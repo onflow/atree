@@ -91,6 +91,7 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		require.Equal(t, typeInfo, m.Type())
+		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
 
 		stats, _ := m.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
@@ -147,6 +148,7 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		require.Equal(t, typeInfo, m.Type())
+		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
 
 		stats, _ := m.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
@@ -196,6 +198,7 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		require.Equal(t, typeInfo, m.Type())
+		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
 
 		stats, _ := m.Stats()
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
@@ -254,6 +257,7 @@ func TestMapHas(t *testing.T) {
 	}
 
 	require.Equal(t, typeInfo, m.Type())
+	require.Equal(t, uint64(mapSize), m.Count())
 }
 
 func TestMapIterate(t *testing.T) {

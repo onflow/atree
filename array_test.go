@@ -877,7 +877,7 @@ func TestDeepRemove(t *testing.T) {
 	err = storage.Commit()
 	require.NoError(t, err)
 
-	require.Equal(t, 0, storage.Count())
+	require.Equal(t, 1, storage.Count())
 }
 
 func TestConstRootStorageID(t *testing.T) {

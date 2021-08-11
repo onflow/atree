@@ -1954,7 +1954,9 @@ func (a *Array) DeepRemove(storage SlabStorage) error {
 		}
 	}
 
-	return a.root.DeepRemove(storage)
+	// Root slab will be removed by parent
+
+	return nil
 }
 
 func (a *Array) Count() uint64 {

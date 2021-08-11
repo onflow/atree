@@ -201,7 +201,7 @@ type SlabStorage interface {
 }
 
 type BasicSlabStorage struct {
-	slabs          map[StorageID]Slab
+	Slabs          map[StorageID]Slab
 	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
 	cborEncMode    cbor.EncMode
@@ -212,7 +212,7 @@ var _ SlabStorage = &BasicSlabStorage{}
 
 func NewBasicSlabStorage(cborEncMode cbor.EncMode, cborDecMode cbor.DecMode) *BasicSlabStorage {
 	return &BasicSlabStorage{
-		slabs:        make(map[StorageID]Slab),
+		Slabs:        make(map[StorageID]Slab),
 		storageIndex: make(map[Address]StorageIndex),
 		cborEncMode:  cborEncMode,
 		cborDecMode:  cborDecMode,
@@ -228,26 +228,26 @@ func (s *BasicSlabStorage) GenerateStorageID(address Address) StorageID {
 }
 
 func (s *BasicSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
-	slab, ok := s.slabs[id]
+	slab, ok := s.Slabs[id]
 	return slab, ok, nil
 }
 
 func (s *BasicSlabStorage) Store(id StorageID, slab Slab) error {
-	s.slabs[id] = slab
+	s.Slabs[id] = slab
 	return nil
 }
 
 func (s *BasicSlabStorage) Remove(id StorageID) {
-	delete(s.slabs, id)
+	delete(s.Slabs, id)
 }
 
 func (s *BasicSlabStorage) Count() int {
-	return len(s.slabs)
+	return len(s.Slabs)
 }
 
 func (s *BasicSlabStorage) StorageIDs() []StorageID {
-	result := make([]StorageID, 0, len(s.slabs))
-	for storageID := range s.slabs {
+	result := make([]StorageID, 0, len(s.Slabs))
+	for storageID := range s.Slabs {
 		result = append(result, storageID)
 	}
 	return result
@@ -257,7 +257,7 @@ func (s *BasicSlabStorage) StorageIDs() []StorageID {
 // This is currently used for testing.
 func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
 	m := make(map[StorageID][]byte)
-	for id, slab := range s.slabs {
+	for id, slab := range s.Slabs {
 		b, err := Encode(slab, s.cborEncMode)
 		if err != nil {
 			return nil, err
@@ -275,7 +275,7 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 		if err != nil {
 			return err
 		}
-		s.slabs[id] = slab
+		s.Slabs[id] = slab
 	}
 	return nil
 }

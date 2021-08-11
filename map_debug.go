@@ -155,28 +155,21 @@ func (m *OrderedMap) valid() (bool, error) {
 	return m._valid(m.root.Header().id, 0)
 }
 
-func (m *OrderedMap) _validElements(id StorageID, h Hasher, elements elements, level int, hkeyPrefixes []uint64) (uint32, error) {
+func (m *OrderedMap) _validElements(id StorageID, db DigesterBuilder, elements elements, level int, hkeyPrefixes []Digest) (uint32, error) {
 
-	hkeyLen := h.DigestSize() / 8
-
-	if level < hkeyLen {
-		elems, ok := elements.(*hkeyElements)
-		if !ok {
-			return 0, fmt.Errorf("slab %d, element level %d, elements is wrong type %T, expect *hkeyElements",
-				id, level, elements)
-		}
-		return m._validHkeyElements(id, h, elems, level, hkeyPrefixes)
+	if elems, ok := elements.(*hkeyElements); ok {
+		return m._validHkeyElements(id, db, elems, level, hkeyPrefixes)
 	}
 
-	elems, ok := elements.(*singleElements)
-	if !ok {
-		return 0, fmt.Errorf("slab %d, element level %d, elements is wrong type %T, expect *singlElements",
-			id, level, elements)
+	if elems, ok := elements.(*singleElements); ok {
+		return m._validSingleElements(id, db, elems, level, hkeyPrefixes)
 	}
-	return m._validSingleElements(id, h, elems, level, hkeyPrefixes)
+
+	return 0, fmt.Errorf("slab %d, element level %d, elements is wrong type %T, expect *hkeyElements, or *singleElements",
+		id, level, elements)
 }
 
-func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyElements, level int, hkeyPrefixes []uint64) (uint32, error) {
+func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, elements *hkeyElements, level int, hkeyPrefixes []Digest) (uint32, error) {
 
 	if level != elements.level {
 		return 0, fmt.Errorf("slab %d, level %d, expect %d",
@@ -205,11 +198,11 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyEl
 				return 0, err
 			}
 
-			var prefixes []uint64
+			var prefixes []Digest
 			prefixes = append(prefixes, hkeyPrefixes...)
 			prefixes = append(prefixes, elements.hkeys[i])
 
-			_, err = m._validElements(id, h, ge, level+1, prefixes)
+			_, err = m._validElements(id, db, ge, level+1, prefixes)
 			if err != nil {
 				return 0, err
 			}
@@ -241,7 +234,7 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyEl
 			}
 
 			// Verify single element hashed value
-			d, err := h.Digest(ck)
+			d, err := db.Digest(ck)
 			if err != nil {
 				return 0, err
 			}
@@ -250,7 +243,7 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyEl
 				return 0, err
 			}
 
-			var hkeys []uint64
+			var hkeys []Digest
 			hkeys = append(hkeys, hkeyPrefixes...)
 			hkeys = append(hkeys, elements.hkeys[i])
 
@@ -271,7 +264,7 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, h Hasher, elements *hkeyEl
 	return size, nil
 }
 
-func (m *OrderedMap) _validSingleElements(id StorageID, h Hasher, elements *singleElements, level int, hkeyPrefixes []uint64) (uint32, error) {
+func (m *OrderedMap) _validSingleElements(id StorageID, db DigesterBuilder, elements *singleElements, level int, hkeyPrefixes []Digest) (uint32, error) {
 
 	if level != elements.level {
 		return 0, fmt.Errorf("slab %d, level %d, expect %d",
@@ -300,7 +293,7 @@ func (m *OrderedMap) _validSingleElements(id StorageID, h Hasher, elements *sing
 		}
 
 		// Verify single element hashed value
-		digest, err := h.Digest(ck)
+		digest, err := db.Digest(ck)
 		if err != nil {
 			return 0, err
 		}
@@ -337,7 +330,7 @@ func (m *OrderedMap) _valid(id StorageID, level int) (bool, error) {
 			return false, fmt.Errorf("slab %d is not MapDataSlab", id)
 		}
 
-		elementSize, err := m._validElements(id, m.hasher, dataSlab.elements, 0, nil)
+		elementSize, err := m._validElements(id, m.digesterBuilder, dataSlab.elements, 0, nil)
 		if err != nil {
 			return false, err
 		}

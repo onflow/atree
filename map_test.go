@@ -11,43 +11,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type mockHasher struct {
+type mockDigesterBuilder struct {
 	mock.Mock
 }
 
-type mockHasherDigest struct {
-	d []uint64
+var _ DigesterBuilder = &mockDigesterBuilder{}
+
+type mockDigester struct {
+	d []Digest
 }
 
-func (h *mockHasher) Digest(hashable Hashable) (Digest, error) {
+var _ Digester = &mockDigester{}
+
+func (h *mockDigesterBuilder) Digest(hashable Hashable) (Digester, error) {
 	args := h.Called(hashable)
-	return args.Get(0).(mockHasherDigest), nil
+	return args.Get(0).(mockDigester), nil
 }
 
-func (h *mockHasher) DigestSize() int {
-	args := h.Called()
-	return args.Get(0).(int)
-}
-
-func (d mockHasherDigest) DigestPrefix(level int) ([]uint64, error) {
+func (d mockDigester) DigestPrefix(level int) ([]Digest, error) {
 	if level > len(d.d) {
 		return nil, fmt.Errorf("digest level %d out of bounds", level)
 	}
 	return d.d[:level], nil
 }
 
-func (d mockHasherDigest) Digest(level int) (uint64, error) {
+func (d mockDigester) Digest(level int) (Digest, error) {
 	if level >= len(d.d) {
 		return 0, fmt.Errorf("digest level %d out of bounds", level)
 	}
 	return d.d[level], nil
 }
 
-func (d mockHasherDigest) Size() int {
-	return 8 * len(d.d)
-}
-
-func (d mockHasherDigest) Levels() int {
+func (d mockDigester) Levels() int {
 	return len(d.d)
 }
 
@@ -96,7 +91,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, &sipHash128{secretkey}, typeInfo)
+		m, err := NewMap(storage, address, NewBasicDigesterBuilder(secretkey), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -146,7 +141,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, &sipHash128{secretkey}, typeInfo)
+		m, err := NewMap(storage, address, NewBasicDigesterBuilder(secretkey), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -206,7 +201,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		m, err := NewMap(storage, address, &sipHash128{secretkey}, typeInfo)
+		m, err := NewMap(storage, address, NewBasicDigesterBuilder(secretkey), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -257,7 +252,7 @@ func TestMapHas(t *testing.T) {
 		}
 	}
 
-	m, err := NewMap(storage, address, &sipHash128{secretkey}, typeInfo)
+	m, err := NewMap(storage, address, NewBasicDigesterBuilder(secretkey), typeInfo)
 	require.NoError(t, err)
 
 	for _, k := range uniqueKeys[:mapSize] {
@@ -297,7 +292,7 @@ func TestMapIterate(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		hasher := &sipHash128{secretkey}
+		digesterBuilder := NewBasicDigesterBuilder(secretkey)
 
 		uniqueKeyValues := make(map[string]uint64, mapSize)
 
@@ -316,13 +311,13 @@ func TestMapIterate(t *testing.T) {
 
 		// Sort keys by hashed value
 		sort.SliceStable(sortedKeys, func(i, j int) bool {
-			d1, err := hasher.Digest(sortedKeys[i])
+			d1, err := digesterBuilder.Digest(sortedKeys[i])
 			require.NoError(t, err)
 
 			digest1, err := d1.DigestPrefix(d1.Levels())
 			require.NoError(t, err)
 
-			d2, err := hasher.Digest(sortedKeys[j])
+			d2, err := digesterBuilder.Digest(sortedKeys[j])
 			require.NoError(t, err)
 
 			digest2, err := d2.DigestPrefix(d2.Levels())
@@ -336,7 +331,7 @@ func TestMapIterate(t *testing.T) {
 			return i < j // sort by insertion order with hash collision
 		})
 
-		m, err := NewMap(storage, address, hasher, typeInfo)
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -372,8 +367,7 @@ func TestMapIterate(t *testing.T) {
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		hasher := &mockHasher{}
-		hasher.On("DigestSize", mock.Anything).Return(16)
+		digesterBuilder := &mockDigesterBuilder{}
 
 		storage := newTestInMemoryStorage(t)
 
@@ -395,10 +389,10 @@ func TestMapIterate(t *testing.T) {
 					keys[i] = k
 					uniqueKeyValues[k] = v
 
-					digest1 := rand.Intn(256)
-					digest2 := rand.Intn(256)
+					digest1 := Digest(rand.Intn(256))
+					digest2 := Digest(rand.Intn(256))
 
-					hasher.On("Digest", k).Return(mockHasherDigest{[]uint64{uint64(digest1), uint64(digest2)}})
+					digesterBuilder.On("Digest", k).Return(mockDigester{[]Digest{digest1, digest2}})
 					break
 				}
 			}
@@ -407,13 +401,13 @@ func TestMapIterate(t *testing.T) {
 		// Sort keys by hashed value
 		sort.SliceStable(sortedKeys, func(i, j int) bool {
 
-			d1, err := hasher.Digest(sortedKeys[i])
+			d1, err := digesterBuilder.Digest(sortedKeys[i])
 			require.NoError(t, err)
 
 			digest1, err := d1.DigestPrefix(d1.Levels())
 			require.NoError(t, err)
 
-			d2, err := hasher.Digest(sortedKeys[j])
+			d2, err := digesterBuilder.Digest(sortedKeys[j])
 			require.NoError(t, err)
 
 			digest2, err := d2.DigestPrefix(d2.Levels())
@@ -427,7 +421,7 @@ func TestMapIterate(t *testing.T) {
 			return i < j // sort by insertion order with hash collision
 		})
 
-		m, err := NewMap(storage, address, hasher, typeInfo)
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
 		for _, k := range keys {
@@ -473,14 +467,13 @@ func TestMapHashCollision(t *testing.T) {
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		hasher := &mockHasher{}
-		hasher.On("DigestSize", mock.Anything).Return(16)
+		digesterBuilder := &mockDigesterBuilder{}
 
-		digests := make([][]uint64, 0, mockDigestCount)
+		digests := make([][]Digest, 0, mockDigestCount)
 		for i := 0; i < mockDigestCount; i++ {
-			digest1 := uint64(rand.Intn(256))
-			digest2 := uint64(rand.Intn(256))
-			digests = append(digests, []uint64{digest1, digest2})
+			digest1 := Digest(uint64(rand.Intn(256)))
+			digest2 := Digest(uint64(rand.Intn(256)))
+			digests = append(digests, []Digest{digest1, digest2})
 		}
 
 		storage := newTestInMemoryStorage(t)
@@ -496,14 +489,14 @@ func TestMapHashCollision(t *testing.T) {
 
 					digest := digests[i%mockDigestCount]
 
-					hasher.On("Digest", k).Return(mockHasherDigest{digest})
+					digesterBuilder.On("Digest", k).Return(mockDigester{digest})
 
 					break
 				}
 			}
 		}
 
-		m, err := NewMap(storage, address, hasher, typeInfo)
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -540,8 +533,7 @@ func TestMapHashCollision(t *testing.T) {
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		hasher := &mockHasher{}
-		hasher.On("DigestSize", mock.Anything).Return(16)
+		digesterBuilder := &mockDigesterBuilder{}
 
 		storage := newTestInMemoryStorage(t)
 
@@ -554,17 +546,17 @@ func TestMapHashCollision(t *testing.T) {
 					v := NewStringValue(randStr(16))
 					uniqueKeyValues[k] = v
 
-					digest1 := rand.Intn(256)
-					digest2 := rand.Intn(256)
+					digest1 := Digest(rand.Intn(256))
+					digest2 := Digest(rand.Intn(256))
 
-					hasher.On("Digest", k).Return(mockHasherDigest{[]uint64{uint64(digest1), uint64(digest2)}})
+					digesterBuilder.On("Digest", k).Return(mockDigester{[]Digest{digest1, digest2}})
 
 					break
 				}
 			}
 		}
 
-		m, err := NewMap(storage, address, hasher, typeInfo)
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -617,7 +609,7 @@ func TestMapLargeElement(t *testing.T) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	m, err := NewMap(storage, address, &sipHash128{secretkey}, typeInfo)
+	m, err := NewMap(storage, address, NewBasicDigesterBuilder(secretkey), typeInfo)
 	require.NoError(t, err)
 
 	for k, v := range strs {

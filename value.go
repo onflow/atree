@@ -9,3 +9,9 @@ type Value interface {
 	DeepCopy(SlabStorage, Address) (Value, error)
 	DeepRemove(storage SlabStorage) error
 }
+
+type ComparableValue interface {
+	Value
+	Hashable
+	Equal(other Value) bool
+}

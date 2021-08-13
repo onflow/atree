@@ -1341,9 +1341,7 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Remove right sib from storage
-		storage.Remove(rightSib.ID())
-
-		return nil
+		return storage.Remove(rightSib.ID())
 	}
 
 	if rightSib == nil {
@@ -1402,9 +1400,7 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Remove child from storage
-		storage.Remove(child.ID())
-
-		return nil
+		return storage.Remove(child.ID())
 	} else {
 		// leftSib.ByteSize() > rightSib.ByteSize
 
@@ -1505,8 +1501,7 @@ func (m *MapMetaDataSlab) CanLendToRight(size uint32) bool {
 }
 
 func (m *MapMetaDataSlab) DeepRemove(storage SlabStorage) error {
-	storage.Remove(m.ID())
-	return nil
+	return storage.Remove(m.ID())
 }
 
 func (m MapMetaDataSlab) IsData() bool {

@@ -206,7 +206,7 @@ func (s *InMemBaseStorage) ResetReporter() {
 type Ledger interface {
 	GetValue(owner, key []byte) (value []byte, err error)
 	SetValue(owner, key, value []byte) (err error)
-	GenerateStorageIndex(owner []byte) StorageIndex
+	AllocateStorageIndex(owner []byte) StorageIndex
 }
 
 type LedgerBaseStorage struct {
@@ -239,7 +239,7 @@ func (s *LedgerBaseStorage) Remove(id StorageID) error {
 }
 
 func (s *LedgerBaseStorage) GenerateStorageID(address Address) StorageID {
-	idx := s.ledger.GenerateStorageIndex(address[:])
+	idx := s.ledger.AllocateStorageIndex(address[:])
 	return NewStorageID(address, idx)
 }
 

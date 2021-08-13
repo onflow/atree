@@ -982,8 +982,7 @@ func (m *MapDataSlab) CanLendToRight(size uint32) bool {
 }
 
 func (m *MapDataSlab) DeepRemove(storage SlabStorage) error {
-	storage.Remove(m.ID())
-	return nil
+	return storage.Remove(m.ID())
 }
 
 func (m *MapDataSlab) SetID(id StorageID) {
@@ -1342,9 +1341,7 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Remove right sib from storage
-		storage.Remove(rightSib.ID())
-
-		return nil
+		return storage.Remove(rightSib.ID())
 	}
 
 	if rightSib == nil {
@@ -1374,9 +1371,7 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Remove child from storage
-		storage.Remove(child.ID())
-
-		return nil
+		return storage.Remove(child.ID())
 	}
 
 	// Merge with smaller sib
@@ -1405,9 +1400,7 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Remove child from storage
-		storage.Remove(child.ID())
-
-		return nil
+		return storage.Remove(child.ID())
 	} else {
 		// leftSib.ByteSize() > rightSib.ByteSize
 
@@ -1435,9 +1428,7 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Remove rightSib from storage
-		storage.Remove(rightSib.ID())
-
-		return nil
+		return storage.Remove(rightSib.ID())
 	}
 }
 
@@ -1510,8 +1501,7 @@ func (m *MapMetaDataSlab) CanLendToRight(size uint32) bool {
 }
 
 func (m *MapMetaDataSlab) DeepRemove(storage SlabStorage) error {
-	storage.Remove(m.ID())
-	return nil
+	return storage.Remove(m.ID())
 }
 
 func (m MapMetaDataSlab) IsData() bool {
@@ -1666,7 +1656,10 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) error {
 				return err
 			}
 
-			m.storage.Remove(childID)
+			err = m.storage.Remove(childID)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

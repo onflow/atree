@@ -26,8 +26,7 @@ func (a *BasicArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 }
 
 func (a *BasicArrayDataSlab) DeepRemove(storage SlabStorage) error {
-	storage.Remove(a.ID())
-	return nil
+	return storage.Remove(a.ID())
 }
 
 type BasicArray struct {

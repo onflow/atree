@@ -99,7 +99,7 @@ type BaseStorageUsageReporter interface {
 type BaseStorage interface {
 	Store(StorageID, []byte) error
 	Retrieve(StorageID) ([]byte, bool, error)
-	Remove(StorageID)
+	Remove(StorageID) error
 	SegmentCounts() int // number of segments stored in the storage
 	Size() int          // total byte size stored
 	BaseStorageUsageReporter
@@ -145,10 +145,11 @@ func (s *InMemBaseStorage) Store(id StorageID, data []byte) error {
 	return nil
 }
 
-func (s *InMemBaseStorage) Remove(id StorageID) {
+func (s *InMemBaseStorage) Remove(id StorageID) error {
 	s.segmentsUpdated[id] = struct{}{}
 	s.segmentsTouched[id] = struct{}{}
 	delete(s.segments, id)
+	return nil
 }
 
 func (s *InMemBaseStorage) SegmentCounts() int {
@@ -191,10 +192,82 @@ func (s *InMemBaseStorage) ResetReporter() {
 	s.segmentsTouched = make(map[StorageID]struct{})
 }
 
+type Ledger interface {
+	GetValue(owner, key []byte) (value []byte, err error)
+	SetValue(owner, key, value []byte) (err error)
+}
+
+type LedgerBaseStorage struct {
+	ledger         Ledger
+	bytesRetrieved int
+	bytesStored    int
+}
+
+func NewLedgerBaseStorage(ledger Ledger) *LedgerBaseStorage {
+	return &LedgerBaseStorage{
+		ledger:         ledger,
+		bytesRetrieved: 0,
+		bytesStored:    0,
+	}
+}
+
+func (s *LedgerBaseStorage) Retrieve(id StorageID) ([]byte, bool, error) {
+	v, err := s.ledger.GetValue(id.Address[:], id.Index[:])
+	s.bytesRetrieved += len(v)
+	return v, len(v) > 0, err
+}
+
+func (s *LedgerBaseStorage) Store(id StorageID, data []byte) error {
+	s.bytesStored += len(data)
+	return s.ledger.SetValue(id.Address[:], id.Index[:], data)
+}
+
+func (s *LedgerBaseStorage) Remove(id StorageID) error {
+	return s.ledger.SetValue(id.Address[:], id.Index[:], nil)
+}
+
+func (s *LedgerBaseStorage) BytesRetrieved() int {
+	return s.bytesRetrieved
+}
+
+func (s *LedgerBaseStorage) BytesStored() int {
+	return s.bytesStored
+}
+
+func (s *LedgerBaseStorage) SegmentCounts() int {
+	// TODO
+	return 0
+}
+
+func (s *LedgerBaseStorage) Size() int {
+	// TODO
+	return 0
+}
+
+func (s *LedgerBaseStorage) SegmentsReturned() int {
+	// TODO
+	return 0
+}
+
+func (s *LedgerBaseStorage) SegmentsUpdated() int {
+	// TODO
+	return 0
+}
+
+func (s *LedgerBaseStorage) SegmentsTouched() int {
+	// TODO
+	return 0
+}
+
+func (s *LedgerBaseStorage) ResetReporter() {
+	s.bytesStored = 0
+	s.bytesRetrieved = 0
+}
+
 type SlabStorage interface {
 	Store(StorageID, Slab) error
 	Retrieve(StorageID) (Slab, bool, error)
-	Remove(StorageID)
+	Remove(StorageID) error
 
 	Count() int
 	GenerateStorageID(address Address) StorageID
@@ -237,8 +310,9 @@ func (s *BasicSlabStorage) Store(id StorageID, slab Slab) error {
 	return nil
 }
 
-func (s *BasicSlabStorage) Remove(id StorageID) {
+func (s *BasicSlabStorage) Remove(id StorageID) error {
 	delete(s.Slabs, id)
+	return nil
 }
 
 func (s *BasicSlabStorage) Count() int {
@@ -334,11 +408,15 @@ func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
 }
 
 func (s *PersistentSlabStorage) Commit() error {
+	var err error
 	for id, slab := range s.deltas {
 		if id.Address != AddressUndefined {
 			// deleted slabs
 			if slab == nil {
-				s.baseStorage.Remove(id)
+				err = s.baseStorage.Remove(id)
+				if err != nil {
+					return err
+				}
 				continue
 			}
 
@@ -416,13 +494,17 @@ func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {
 	return nil
 }
 
-func (s *PersistentSlabStorage) Remove(id StorageID) {
+func (s *PersistentSlabStorage) Remove(id StorageID) error {
 	if s.autoCommit {
-		s.baseStorage.Remove(id)
+		err := s.baseStorage.Remove(id)
+		if err != nil {
+			return err
+		}
 	}
 
 	// add to nil to deltas under that id
 	s.deltas[id] = nil
+	return nil
 }
 
 // Warning Counts doesn't consider new segments in the deltas and only returns commited values

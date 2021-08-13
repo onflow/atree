@@ -1,6 +1,8 @@
 package atree
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Error interface {
 	// returns true if the error is fatal
@@ -139,19 +141,73 @@ func (e StorageError) Unwrap() error {
 // SlabNotFoundError is a fatal error returned when an slab is not found
 type SlabNotFoundError struct {
 	storageID StorageID
+	err       error
 }
 
 // NewSlabNotFoundError constructs a SlabNotFoundError
-func NewSlabNotFoundError(storageID StorageID) *SlabNotFoundError {
-	return &SlabNotFoundError{storageID: storageID}
+func NewSlabNotFoundError(storageID StorageID, err error) *SlabNotFoundError {
+	return &SlabNotFoundError{storageID: storageID, err: err}
+}
+
+// NewSlabNotFoundErrorf constructs a new SlabNotFoundError with error formating
+func NewSlabNotFoundErrorf(storageID StorageID, msg string, args ...interface{}) *SlabNotFoundError {
+	return &SlabNotFoundError{storageID: storageID, err: fmt.Errorf(msg, args...)}
 }
 
 func (e *SlabNotFoundError) Error() string {
-	return fmt.Sprintf("slab with the given storageID (%s) not found", e.storageID.String())
+	return fmt.Sprintf("slab with the given storageID (%s) not found. %s", e.storageID.String(), e.err.Error())
 }
 
 // IsFatal returns true if the error is fatal
 func (e *SlabNotFoundError) IsFatal() bool {
+	return true
+}
+
+// SlabSplitError is a fatal error returned when splitting an slab has failed
+type SlabSplitError struct {
+	err error
+}
+
+// NewSlabSplitError constructs a SlabSplitError
+func NewSlabSplitError(err error) *SlabSplitError {
+	return &SlabSplitError{err: err}
+}
+
+// NewSlabSplitErrorf constructs a new SlabSplitError with error formating
+func NewSlabSplitErrorf(msg string, args ...interface{}) *SlabSplitError {
+	return &SlabSplitError{err: fmt.Errorf(msg, args...)}
+}
+
+func (e *SlabSplitError) Error() string {
+	return fmt.Sprintf("slab can not split. %s", e.err.Error())
+}
+
+// IsFatal returns true if the error is fatal
+func (e *SlabSplitError) IsFatal() bool {
+	return true
+}
+
+// SlabError is a fatal error returned when something is wrong with the content of the slab
+type SlabError struct {
+	err error
+}
+
+// NewSlabError constructs a SlabError
+func NewSlabError(err error) *SlabError {
+	return &SlabError{err: err}
+}
+
+// NewSlabErrorf constructs a new DataSlabError with error formating
+func NewSlabErrorf(msg string, args ...interface{}) *SlabError {
+	return &SlabError{err: fmt.Errorf(msg, args...)}
+}
+
+func (e *SlabError) Error() string {
+	return fmt.Sprintf("slab error: %s", e.err.Error())
+}
+
+// IsFatal returns true if the error is fatal
+func (e *SlabError) IsFatal() bool {
 	return true
 }
 
@@ -204,6 +260,11 @@ func NewEncodingError(err error) *EncodingError {
 	return &EncodingError{err: err}
 }
 
+// NewEncodingErrorf constructs a new EncodingError with error formating
+func NewEncodingErrorf(msg string, args ...interface{}) *EncodingError {
+	return &EncodingError{err: fmt.Errorf(msg, args...)}
+}
+
 func (e *EncodingError) Error() string {
 	return fmt.Sprintf("Encoding has failed %s", e.err.Error())
 }
@@ -218,9 +279,14 @@ type DecodingError struct {
 	err error
 }
 
-// NewDecodingError constructs a DigestLevelNotMatchError
+// NewDecodingError constructs a DecodingError
 func NewDecodingError(err error) *DecodingError {
 	return &DecodingError{err: err}
+}
+
+// NewDecodingErrorf constructs a new DecodingError with error formating
+func NewDecodingErrorf(msg string, args ...interface{}) *DecodingError {
+	return &DecodingError{err: fmt.Errorf(msg, args...)}
 }
 
 func (e *DecodingError) Error() string {

@@ -2054,22 +2054,22 @@ func TestEmptyArray(t *testing.T) {
 
 	t.Run("get", func(t *testing.T) {
 		_, err := array.Get(0)
-		require.Error(t, err, IndexOutOfRangeError{})
+		require.Error(t, err, IndexOutOfBoundsError{})
 	})
 
 	t.Run("set", func(t *testing.T) {
 		err := array.Set(0, Uint64Value(0))
-		require.Error(t, err, IndexOutOfRangeError{})
+		require.Error(t, err, IndexOutOfBoundsError{})
 	})
 
 	t.Run("insert", func(t *testing.T) {
 		err := array.Insert(1, Uint64Value(0))
-		require.Error(t, err, IndexOutOfRangeError{})
+		require.Error(t, err, IndexOutOfBoundsError{})
 	})
 
 	t.Run("remove", func(t *testing.T) {
 		_, err := array.Remove(0)
-		require.Error(t, err, IndexOutOfRangeError{})
+		require.Error(t, err, IndexOutOfBoundsError{})
 	})
 
 	t.Run("iterate", func(t *testing.T) {

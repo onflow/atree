@@ -210,18 +210,16 @@ type Ledger interface {
 }
 
 type LedgerBaseStorage struct {
-	ledger           Ledger
-	tempStorageIndex uint64
-	bytesRetrieved   int
-	bytesStored      int
+	ledger         Ledger
+	bytesRetrieved int
+	bytesStored    int
 }
 
 func NewLedgerBaseStorage(ledger Ledger) *LedgerBaseStorage {
 	return &LedgerBaseStorage{
-		ledger:           ledger,
-		tempStorageIndex: 0,
-		bytesRetrieved:   0,
-		bytesStored:      0,
+		ledger:         ledger,
+		bytesRetrieved: 0,
+		bytesStored:    0,
 	}
 }
 
@@ -241,13 +239,7 @@ func (s *LedgerBaseStorage) Remove(id StorageID) error {
 }
 
 func (s *LedgerBaseStorage) GenerateStorageID(address Address) StorageID {
-	var idx StorageIndex
-	if address == AddressUndefined {
-		s.tempStorageIndex++
-		binary.BigEndian.PutUint64(idx[:], s.tempStorageIndex)
-	} else {
-		idx = s.ledger.AllocateStorageIndex(address[:])
-	}
+	idx := s.ledger.AllocateStorageIndex(address[:])
 	return NewStorageID(address, idx)
 }
 
@@ -380,13 +372,14 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 }
 
 type PersistentSlabStorage struct {
-	baseStorage    BaseStorage
-	cache          map[StorageID]Slab
-	deltas         map[StorageID]Slab
-	DecodeStorable StorableDecoder
-	cborEncMode    cbor.EncMode
-	cborDecMode    cbor.DecMode
-	autoCommit     bool // flag to call commit after each operation
+	baseStorage      BaseStorage
+	cache            map[StorageID]Slab
+	deltas           map[StorageID]Slab
+	tempStorageIndex uint64
+	DecodeStorable   StorableDecoder
+	cborEncMode      cbor.EncMode
+	cborDecMode      cbor.DecMode
+	autoCommit       bool // flag to call commit after each operation
 }
 
 var _ SlabStorage = &PersistentSlabStorage{}
@@ -423,6 +416,12 @@ func WithNoAutoCommit() StorageOption {
 }
 
 func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
+	if address == AddressUndefined {
+		var idx StorageIndex
+		s.tempStorageIndex++
+		binary.BigEndian.PutUint64(idx[:], s.tempStorageIndex)
+		return NewStorageID(address, idx)
+	}
 	return s.baseStorage.GenerateStorageID(address)
 }
 

@@ -13,8 +13,6 @@ import (
 )
 
 const (
-	flagBasicArray byte = 0x80
-
 	basicArrayDataSlabPrefixSize = 1 + 8
 )
 
@@ -115,16 +113,16 @@ func newBasicArrayDataSlabFromData(
 	*BasicArrayDataSlab,
 	error,
 ) {
-	if len(data) == 0 {
+	if len(data) < 2 {
 		return nil, errors.New("data is too short for basic array")
 	}
 
 	// Check flag
-	if data[0]&flagBasicArray == 0 {
-		return nil, fmt.Errorf("data has invalid flag 0x%x, want 0x%x", data[0], flagBasicArray)
+	if getSlabArrayType(data[1]) != slabBasicArray {
+		return nil, fmt.Errorf("data has invalid flag 0x%x, want 0x%x", data[0], maskBasicArray)
 	}
 
-	cborDec := decMode.NewByteStreamDecoder(data[1:])
+	cborDec := decMode.NewByteStreamDecoder(data[2:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
@@ -147,8 +145,11 @@ func newBasicArrayDataSlabFromData(
 }
 
 func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
+
+	flag := maskBasicArray | maskSlabRoot
+
 	// Encode flag
-	_, err := enc.Write([]byte{flagBasicArray})
+	_, err := enc.Write([]byte{0x0, flag})
 	if err != nil {
 		return err
 	}

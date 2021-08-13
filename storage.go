@@ -100,7 +100,7 @@ type BaseStorage interface {
 	Store(StorageID, []byte) error
 	Retrieve(StorageID) ([]byte, bool, error)
 	Remove(StorageID) error
-	GenerateStorageID(Address) StorageID
+	GenerateStorageID(Address) (StorageID, error)
 	SegmentCounts() int // number of segments stored in the storage
 	Size() int          // total byte size stored
 	BaseStorageUsageReporter
@@ -155,12 +155,12 @@ func (s *InMemBaseStorage) Remove(id StorageID) error {
 	return nil
 }
 
-func (s *InMemBaseStorage) GenerateStorageID(address Address) StorageID {
+func (s *InMemBaseStorage) GenerateStorageID(address Address) (StorageID, error) {
 	index := s.storageIndex[address]
 	nextIndex := index.Next()
 
 	s.storageIndex[address] = nextIndex
-	return NewStorageID(address, nextIndex)
+	return NewStorageID(address, nextIndex), nil
 }
 
 func (s *InMemBaseStorage) SegmentCounts() int {
@@ -206,7 +206,7 @@ func (s *InMemBaseStorage) ResetReporter() {
 type Ledger interface {
 	GetValue(owner, key []byte) (value []byte, err error)
 	SetValue(owner, key, value []byte) (err error)
-	AllocateStorageIndex(owner []byte) StorageIndex
+	AllocateStorageIndex(owner []byte) (StorageIndex, error)
 }
 
 type LedgerBaseStorage struct {
@@ -238,9 +238,9 @@ func (s *LedgerBaseStorage) Remove(id StorageID) error {
 	return s.ledger.SetValue(id.Address[:], id.Index[:], nil)
 }
 
-func (s *LedgerBaseStorage) GenerateStorageID(address Address) StorageID {
-	idx := s.ledger.AllocateStorageIndex(address[:])
-	return NewStorageID(address, idx)
+func (s *LedgerBaseStorage) GenerateStorageID(address Address) (StorageID, error) {
+	idx, err := s.ledger.AllocateStorageIndex(address[:])
+	return NewStorageID(address, idx), err
 }
 
 func (s *LedgerBaseStorage) BytesRetrieved() int {
@@ -285,7 +285,7 @@ type SlabStorage interface {
 	Store(StorageID, Slab) error
 	Retrieve(StorageID) (Slab, bool, error)
 	Remove(StorageID) error
-	GenerateStorageID(address Address) StorageID
+	GenerateStorageID(address Address) (StorageID, error)
 
 	Count() int
 }
@@ -309,12 +309,12 @@ func NewBasicSlabStorage(cborEncMode cbor.EncMode, cborDecMode cbor.DecMode) *Ba
 	}
 }
 
-func (s *BasicSlabStorage) GenerateStorageID(address Address) StorageID {
+func (s *BasicSlabStorage) GenerateStorageID(address Address) (StorageID, error) {
 	index := s.storageIndex[address]
 	nextIndex := index.Next()
 
 	s.storageIndex[address] = nextIndex
-	return NewStorageID(address, nextIndex)
+	return NewStorageID(address, nextIndex), nil
 }
 
 func (s *BasicSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
@@ -415,12 +415,12 @@ func WithNoAutoCommit() StorageOption {
 	}
 }
 
-func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
+func (s *PersistentSlabStorage) GenerateStorageID(address Address) (StorageID, error) {
 	if address == AddressUndefined {
 		var idx StorageIndex
 		s.tempStorageIndex++
 		binary.BigEndian.PutUint64(idx[:], s.tempStorageIndex)
-		return NewStorageID(address, idx)
+		return NewStorageID(address, idx), nil
 	}
 	return s.baseStorage.GenerateStorageID(address)
 }

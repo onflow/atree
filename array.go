@@ -489,10 +489,14 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	}
 
 	// Construct right slab
+	sId, err := storage.GenerateStorageID(a.header.id.Address)
+	if err != nil {
+		return nil, nil, err
+	}
 	rightSlabCount := len(a.elements) - leftCount
 	rightSlab := &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(a.header.id.Address),
+			id:    sId,
 			size:  arrayDataSlabPrefixSize + dataSize - leftSize,
 			count: uint32(rightSlabCount),
 		},
@@ -1482,9 +1486,14 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	}
 
 	// Construct right slab
+	sId, err := storage.GenerateStorageID(a.header.id.Address)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	rightSlab := &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
-			id:    storage.GenerateStorageID(a.header.id.Address),
+			id:    sId,
 			size:  a.header.size - uint32(leftSize),
 			count: a.header.count - leftCount,
 		},
@@ -1653,15 +1662,20 @@ func NewArray(storage SlabStorage, address Address, typeInfo string) (*Array, er
 
 	extraData := &ArrayExtraData{TypeInfo: typeInfo}
 
+	sId, err := storage.GenerateStorageID(address)
+	if err != nil {
+		return nil, err
+	}
+
 	root := &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:   storage.GenerateStorageID(address),
+			id:   sId,
 			size: arrayDataSlabPrefixSize,
 		},
 		extraData: extraData,
 	}
 
-	err := storage.Store(root.header.id, root)
+	err = storage.Store(root.header.id, root)
 	if err != nil {
 		return nil, err
 	}
@@ -1724,8 +1738,12 @@ func (a *Array) Insert(index uint64, value Value) error {
 		rootID := a.root.ID()
 
 		// Assign a new storage id to old root before splitting it.
+		sId, err := a.Storage.GenerateStorageID(a.Address())
+		if err != nil {
+			return err
+		}
 		oldRoot := a.root
-		oldRoot.SetID(a.Storage.GenerateStorageID(a.Address()))
+		oldRoot.SetID(sId)
 
 		// Split old root
 		leftSlab, rightSlab, err := oldRoot.Split(a.Storage)

@@ -309,7 +309,11 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 		// for first level collision.
 		if e.elements.Size() > uint32(MaxInlineElementSize) {
 
-			id := storage.GenerateStorageID(address)
+			id, err := storage.GenerateStorageID(address)
+
+			if err != nil {
+				return nil, false, err
+			}
 
 			// Create MapDataSlab
 			slab := &MapDataSlab{
@@ -322,7 +326,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 				anySize:  true,
 			}
 
-			err := storage.Store(id, slab)
+			err = storage.Store(id, slab)
 			if err != nil {
 				return nil, false, err
 			}
@@ -891,10 +895,15 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		return nil, nil, err
 	}
 
+	sId, err := storage.GenerateStorageID(m.ID().Address)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// Create new right slab
 	rightSlab := &MapDataSlab{
 		header: MapSlabHeader{
-			id:       storage.GenerateStorageID(m.ID().Address),
+			id:       sId,
 			size:     mapDataSlabPrefixSize + rightElements.Size(),
 			firstKey: rightElements.firstKey(),
 		},
@@ -1450,10 +1459,15 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	leftChildrenCount := int(math.Ceil(float64(len(m.childrenHeaders)) / 2))
 	leftSize := leftChildrenCount * mapSlabHeaderSize
 
+	sId, err := storage.GenerateStorageID(m.ID().Address)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// Construct right slab
 	rightSlab := &MapMetaDataSlab{
 		header: MapSlabHeader{
-			id:       storage.GenerateStorageID(m.ID().Address),
+			id:       sId,
 			size:     m.header.size - uint32(leftSize),
 			firstKey: m.childrenHeaders[leftChildrenCount].firstKey,
 		},
@@ -1550,16 +1564,21 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 
 	extraData := &MapExtraData{TypeInfo: typeInfo}
 
+	sId, err := storage.GenerateStorageID(address)
+	if err != nil {
+		return nil, err
+	}
+
 	root := &MapDataSlab{
 		header: MapSlabHeader{
-			id:   storage.GenerateStorageID(address),
+			id:   sId,
 			size: mapDataSlabPrefixSize,
 		},
 		elements:  &hkeyElements{},
 		extraData: extraData,
 	}
 
-	err := storage.Store(root.header.id, root)
+	err = storage.Store(root.header.id, root)
 	if err != nil {
 		return nil, err
 	}
@@ -1672,8 +1691,13 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) error {
 		rootID := m.root.ID()
 
 		// Assign a new storage id to old root before splitting it.
+		sId, err := m.storage.GenerateStorageID(m.Address())
+		if err != nil {
+			return err
+		}
+
 		oldRoot := m.root
-		oldRoot.SetID(m.storage.GenerateStorageID(m.Address()))
+		oldRoot.SetID(sId)
 
 		// Split old root
 		leftSlab, rightSlab, err := oldRoot.Split(m.storage)

@@ -80,8 +80,7 @@ func (v StorageIDStorable) String() string {
 }
 
 func (v StorageIDStorable) DeepRemove(storage SlabStorage) error {
-	storage.Remove(StorageID(v))
-	return nil
+	return storage.Remove(StorageID(v))
 }
 
 // NonStorable represents a value that cannot be stored

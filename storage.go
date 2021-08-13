@@ -100,6 +100,7 @@ type BaseStorage interface {
 	Store(StorageID, []byte) error
 	Retrieve(StorageID) ([]byte, bool, error)
 	Remove(StorageID) error
+	GenerateStorageID(Address) StorageID
 	SegmentCounts() int // number of segments stored in the storage
 	Size() int          // total byte size stored
 	BaseStorageUsageReporter
@@ -107,6 +108,7 @@ type BaseStorage interface {
 
 type InMemBaseStorage struct {
 	segments         map[StorageID][]byte
+	storageIndex     map[Address]StorageIndex
 	bytesRetrieved   int
 	bytesStored      int
 	segmentsReturned map[StorageID]struct{}
@@ -123,6 +125,7 @@ func NewInMemBaseStorage() *InMemBaseStorage {
 func NewInMemBaseStorageFromMap(segments map[StorageID][]byte) *InMemBaseStorage {
 	return &InMemBaseStorage{
 		segments:         segments,
+		storageIndex:     make(map[Address]StorageIndex),
 		segmentsReturned: make(map[StorageID]struct{}),
 		segmentsUpdated:  make(map[StorageID]struct{}),
 		segmentsTouched:  make(map[StorageID]struct{}),
@@ -150,6 +153,14 @@ func (s *InMemBaseStorage) Remove(id StorageID) error {
 	s.segmentsTouched[id] = struct{}{}
 	delete(s.segments, id)
 	return nil
+}
+
+func (s *InMemBaseStorage) GenerateStorageID(address Address) StorageID {
+	index := s.storageIndex[address]
+	nextIndex := index.Next()
+
+	s.storageIndex[address] = nextIndex
+	return NewStorageID(address, nextIndex)
 }
 
 func (s *InMemBaseStorage) SegmentCounts() int {
@@ -195,6 +206,7 @@ func (s *InMemBaseStorage) ResetReporter() {
 type Ledger interface {
 	GetValue(owner, key []byte) (value []byte, err error)
 	SetValue(owner, key, value []byte) (err error)
+	GenerateStorageIndex(owner []byte) StorageIndex
 }
 
 type LedgerBaseStorage struct {
@@ -224,6 +236,11 @@ func (s *LedgerBaseStorage) Store(id StorageID, data []byte) error {
 
 func (s *LedgerBaseStorage) Remove(id StorageID) error {
 	return s.ledger.SetValue(id.Address[:], id.Index[:], nil)
+}
+
+func (s *LedgerBaseStorage) GenerateStorageID(address Address) StorageID {
+	idx := s.ledger.GenerateStorageIndex(address[:])
+	return NewStorageID(address, idx)
 }
 
 func (s *LedgerBaseStorage) BytesRetrieved() int {
@@ -268,9 +285,9 @@ type SlabStorage interface {
 	Store(StorageID, Slab) error
 	Retrieve(StorageID) (Slab, bool, error)
 	Remove(StorageID) error
+	GenerateStorageID(address Address) StorageID
 
 	Count() int
-	GenerateStorageID(address Address) StorageID
 }
 
 type BasicSlabStorage struct {
@@ -358,7 +375,6 @@ type PersistentSlabStorage struct {
 	baseStorage    BaseStorage
 	cache          map[StorageID]Slab
 	deltas         map[StorageID]Slab
-	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
 	cborEncMode    cbor.EncMode
 	cborDecMode    cbor.DecMode
@@ -376,12 +392,11 @@ func NewPersistentSlabStorage(
 	opts ...StorageOption,
 ) *PersistentSlabStorage {
 	storage := &PersistentSlabStorage{baseStorage: base,
-		cache:        make(map[StorageID]Slab),
-		deltas:       make(map[StorageID]Slab),
-		storageIndex: make(map[Address]StorageIndex),
-		cborEncMode:  cborEncMode,
-		cborDecMode:  cborDecMode,
-		autoCommit:   true,
+		cache:       make(map[StorageID]Slab),
+		deltas:      make(map[StorageID]Slab),
+		cborEncMode: cborEncMode,
+		cborDecMode: cborDecMode,
+		autoCommit:  true,
 	}
 
 	for _, applyOption := range opts {
@@ -400,11 +415,7 @@ func WithNoAutoCommit() StorageOption {
 }
 
 func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
-	index := s.storageIndex[address]
-	nextIndex := index.Next()
-
-	s.storageIndex[address] = nextIndex
-	return NewStorageID(address, nextIndex)
+	return s.baseStorage.GenerateStorageID(address)
 }
 
 func (s *PersistentSlabStorage) Commit() error {

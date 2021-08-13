@@ -210,16 +210,18 @@ type Ledger interface {
 }
 
 type LedgerBaseStorage struct {
-	ledger         Ledger
-	bytesRetrieved int
-	bytesStored    int
+	ledger           Ledger
+	tempStorageIndex uint64
+	bytesRetrieved   int
+	bytesStored      int
 }
 
 func NewLedgerBaseStorage(ledger Ledger) *LedgerBaseStorage {
 	return &LedgerBaseStorage{
-		ledger:         ledger,
-		bytesRetrieved: 0,
-		bytesStored:    0,
+		ledger:           ledger,
+		tempStorageIndex: 0,
+		bytesRetrieved:   0,
+		bytesStored:      0,
 	}
 }
 
@@ -239,7 +241,13 @@ func (s *LedgerBaseStorage) Remove(id StorageID) error {
 }
 
 func (s *LedgerBaseStorage) GenerateStorageID(address Address) StorageID {
-	idx := s.ledger.AllocateStorageIndex(address[:])
+	var idx StorageIndex
+	if address == AddressUndefined {
+		s.tempStorageIndex++
+		binary.BigEndian.PutUint64(idx[:], s.tempStorageIndex)
+	} else {
+		idx = s.ledger.AllocateStorageIndex(address[:])
+	}
 	return NewStorageID(address, idx)
 }
 

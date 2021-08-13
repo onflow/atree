@@ -408,11 +408,15 @@ func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
 }
 
 func (s *PersistentSlabStorage) Commit() error {
+	var err error
 	for id, slab := range s.deltas {
 		if id.Address != AddressUndefined {
 			// deleted slabs
 			if slab == nil {
-				s.baseStorage.Remove(id)
+				err = s.baseStorage.Remove(id)
+				if err != nil {
+					return err
+				}
 				continue
 			}
 
@@ -492,7 +496,10 @@ func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {
 
 func (s *PersistentSlabStorage) Remove(id StorageID) error {
 	if s.autoCommit {
-		s.baseStorage.Remove(id)
+		err := s.baseStorage.Remove(id)
+		if err != nil {
+			return err
+		}
 	}
 
 	// add to nil to deltas under that id

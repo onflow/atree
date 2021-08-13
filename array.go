@@ -1341,9 +1341,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Remove right sib from storage
-		storage.Remove(rightSib.ID())
-
-		return nil
+		return storage.Remove(rightSib.ID())
 	}
 
 	if rightSib == nil {
@@ -1377,9 +1375,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Remove child from storage
-		storage.Remove(child.ID())
-
-		return nil
+		return storage.Remove(child.ID())
 	}
 
 	// Merge with smaller sib
@@ -1412,9 +1408,8 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Remove child from storage
-		storage.Remove(child.ID())
+		return storage.Remove(child.ID())
 
-		return nil
 	} else {
 		// leftSib.ByteSize > rightSib.ByteSize
 
@@ -1446,9 +1441,7 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Remove rightSib from storage
-		storage.Remove(rightSib.ID())
-
-		return nil
+		return storage.Remove(rightSib.ID())
 	}
 }
 
@@ -1806,7 +1799,10 @@ func (a *Array) Remove(index uint64) (Value, error) {
 			if err != nil {
 				return nil, err
 			}
-			a.Storage.Remove(childID)
+			err = a.Storage.Remove(childID)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

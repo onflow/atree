@@ -22,7 +22,14 @@ func (s StorableSlab) Encode(enc *Encoder) error {
 	enc.Scratch[0] = 0
 
 	// Encode flag
-	enc.Scratch[1] = flagStorable
+	flag := maskStorable
+	flag = setNoSizeLimit(flag)
+
+	if _, ok := s.Storable.(StorageIDStorable); ok {
+		flag = setHasPointers(flag)
+	}
+
+	enc.Scratch[1] = flag
 
 	const versionAndFlagSize = 2
 	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])

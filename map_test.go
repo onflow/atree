@@ -79,12 +79,15 @@ func TestMapSetAndGet(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
+		uniqueKeys := make(map[string]bool, mapSize)
 		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
-				k := NewStringValue(s)
-				if _, kExist := uniqueKeyValues[k]; !kExist {
+				if !uniqueKeys[s] {
+					uniqueKeys[s] = true
+
+					k := NewStringValue(s)
 					uniqueKeyValues[k] = Uint64Value(i)
 					break
 				}
@@ -107,7 +110,10 @@ func TestMapSetAndGet(t *testing.T) {
 		require.True(t, verified)
 
 		for k, v := range uniqueKeyValues {
-			e, err := m.Get(k)
+			strv := k.(*StringValue)
+			require.NotNil(t, strv)
+
+			e, err := m.Get(NewStringValue(strv.str))
 			require.NoError(t, err)
 			require.Equal(t, v, e)
 		}
@@ -129,12 +135,15 @@ func TestMapSetAndGet(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
+		uniqueKeys := make(map[string]bool, mapSize)
 		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
-				k := NewStringValue(s)
-				if _, kExist := uniqueKeyValues[k]; !kExist {
+				if !uniqueKeys[s] {
+					uniqueKeys[s] = true
+
+					k := NewStringValue(s)
 					uniqueKeyValues[k] = Uint64Value(i)
 					break
 				}
@@ -164,7 +173,10 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		for k, v := range uniqueKeyValues {
-			e, err := m.Get(k)
+			strv := k.(*StringValue)
+			require.NotNil(t, strv)
+
+			e, err := m.Get(NewStringValue(strv.str))
 			require.NoError(t, err)
 			require.Equal(t, v, e)
 		}
@@ -186,14 +198,18 @@ func TestMapSetAndGet(t *testing.T) {
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		uniqueKeyValues := make(map[string]Value, mapSize)
+		uniqueKeys := make(map[string]bool, mapSize)
+		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				slen := rand.Intn(maxKeyLength + 1)
 				s := randStr(slen)
 
-				if _, kExist := uniqueKeyValues[s]; !kExist {
-					uniqueKeyValues[s] = RandomValue()
+				if !uniqueKeys[s] {
+					uniqueKeys[s] = true
+
+					k := NewStringValue(s)
+					uniqueKeyValues[k] = RandomValue()
 					break
 				}
 			}
@@ -205,7 +221,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
-			err := m.Set(NewStringValue(k), v)
+			err := m.Set(k, v)
 			require.NoError(t, err)
 		}
 
@@ -214,7 +230,10 @@ func TestMapSetAndGet(t *testing.T) {
 		require.True(t, verified)
 
 		for k, v := range uniqueKeyValues {
-			e, err := m.Get(NewStringValue(k))
+			strv := k.(*StringValue)
+			require.NotNil(t, strv)
+
+			e, err := m.Get(NewStringValue(strv.str))
 			require.NoError(t, err)
 			require.Equal(t, v, e)
 		}
@@ -237,16 +256,21 @@ func TestMapHas(t *testing.T) {
 
 	storage := newTestInMemoryStorage(t)
 
-	// Only first half of unique keys are inserted into the map.
-	uniqueKeyValues := make(map[ComparableValue]Uint64Value, mapSize*2)
-	uniqueKeys := make([]ComparableValue, mapSize*2)
+	uniqueKeys := make(map[string]bool, mapSize*2)
+	var keysToInsert []string
+	var keysToNotInsert []string
 	for i := uint64(0); i < mapSize*2; i++ {
 		for {
 			s := randStr(16)
-			if _, kExist := uniqueKeyValues[NewStringValue(s)]; !kExist {
-				k := NewStringValue(s)
-				uniqueKeyValues[k] = Uint64Value(i)
-				uniqueKeys[i] = k
+			if !uniqueKeys[s] {
+				uniqueKeys[s] = true
+
+				if i%2 == 0 {
+					keysToInsert = append(keysToInsert, s)
+				} else {
+					keysToNotInsert = append(keysToNotInsert, s)
+				}
+
 				break
 			}
 		}
@@ -255,8 +279,8 @@ func TestMapHas(t *testing.T) {
 	m, err := NewMap(storage, address, NewBasicDigesterBuilder(secretkey), typeInfo)
 	require.NoError(t, err)
 
-	for _, k := range uniqueKeys[:mapSize] {
-		err := m.Set(k, uniqueKeyValues[k])
+	for i, k := range keysToInsert {
+		err := m.Set(NewStringValue(k), Uint64Value(i))
 		require.NoError(t, err)
 	}
 
@@ -267,15 +291,16 @@ func TestMapHas(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, verified)
 
-	for i, k := range uniqueKeys {
-		exist, err := m.Has(k)
+	for _, k := range keysToInsert {
+		exist, err := m.Has(NewStringValue(k))
 		require.NoError(t, err)
+		require.Equal(t, true, exist)
+	}
 
-		if i < mapSize {
-			require.Equal(t, true, exist)
-		} else {
-			require.Equal(t, false, exist)
-		}
+	for _, k := range keysToNotInsert {
+		exist, err := m.Has(NewStringValue(k))
+		require.NoError(t, err)
+		require.Equal(t, false, exist)
 	}
 
 	require.Equal(t, typeInfo, m.Type())
@@ -301,7 +326,7 @@ func TestMapIterate(t *testing.T) {
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
-				if _, kExist := uniqueKeyValues[s]; !kExist {
+				if _, exist := uniqueKeyValues[s]; !exist {
 					sortedKeys[i] = NewStringValue(s)
 					uniqueKeyValues[s] = i
 					break
@@ -373,6 +398,8 @@ func TestMapIterate(t *testing.T) {
 
 		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
 
+		uniqueKeys := make(map[string]bool, mapSize)
+
 		sortedKeys := make([]ComparableValue, mapSize)
 
 		keys := make([]ComparableValue, mapSize)
@@ -380,19 +407,25 @@ func TestMapIterate(t *testing.T) {
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
-				k := NewStringValue(s)
 
-				if _, kExist := uniqueKeyValues[k]; !kExist {
+				if !uniqueKeys[s] {
+					uniqueKeys[s] = true
+
+					k := NewStringValue(s)
 					v := NewStringValue(randStr(16))
 
 					sortedKeys[i] = k
 					keys[i] = k
 					uniqueKeyValues[k] = v
 
-					digest1 := Digest(rand.Intn(256))
-					digest2 := Digest(rand.Intn(256))
+					digests := []Digest{
+						Digest(rand.Intn(256)),
+						Digest(rand.Intn(256)),
+						Digest(rand.Intn(256)),
+						Digest(rand.Intn(256)),
+					}
 
-					digesterBuilder.On("Digest", k).Return(mockDigester{[]Digest{digest1, digest2}})
+					digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 					break
 				}
 			}

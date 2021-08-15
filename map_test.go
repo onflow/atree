@@ -451,6 +451,148 @@ func TestMapIterate(t *testing.T) {
 	})
 }
 
+func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
+
+	const mapSize = 2 * 1024
+
+	// mockDigestCount is the number of unique set of digests.
+	// Each set has maxHashLevel of digest.
+	const mockDigestCount = 8
+
+	const typeInfo = "map[String]String"
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	digesterBuilder := &mockDigesterBuilder{}
+
+	// Generate mockDigestCount*maxHashLevel number of unique digest
+	digests := make([]Digest, 0, mockDigestCount*maxHashLevel)
+	uniqueDigest := make(map[Digest]bool)
+	for len(uniqueDigest) < mockDigestCount*maxHashLevel {
+		d := Digest(uint64(rand.Intn(256)))
+		if !uniqueDigest[d] {
+			uniqueDigest[d] = true
+			digests = append(digests, d)
+		}
+	}
+
+	storage := newTestInMemoryStorage(t)
+
+	uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+	uniqueKeys := make(map[string]bool)
+	for i := uint64(0); i < mapSize; i++ {
+		for {
+			s := randStr(16)
+			if !uniqueKeys[s] {
+				uniqueKeys[s] = true
+
+				k := NewStringValue(s)
+				uniqueKeyValues[k] = NewStringValue(randStr(16))
+
+				index := (i % mockDigestCount)
+				startIndex := int(index) * maxHashLevel
+				endIndex := int(index)*maxHashLevel + maxHashLevel
+
+				digests := digests[startIndex:endIndex]
+
+				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+				break
+			}
+		}
+	}
+
+	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+	require.NoError(t, err)
+
+	for k, v := range uniqueKeyValues {
+		err := m.Set(k, v)
+		require.NoError(t, err)
+	}
+
+	verified, err := m.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
+
+	for k, v := range uniqueKeyValues {
+		strv := k.(*StringValue)
+		require.NotNil(t, strv)
+
+		e, err := m.Get(NewStringValue(strv.str))
+		require.NoError(t, err)
+		require.Equal(t, v, e)
+	}
+
+	require.Equal(t, typeInfo, m.Type())
+
+	stats, _ := m.Stats()
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
+	require.Equal(t, uint64(mockDigestCount), stats.CollisionDataSlabCount)
+}
+
+func testMapRandomHashCollision(t *testing.T, maxHashLevel int) {
+
+	const mapSize = 2 * 1024
+
+	const typeInfo = "map[String]String"
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	digesterBuilder := &mockDigesterBuilder{}
+
+	storage := newTestInMemoryStorage(t)
+
+	uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+	uniqueKeys := make(map[string]bool)
+	for i := uint64(0); i < mapSize; i++ {
+		for {
+			s := randStr(rand.Intn(16))
+
+			if !uniqueKeys[s] {
+				uniqueKeys[s] = true
+
+				k := NewStringValue(s)
+				uniqueKeyValues[k] = NewStringValue(randStr(16))
+
+				var digests []Digest
+				for i := 0; i < maxHashLevel; i++ {
+					digests = append(digests, Digest(rand.Intn(256)))
+				}
+
+				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+				break
+			}
+		}
+	}
+
+	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+	require.NoError(t, err)
+
+	for k, v := range uniqueKeyValues {
+		err := m.Set(k, v)
+		require.NoError(t, err)
+	}
+
+	verified, err := m.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
+
+	for k, v := range uniqueKeyValues {
+		strv := k.(*StringValue)
+		require.NotNil(t, strv)
+
+		e, err := m.Get(NewStringValue(strv.str))
+		require.NoError(t, err)
+		require.Equal(t, v, e)
+	}
+
+	require.Equal(t, typeInfo, m.Type())
+
+	stats, _ := m.Stats()
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
+}
+
 func TestMapHashCollision(t *testing.T) {
 
 	SetThreshold(512)
@@ -458,130 +600,21 @@ func TestMapHashCollision(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	t.Run("deterministic", func(t *testing.T) {
-		const mapSize = 2 * 1024
+	const maxHashLevel = 4
 
-		const mockDigestCount = 8
+	for hashLevel := 1; hashLevel <= maxHashLevel; hashLevel++ {
+		name := fmt.Sprintf("deterministic max hash level %d", hashLevel)
+		t.Run(name, func(t *testing.T) {
+			testMapDeterministicHashCollision(t, hashLevel)
+		})
+	}
 
-		const typeInfo = "map[String]String"
-
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
-		digesterBuilder := &mockDigesterBuilder{}
-
-		digests := make([][]Digest, 0, mockDigestCount)
-		for i := 0; i < mockDigestCount; i++ {
-			digest1 := Digest(uint64(rand.Intn(256)))
-			digest2 := Digest(uint64(rand.Intn(256)))
-			digests = append(digests, []Digest{digest1, digest2})
-		}
-
-		storage := newTestInMemoryStorage(t)
-
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				s := randStr(16)
-				k := NewStringValue(s)
-				if _, kExist := uniqueKeyValues[k]; !kExist {
-					v := NewStringValue(randStr(16))
-					uniqueKeyValues[k] = v
-
-					digest := digests[i%mockDigestCount]
-
-					digesterBuilder.On("Digest", k).Return(mockDigester{digest})
-
-					break
-				}
-			}
-		}
-
-		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		for k, v := range uniqueKeyValues {
-			err := m.Set(k, v)
-			require.NoError(t, err)
-		}
-
-		verified, err := m.valid()
-		if !verified {
-			m.Print()
-		}
-		require.NoError(t, err)
-		require.True(t, verified)
-
-		for k, v := range uniqueKeyValues {
-			e, err := m.Get(k)
-			require.NoError(t, err)
-			require.Equal(t, v, e)
-		}
-
-		require.Equal(t, typeInfo, m.Type())
-
-		stats, _ := m.Stats()
-		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
-		require.Equal(t, uint64(0), stats.MetaDataSlabCount)
-		require.Equal(t, uint64(1), stats.DataSlabCount)
-		require.Equal(t, uint64(mockDigestCount), stats.CollisionDataSlabCount)
-	})
-
-	t.Run("random", func(t *testing.T) {
-		const mapSize = 2 * 1024
-
-		const typeInfo = "map[String]String"
-
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
-		digesterBuilder := &mockDigesterBuilder{}
-
-		storage := newTestInMemoryStorage(t)
-
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				s := randStr(16)
-				k := NewStringValue(s)
-				if _, kExist := uniqueKeyValues[k]; !kExist {
-					v := NewStringValue(randStr(16))
-					uniqueKeyValues[k] = v
-
-					digest1 := Digest(rand.Intn(256))
-					digest2 := Digest(rand.Intn(256))
-
-					digesterBuilder.On("Digest", k).Return(mockDigester{[]Digest{digest1, digest2}})
-
-					break
-				}
-			}
-		}
-
-		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		for k, v := range uniqueKeyValues {
-			err := m.Set(k, v)
-			require.NoError(t, err)
-		}
-
-		verified, err := m.valid()
-		if !verified {
-			m.Print()
-		}
-		require.NoError(t, err)
-		require.True(t, verified)
-
-		for k, v := range uniqueKeyValues {
-			e, err := m.Get(k)
-			require.NoError(t, err)
-			require.Equal(t, v, e)
-		}
-
-		require.Equal(t, typeInfo, m.Type())
-
-		stats, _ := m.Stats()
-		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
-	})
+	for hashLevel := 1; hashLevel <= maxHashLevel; hashLevel++ {
+		name := fmt.Sprintf("random max hash level %d", hashLevel)
+		t.Run(name, func(t *testing.T) {
+			testMapRandomHashCollision(t, hashLevel)
+		})
+	}
 }
 
 func TestMapLargeElement(t *testing.T) {

@@ -152,12 +152,9 @@ func newArrayExtraDataFromData(data []byte, decMode cbor.DecMode) (*ArrayExtraDa
 
 	// Check flag
 	flag := data[1]
-	if flag&flagExtraData == 0 {
-		return nil, data, NewDecodingErrorf(
-			"data has invalid flag 0x%x, want 0x%x",
-			flag,
-			flagExtraData,
-		).Fatal()
+	if !isRoot(flag) {
+		return nil, data, NewDecodingErrorf("data has invalid flag 0x%x, want root flag", flag).Fatal()
+
 	}
 
 	// Decode extra data
@@ -197,7 +194,7 @@ func (a *ArrayExtraData) Encode(enc *Encoder, flag byte) error {
 	enc.Scratch[0] = 0
 
 	// Encode flag
-	enc.Scratch[1] = flag | flagExtraData
+	enc.Scratch[1] = flag
 
 	// Write scratch content to encoder
 	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
@@ -228,7 +225,7 @@ func newArrayDataSlabFromData(
 	var extraData *ArrayExtraData
 
 	// Check flag for extra data
-	if data[1]&flagExtraData != 0 {
+	if isRoot(data[1]) {
 		// Decode extra data
 		var err error
 		extraData, data, err = newArrayExtraDataFromData(data, decMode)
@@ -244,11 +241,12 @@ func newArrayDataSlabFromData(
 
 	// Check flag
 	flag := data[1]
-	if flag&flagArray == 0 || flag&flagDataSlab == 0 {
+
+	if getSlabArrayType(flag) != slabArrayData {
 		return nil, NewDecodingErrorf(
 			"data has invalid flag 0x%x, want 0x%x",
 			flag,
-			flagArray&flagDataSlab,
+			maskArrayData,
 		).Fatal()
 	}
 
@@ -316,10 +314,16 @@ func newArrayDataSlabFromData(
 //
 func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
-	flag := flagDataSlab | flagArray
+	flag := maskArrayData
+
+	if a.hasPointer() {
+		flag = setHasPointers(flag)
+	}
 
 	// Encode extra data if present
 	if a.extraData != nil {
+		flag = setRoot(flag)
+
 		err := a.extraData.Encode(enc, flag)
 		if err != nil {
 			return err
@@ -374,6 +378,15 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	}
 
 	return enc.CBOR.Flush()
+}
+
+func (a *ArrayDataSlab) hasPointer() bool {
+	for _, e := range a.elements {
+		if _, ok := e.(StorageIDStorable); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
@@ -737,7 +750,7 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMod
 	var extraData *ArrayExtraData
 
 	// Check flag for extra data
-	if data[1]&flagExtraData != 0 {
+	if isRoot(data[1]) {
 		// Decode extra data
 		var err error
 		extraData, data, err = newArrayExtraDataFromData(data, decMode)
@@ -753,11 +766,12 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMod
 
 	// Check flag
 	flag := data[1]
-	if flag&flagArray == 0 || flag&flagMetaDataSlab == 0 {
+	if getSlabArrayType(flag) != slabArrayMeta {
 		return nil, NewDecodingErrorf(
 			"data has invalid flag 0x%x, want 0x%x",
 			flag,
-			flagArray&flagMetaDataSlab).Fatal()
+			maskArrayMeta,
+		).Fatal()
 	}
 
 	// Decode number of child headers
@@ -834,10 +848,12 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMod
 //
 func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
-	flag := flagArray | flagMetaDataSlab
+	flag := maskArrayMeta
 
 	// Encode extra data if present
 	if a.extraData != nil {
+		flag = setRoot(flag)
+
 		err := a.extraData.Encode(enc, flag)
 		if err != nil {
 			return err

@@ -40,17 +40,29 @@ func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable 
 	if len(data) < 2 {
 		return nil, errors.New("data is too short")
 	}
+
 	flag := data[1]
-	if flag&flagArray != 0 {
 
-		if flag&flagMetaDataSlab != 0 {
+	dataType := getSlabType(flag)
+	switch dataType {
+
+	case slabArray:
+
+		switch arrayDataType := getSlabArrayType(flag); arrayDataType {
+		case slabArrayData:
+			return newArrayDataSlabFromData(id, data, decMode, decodeStorable)
+		case slabArrayMeta:
 			return newArrayMetaDataSlabFromData(id, data, decMode)
+		case slabBasicArray:
+			return newBasicArrayDataSlabFromData(id, data, decMode, decodeStorable)
+		default:
+			return nil, fmt.Errorf("data has invalid flag %x", flag)
 		}
-		return newArrayDataSlabFromData(id, data, decMode, decodeStorable)
 
-	} else if flag&flagBasicArray != 0 {
-		return newBasicArrayDataSlabFromData(id, data, decMode, decodeStorable)
-	} else if flag&flagStorable != 0 {
+	case slabMap:
+		return nil, errors.New("not implemented")
+
+	case slabStorable:
 		const versionAndFlagSize = 2
 		cborDec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
 		storable, err := decodeStorable(cborDec, id)
@@ -61,8 +73,10 @@ func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable 
 			StorageID: id,
 			Storable:  storable,
 		}, nil
+
+	default:
+		return nil, fmt.Errorf("data has invalid flag %x", flag)
 	}
-	return nil, fmt.Errorf("data has invalid flag %x", flag)
 }
 
 // TODO: make it inline

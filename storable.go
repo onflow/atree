@@ -20,14 +20,6 @@ type Storable interface {
 	DeepRemove(storage SlabStorage) error
 }
 
-const (
-	flagMetaDataSlab byte = 0b00000001
-	flagDataSlab     byte = 0b00000010
-	flagArray        byte = 0b00000100
-	flagExtraData    byte = 0b01000000
-	flagStorable     byte = 0b10000000
-)
-
 const CBORTagStorageID = 255
 
 type StorageIDStorable StorageID

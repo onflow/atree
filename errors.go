@@ -81,6 +81,20 @@ func (e *MaxKeySizeError) Error() string {
 	return fmt.Sprintf("the given key (%s) is larger than the maximum limit (%d)", e.keyStr, e.maxKeySize)
 }
 
+// KeyNotFoundError is returned when the key not found in the dictionary
+type KeyNotFoundError struct {
+	key fmt.Stringer
+}
+
+// NewMaxKeySizeError constructs a KeyNotFoundError
+func NewKeyNotFoundError(key fmt.Stringer) *KeyNotFoundError {
+	return &KeyNotFoundError{key: key}
+}
+
+func (e *KeyNotFoundError) Error() string {
+	return fmt.Sprintf("key (%s) not found", e.key.String())
+}
+
 // HashError is a fatal error returned when hash calculation fails
 type HashError struct {
 	err error
@@ -219,7 +233,7 @@ func NewSlabDataError(err error, fatal bool) error {
 }
 
 // NewSlabDataErrorf constructs a new SlabError with error formating
-func NewSlabDataErrorf(msg string, fatal bool, args ...interface{}) error {
+func NewSlabDataErrorf(fatal bool, msg string, args ...interface{}) error {
 	return NewSlabDataError(fmt.Errorf(msg, args...), fatal)
 }
 
@@ -270,3 +284,18 @@ func (e *DecodingError) Error() string {
 }
 
 func (e *DecodingError) Unwrap() error { return e.err }
+
+// DecodingError is a fatal error returned when a method is called which is not yet implemented
+// this is a temporary error
+type NotImplementedError struct {
+	methodName string
+}
+
+// NewDecodingError constructs a DecodingError
+func NewNotImplementedError(methodName string) error {
+	return NewFatalError(&NotImplementedError{methodName: methodName})
+}
+
+func (e *NotImplementedError) Error() string {
+	return fmt.Sprintf("method (%s) is not implemented.", e.methodName)
+}

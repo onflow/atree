@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,7 +59,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	const typeInfo = "[AnyType]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	array, err := NewArray(storage, address, typeInfo)
 
@@ -197,7 +198,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	const typeInfo = "[AnyType]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	array, err := NewArray(storage, address, typeInfo)
 

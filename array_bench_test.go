@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -83,7 +84,7 @@ func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, e
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	const typeInfo = "[AnyType]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	array, err := NewArray(storage, address, typeInfo)
 	if err != nil {

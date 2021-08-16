@@ -4,12 +4,19 @@ import (
 	"fmt"
 )
 
-type Error interface {
-	// returns true if the error is fatal
-	IsFatal() bool
-	// and anything else that is needed to be an error
-	error
+type FatalErr struct {
+	err error
 }
+
+func FatalError(err error) error {
+	return &FatalErr{err: err}
+}
+
+func (e *FatalErr) Error() string {
+	return fmt.Sprintf("fatal error: %s", e.err.Error())
+}
+
+func (e *FatalErr) Unwrap() error { return e.err }
 
 // IndexOutOfBoundsError is returned when an insert or delete operation is attempted on an array index which is out of bounds
 type IndexOutOfBoundsError struct {
@@ -27,11 +34,6 @@ func (e *IndexOutOfBoundsError) Error() string {
 	return fmt.Sprintf("the given index %d is not in the acceptable range (%d-%d)", e.index, e.min, e.max)
 }
 
-// IsFatal returns true if the error is fatal
-func (e *IndexOutOfBoundsError) IsFatal() bool {
-	return false
-}
-
 // MaxArraySizeError is returned when an insert or delete operation is attempted on an array which has reached maximum size
 type MaxArraySizeError struct {
 	maxLen uint64
@@ -46,9 +48,8 @@ func (e *MaxArraySizeError) Error() string {
 	return fmt.Sprintf("array has reach its maximum number of elements %d", e.maxLen)
 }
 
-// IsFatal returns true if the error is fatal
-func (e *MaxArraySizeError) IsFatal() bool {
-	return false
+func (e *MaxArraySizeError) Fatal() error {
+	return FatalError(e)
 }
 
 // NonStorableElementError is returned when we try to store a non-storable element.
@@ -63,11 +64,6 @@ func NewNonStorableElementError(element interface{}) *NonStorableElementError {
 
 func (e *NonStorableElementError) Error() string {
 	return fmt.Sprintf("a non-storable element of type %T found when storing object", e.element)
-}
-
-// IsFatal returns true if the error is fatal
-func (e *NonStorableElementError) IsFatal() bool {
-	return false
 }
 
 // MaxKeySizeError is returned when a dictionary key is too large
@@ -85,11 +81,6 @@ func (e *MaxKeySizeError) Error() string {
 	return fmt.Sprintf("the given key (%s) is larger than the maximum limit (%d)", e.keyStr, e.maxKeySize)
 }
 
-// IsFatal returns true if the error is fatal
-func (e *MaxKeySizeError) IsFatal() bool {
-	return false
-}
-
 // HashError is a fatal error returned when hash calculation fails
 type HashError struct {
 	err error
@@ -104,17 +95,16 @@ func (e *HashError) Error() string {
 	return fmt.Sprintf("atree hasher failed: %s", e.err.Error())
 }
 
-// IsFatal returns true if the error is fatal
-func (e *HashError) IsFatal() bool {
-	return true
-}
-
 // Unwrap returns the wrapped err
 func (e HashError) Unwrap() error {
 	return e.err
 }
 
-// StorageError is a fatal error returned when storage fails
+func (e *HashError) Fatal() error {
+	return FatalError(e)
+}
+
+// StorageError is a usually fatal error returned when storage fails
 type StorageError struct {
 	err error
 }
@@ -128,17 +118,16 @@ func (e *StorageError) Error() string {
 	return fmt.Sprintf("storage failed: %s", e.err.Error())
 }
 
-// IsFatal returns true if the error is fatal
-func (e *StorageError) IsFatal() bool {
-	return true
-}
-
 // Unwrap returns the wrapped err
 func (e StorageError) Unwrap() error {
 	return e.err
 }
 
-// SlabNotFoundError is a fatal error returned when an slab is not found
+func (e *StorageError) Fatal() error {
+	return FatalError(e)
+}
+
+// SlabNotFoundError is a usually fatal error returned when an slab is not found
 type SlabNotFoundError struct {
 	storageID StorageID
 	err       error
@@ -158,12 +147,11 @@ func (e *SlabNotFoundError) Error() string {
 	return fmt.Sprintf("slab with the given storageID (%s) not found. %s", e.storageID.String(), e.err.Error())
 }
 
-// IsFatal returns true if the error is fatal
-func (e *SlabNotFoundError) IsFatal() bool {
-	return true
+func (e *SlabNotFoundError) Fatal() error {
+	return FatalError(e)
 }
 
-// SlabSplitError is a fatal error returned when splitting an slab has failed
+// SlabSplitError is a usually fatal error returned when splitting an slab has failed
 type SlabSplitError struct {
 	err error
 }
@@ -182,12 +170,11 @@ func (e *SlabSplitError) Error() string {
 	return fmt.Sprintf("slab can not split. %s", e.err.Error())
 }
 
-// IsFatal returns true if the error is fatal
-func (e *SlabSplitError) IsFatal() bool {
-	return true
+func (e *SlabSplitError) Fatal() error {
+	return FatalError(e)
 }
 
-// SlabError is a fatal error returned when something is wrong with the content of the slab
+// SlabError is a usually fatal error returned when something is wrong with the content of the slab
 type SlabError struct {
 	err error
 }
@@ -206,12 +193,11 @@ func (e *SlabError) Error() string {
 	return fmt.Sprintf("slab error: %s", e.err.Error())
 }
 
-// IsFatal returns true if the error is fatal
-func (e *SlabError) IsFatal() bool {
-	return true
+func (e *SlabError) Fatal() error {
+	return FatalError(e)
 }
 
-// WrongSlabTypeFoundError is a fatal error returned when an slab is loaded but has an unexpected type
+// WrongSlabTypeFoundError is a usually fatal error returned when an slab is loaded but has an unexpected type
 type WrongSlabTypeFoundError struct {
 	storageID StorageID
 }
@@ -225,12 +211,11 @@ func (e *WrongSlabTypeFoundError) Error() string {
 	return fmt.Sprintf("slab with the given storageID (%s) has a wrong type", e.storageID.String())
 }
 
-// IsFatal returns true if the error is fatal
-func (e *WrongSlabTypeFoundError) IsFatal() bool {
-	return true
+func (e *WrongSlabTypeFoundError) Fatal() error {
+	return FatalError(e)
 }
 
-// DigestLevelNotMatchError is a fatal error returned when a digest level in the dictionary is not matched
+// DigestLevelNotMatchError is a usually fatal error returned when a digest level in the dictionary is not matched
 type DigestLevelNotMatchError struct {
 	got      uint8
 	expected uint8
@@ -245,12 +230,11 @@ func (e *DigestLevelNotMatchError) Error() string {
 	return fmt.Sprintf("got digest level of %d but was expecting %d", e.got, e.expected)
 }
 
-// IsFatal returns true if the error is fatal
-func (e *DigestLevelNotMatchError) IsFatal() bool {
-	return true
+func (e *DigestLevelNotMatchError) Fatal() error {
+	return FatalError(e)
 }
 
-// EncodingError is a fatal error returned when a encoding operation fails
+// EncodingError is a usually fatal error returned when a encoding operation fails
 type EncodingError struct {
 	err error
 }
@@ -269,12 +253,11 @@ func (e *EncodingError) Error() string {
 	return fmt.Sprintf("Encoding has failed %s", e.err.Error())
 }
 
-// IsFatal returns true if the error is fatal
-func (e *EncodingError) IsFatal() bool {
-	return true
+func (e *EncodingError) Fatal() error {
+	return FatalError(e)
 }
 
-// DecodingError is a fatal error returned when a decoding operation fails
+// DecodingError is a usually fatal error returned when a decoding operation fails
 type DecodingError struct {
 	err error
 }
@@ -293,7 +276,6 @@ func (e *DecodingError) Error() string {
 	return fmt.Sprintf("Encoding has failed %s", e.err.Error())
 }
 
-// IsFatal returns true if the error is fatal
-func (e *DecodingError) IsFatal() bool {
-	return true
+func (e *DecodingError) Fatal() error {
+	return FatalError(e)
 }

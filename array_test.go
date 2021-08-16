@@ -55,7 +55,7 @@ func TestAppendAndGet(t *testing.T) {
 
 	t.Parallel()
 
-	const typeInfo = "[UInt64]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	const arraySize = 256 * 256
 
@@ -100,7 +100,7 @@ func TestSetAndGet(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	const typeInfo = "[UInt64]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := newTestPersistentStorage(t)
 
@@ -151,7 +151,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -191,7 +191,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -231,7 +231,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -282,7 +282,7 @@ func TestRemove(t *testing.T) {
 	t.Run("remove-first", func(t *testing.T) {
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -332,7 +332,7 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -382,7 +382,7 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -440,7 +440,7 @@ func TestSplit(t *testing.T) {
 	t.Run("data slab as root", func(t *testing.T) {
 		const arraySize = 50
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -474,7 +474,7 @@ func TestSplit(t *testing.T) {
 
 		const arraySize = 50
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -515,7 +515,7 @@ func TestSplit(t *testing.T) {
 func TestIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		const typeInfo = "[AnyType]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -541,7 +541,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -575,7 +575,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -614,7 +614,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -653,7 +653,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -688,7 +688,7 @@ func TestIterate(t *testing.T) {
 
 	t.Run("stop", func(t *testing.T) {
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -723,7 +723,7 @@ func TestIterate(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -769,7 +769,7 @@ func TestDeepCopy(t *testing.T) {
 
 	const arraySize uint64 = 256 * 256
 
-	const typeInfo = "[UInt64]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := newTestPersistentStorage(t)
 
@@ -826,7 +826,7 @@ func TestDeepRemove(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	const typeInfo1 = "[AnyStruct]"
+	typeInfo1 := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := newTestPersistentStorage(t)
 
@@ -843,7 +843,7 @@ func TestDeepRemove(t *testing.T) {
 	err = array1.Append(NewStringValue(randStr(stringSize)))
 	require.NoError(t, err)
 
-	const typeInfo2 = "[AnyStruct]"
+	typeInfo2 := cbor.RawMessage{0x18, 0x2B} // unsigned(43)
 
 	array2, err := NewArray(storage, address, typeInfo2)
 	require.NoError(t, err)
@@ -888,7 +888,7 @@ func TestConstRootStorageID(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	const typeInfo = "[UInt64]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := newTestPersistentStorage(t)
 
@@ -931,7 +931,7 @@ func TestSetRandomValue(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	const typeInfo = "[UInt64]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := newTestPersistentStorage(t)
 
@@ -996,7 +996,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -1041,7 +1041,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -1086,7 +1086,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		storage := newTestPersistentStorage(t)
 
@@ -1140,7 +1140,7 @@ func TestRemoveRandomElement(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	const typeInfo = "[UInt64]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := newTestPersistentStorage(t)
 
@@ -1211,7 +1211,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	const typeInfo = "[UInt64]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := newTestPersistentStorage(t)
 
@@ -1331,7 +1331,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	const typeInfo = "[UInt8]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := newTestPersistentStorage(t)
 
@@ -1459,7 +1459,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	const typeInfo = "[AnyType]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := newTestPersistentStorage(t)
 
@@ -1578,7 +1578,7 @@ func TestNestedArray(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const nestedTypeInfo = "[UInt64]"
+		nestedTypeInfo := cbor.RawMessage{0x18, 0x2B} // unsigned(43)
 
 		storage := newTestPersistentStorage(t)
 
@@ -1600,7 +1600,7 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested
 		}
 
-		const typeInfo = "[[UInt64]]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
@@ -1626,7 +1626,7 @@ func TestNestedArray(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		const nestedTypeInfo = "[UInt64]"
+		nestedTypeInfo := cbor.RawMessage{0x18, 0x2B} // unsigned(43)
 
 		storage := newTestPersistentStorage(t)
 
@@ -1646,7 +1646,7 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested
 		}
 
-		const typeInfo = "[[UInt64]]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
@@ -1683,7 +1683,7 @@ func TestEncode(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("no pointers", func(t *testing.T) {
-		const typeInfo = "[UInt64]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		// Create and populate array in memory
 		storage := NewBasicSlabStorage(encMode, decMode)
@@ -1717,8 +1717,8 @@ func TestEncode(t *testing.T) {
 				0x81,
 				// array of extra data
 				0x81,
-				// type info "[UInt64]"
-				0x68, 0x5b, 0x55, 0x49, 0x6e, 0x74, 0x36, 0x34, 0x5d,
+				// type info
+				0x18, 0x2a,
 
 				// version
 				0x00,
@@ -1793,7 +1793,7 @@ func TestEncode(t *testing.T) {
 	})
 
 	t.Run("has pointers", func(t *testing.T) {
-		const typeInfo = "[AnyType]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		// Create and populate array in memory
 		storage := NewBasicSlabStorage(encMode, decMode)
@@ -1815,7 +1815,9 @@ func TestEncode(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		array2, err := NewArray(storage, address, "[AnyType]")
+		typeInfo2 := cbor.RawMessage{0x18, 0x2B} // unsigned(43)
+
+		array2, err := NewArray(storage, address, typeInfo2)
 		require.NoError(t, err)
 
 		err = array2.Append(Uint64Value(0))
@@ -1839,8 +1841,8 @@ func TestEncode(t *testing.T) {
 				0x81,
 				// array of extra data
 				0x81,
-				// type info "[AnyType]"
-				0x69, 0x5b, 0x41, 0x6e, 0x79, 0x54, 0x79, 0x70, 0x65, 0x5d,
+				// type info
+				0x18, 0x2a,
 
 				// version
 				0x00,
@@ -1917,8 +1919,8 @@ func TestEncode(t *testing.T) {
 				0x80,
 				// array of extra data
 				0x81,
-				// type info "[AnyType]"
-				0x69, 0x5b, 0x41, 0x6e, 0x79, 0x54, 0x79, 0x70, 0x65, 0x5d,
+				// type info
+				0x18, 0x2b,
 
 				// version
 				0x00,
@@ -1952,7 +1954,7 @@ func TestDecodeEncode(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	const typeInfo = "[UInt64]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1971,8 +1973,8 @@ func TestDecodeEncode(t *testing.T) {
 			0x81,
 			// array of extra data
 			0x81,
-			// type info "[UInt64]"
-			0x68, 0x5b, 0x55, 0x49, 0x6e, 0x74, 0x36, 0x34, 0x5d,
+			// type info
+			0x18, 0x2a,
 
 			// version
 			0x00,
@@ -2114,7 +2116,7 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	const typeInfo = "[AnyType]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := NewBasicSlabStorage(encMode, decMode)
 	storage.DecodeStorable = decodeStorable
@@ -2192,7 +2194,7 @@ func TestEmptyArray(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	const typeInfo = "[UInt64]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := NewBasicSlabStorage(encMode, decMode)
 	storage.DecodeStorable = decodeStorable
@@ -2261,8 +2263,8 @@ func TestEmptyArray(t *testing.T) {
 			0x80,
 			// array of extra data
 			0x81,
-			// type info "[UInt64]"
-			0x68, 0x5b, 0x55, 0x49, 0x6e, 0x74, 0x36, 0x34, 0x5d,
+			// type info
+			0x18, 0x2a,
 
 			// version
 			0x00,
@@ -2297,7 +2299,7 @@ func TestStringElement(t *testing.T) {
 
 	t.Run("inline", func(t *testing.T) {
 
-		const typeInfo = "[string]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		const arraySize = 256 * 256
 
@@ -2348,7 +2350,7 @@ func TestStringElement(t *testing.T) {
 
 	t.Run("external slab", func(t *testing.T) {
 
-		const typeInfo = "[string]"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		const arraySize = 256 * 256
 

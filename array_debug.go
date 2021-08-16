@@ -5,10 +5,13 @@
 package atree
 
 import (
+	"bytes"
 	"container/list"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 type Stats struct {
@@ -146,15 +149,19 @@ func (a *Array) Print() {
 	}
 }
 
-func (a *Array) valid(typeInfo string) (bool, error) {
+func (a *Array) valid(typeInfo cbor.RawMessage) (bool, error) {
 
 	// Verify that root has type information
 	extraData := a.root.ExtraData()
 	if extraData == nil {
 		return false, errors.New("root slab doesn't have extra data")
 	}
-	if extraData.TypeInfo != typeInfo {
-		return false, fmt.Errorf("type information is %s, want %s", extraData.TypeInfo, typeInfo)
+	if !bytes.Equal(extraData.TypeInfo, typeInfo) {
+		return false, fmt.Errorf(
+			"type information is %v, want %v",
+			extraData.TypeInfo,
+			typeInfo,
+		)
 	}
 
 	verified, _, err := a._valid(a.root.Header().id, 0)

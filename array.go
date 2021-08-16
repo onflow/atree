@@ -41,8 +41,8 @@ type ArraySlabHeader struct {
 }
 
 type ArrayExtraData struct {
-	_        struct{} `cbor:",toarray"`
-	TypeInfo string   // array type
+	_        struct{}        `cbor:",toarray"`
+	TypeInfo cbor.RawMessage // array type
 }
 
 // ArrayDataSlab is leaf node, implementing ArraySlab.
@@ -1656,7 +1656,7 @@ func (a *ArrayMetaDataSlab) String() string {
 	return strings.Join(elemsStr, " ")
 }
 
-func NewArray(storage SlabStorage, address Address, typeInfo string) (*Array, error) {
+func NewArray(storage SlabStorage, address Address, typeInfo cbor.RawMessage) (*Array, error) {
 
 	extraData := &ArrayExtraData{TypeInfo: typeInfo}
 
@@ -1979,11 +1979,11 @@ func (a *Array) StorageID() StorageID {
 	return a.root.ID()
 }
 
-func (a *Array) Type() string {
+func (a *Array) Type() cbor.RawMessage {
 	if extraData := a.root.ExtraData(); extraData != nil {
 		return extraData.TypeInfo
 	}
-	return ""
+	return nil
 }
 
 func (a *Array) String() string {

@@ -47,7 +47,7 @@ var (
 	emptyBlake3Hash [4]uint64
 )
 
-func NewBasicDigesterBuilder(key [16]byte) *basicDigesterBuilder {
+func newBasicDigesterBuilder(key [16]byte) *basicDigesterBuilder {
 	return &basicDigesterBuilder{secretKey: key}
 }
 
@@ -106,6 +106,6 @@ func (bd *basicDigester) Digest(level int) (Digest, error) {
 	}
 }
 
-func (d *basicDigester) Levels() int {
+func (bd *basicDigester) Levels() int {
 	return 4
 }

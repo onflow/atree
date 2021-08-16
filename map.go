@@ -286,7 +286,7 @@ func (e *singleElement) String() string {
 func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapValue, error) {
 
 	// Adjust level and hkey for collision group
-	level += 1
+	level++
 	if level > digester.Levels() {
 		panic(fmt.Sprintf("inlineCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels()))
 	}
@@ -299,7 +299,7 @@ func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level
 func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, key ComparableValue, value MapValue) (element, bool, error) {
 
 	// Adjust level and hkey for collision group
-	level += 1
+	level++
 	if level > digester.Levels() {
 		panic(fmt.Sprintf("inlineCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels()))
 	}
@@ -367,7 +367,7 @@ func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, lev
 	}
 
 	// Adjust level and hkey for collision group
-	level += 1
+	level++
 	if level > digester.Levels() {
 		panic(fmt.Sprintf("externalCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels()))
 	}
@@ -384,7 +384,7 @@ func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b Dig
 	}
 
 	// Adjust level and hkey for collision group
-	level += 1
+	level++
 	if level > digester.Levels() {
 		panic(fmt.Sprintf("externalCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels()))
 	}
@@ -2064,7 +2064,7 @@ func firstMapDataSlab(storage SlabStorage, slab MapSlab) (MapSlab, error) {
 }
 
 func (extra *MapExtraData) incrementCount() {
-	extra.Count += 1
+	extra.Count++
 }
 
 type MapElementIterator struct {

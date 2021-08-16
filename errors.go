@@ -4,19 +4,19 @@ import (
 	"fmt"
 )
 
-type FatalErr struct {
+type FatalError struct {
 	err error
 }
 
-func FatalError(err error) error {
-	return &FatalErr{err: err}
+func NewFatalError(err error) error {
+	return &FatalError{err: err}
 }
 
-func (e *FatalErr) Error() string {
+func (e *FatalError) Error() string {
 	return fmt.Sprintf("fatal error: %s", e.err.Error())
 }
 
-func (e *FatalErr) Unwrap() error { return e.err }
+func (e *FatalError) Unwrap() error { return e.err }
 
 // IndexOutOfBoundsError is returned when an insert or delete operation is attempted on an array index which is out of bounds
 type IndexOutOfBoundsError struct {
@@ -49,7 +49,7 @@ func (e *MaxArraySizeError) Error() string {
 }
 
 func (e *MaxArraySizeError) Fatal() error {
-	return FatalError(e)
+	return NewFatalError(e)
 }
 
 // NonStorableElementError is returned when we try to store a non-storable element.
@@ -101,7 +101,7 @@ func (e HashError) Unwrap() error {
 }
 
 func (e *HashError) Fatal() error {
-	return FatalError(e)
+	return NewFatalError(e)
 }
 
 // StorageError is a usually fatal error returned when storage fails
@@ -124,7 +124,7 @@ func (e StorageError) Unwrap() error {
 }
 
 func (e *StorageError) Fatal() error {
-	return FatalError(e)
+	return NewFatalError(e)
 }
 
 // SlabNotFoundError is a usually fatal error returned when an slab is not found
@@ -148,7 +148,7 @@ func (e *SlabNotFoundError) Error() string {
 }
 
 func (e *SlabNotFoundError) Fatal() error {
-	return FatalError(e)
+	return NewFatalError(e)
 }
 
 // SlabSplitError is a usually fatal error returned when splitting an slab has failed
@@ -171,7 +171,7 @@ func (e *SlabSplitError) Error() string {
 }
 
 func (e *SlabSplitError) Fatal() error {
-	return FatalError(e)
+	return NewFatalError(e)
 }
 
 // SlabError is a usually fatal error returned when something is wrong with the content of the slab
@@ -194,7 +194,7 @@ func (e *SlabError) Error() string {
 }
 
 func (e *SlabError) Fatal() error {
-	return FatalError(e)
+	return NewFatalError(e)
 }
 
 // WrongSlabTypeFoundError is a usually fatal error returned when an slab is loaded but has an unexpected type
@@ -212,7 +212,7 @@ func (e *WrongSlabTypeFoundError) Error() string {
 }
 
 func (e *WrongSlabTypeFoundError) Fatal() error {
-	return FatalError(e)
+	return NewFatalError(e)
 }
 
 // DigestLevelNotMatchError is a usually fatal error returned when a digest level in the dictionary is not matched
@@ -231,7 +231,7 @@ func (e *DigestLevelNotMatchError) Error() string {
 }
 
 func (e *DigestLevelNotMatchError) Fatal() error {
-	return FatalError(e)
+	return NewFatalError(e)
 }
 
 // EncodingError is a usually fatal error returned when a encoding operation fails
@@ -254,7 +254,7 @@ func (e *EncodingError) Error() string {
 }
 
 func (e *EncodingError) Fatal() error {
-	return FatalError(e)
+	return NewFatalError(e)
 }
 
 // DecodingError is a usually fatal error returned when a decoding operation fails
@@ -277,5 +277,5 @@ func (e *DecodingError) Error() string {
 }
 
 func (e *DecodingError) Fatal() error {
-	return FatalError(e)
+	return NewFatalError(e)
 }

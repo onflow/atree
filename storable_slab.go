@@ -31,7 +31,6 @@ func (s StorableSlab) Encode(enc *Encoder) error {
 
 	enc.Scratch[1] = flag
 
-	const versionAndFlagSize = 2
 	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
 	if err != nil {
 		return err
@@ -41,7 +40,6 @@ func (s StorableSlab) Encode(enc *Encoder) error {
 }
 
 func (s StorableSlab) ByteSize() uint32 {
-	const versionAndFlagSize = 2
 	return versionAndFlagSize + s.Storable.ByteSize()
 }
 

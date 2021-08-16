@@ -83,16 +83,16 @@ func (e *MaxKeySizeError) Error() string {
 
 // KeyNotFoundError is returned when the key not found in the dictionary
 type KeyNotFoundError struct {
-	key fmt.Stringer
+	key interface{}
 }
 
 // NewMaxKeySizeError constructs a KeyNotFoundError
-func NewKeyNotFoundError(key fmt.Stringer) *KeyNotFoundError {
+func NewKeyNotFoundError(key interface{}) *KeyNotFoundError {
 	return &KeyNotFoundError{key: key}
 }
 
 func (e *KeyNotFoundError) Error() string {
-	return fmt.Sprintf("key (%s) not found", e.key.String())
+	return fmt.Sprintf("key (%s) not found", e.key)
 }
 
 // HashError is a fatal error returned when hash calculation fails

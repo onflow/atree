@@ -345,7 +345,7 @@ func (v *StringValue) Storable(storage SlabStorage, address Address) (Storable, 
 		// Create StorableSlab
 		id, err := storage.GenerateStorageID(address)
 		if err != nil {
-			return nil, err
+			return nil, NewStorageError(err)
 		}
 
 		slab := &StorableSlab{

@@ -312,7 +312,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 			id, err := storage.GenerateStorageID(address)
 
 			if err != nil {
-				return nil, false, err
+				return nil, false, NewStorageError(err)
 			}
 
 			// Create MapDataSlab
@@ -897,7 +897,7 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 
 	sId, err := storage.GenerateStorageID(m.ID().Address)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, NewStorageError(err)
 	}
 
 	// Create new right slab
@@ -1461,7 +1461,7 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 
 	sId, err := storage.GenerateStorageID(m.ID().Address)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, NewStorageError(err)
 	}
 
 	// Construct right slab
@@ -1566,7 +1566,7 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 
 	sId, err := storage.GenerateStorageID(address)
 	if err != nil {
-		return nil, err
+		return nil, NewStorageError(err)
 	}
 
 	root := &MapDataSlab{
@@ -1693,7 +1693,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) error {
 		// Assign a new storage id to old root before splitting it.
 		sId, err := m.storage.GenerateStorageID(m.Address())
 		if err != nil {
-			return err
+			return NewStorageError(err)
 		}
 
 		oldRoot := m.root

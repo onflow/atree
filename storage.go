@@ -438,45 +438,47 @@ func (s *PersistentSlabStorage) Commit() error {
 	var err error
 
 	// this part ensures the keys are sorted so commit operation is deterministic
-	keys := make([]StorageID, 0, len(s.deltas))
+	keysWithOwners := make([]StorageID, 0, len(s.deltas))
 	for k := range s.deltas {
-		keys = append(keys, k)
+		// ignore the ones that are not owned by accounts
+		if k.Address != AddressUndefined {
+			keysWithOwners = append(keysWithOwners, k)
+		}
 	}
 
-	sort.Slice(keys, func(i, j int) bool {
-		if keys[i].Address == keys[j].Address {
-			return keys[i].IndexAsUint64() < keys[j].IndexAsUint64()
+	sort.Slice(keysWithOwners, func(i, j int) bool {
+		if keysWithOwners[i].Address == keysWithOwners[j].Address {
+			return keysWithOwners[i].IndexAsUint64() < keysWithOwners[j].IndexAsUint64()
 		}
-		return keys[i].AddressAsUint64() < keys[j].AddressAsUint64()
+		return keysWithOwners[i].AddressAsUint64() < keysWithOwners[j].AddressAsUint64()
 	})
 
-	for _, id := range keys {
+	for _, id := range keysWithOwners {
 		slab := s.deltas[id]
-		if id.Address != AddressUndefined {
-			// deleted slabs
-			if slab == nil {
-				err = s.baseStorage.Remove(id)
-				if err != nil {
-					return err
-				}
-				continue
-			}
 
-			// serialize
-			data, err := Encode(slab, s.cborEncMode)
+		// deleted slabs
+		if slab == nil {
+			err = s.baseStorage.Remove(id)
 			if err != nil {
 				return err
 			}
-
-			// store
-			err = s.baseStorage.Store(id, data)
-			if err != nil {
-				return err
-			}
-
-			// add to read cache
-			s.cache[id] = slab
+			continue
 		}
+
+		// serialize
+		data, err := Encode(slab, s.cborEncMode)
+		if err != nil {
+			return err
+		}
+
+		// store
+		err = s.baseStorage.Store(id, data)
+		if err != nil {
+			return err
+		}
+
+		// add to read cache
+		s.cache[id] = slab
 	}
 	// reset deltas
 	s.deltas = make(map[StorageID]Slab)

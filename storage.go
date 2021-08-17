@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -28,6 +29,14 @@ func (id StorageID) String() string {
 		binary.BigEndian.Uint64(id.Address[:]),
 		binary.BigEndian.Uint64(id.Index[:]),
 	)
+}
+
+func (id StorageID) AddressAsUint64() uint64 {
+	return binary.BigEndian.Uint64(id.Address[:])
+}
+
+func (id StorageID) IndexAsUint64() uint64 {
+	return binary.BigEndian.Uint64(id.Index[:])
 }
 
 var (
@@ -427,7 +436,22 @@ func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
 
 func (s *PersistentSlabStorage) Commit() error {
 	var err error
-	for id, slab := range s.deltas {
+
+	// this part ensures the keys are sorted so commit operation is deterministic
+	keys := make([]StorageID, 0, len(s.deltas))
+	for k := range s.deltas {
+		keys = append(keys, k)
+	}
+
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].Address == keys[j].Address {
+			return keys[i].IndexAsUint64() < keys[j].IndexAsUint64()
+		}
+		return keys[i].AddressAsUint64() < keys[j].AddressAsUint64()
+	})
+
+	for _, id := range keys {
+		slab := s.deltas[id]
 		if id.Address != AddressUndefined {
 			// deleted slabs
 			if slab == nil {

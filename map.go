@@ -1075,14 +1075,14 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		return nil, nil, err
 	}
 
-	sid, err := storage.GenerateStorageID(m.ID().Address)
+	sId, err := storage.GenerateStorageID(m.ID().Address)
 	if err != nil {
 		return nil, nil, NewStorageError(err)
 	}
 	// Create new right slab
 	rightSlab := &MapDataSlab{
 		header: MapSlabHeader{
-			id:       sid,
+			id:       sId,
 			size:     mapDataSlabPrefixSize + rightElements.Size(),
 			firstKey: rightElements.firstKey(),
 		},
@@ -1675,14 +1675,14 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	leftChildrenCount := int(math.Ceil(float64(len(m.childrenHeaders)) / 2))
 	leftSize := leftChildrenCount * mapSlabHeaderSize
 
-	sid, err := storage.GenerateStorageID(m.ID().Address)
+	sId, err := storage.GenerateStorageID(m.ID().Address)
 	if err != nil {
 		return nil, nil, NewStorageError(err)
 	}
 	// Construct right slab
 	rightSlab := &MapMetaDataSlab{
 		header: MapSlabHeader{
-			id:       sid,
+			id:       sId,
 			size:     m.header.size - uint32(leftSize),
 			firstKey: m.childrenHeaders[leftChildrenCount].firstKey,
 		},
@@ -1816,14 +1816,14 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 
 	extraData := &MapExtraData{TypeInfo: typeInfo}
 
-	sid, err := storage.GenerateStorageID(address)
+	sId, err := storage.GenerateStorageID(address)
 	if err != nil {
 		return nil, NewStorageError(err)
 	}
 
 	root := &MapDataSlab{
 		header: MapSlabHeader{
-			id:   sid,
+			id:   sId,
 			size: mapDataSlabPrefixSize,
 		},
 		elements:  &hkeyElements{},

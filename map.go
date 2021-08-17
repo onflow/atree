@@ -410,7 +410,7 @@ func (e *externalCollisionGroup) Elements(storage SlabStorage) (elements, error)
 	}
 	dataSlab, ok := slab.(*MapDataSlab)
 	if !ok {
-		return nil, NewSlabDataErrorf(true, "expect MapDataSlab, got %T", slab)
+		return nil, NewSlabDataErrorf("expect MapDataSlab, got %T", slab)
 	}
 	return dataSlab.elements, nil
 }
@@ -1918,7 +1918,7 @@ func (i *MapIterator) Next() (key Value, value Value, err error) {
 			return nil, nil, err
 		}
 		if !found {
-			return nil, nil, NewSlabNotFoundErrorf(i.id, true, "next slab not found inside MapIterator")
+			return nil, nil, NewSlabNotFoundErrorf(i.id, "next slab not found inside MapIterator")
 		}
 
 		dataSlab := slab.(*MapDataSlab)

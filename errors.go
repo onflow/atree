@@ -110,7 +110,7 @@ func (e *HashError) Error() string {
 }
 
 // Unwrap returns the wrapped err
-func (e HashError) Unwrap() error { return e.err }
+func (e *HashError) Unwrap() error { return e.err }
 
 // StorageError is always a fatal error returned when storage fails
 type StorageError struct {
@@ -127,7 +127,7 @@ func (e *StorageError) Error() string {
 }
 
 // Unwrap returns the wrapped err
-func (e StorageError) Unwrap() error { return e.err }
+func (e *StorageError) Unwrap() error { return e.err }
 
 // SlabNotFoundError is always a fatal error returned when an slab is not found
 type SlabNotFoundError struct {

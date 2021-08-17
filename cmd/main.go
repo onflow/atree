@@ -121,7 +121,7 @@ func main() {
 	storage := atree.NewBasicSlabStorage(encMode, decMode)
 	storage.DecodeStorable = decodeStorable
 
-	const typeInfo = "[UInt64]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 

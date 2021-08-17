@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest]
-        go-version: [1.16.x]
+        go-version: [1.16.x, 1.17.x]
         
     steps:
     - name: Install Go
@@ -34,4 +34,4 @@ jobs:
     - name: Run tests
       run: |
         go version
-        go test -timeout 30m -race -v ./...
+        go test -timeout 60m -race -v ./...

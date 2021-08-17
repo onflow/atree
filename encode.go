@@ -63,7 +63,6 @@ func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable 
 		return nil, errors.New("not implemented")
 
 	case slabStorable:
-		const versionAndFlagSize = 2
 		cborDec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
 		storable, err := decodeStorable(cborDec, id)
 		if err != nil {

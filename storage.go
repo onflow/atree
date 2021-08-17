@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -28,6 +29,14 @@ func (id StorageID) String() string {
 		binary.BigEndian.Uint64(id.Address[:]),
 		binary.BigEndian.Uint64(id.Index[:]),
 	)
+}
+
+func (id StorageID) AddressAsUint64() uint64 {
+	return binary.BigEndian.Uint64(id.Address[:])
+}
+
+func (id StorageID) IndexAsUint64() uint64 {
+	return binary.BigEndian.Uint64(id.Index[:])
 }
 
 var (
@@ -427,32 +436,51 @@ func (s *PersistentSlabStorage) GenerateStorageID(address Address) StorageID {
 
 func (s *PersistentSlabStorage) Commit() error {
 	var err error
-	for id, slab := range s.deltas {
-		if id.Address != AddressUndefined {
-			// deleted slabs
-			if slab == nil {
-				err = s.baseStorage.Remove(id)
-				if err != nil {
-					return err
-				}
-				continue
-			}
 
-			// serialize
-			data, err := Encode(slab, s.cborEncMode)
-			if err != nil {
-				return err
-			}
-
-			// store
-			err = s.baseStorage.Store(id, data)
-			if err != nil {
-				return err
-			}
-
-			// add to read cache
-			s.cache[id] = slab
+	// this part ensures the keys are sorted so commit operation is deterministic
+	keysWithOwners := make([]StorageID, 0, len(s.deltas))
+	for k := range s.deltas {
+		// ignore the ones that are not owned by accounts
+		if k.Address != AddressUndefined {
+			keysWithOwners = append(keysWithOwners, k)
 		}
+	}
+
+	sort.Slice(keysWithOwners, func(i, j int) bool {
+		a := keysWithOwners[i]
+		b := keysWithOwners[j]
+		if a.Address == b.Address {
+			return a.IndexAsUint64() < b.IndexAsUint64()
+		}
+		return a.AddressAsUint64() < b.AddressAsUint64()
+	})
+
+	for _, id := range keysWithOwners {
+		slab := s.deltas[id]
+
+		// deleted slabs
+		if slab == nil {
+			err = s.baseStorage.Remove(id)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		// serialize
+		data, err := Encode(slab, s.cborEncMode)
+		if err != nil {
+			return err
+		}
+
+		// store
+		err = s.baseStorage.Store(id, data)
+		if err != nil {
+			return err
+		}
+
+		// add to read cache
+		s.cache[id] = slab
 	}
 	// reset deltas
 	s.deltas = make(map[StorageID]Slab)

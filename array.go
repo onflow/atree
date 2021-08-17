@@ -141,7 +141,7 @@ func (a *Array) Value(_ SlabStorage) (Value, error) {
 	return a, nil
 }
 
-func (a *Array) Storable(_ SlabStorage, _ Address) (Storable, error) {
+func (a *Array) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
 	return StorageIDStorable(a.StorageID()), nil
 }
 
@@ -1706,7 +1706,7 @@ func (a *Array) Get(i uint64) (Value, error) {
 }
 
 func (a *Array) Set(index uint64, value Value) error {
-	storable, err := value.Storable(a.Storage, a.Address())
+	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineElementSize)
 	if err != nil {
 		return err
 	}
@@ -1718,7 +1718,7 @@ func (a *Array) Append(value Value) error {
 }
 
 func (a *Array) Insert(index uint64, value Value) error {
-	storable, err := value.Storable(a.Storage, a.Address())
+	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineElementSize)
 	if err != nil {
 		return err
 	}

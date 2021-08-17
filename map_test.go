@@ -2,6 +2,7 @@ package atree
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"sort"
 	"testing"
@@ -307,6 +308,185 @@ func TestMapHas(t *testing.T) {
 	require.Equal(t, uint64(mapSize), m.Count())
 }
 
+func TestMapRemove(t *testing.T) {
+
+	SetThreshold(512)
+	defer func() {
+		SetThreshold(1024)
+	}()
+
+	t.Run("small key and value", func(t *testing.T) {
+
+		const mapSize = 2 * 1024
+
+		const keyStringMaxSize = 16
+
+		const valueStringMaxSize = 16
+
+		const typeInfo = "map[String]Uint64"
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		storage := newTestInMemoryStorage(t)
+
+		uniqueKeys := make(map[string]bool, mapSize)
+		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		for i := uint64(0); i < mapSize; i++ {
+			for {
+				s := randStr(keyStringMaxSize)
+				if !uniqueKeys[s] {
+					uniqueKeys[s] = true
+
+					k := NewStringValue(s)
+					uniqueKeyValues[k] = NewStringValue(randStr(valueStringMaxSize))
+					break
+				}
+			}
+		}
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		require.NoError(t, err)
+
+		// Insert elements
+		for k, v := range uniqueKeyValues {
+			err := m.Set(k, v)
+			require.NoError(t, err)
+		}
+
+		verified, err := m.valid()
+		if !verified {
+			m.Print()
+		}
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		// Get elements
+		for k, v := range uniqueKeyValues {
+			strv := k.(*StringValue)
+			require.NotNil(t, strv)
+
+			e, err := m.Get(NewStringValue(strv.str))
+			require.NoError(t, err)
+			require.Equal(t, v, e)
+		}
+
+		count := len(uniqueKeyValues)
+
+		// Remove all elements
+		for k, v := range uniqueKeyValues {
+			strv := k.(*StringValue)
+			require.NotNil(t, strv)
+
+			removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
+			require.NoError(t, err)
+			require.Equal(t, k, removedKey)
+			require.Equal(t, v, removedValue)
+
+			removedKey, removedValue, err = m.Remove(NewStringValue(strv.str))
+			require.Error(t, err)
+			require.Nil(t, removedKey)
+			require.Nil(t, removedValue)
+
+			count--
+
+			require.Equal(t, uint64(count), m.Count())
+
+			require.Equal(t, typeInfo, m.Type())
+		}
+
+		stats, _ := m.Stats()
+		require.Equal(t, uint64(1), stats.DataSlabCount)
+		require.Equal(t, uint64(0), stats.MetaDataSlabCount)
+		require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
+
+		require.Equal(t, int(1), m.storage.Count())
+	})
+
+	t.Run("large key and value", func(t *testing.T) {
+		const mapSize = 2 * 1024
+
+		const keyStringMaxSize = 512
+
+		const valueStringMaxSize = 512
+
+		const typeInfo = "map[String]Uint64"
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		storage := newTestInMemoryStorage(t)
+
+		uniqueKeys := make(map[string]bool, mapSize)
+		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		for i := uint64(0); i < mapSize; i++ {
+			for {
+				s := randStr(keyStringMaxSize)
+				if !uniqueKeys[s] {
+					uniqueKeys[s] = true
+
+					k := NewStringValue(s)
+					uniqueKeyValues[k] = NewStringValue(randStr(valueStringMaxSize))
+					break
+				}
+			}
+		}
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		require.NoError(t, err)
+
+		// Insert elements
+		for k, v := range uniqueKeyValues {
+			err := m.Set(k, v)
+			require.NoError(t, err)
+		}
+
+		verified, err := m.valid()
+		if !verified {
+			m.Print()
+		}
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		// Get elements
+		for k, v := range uniqueKeyValues {
+			strv := k.(*StringValue)
+			require.NotNil(t, strv)
+
+			e, err := m.Get(NewStringValue(strv.str))
+			require.NoError(t, err)
+			require.Equal(t, v, e)
+		}
+
+		count := len(uniqueKeyValues)
+
+		// Remove all elements
+		for k, v := range uniqueKeyValues {
+			strv := k.(*StringValue)
+			require.NotNil(t, strv)
+
+			removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
+			require.NoError(t, err)
+			require.Equal(t, k, removedKey)
+			require.Equal(t, v, removedValue)
+
+			removedKey, removedValue, err = m.Remove(NewStringValue(strv.str))
+			require.Error(t, err)
+			require.Nil(t, removedKey)
+			require.Nil(t, removedValue)
+
+			count--
+
+			require.Equal(t, uint64(count), m.Count())
+
+			require.Equal(t, typeInfo, m.Type())
+		}
+
+		stats, _ := m.Stats()
+		require.Equal(t, uint64(1), stats.DataSlabCount)
+		require.Equal(t, uint64(0), stats.MetaDataSlabCount)
+		require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
+	})
+}
+
 func TestMapIterate(t *testing.T) {
 	t.Run("no collision", func(t *testing.T) {
 		const mapSize = 64 * 1024
@@ -561,6 +741,27 @@ func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
 	stats, _ := m.Stats()
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
 	require.Equal(t, uint64(mockDigestCount), stats.CollisionDataSlabCount)
+
+	for k, v := range uniqueKeyValues {
+		strv := k.(*StringValue)
+		require.NotNil(t, strv)
+
+		removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
+		require.NoError(t, err)
+		require.Equal(t, k, removedKey)
+		require.Equal(t, v, removedValue)
+	}
+
+	require.Equal(t, uint64(0), m.Count())
+
+	require.Equal(t, typeInfo, m.Type())
+
+	require.Equal(t, uint64(1), uint64(m.storage.Count()))
+
+	stats, _ = m.Stats()
+	require.Equal(t, uint64(1), stats.DataSlabCount)
+	require.Equal(t, uint64(0), stats.MetaDataSlabCount)
+	require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
 }
 
 func testMapRandomHashCollision(t *testing.T, maxHashLevel int) {
@@ -624,6 +825,27 @@ func testMapRandomHashCollision(t *testing.T, maxHashLevel int) {
 
 	stats, _ := m.Stats()
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
+
+	for k, v := range uniqueKeyValues {
+		strv := k.(*StringValue)
+		require.NotNil(t, strv)
+
+		removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
+		require.NoError(t, err)
+		require.Equal(t, k, removedKey)
+		require.Equal(t, v, removedValue)
+	}
+
+	require.Equal(t, uint64(0), m.Count())
+
+	require.Equal(t, typeInfo, m.Type())
+
+	require.Equal(t, uint64(1), uint64(m.storage.Count()))
+
+	stats, _ = m.Stats()
+	require.Equal(t, uint64(1), stats.DataSlabCount)
+	require.Equal(t, uint64(0), stats.MetaDataSlabCount)
+	require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
 }
 
 func TestMapHashCollision(t *testing.T) {
@@ -701,4 +923,139 @@ func TestMapLargeElement(t *testing.T) {
 
 	stats, _ := m.Stats()
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+mapSize*2, uint64(m.storage.Count()))
+}
+
+func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
+
+	const (
+		SetAction = iota
+		RemoveAction
+		MaxAction
+	)
+
+	const (
+		Uint8Type = iota
+		Uint16Type
+		Uint32Type
+		Uint64Type
+		StringType
+		MaxType
+	)
+
+	SetThreshold(256)
+	defer func() {
+		SetThreshold(1024)
+	}()
+
+	const actionCount = 2 * 1024
+
+	const digestMaxValue = 256
+
+	const digestMaxLevels = 4
+
+	const stringMaxSize = 512
+
+	const typeInfo = "[AnyType]"
+
+	storage := newTestInMemoryStorage(t)
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	digesterBuilder := &mockDigesterBuilder{}
+
+	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+	require.NoError(t, err)
+
+	keyValues := make(map[ComparableValue]Value)
+	var keys []ComparableValue
+
+	for i := uint64(0); i < actionCount; i++ {
+
+		switch rand.Intn(MaxAction) {
+
+		case SetAction:
+
+			var k ComparableValue
+
+			switch rand.Intn(MaxType) {
+			case Uint8Type:
+				n := rand.Intn(math.MaxUint8 + 1)
+				k = Uint8Value(n)
+			case Uint16Type:
+				n := rand.Intn(math.MaxUint16 + 1)
+				k = Uint16Value(n)
+			case Uint32Type:
+				k = Uint32Value(rand.Uint32())
+			case Uint64Type:
+				k = Uint64Value(rand.Uint64())
+			case StringType:
+				k = NewStringValue(randStr(rand.Intn(stringMaxSize)))
+			}
+
+			var v Value
+
+			switch rand.Intn(MaxType) {
+			case Uint8Type:
+				n := rand.Intn(math.MaxUint8 + 1)
+				v = Uint8Value(n)
+			case Uint16Type:
+				n := rand.Intn(math.MaxUint16 + 1)
+				v = Uint16Value(n)
+			case Uint32Type:
+				v = Uint32Value(rand.Uint32())
+			case Uint64Type:
+				v = Uint64Value(rand.Uint64())
+			case StringType:
+				v = NewStringValue(randStr(rand.Intn(stringMaxSize)))
+			}
+
+			keyValues[k] = v
+
+			var digests []Digest
+			for i := 0; i < digestMaxLevels; i++ {
+				digests = append(digests, Digest(rand.Intn(digestMaxValue)))
+			}
+
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+			oldCount := m.Count()
+
+			err := m.Set(k, v)
+			require.NoError(t, err)
+
+			newCount := m.Count()
+
+			if newCount > oldCount {
+				keys = append(keys, k)
+			}
+
+		case RemoveAction:
+			if len(keys) > 0 {
+				ki := rand.Intn(len(keys))
+				k := keys[ki]
+
+				removedKey, removedValue, err := m.Remove(k)
+				require.NoError(t, err)
+				require.Equal(t, k, removedKey)
+				require.Equal(t, keyValues[k], removedValue)
+
+				delete(keyValues, k)
+				copy(keys[ki:], keys[ki+1:])
+				keys = keys[:len(keys)-1]
+			}
+		}
+
+		require.Equal(t, m.Count(), uint64(len(keys)))
+		require.Equal(t, typeInfo, m.Type())
+	}
+
+	for k, v := range keyValues {
+		e, err := m.Get(k)
+		require.NoError(t, err)
+		require.Equal(t, v, e)
+	}
+
+	verified, err := m.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
 }

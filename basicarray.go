@@ -90,7 +90,7 @@ func (a *BasicArray) DeepRemove(storage SlabStorage) error {
 	return a.root.DeepRemove(storage)
 }
 
-func (a *BasicArray) Storable(_ SlabStorage, _ Address) (Storable, error) {
+func (a *BasicArray) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
 	return a.root, nil
 }
 
@@ -335,7 +335,7 @@ func (a *BasicArray) Get(index uint64) (Value, error) {
 }
 
 func (a *BasicArray) Set(index uint64, v Value) error {
-	storable, err := v.Storable(a.storage, a.Address())
+	storable, err := v.Storable(a.storage, a.Address(), MaxInlineElementSize)
 	if err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ func (a *BasicArray) Append(v Value) error {
 }
 
 func (a *BasicArray) Insert(index uint64, v Value) error {
-	storable, err := v.Storable(a.storage, a.Address())
+	storable, err := v.Storable(a.storage, a.Address(), MaxInlineElementSize)
 	if err != nil {
 		return err
 	}

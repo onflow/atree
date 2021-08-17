@@ -288,7 +288,7 @@ func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level
 	// Adjust level and hkey for collision group
 	level++
 	if level > digester.Levels() {
-		panic(fmt.Sprintf("inlineCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels()))
+		return nil, fmt.Errorf("inlineCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -301,7 +301,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 	// Adjust level and hkey for collision group
 	level++
 	if level > digester.Levels() {
-		panic(fmt.Sprintf("inlineCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels()))
+		return nil, false, fmt.Errorf("inlineCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -369,7 +369,7 @@ func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, lev
 	// Adjust level and hkey for collision group
 	level++
 	if level > digester.Levels() {
-		panic(fmt.Sprintf("externalCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels()))
+		return nil, fmt.Errorf("externalCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -386,7 +386,7 @@ func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b Dig
 	// Adjust level and hkey for collision group
 	level++
 	if level > digester.Levels() {
-		panic(fmt.Sprintf("externalCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels()))
+		return nil, false, fmt.Errorf("externalCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -424,7 +424,7 @@ func (e *externalCollisionGroup) String() string {
 func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapValue, error) {
 
 	if level >= digester.Levels() {
-		panic(fmt.Sprintf("hkeyElements.Get() level %d, expect < %d", level, digester.Levels()))
+		return nil, fmt.Errorf("hkeyElements.Get() level %d, expect < %d", level, digester.Levels())
 	}
 
 	// binary search by hkey
@@ -458,7 +458,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 
 	// Check hkeys are not empty
 	if level >= digester.Levels() {
-		panic(fmt.Sprintf("hkeyElements.Set() level %d, expect < %d", level, digester.Levels()))
+		return false, fmt.Errorf("hkeyElements.Set() level %d, expect < %d", level, digester.Levels())
 	}
 
 	ks, err := key.Storable(storage, address)
@@ -571,7 +571,7 @@ func (e *hkeyElements) Merge(elems elements) error {
 
 	rElems, ok := elems.(*hkeyElements)
 	if !ok {
-		panic(fmt.Sprintf("hkeyElements.Merge() elems type %T, want *hkeyElements", elems))
+		return fmt.Errorf("hkeyElements.Merge() elems type %T, want *hkeyElements", elems)
 	}
 
 	e.hkeys = append(e.hkeys, rElems.hkeys...)
@@ -647,7 +647,7 @@ func (e *hkeyElements) LendToRight(re elements) error {
 	rightElements := re.(*hkeyElements)
 
 	if e.level != rightElements.level {
-		panic(fmt.Sprintf("failed to lend elements because they have different levels %d vs %d", e.level, rightElements.level))
+		return fmt.Errorf("failed to lend elements because they have different levels %d vs %d", e.level, rightElements.level)
 	}
 
 	count := len(e.elems) + len(rightElements.elems)
@@ -704,7 +704,7 @@ func (e *hkeyElements) BorrowFromRight(re elements) error {
 	rightElements := re.(*hkeyElements)
 
 	if e.level != rightElements.level {
-		panic(fmt.Sprintf("failed to borrow elements because they have different levels %d vs %d", e.level, rightElements.level))
+		return fmt.Errorf("failed to borrow elements because they have different levels %d vs %d", e.level, rightElements.level)
 	}
 
 	size := e.size + rightElements.size
@@ -750,7 +750,7 @@ func (e *hkeyElements) BorrowFromRight(re elements) error {
 
 func (e *hkeyElements) CanLendToLeft(size uint32) bool {
 	if len(e.elems) == 0 {
-		panic("empty hkeyElements")
+		return false
 	}
 
 	if len(e.elems) < 2 {
@@ -777,7 +777,7 @@ func (e *hkeyElements) CanLendToLeft(size uint32) bool {
 
 func (e *hkeyElements) CanLendToRight(size uint32) bool {
 	if len(e.elems) == 0 {
-		panic("empty hkeyElements")
+		return false
 	}
 
 	if len(e.elems) < 2 {
@@ -845,7 +845,7 @@ func (e *hkeyElements) String() string {
 func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapValue, error) {
 
 	if level != digester.Levels() {
-		panic(fmt.Sprintf("singleElements.Get() level %d, expect %d", level, digester.Levels()))
+		return nil, fmt.Errorf("singleElements.Get() level %d, expect %d", level, digester.Levels())
 	}
 
 	// linear search by key
@@ -865,7 +865,7 @@ func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, 
 func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, key ComparableValue, value MapValue) (bool, error) {
 
 	if level != digester.Levels() {
-		panic(fmt.Sprintf("singleElements.Set() level %d, expect %d", level, digester.Levels()))
+		return false, fmt.Errorf("singleElements.Set() level %d, expect %d", level, digester.Levels())
 	}
 
 	// linear search key and update value
@@ -910,7 +910,7 @@ func (e *singleElements) Element(i int) (element, error) {
 func (e *singleElements) Merge(elems elements) error {
 	mElems, ok := elems.(*singleElements)
 	if !ok {
-		panic(fmt.Sprintf("singleElements.Merge() elems type %T, want *hkeyElements", elems))
+		return fmt.Errorf("singleElements.Merge() elems type %T, want *hkeyElements", elems)
 	}
 
 	e.elems = append(e.elems, mElems.elems...)
@@ -1114,7 +1114,7 @@ func (m *MapDataSlab) LendToRight(slab Slab) error {
 	rightSlab := slab.(*MapDataSlab)
 
 	if m.anySize || rightSlab.anySize {
-		panic("oversized data slab shouldn't be asked to LendToRight")
+		return errors.New("oversized data slab shouldn't be asked to LendToRight")
 	}
 
 	rightElements := rightSlab.elements
@@ -1139,7 +1139,7 @@ func (m *MapDataSlab) BorrowFromRight(slab Slab) error {
 	rightSlab := slab.(*MapDataSlab)
 
 	if m.anySize || rightSlab.anySize {
-		panic("oversized data slab shouldn't be asked to BorrowFromRight")
+		return errors.New("oversized data slab shouldn't be asked to BorrowFromRight")
 	}
 
 	rightElements := rightSlab.elements
@@ -1663,7 +1663,7 @@ func (m *MapMetaDataSlab) Merge(slab Slab) error {
 func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	if len(m.childrenHeaders) < 2 {
 		// Can't split meta slab with less than 2 headers
-		panic("can't split meta slab with less than 2 headers")
+		return nil, nil, errors.New("can't split meta slab with less than 2 headers")
 	}
 
 	leftChildrenCount := int(math.Ceil(float64(len(m.childrenHeaders)) / 2))
@@ -2114,7 +2114,7 @@ func (i *MapElementIterator) Next() (key Value, value Value, err error) {
 
 	se, ok := e.(*singleElement)
 	if !ok {
-		panic("iterate over an element that is not a elementGroup and not a singleElement")
+		return nil, nil, errors.New("iterate over an element that is not a elementGroup and not a singleElement")
 	}
 
 	k, err := se.key.StoredValue(i.storage)

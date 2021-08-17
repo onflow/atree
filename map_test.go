@@ -94,7 +94,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, NewBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -150,7 +150,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, NewBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -217,7 +217,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		m, err := NewMap(storage, address, NewBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -276,7 +276,7 @@ func TestMapHas(t *testing.T) {
 		}
 	}
 
-	m, err := NewMap(storage, address, NewBasicDigesterBuilder(secretkey), typeInfo)
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
 	require.NoError(t, err)
 
 	for i, k := range keysToInsert {
@@ -317,7 +317,7 @@ func TestMapIterate(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		digesterBuilder := NewBasicDigesterBuilder(secretkey)
+		digesterBuilder := newBasicDigesterBuilder(secretkey)
 
 		uniqueKeyValues := make(map[string]uint64, mapSize)
 
@@ -675,7 +675,7 @@ func TestMapLargeElement(t *testing.T) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	m, err := NewMap(storage, address, NewBasicDigesterBuilder(secretkey), typeInfo)
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
 	require.NoError(t, err)
 
 	for k, v := range strs {

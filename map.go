@@ -62,6 +62,12 @@ type elements interface {
 	Merge(elements) error
 	Split() (elements, elements, error)
 
+	LendToRight(elements) error
+	BorrowFromRight(elements) error
+
+	CanLendToLeft(size uint32) bool
+	CanLendToRight(size uint32) bool
+
 	Element(int) (element, error)
 
 	firstKey() Digest
@@ -280,9 +286,9 @@ func (e *singleElement) String() string {
 func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapValue, error) {
 
 	// Adjust level and hkey for collision group
-	level += 1
+	level++
 	if level > digester.Levels() {
-		panic(fmt.Sprintf("inlineCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels()))
+		return nil, fmt.Errorf("inlineCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -293,9 +299,9 @@ func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level
 func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, key ComparableValue, value MapValue) (element, bool, error) {
 
 	// Adjust level and hkey for collision group
-	level += 1
+	level++
 	if level > digester.Levels() {
-		panic(fmt.Sprintf("inlineCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels()))
+		return nil, false, fmt.Errorf("inlineCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -361,9 +367,9 @@ func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, lev
 	}
 
 	// Adjust level and hkey for collision group
-	level += 1
+	level++
 	if level > digester.Levels() {
-		panic(fmt.Sprintf("externalCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels()))
+		return nil, fmt.Errorf("externalCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -378,9 +384,9 @@ func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b Dig
 	}
 
 	// Adjust level and hkey for collision group
-	level += 1
+	level++
 	if level > digester.Levels() {
-		panic(fmt.Sprintf("externalCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels()))
+		return nil, false, fmt.Errorf("externalCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -418,7 +424,7 @@ func (e *externalCollisionGroup) String() string {
 func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapValue, error) {
 
 	if level >= digester.Levels() {
-		panic(fmt.Sprintf("hkeyElements.Get() level %d, expect < %d", level, digester.Levels()))
+		return nil, fmt.Errorf("hkeyElements.Get() level %d, expect < %d", level, digester.Levels())
 	}
 
 	// binary search by hkey
@@ -452,7 +458,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 
 	// Check hkeys are not empty
 	if level >= digester.Levels() {
-		panic(fmt.Sprintf("hkeyElements.Set() level %d, expect < %d", level, digester.Levels()))
+		return false, fmt.Errorf("hkeyElements.Set() level %d, expect < %d", level, digester.Levels())
 	}
 
 	ks, err := key.Storable(storage, address)
@@ -562,11 +568,10 @@ func (e *hkeyElements) Element(i int) (element, error) {
 }
 
 func (e *hkeyElements) Merge(elems elements) error {
-	// TODO: verify that both elements have the same hkey prefixes
 
 	rElems, ok := elems.(*hkeyElements)
 	if !ok {
-		panic(fmt.Sprintf("hkeyElements.Merge() elems type %T, want *hkeyElements", elems))
+		return fmt.Errorf("hkeyElements.Merge() elems type %T, want *hkeyElements", elems)
 	}
 
 	e.hkeys = append(e.hkeys, rElems.hkeys...)
@@ -634,6 +639,169 @@ func (e *hkeyElements) Split() (elements, elements, error) {
 	return e, rightElements, nil
 }
 
+// LendToRight rebalances elements by moving elements from left to right
+func (e *hkeyElements) LendToRight(re elements) error {
+
+	minSize := minThreshold - mapDataSlabPrefixSize
+
+	rightElements := re.(*hkeyElements)
+
+	if e.level != rightElements.level {
+		return fmt.Errorf("failed to lend elements because they have different levels %d vs %d", e.level, rightElements.level)
+	}
+
+	count := len(e.elems) + len(rightElements.elems)
+	size := e.size + rightElements.size
+
+	leftCount := len(e.elems)
+	leftSize := e.size
+
+	midPoint := (size + 1) >> 1
+
+	// Left elements size is as close to midPoint as possible while right elements size >= minThreshold
+	for i := len(e.elems) - 1; i >= 0; i-- {
+		elemSize := e.elems[i].Size()
+		if leftSize-elemSize < midPoint && size-leftSize >= uint32(minSize) {
+			break
+		}
+		leftSize -= elemSize
+		leftCount--
+	}
+
+	// Update the right elements
+	//
+	// It is easier and less error-prone to realloc elements for the right elements.
+
+	hkeys := make([]Digest, count-leftCount)
+	n := copy(hkeys, e.hkeys[leftCount:])
+	copy(hkeys[n:], rightElements.hkeys)
+
+	elements := make([]element, count-leftCount)
+	n = copy(elements, e.elems[leftCount:])
+	copy(elements[n:], rightElements.elems)
+
+	rightElements.hkeys = hkeys
+	rightElements.elems = elements
+	rightElements.size = size - leftSize
+
+	// Update left slab
+	// NOTE: prevent memory leak
+	for i := leftCount; i < len(e.elems); i++ {
+		e.elems[i] = nil
+	}
+	e.hkeys = e.hkeys[:leftCount]
+	e.elems = e.elems[:leftCount]
+	e.size = leftSize
+
+	return nil
+}
+
+// BorrowFromRight rebalances slabs by moving elements from right slab to left slab.
+func (e *hkeyElements) BorrowFromRight(re elements) error {
+
+	minSize := minThreshold - mapDataSlabPrefixSize
+
+	rightElements := re.(*hkeyElements)
+
+	if e.level != rightElements.level {
+		return fmt.Errorf("failed to borrow elements because they have different levels %d vs %d", e.level, rightElements.level)
+	}
+
+	size := e.size + rightElements.size
+
+	leftCount := len(e.elems)
+	leftSize := e.size
+
+	midPoint := (size + 1) >> 1
+
+	for _, e := range rightElements.elems {
+		elemSize := e.Size()
+		if leftSize+elemSize > midPoint {
+			if size-leftSize-elemSize >= uint32(minSize) {
+				// Include this element in left elements
+				leftSize += elemSize
+				leftCount++
+			}
+			break
+		}
+		leftSize += elemSize
+		leftCount++
+	}
+
+	rightStartIndex := leftCount - len(e.elems)
+
+	// Update left elements
+	e.hkeys = append(e.hkeys, rightElements.hkeys[:rightStartIndex]...)
+	e.elems = append(e.elems, rightElements.elems[:rightStartIndex]...)
+	e.size = leftSize
+
+	// Update right slab
+	// TODO: copy elements to front instead?
+	// NOTE: prevent memory leak
+	for i := 0; i < rightStartIndex; i++ {
+		rightElements.elems[i] = nil
+	}
+	rightElements.hkeys = rightElements.hkeys[rightStartIndex:]
+	rightElements.elems = rightElements.elems[rightStartIndex:]
+	rightElements.size = size - leftSize
+
+	return nil
+}
+
+func (e *hkeyElements) CanLendToLeft(size uint32) bool {
+	if len(e.elems) == 0 {
+		return false
+	}
+
+	if len(e.elems) < 2 {
+		return false
+	}
+
+	minSize := minThreshold - mapDataSlabPrefixSize
+	if e.size-size < uint32(minSize) {
+		return false
+	}
+
+	lendSize := uint32(0)
+	for i := 0; i < len(e.elems); i++ {
+		lendSize += e.elems[i].Size()
+		if e.size-lendSize < uint32(minSize) {
+			return false
+		}
+		if lendSize >= size {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *hkeyElements) CanLendToRight(size uint32) bool {
+	if len(e.elems) == 0 {
+		return false
+	}
+
+	if len(e.elems) < 2 {
+		return false
+	}
+
+	minSize := minThreshold - mapDataSlabPrefixSize
+	if e.size-size < uint32(minSize) {
+		return false
+	}
+
+	lendSize := uint32(0)
+	for i := len(e.elems) - 1; i >= 0; i-- {
+		lendSize += e.elems[i].Size()
+		if e.size-lendSize < uint32(minSize) {
+			return false
+		}
+		if lendSize >= size {
+			return true
+		}
+	}
+	return false
+}
+
 func (e *hkeyElements) Size() uint32 {
 	return e.size
 }
@@ -654,7 +822,6 @@ func (e *hkeyElements) String() string {
 	s = append(s, fmt.Sprintf("(level %v)", e.level))
 
 	if len(e.elems) <= 6 {
-		var s []string
 		for i := 0; i < len(e.elems); i++ {
 			s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
 		}
@@ -678,7 +845,7 @@ func (e *hkeyElements) String() string {
 func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapValue, error) {
 
 	if level != digester.Levels() {
-		panic(fmt.Sprintf("singleElements.Get() level %d, expect %d", level, digester.Levels()))
+		return nil, fmt.Errorf("singleElements.Get() level %d, expect %d", level, digester.Levels())
 	}
 
 	// linear search by key
@@ -698,7 +865,7 @@ func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, 
 func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, key ComparableValue, value MapValue) (bool, error) {
 
 	if level != digester.Levels() {
-		panic(fmt.Sprintf("singleElements.Set() level %d, expect %d", level, digester.Levels()))
+		return false, fmt.Errorf("singleElements.Set() level %d, expect %d", level, digester.Levels())
 	}
 
 	// linear search key and update value
@@ -741,11 +908,9 @@ func (e *singleElements) Element(i int) (element, error) {
 }
 
 func (e *singleElements) Merge(elems elements) error {
-	// TODO: verify that both elements have the same hkey prefixes
-
 	mElems, ok := elems.(*singleElements)
 	if !ok {
-		panic(fmt.Sprintf("singleElements.Merge() elems type %T, want *hkeyElements", elems))
+		return fmt.Errorf("singleElements.Merge() elems type %T, want *hkeyElements", elems)
 	}
 
 	e.elems = append(e.elems, mElems.elems...)
@@ -806,6 +971,22 @@ func (e *singleElements) Split() (elements, elements, error) {
 	}
 
 	return e, rightElements, nil
+}
+
+func (e *singleElements) LendToRight(re elements) error {
+	return errors.New("not applicable")
+}
+
+func (e *singleElements) BorrowFromRight(re elements) error {
+	return errors.New("not applicable")
+}
+
+func (e *singleElements) CanLendToLeft(size uint32) bool {
+	return false
+}
+
+func (e *singleElements) CanLendToRight(size uint32) bool {
+	return false
 }
 
 func (e *singleElements) Count() uint32 {
@@ -929,13 +1110,53 @@ func (m *MapDataSlab) Merge(slab Slab) error {
 }
 
 func (m *MapDataSlab) LendToRight(slab Slab) error {
-	// TODO: implement me
-	return errors.New("not implemented")
+
+	rightSlab := slab.(*MapDataSlab)
+
+	if m.anySize || rightSlab.anySize {
+		return errors.New("oversized data slab shouldn't be asked to LendToRight")
+	}
+
+	rightElements := rightSlab.elements
+	err := m.elements.LendToRight(rightElements)
+	if err != nil {
+		return err
+	}
+
+	// Update right slab
+	rightSlab.elements = rightElements
+	rightSlab.header.size = mapDataSlabPrefixSize + rightElements.Size()
+	rightSlab.header.firstKey = rightElements.firstKey()
+
+	// Update left slab
+	m.header.size = mapDataSlabPrefixSize + m.elements.Size()
+
+	return nil
 }
 
 func (m *MapDataSlab) BorrowFromRight(slab Slab) error {
-	// TODO: implement me
-	return errors.New("not implemented")
+
+	rightSlab := slab.(*MapDataSlab)
+
+	if m.anySize || rightSlab.anySize {
+		return errors.New("oversized data slab shouldn't be asked to BorrowFromRight")
+	}
+
+	rightElements := rightSlab.elements
+	err := m.elements.BorrowFromRight(rightElements)
+	if err != nil {
+		return err
+	}
+
+	// Update right slab
+	rightSlab.elements = rightElements
+	rightSlab.header.size = mapDataSlabPrefixSize + rightElements.Size()
+	rightSlab.header.firstKey = rightElements.firstKey()
+
+	// Update left slab
+	m.header.size = mapDataSlabPrefixSize + m.elements.Size()
+
+	return nil
 }
 
 func (m *MapDataSlab) IsFull() bool {
@@ -966,8 +1187,7 @@ func (m *MapDataSlab) CanLendToLeft(size uint32) bool {
 	if m.anySize {
 		return false
 	}
-	// TODO: implement me
-	return false
+	return m.elements.CanLendToLeft(size)
 }
 
 // CanLendToRight returns true if elements on the right of the slab could be removed
@@ -977,8 +1197,7 @@ func (m *MapDataSlab) CanLendToRight(size uint32) bool {
 	if m.anySize {
 		return false
 	}
-	// TODO: implement me
-	return false
+	return m.elements.CanLendToRight(size)
 }
 
 func (m *MapDataSlab) DeepRemove(storage SlabStorage) error {
@@ -1444,7 +1663,7 @@ func (m *MapMetaDataSlab) Merge(slab Slab) error {
 func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	if len(m.childrenHeaders) < 2 {
 		// Can't split meta slab with less than 2 headers
-		panic("can't split meta slab with less than 2 headers")
+		return nil, nil, errors.New("can't split meta slab with less than 2 headers")
 	}
 
 	leftChildrenCount := int(math.Ceil(float64(len(m.childrenHeaders)) / 2))
@@ -1470,13 +1689,51 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 }
 
 func (m *MapMetaDataSlab) LendToRight(slab Slab) error {
-	// TODO: implement me
-	return errors.New("not implemented")
+
+	rightSlab := slab.(*MapMetaDataSlab)
+
+	childrenHeadersLen := len(m.childrenHeaders) + len(rightSlab.childrenHeaders)
+	leftChildrenHeadersLen := childrenHeadersLen / 2
+	rightChildrenHeadersLen := childrenHeadersLen - leftChildrenHeadersLen
+
+	// Update right slab childrenHeaders by prepending borrowed children headers
+	rightChildrenHeaders := make([]MapSlabHeader, rightChildrenHeadersLen)
+	n := copy(rightChildrenHeaders, m.childrenHeaders[leftChildrenHeadersLen:])
+	copy(rightChildrenHeaders[n:], rightSlab.childrenHeaders)
+	rightSlab.childrenHeaders = rightChildrenHeaders
+
+	// Update right slab header
+	rightSlab.header.size = mapMetaDataSlabPrefixSize + uint32(rightChildrenHeadersLen)*mapSlabHeaderSize
+	rightSlab.header.firstKey = rightSlab.childrenHeaders[0].firstKey
+
+	// Update left slab (original)
+	m.childrenHeaders = m.childrenHeaders[:leftChildrenHeadersLen]
+
+	m.header.size = mapMetaDataSlabPrefixSize + uint32(leftChildrenHeadersLen)*mapSlabHeaderSize
+
+	return nil
 }
 
 func (m *MapMetaDataSlab) BorrowFromRight(slab Slab) error {
-	// TODO: implement me
-	return errors.New("not implemented")
+
+	rightSlab := slab.(*MapMetaDataSlab)
+
+	childrenHeadersLen := len(m.childrenHeaders) + len(rightSlab.childrenHeaders)
+	leftSlabHeaderLen := childrenHeadersLen / 2
+	rightSlabHeaderLen := childrenHeadersLen - leftSlabHeaderLen
+
+	// Update left slab (original)
+	m.childrenHeaders = append(m.childrenHeaders, rightSlab.childrenHeaders[:leftSlabHeaderLen-len(m.childrenHeaders)]...)
+
+	m.header.size = mapMetaDataSlabPrefixSize + uint32(leftSlabHeaderLen)*mapSlabHeaderSize
+
+	// Update right slab
+	rightSlab.childrenHeaders = rightSlab.childrenHeaders[len(rightSlab.childrenHeaders)-rightSlabHeaderLen:]
+
+	rightSlab.header.size = mapMetaDataSlabPrefixSize + uint32(rightSlabHeaderLen)*mapSlabHeaderSize
+	rightSlab.header.firstKey = rightSlab.childrenHeaders[0].firstKey
+
+	return nil
 }
 
 func (m MapMetaDataSlab) IsFull() bool {
@@ -1491,13 +1748,13 @@ func (m MapMetaDataSlab) IsUnderflow() (uint32, bool) {
 }
 
 func (m *MapMetaDataSlab) CanLendToLeft(size uint32) bool {
-	// TODO: implement me
-	return false
+	n := uint32(math.Ceil(float64(size) / mapSlabHeaderSize))
+	return m.header.size-mapSlabHeaderSize*n > uint32(minThreshold)
 }
 
 func (m *MapMetaDataSlab) CanLendToRight(size uint32) bool {
-	// TODO: implement me
-	return false
+	n := uint32(math.Ceil(float64(size) / mapSlabHeaderSize))
+	return m.header.size-mapSlabHeaderSize*n > uint32(minThreshold)
 }
 
 func (m *MapMetaDataSlab) DeepRemove(storage SlabStorage) error {
@@ -1807,7 +2064,7 @@ func firstMapDataSlab(storage SlabStorage, slab MapSlab) (MapSlab, error) {
 }
 
 func (extra *MapExtraData) incrementCount() {
-	extra.Count += 1
+	extra.Count++
 }
 
 type MapElementIterator struct {
@@ -1857,7 +2114,7 @@ func (i *MapElementIterator) Next() (key Value, value Value, err error) {
 
 	se, ok := e.(*singleElement)
 	if !ok {
-		panic("iterate over an element that is not a elementGroup and not a singleElement")
+		return nil, nil, errors.New("iterate over an element that is not a elementGroup and not a singleElement")
 	}
 
 	k, err := se.key.StoredValue(i.storage)

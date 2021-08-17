@@ -211,7 +211,7 @@ func (e *singleElement) Get(storage SlabStorage, _ Digester, _ int, _ Digest, ke
 	if key.Equal(kv) {
 		return e.value, nil
 	}
-	return nil, fmt.Errorf("key %s not found", key)
+	return nil, NewKeyNotFoundError(key)
 }
 
 // Set updates value if key matches, otherwise returns inlineCollisionGroup with existing and new elements.
@@ -409,7 +409,7 @@ func (e *externalCollisionGroup) Elements(storage SlabStorage) (elements, error)
 	}
 	dataSlab, ok := slab.(*MapDataSlab)
 	if !ok {
-		return nil, fmt.Errorf("expect MapDataSlab, got %T", slab)
+		return nil, NewSlabDataErrorf(true, "expect MapDataSlab, got %T", slab)
 	}
 	return dataSlab.elements, nil
 }
@@ -443,7 +443,7 @@ func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level int, hk
 
 	// No matching hkey
 	if equalIndex == -1 {
-		return nil, fmt.Errorf("key %s not found", key)
+		return nil, NewKeyNotFoundError(key)
 	}
 
 	elem := e.elems[equalIndex]
@@ -559,7 +559,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 
 func (e *hkeyElements) Element(i int) (element, error) {
 	if i >= len(e.elems) {
-		return nil, errors.New("index out of bounds")
+		return nil, NewIndexOutOfBoundsError(uint64(i), 0, uint64(len(e.elems)))
 	}
 	return e.elems[i], nil
 }
@@ -587,7 +587,7 @@ func (e *hkeyElements) Merge(elems elements) error {
 func (e *hkeyElements) Split() (elements, elements, error) {
 	if len(e.elems) < 2 {
 		// Can't split slab with less than two elements
-		return nil, nil, fmt.Errorf("can't split elements with less than 2 elements")
+		return nil, nil, NewSlabSplitErrorf("can't split elements with less than 2 elements")
 	}
 
 	// This computes the ceil of split to give the first slab more elements.
@@ -695,7 +695,7 @@ func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, 
 		}
 	}
 
-	return nil, fmt.Errorf("key %s not found", key)
+	return nil, NewKeyNotFoundError(key)
 }
 
 func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, key ComparableValue, value MapValue) (bool, error) {
@@ -738,7 +738,7 @@ func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBui
 
 func (e *singleElements) Element(i int) (element, error) {
 	if i >= len(e.elems) {
-		return nil, errors.New("index out of bounds")
+		return nil, NewIndexOutOfBoundsError(uint64(i), 0, uint64(len(e.elems)))
 	}
 	return e.elems[i], nil
 }
@@ -765,7 +765,7 @@ func (e *singleElements) Merge(elems elements) error {
 func (e *singleElements) Split() (elements, elements, error) {
 	if len(e.elems) < 2 {
 		// Can't split slab with less than two elements
-		return nil, nil, fmt.Errorf("can't split elements with less than 2 elements")
+		return nil, nil, NewSlabSplitErrorf("can't split elements with less than 2 elements")
 	}
 
 	// This computes the ceil of split to give the first slab more elements.
@@ -850,7 +850,7 @@ func (e *singleElements) String() string {
 
 func (m *MapDataSlab) Encode(enc *Encoder) error {
 	// TODO: implement me
-	return errors.New("not implemented")
+	return NewNotImplementedError("MapDataSlab's Encode")
 }
 
 // TODO: need to set DigesterBuilder for OrderedMap
@@ -885,7 +885,7 @@ func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Diges
 
 func (m *MapDataSlab) Remove(storage SlabStorage, level int, hkey Digest, key ComparableValue) (MapValue, error) {
 	// TODO: implement me
-	return nil, errors.New("not implemented")
+	return nil, NewNotImplementedError("MapDataSlab's Remove")
 }
 
 func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
@@ -937,12 +937,12 @@ func (m *MapDataSlab) Merge(slab Slab) error {
 
 func (m *MapDataSlab) LendToRight(slab Slab) error {
 	// TODO: implement me
-	return errors.New("not implemented")
+	return NewNotImplementedError("MapDataSlab's LendToRight")
 }
 
 func (m *MapDataSlab) BorrowFromRight(slab Slab) error {
 	// TODO: implement me
-	return errors.New("not implemented")
+	return NewNotImplementedError("MapDataSlab's BorrowFromRight")
 }
 
 func (m *MapDataSlab) IsFull() bool {
@@ -1032,7 +1032,7 @@ func (m *MapDataSlab) String() string {
 
 func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 	// TODO: implement me
-	return errors.New("not implemented")
+	return NewNotImplementedError("MapMetaDataSlab's Encode")
 }
 
 // TODO: need to set DigesterBuilder for OrderedMap
@@ -1058,7 +1058,7 @@ func (m *MapMetaDataSlab) Get(storage SlabStorage, digester Digester, level int,
 	}
 
 	if ans == -1 {
-		return nil, fmt.Errorf("key %v not found", key)
+		return nil, NewKeyNotFoundError(key)
 	}
 
 	childHeaderIndex := ans
@@ -1133,7 +1133,7 @@ func (m *MapMetaDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester D
 
 func (m *MapMetaDataSlab) Remove(storage SlabStorage, level int, hkey Digest, key ComparableValue) (MapValue, error) {
 	// TODO: implement me
-	return nil, errors.New("not implemented")
+	return nil, NewNotImplementedError("MapMetaDataSlab's Remove")
 }
 
 func (m *MapMetaDataSlab) SplitChildSlab(storage SlabStorage, child MapSlab, childHeaderIndex int) error {
@@ -1482,12 +1482,12 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 
 func (m *MapMetaDataSlab) LendToRight(slab Slab) error {
 	// TODO: implement me
-	return errors.New("not implemented")
+	return NewNotImplementedError("MapMetaDataSlab's LendToRight")
 }
 
 func (m *MapMetaDataSlab) BorrowFromRight(slab Slab) error {
 	// TODO: implement me
-	return errors.New("not implemented")
+	return NewNotImplementedError("MapMetaDataSlab's BorrowFromRight")
 }
 
 func (m MapMetaDataSlab) IsFull() bool {
@@ -1687,14 +1687,14 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) error {
 		// Save root node id
 		rootID := m.root.ID()
 
-		sid, err := m.storage.GenerateStorageID(m.Address())
+		// Assign a new storage id to old root before splitting it.
+		sId, err := m.storage.GenerateStorageID(m.Address())
 		if err != nil {
 			return NewStorageError(err)
 		}
 
-		// Assign a new storage id to old root before splitting it.
 		oldRoot := m.root
-		oldRoot.SetID(sid)
+		oldRoot.SetID(sId)
 
 		// Split old root
 		leftSlab, rightSlab, err := oldRoot.Split(m.storage)
@@ -1737,7 +1737,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) error {
 
 func (m *OrderedMap) Remove(key ComparableValue) (Value, error) {
 	// TODO: implement me
-	return nil, errors.New("not implemented")
+	return nil, NewNotImplementedError("OrderedMap's Remove")
 }
 
 func (m *OrderedMap) StorageID() StorageID {
@@ -1746,12 +1746,12 @@ func (m *OrderedMap) StorageID() StorageID {
 
 func (m *OrderedMap) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	// TODO: implement me
-	return nil, errors.New("not implemented")
+	return nil, NewNotImplementedError("OrderedMap's DeepCopy")
 }
 
 func (m *OrderedMap) DeepRemove(storage SlabStorage) error {
 	// TODO: implement me
-	return errors.New("not implemented")
+	return NewNotImplementedError("OrderedMap's DeepRemove")
 }
 
 func (m *OrderedMap) StoredValue(_ SlabStorage) (Value, error) {
@@ -1915,7 +1915,7 @@ func (i *MapIterator) Next() (key Value, value Value, err error) {
 			return nil, nil, err
 		}
 		if !found {
-			return nil, nil, fmt.Errorf("slab %d not found", i.id)
+			return nil, nil, NewSlabNotFoundErrorf(i.id, true, "next slab not found inside MapIterator")
 		}
 
 		dataSlab := slab.(*MapDataSlab)

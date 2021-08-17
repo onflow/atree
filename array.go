@@ -7,7 +7,6 @@ package atree
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -145,34 +144,17 @@ func (a *Array) Storable(_ SlabStorage, _ Address) (Storable, error) {
 	return StorageIDStorable(a.StorageID()), nil
 }
 
-type IndexOutOfRangeError struct {
-	// TODO: add more info
-}
-
-func (e IndexOutOfRangeError) Error() string {
-	// TODO: add more info
-	return "index out of range"
-}
-
-type ArraySlabNotFoundError struct {
-	id  StorageID
-	err error
-}
-
-func (e ArraySlabNotFoundError) Error() string {
-	return fmt.Sprintf("failed to retrieve ArraySlab %d: %v", e.id, e.err)
-}
-
 func newArrayExtraDataFromData(data []byte, decMode cbor.DecMode) (*ArrayExtraData, []byte, error) {
 	// Check data length
 	if len(data) < versionAndFlagSize {
-		return nil, data, errors.New("data is too short for array extra data")
+		return nil, data, NewDecodingErrorf("data is too short for array extra data")
 	}
 
 	// Check flag
 	flag := data[1]
 	if !isRoot(flag) {
-		return nil, data, fmt.Errorf("data has invalid flag 0x%x, want root flag", flag)
+		return nil, data, NewDecodingErrorf("data has invalid flag 0x%x, want root flag", flag)
+
 	}
 
 	// Decode extra data
@@ -237,7 +219,7 @@ func newArrayDataSlabFromData(
 ) {
 	// Check minimum data length
 	if len(data) < versionAndFlagSize {
-		return nil, errors.New("data is too short for array data slab")
+		return nil, NewDecodingErrorf("data is too short for array data slab")
 	}
 
 	var extraData *ArrayExtraData
@@ -254,13 +236,14 @@ func newArrayDataSlabFromData(
 
 	// Check data length (after decoding extra data if present)
 	if len(data) < arrayDataSlabPrefixSize {
-		return nil, errors.New("data is too short for array data slab")
+		return nil, NewDecodingErrorf("data is too short for array data slab")
 	}
 
 	// Check flag
 	flag := data[1]
+
 	if getSlabArrayType(flag) != slabArrayData {
-		return nil, fmt.Errorf(
+		return nil, NewDecodingErrorf(
 			"data has invalid flag 0x%x, want 0x%x",
 			flag,
 			maskArrayData,
@@ -408,14 +391,14 @@ func (a *ArrayDataSlab) hasPointer() bool {
 
 func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
-		return nil, IndexOutOfRangeError{}
+		return nil, NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
 	return a.elements[index], nil
 }
 
 func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error {
 	if index >= uint64(len(a.elements)) {
-		return IndexOutOfRangeError{}
+		return NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
 	oldSize := a.elements[index].ByteSize()
 	a.elements[index] = v
@@ -426,7 +409,7 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error
 
 func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
 	if index > uint64(len(a.elements)) {
-		return IndexOutOfRangeError{}
+		return NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
 	if index == uint64(len(a.elements)) {
 		a.elements = append(a.elements, v)
@@ -444,7 +427,7 @@ func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) er
 
 func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
-		return nil, IndexOutOfRangeError{}
+		return nil, NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
 
 	v := a.elements[index]
@@ -474,7 +457,7 @@ func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, err
 func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	if len(a.elements) < 2 {
 		// Can't split slab with less than two elements
-		return nil, nil, fmt.Errorf("can't split slab with less than 2 elements")
+		return nil, nil, NewSlabSplitErrorf("can't split slab with less than 2 elements")
 	}
 
 	// This computes the ceil of split to give the first slab with more elements.
@@ -499,16 +482,15 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		leftSize += elemSize
 	}
 
-	sid, err := storage.GenerateStorageID(a.header.id.Address)
+	// Construct right slab
+	sId, err := storage.GenerateStorageID(a.header.id.Address)
 	if err != nil {
 		return nil, nil, NewStorageError(err)
 	}
-
-	// Construct right slab
 	rightSlabCount := len(a.elements) - leftCount
 	rightSlab := &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:    sid,
+			id:    sId,
 			size:  arrayDataSlabPrefixSize + dataSize - leftSize,
 			count: uint32(rightSlabCount),
 		},
@@ -654,6 +636,7 @@ func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
 //
 func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 	if len(a.elements) == 0 {
+		// TODO return EmptyDataSlabError
 		panic(fmt.Sprintf("empty data slab %d", a.header.id))
 	}
 	if len(a.elements) < 2 {
@@ -680,6 +663,7 @@ func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 //
 func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
 	if len(a.elements) == 0 {
+		// TODO return EmptyDataSlabError
 		panic(fmt.Sprintf("empty data slab %d", a.header.id))
 	}
 	if len(a.elements) < 2 {
@@ -760,7 +744,7 @@ func (a *ArrayDataSlab) String() string {
 func newArrayMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMode) (*ArrayMetaDataSlab, error) {
 	// Check minimum data length
 	if len(data) < versionAndFlagSize {
-		return nil, errors.New("data is too short for array metadata slab")
+		return nil, NewDecodingErrorf("data is too short for array metadata slab")
 	}
 
 	var extraData *ArrayExtraData
@@ -777,13 +761,13 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMod
 
 	// Check data length (after decoding extra data if present)
 	if len(data) < arrayMetaDataSlabPrefixSize {
-		return nil, errors.New("data is too short for array metadata slab")
+		return nil, NewDecodingErrorf("data is too short for array metadata slab")
 	}
 
 	// Check flag
 	flag := data[1]
 	if getSlabArrayType(flag) != slabArrayMeta {
-		return nil, fmt.Errorf(
+		return nil, NewDecodingErrorf(
 			"data has invalid flag 0x%x, want 0x%x",
 			flag,
 			maskArrayMeta,
@@ -796,7 +780,7 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMod
 
 	expectedDataLength := arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*int(childHeaderCount)
 	if len(data) != expectedDataLength {
-		return nil, fmt.Errorf(
+		return nil, NewDecodingErrorf(
 			"data has unexpected length %d, want %d",
 			len(data),
 			expectedDataLength,
@@ -929,7 +913,7 @@ func (a *ArrayMetaDataSlab) childSlabIndexInfo(
 	err error,
 ) {
 	if index >= uint64(a.header.count) {
-		return 0, 0, StorageID{}, IndexOutOfRangeError{}
+		return 0, 0, StorageID{}, NewIndexOutOfBoundsError(index, 0, uint64(a.header.count))
 	}
 
 	// Either perform a linear scan (for small number of children),
@@ -1024,11 +1008,11 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) e
 // If index == a.header.count, Insert appends v to the end of underlying slab.
 func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
 	if index > uint64(a.header.count) {
-		return IndexOutOfRangeError{}
+		return NewIndexOutOfBoundsError(index, 0, uint64(a.header.count))
 	}
 
 	if len(a.childrenHeaders) == 0 {
-		panic("Inserting to empty MetaDataSlab")
+		return NewSlabDataErrorf(true, "Inserting to empty MetaDataSlab")
 	}
 
 	var childID StorageID
@@ -1082,7 +1066,7 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
 
 	if index >= uint64(a.header.count) {
-		return nil, IndexOutOfRangeError{}
+		return nil, NewIndexOutOfBoundsError(index, 0, uint64(a.header.count))
 	}
 
 	childHeaderIndex, adjustedIndex, childID, err := a.childSlabIndexInfo(index)
@@ -1488,7 +1472,7 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 
 	if len(a.childrenHeaders) < 2 {
 		// Can't split meta slab with less than 2 headers
-		panic("can't split meta slab with less than 2 headers")
+		return nil, nil, NewSlabDataErrorf(true, "can't split meta slab with less than 2 headers")
 	}
 
 	leftChildrenCount := int(math.Ceil(float64(len(a.childrenHeaders)) / 2))
@@ -1499,15 +1483,15 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		leftCount += a.childrenHeaders[i].count
 	}
 
-	sid, err := storage.GenerateStorageID(a.header.id.Address)
+	// Construct right slab
+	sId, err := storage.GenerateStorageID(a.header.id.Address)
 	if err != nil {
 		return nil, nil, NewStorageError(err)
 	}
 
-	// Construct right slab
 	rightSlab := &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
-			id:    sid,
+			id:    sId,
 			size:  a.header.size - uint32(leftSize),
 			count: a.header.count - leftCount,
 		},
@@ -1676,14 +1660,14 @@ func NewArray(storage SlabStorage, address Address, typeInfo cbor.RawMessage) (*
 
 	extraData := &ArrayExtraData{TypeInfo: typeInfo}
 
-	sid, err := storage.GenerateStorageID(address)
+	sId, err := storage.GenerateStorageID(address)
 	if err != nil {
 		return nil, NewStorageError(err)
 	}
 
 	root := &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:   sid,
+			id:   sId,
 			size: arrayDataSlabPrefixSize,
 		},
 		extraData: extraData,
@@ -1751,14 +1735,13 @@ func (a *Array) Insert(index uint64, value Value) error {
 		// Save root node id
 		rootID := a.root.ID()
 
-		sid, err := a.Storage.GenerateStorageID(a.Address())
+		// Assign a new storage id to old root before splitting it.
+		sId, err := a.Storage.GenerateStorageID(a.Address())
 		if err != nil {
 			return NewStorageError(err)
 		}
-
-		// Assign a new storage id to old root before splitting it.
 		oldRoot := a.root
-		oldRoot.SetID(sid)
+		oldRoot.SetID(sId)
 
 		// Split old root
 		leftSlab, rightSlab, err := oldRoot.Split(a.Storage)
@@ -1860,7 +1843,7 @@ func (i *ArrayIterator) Next() (Value, error) {
 			return nil, err
 		}
 		if !found {
-			return nil, fmt.Errorf("slab %d not found", i.id)
+			return nil, NewSlabNotFoundErrorf(i.id, true, "array slab not found during array iterator's next operation")
 		}
 
 		i.dataSlab = slab.(*ArrayDataSlab)
@@ -2037,7 +2020,7 @@ func getArraySlab(storage SlabStorage, id StorageID) (ArraySlab, error) {
 		return arraySlab, nil
 	}
 
-	return nil, ArraySlabNotFoundError{id, err}
+	return nil, NewSlabNotFoundErrorf(id, true, "getArraySlab failed: %w", err)
 }
 
 func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) {

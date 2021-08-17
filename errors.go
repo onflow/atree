@@ -110,7 +110,7 @@ func (e *HashError) Error() string {
 }
 
 // Unwrap returns the wrapped err
-func (e HashError) Unwrap() error { return e.err }
+func (e *HashError) Unwrap() error { return e.err }
 
 // StorageError is always a fatal error returned when storage fails
 type StorageError struct {
@@ -127,25 +127,22 @@ func (e *StorageError) Error() string {
 }
 
 // Unwrap returns the wrapped err
-func (e StorageError) Unwrap() error { return e.err }
+func (e *StorageError) Unwrap() error { return e.err }
 
-// SlabNotFoundError is usually a fatal error returned when an slab is not found
+// SlabNotFoundError is always a fatal error returned when an slab is not found
 type SlabNotFoundError struct {
 	storageID StorageID
 	err       error
 }
 
 // NewSlabNotFoundError constructs a SlabNotFoundError
-func NewSlabNotFoundError(storageID StorageID, fatal bool, err error) error {
-	if fatal {
-		return NewFatalError(&SlabNotFoundError{storageID: storageID, err: err})
-	}
-	return &SlabNotFoundError{storageID: storageID, err: err}
+func NewSlabNotFoundError(storageID StorageID, err error) error {
+	return NewFatalError(&SlabNotFoundError{storageID: storageID, err: err})
 }
 
 // NewSlabNotFoundErrorf constructs a new SlabNotFoundError with error formating
-func NewSlabNotFoundErrorf(storageID StorageID, fatal bool, msg string, args ...interface{}) error {
-	return NewSlabNotFoundError(storageID, fatal, fmt.Errorf(msg, args...))
+func NewSlabNotFoundErrorf(storageID StorageID, msg string, args ...interface{}) error {
+	return NewSlabNotFoundError(storageID, fmt.Errorf(msg, args...))
 }
 
 func (e *SlabNotFoundError) Error() string {
@@ -218,23 +215,20 @@ func (e *SlabRebalanceError) Error() string {
 
 func (e *SlabRebalanceError) Unwrap() error { return e.err }
 
-// SlabError is a usually fatal error returned when something is wrong with the content or type of the slab
+// SlabError is a always fatal error returned when something is wrong with the content or type of the slab
 // you can make this a fatal error by calling Fatal()
 type SlabDataError struct {
 	err error
 }
 
 // NewSlabDataError constructs a SlabDataError
-func NewSlabDataError(err error, fatal bool) error {
-	if fatal {
-		return NewFatalError(&SlabDataError{err: err})
-	}
-	return &SlabDataError{err: err}
+func NewSlabDataError(err error) error {
+	return NewFatalError(&SlabDataError{err: err})
 }
 
 // NewSlabDataErrorf constructs a new SlabError with error formating
-func NewSlabDataErrorf(fatal bool, msg string, args ...interface{}) error {
-	return NewSlabDataError(fmt.Errorf(msg, args...), fatal)
+func NewSlabDataErrorf(msg string, args ...interface{}) error {
+	return NewSlabDataError(fmt.Errorf(msg, args...))
 }
 
 func (e *SlabDataError) Error() string {

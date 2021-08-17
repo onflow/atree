@@ -1012,7 +1012,7 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 	}
 
 	if len(a.childrenHeaders) == 0 {
-		return NewSlabDataErrorf(true, "Inserting to empty MetaDataSlab")
+		return NewSlabDataErrorf("Inserting to empty MetaDataSlab")
 	}
 
 	var childID StorageID
@@ -1472,7 +1472,7 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 
 	if len(a.childrenHeaders) < 2 {
 		// Can't split meta slab with less than 2 headers
-		return nil, nil, NewSlabDataErrorf(true, "can't split meta slab with less than 2 headers")
+		return nil, nil, NewSlabDataErrorf("can't split meta slab with less than 2 headers")
 	}
 
 	leftChildrenCount := int(math.Ceil(float64(len(a.childrenHeaders)) / 2))
@@ -1843,7 +1843,7 @@ func (i *ArrayIterator) Next() (Value, error) {
 			return nil, err
 		}
 		if !found {
-			return nil, NewSlabNotFoundErrorf(i.id, true, "array slab not found during array iterator's next operation")
+			return nil, NewSlabNotFoundErrorf(i.id, "array slab not found during array iterator's next operation")
 		}
 
 		i.dataSlab = slab.(*ArrayDataSlab)
@@ -2020,7 +2020,7 @@ func getArraySlab(storage SlabStorage, id StorageID) (ArraySlab, error) {
 		return arraySlab, nil
 	}
 
-	return nil, NewSlabNotFoundErrorf(id, true, "getArraySlab failed: %w", err)
+	return nil, NewSlabNotFoundErrorf(id, "getArraySlab failed: %w", err)
 }
 
 func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) {

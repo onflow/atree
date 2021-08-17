@@ -11,7 +11,7 @@ import (
 	"sort"
 )
 
-type mapStats struct {
+type MapStats struct {
 	Levels                 uint64
 	ElementCount           uint64
 	MetaDataSlabCount      uint64
@@ -20,7 +20,7 @@ type mapStats struct {
 }
 
 // Stats returns stats about the map slabs.
-func (m *OrderedMap) Stats() (mapStats, error) {
+func (m *OrderedMap) Stats() (MapStats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
 	metaDataSlabSize := uint64(0)
@@ -42,7 +42,7 @@ func (m *OrderedMap) Stats() (mapStats, error) {
 
 			slab, err := getMapSlab(m.storage, id)
 			if err != nil {
-				return mapStats{}, err
+				return MapStats{}, err
 			}
 
 			if slab.IsData() {
@@ -53,7 +53,7 @@ func (m *OrderedMap) Stats() (mapStats, error) {
 				for i := 0; i < int(leaf.elements.Count()); i++ {
 					elem, err := leaf.elements.Element(i)
 					if err != nil {
-						return mapStats{}, err
+						return MapStats{}, err
 					}
 					if group, ok := elem.(elementGroup); ok {
 						if !group.Inline() {
@@ -75,7 +75,7 @@ func (m *OrderedMap) Stats() (mapStats, error) {
 		level++
 	}
 
-	return mapStats{
+	return MapStats{
 		Levels:                 level,
 		MetaDataSlabCount:      metaDataSlabCount,
 		DataSlabCount:          dataSlabCount,

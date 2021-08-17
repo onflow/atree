@@ -447,10 +447,12 @@ func (s *PersistentSlabStorage) Commit() error {
 	}
 
 	sort.Slice(keysWithOwners, func(i, j int) bool {
-		if keysWithOwners[i].Address == keysWithOwners[j].Address {
-			return keysWithOwners[i].IndexAsUint64() < keysWithOwners[j].IndexAsUint64()
+		a := keysWithOwners[i]
+		b := keysWithOwners[j]
+		if a.Address == b.Address {
+			return a.IndexAsUint64() < b.IndexAsUint64()
 		}
-		return keysWithOwners[i].AddressAsUint64() < keysWithOwners[j].AddressAsUint64()
+		return a.AddressAsUint64() < b.AddressAsUint64()
 	})
 
 	for _, id := range keysWithOwners {

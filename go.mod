@@ -1,4 +1,4 @@
-module github.com/fxamacker/atree
+module github.com/onflow/atree
 
 go 1.15
 

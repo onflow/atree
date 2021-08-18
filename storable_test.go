@@ -343,14 +343,18 @@ func (v *StringValue) Storable(storage SlabStorage, address Address, maxInlineSi
 	if uint64(v.ByteSize()) > maxInlineSize {
 
 		// Create StorableSlab
-		id := storage.GenerateStorageID(address)
+		id, err := storage.GenerateStorageID(address)
+		if err != nil {
+			return nil, NewStorageError(err)
+		}
+
 		slab := &StorableSlab{
 			StorageID: id,
 			Storable:  v,
 		}
 
 		// Store StorableSlab in storage
-		err := storage.Store(id, slab)
+		err = storage.Store(id, slab)
 		if err != nil {
 			return nil, err
 		}

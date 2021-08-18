@@ -195,15 +195,6 @@ type OrderedMap struct {
 
 var _ Value = &OrderedMap{}
 
-type MapSlabNotFoundError struct {
-	id  StorageID
-	err error
-}
-
-func (e MapSlabNotFoundError) Error() string {
-	return fmt.Sprintf("failed to retrieve MapSlab %d: %v", e.id, e.err)
-}
-
 func newSingleElement(key MapKey, value MapValue) *singleElement {
 	return &singleElement{
 		key:   key,
@@ -221,7 +212,7 @@ func (e *singleElement) Get(storage SlabStorage, _ Digester, _ int, _ Digest, ke
 	if key.Equal(kv) {
 		return e.value, nil
 	}
-	return nil, fmt.Errorf("key %s not found", key)
+	return nil, NewKeyNotFoundError(key)
 }
 
 // Set updates value if key matches, otherwise returns inlineCollisionGroup with existing and new elements.
@@ -237,7 +228,7 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 
 	kv, ok := v.(ComparableValue)
 	if !ok {
-		return nil, false, errors.New("existing key doesn't implement ComparableValue interface")
+		return nil, false, NewInterfaceNotImplementedError("ComparableValue")
 	}
 
 	if key.Equal(kv) {
@@ -289,14 +280,14 @@ func (e *singleElement) Remove(storage SlabStorage, digester Digester, level int
 
 	kv, ok := v.(ComparableValue)
 	if !ok {
-		return nil, nil, nil, errors.New("existing key doesn't implement ComparableValue interface")
+		return nil, nil, nil, NewInterfaceNotImplementedError("ComparableValue")
 	}
 
 	if key.Equal(kv) {
 		return e.key, e.value, nil, nil
 	}
 
-	return nil, nil, nil, fmt.Errorf("key %s not found", key)
+	return nil, nil, nil, NewKeyNotFoundError(key)
 }
 
 func (e *singleElement) Size() uint32 {
@@ -312,7 +303,7 @@ func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level
 	// Adjust level and hkey for collision group
 	level++
 	if level > digester.Levels() {
-		return nil, fmt.Errorf("inlineCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels())
+		return nil, NewHashLevelErrorf("inline collision group level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -325,7 +316,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 	// Adjust level and hkey for collision group
 	level++
 	if level > digester.Levels() {
-		return nil, false, fmt.Errorf("inlineCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels())
+		return nil, false, NewHashLevelErrorf("inline collision group level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -339,7 +330,11 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 		// for first level collision.
 		if e.elements.Size() > uint32(MaxInlineElementSize) {
 
-			id := storage.GenerateStorageID(address)
+			id, err := storage.GenerateStorageID(address)
+
+			if err != nil {
+				return nil, false, NewStorageError(err)
+			}
 
 			// Create MapDataSlab
 			slab := &MapDataSlab{
@@ -352,7 +347,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 				anySize:  true,
 			}
 
-			err := storage.Store(id, slab)
+			err = storage.Store(id, slab)
 			if err != nil {
 				return nil, false, err
 			}
@@ -375,7 +370,7 @@ func (e *inlineCollisionGroup) Remove(storage SlabStorage, digester Digester, le
 	// Adjust level and hkey for collision group
 	level++
 	if level > digester.Levels() {
-		return nil, nil, nil, fmt.Errorf("inlineCollisionGroup.Remove() level %d, expect <= %d", level, digester.Levels())
+		return nil, nil, nil, NewHashLevelErrorf("inline collision group level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -423,7 +418,7 @@ func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, lev
 	// Adjust level and hkey for collision group
 	level++
 	if level > digester.Levels() {
-		return nil, fmt.Errorf("externalCollisionGroup.Get() level %d, expect <= %d", level, digester.Levels())
+		return nil, NewHashLevelErrorf("external collision group level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -440,7 +435,7 @@ func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b Dig
 	// Adjust level and hkey for collision group
 	level++
 	if level > digester.Levels() {
-		return nil, false, fmt.Errorf("externalCollisionGroup.Set() level %d, expect <= %d", level, digester.Levels())
+		return nil, false, NewHashLevelErrorf("external collision group level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -458,18 +453,18 @@ func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, 
 
 	slab, _, err := storage.Retrieve(e.id)
 	if err != nil {
-		return nil, nil, nil, MapSlabNotFoundError{e.id, err}
+		return nil, nil, nil, NewSlabNotFoundErrorf(e.id, "get map slab failed: %w", err)
 	}
 
 	dataSlab, ok := slab.(*MapDataSlab)
 	if !ok {
-		return nil, nil, nil, MapSlabNotFoundError{e.id, nil}
+		return nil, nil, nil, NewSlabNotFoundErrorf(e.id, "get map data slab failed: got %T", slab)
 	}
 
 	// Adjust level and hkey for collision group
 	level++
 	if level > digester.Levels() {
-		return nil, nil, nil, fmt.Errorf("externalCollisionGroup.Remove() level %d, expect <= %d", level, digester.Levels())
+		return nil, nil, nil, NewHashLevelErrorf("external collision group level %d, expect <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
@@ -513,7 +508,7 @@ func (e *externalCollisionGroup) Elements(storage SlabStorage) (elements, error)
 	}
 	dataSlab, ok := slab.(*MapDataSlab)
 	if !ok {
-		return nil, fmt.Errorf("expect MapDataSlab, got %T", slab)
+		return nil, NewTypeAssertionError("*MapDataSlab", fmt.Sprintf("%T", slab))
 	}
 	return dataSlab.elements, nil
 }
@@ -525,7 +520,7 @@ func (e *externalCollisionGroup) String() string {
 func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapValue, error) {
 
 	if level >= digester.Levels() {
-		return nil, fmt.Errorf("hkeyElements.Get() level %d, expect < %d", level, digester.Levels())
+		return nil, NewHashLevelErrorf("hkey elements level %d, expect < %d", level, digester.Levels())
 	}
 
 	// binary search by hkey
@@ -547,7 +542,7 @@ func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level int, hk
 
 	// No matching hkey
 	if equalIndex == -1 {
-		return nil, fmt.Errorf("key %s not found", key)
+		return nil, NewKeyNotFoundError(key)
 	}
 
 	elem := e.elems[equalIndex]
@@ -559,7 +554,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 
 	// Check hkeys are not empty
 	if level >= digester.Levels() {
-		return false, fmt.Errorf("hkeyElements.Set() level %d, expect < %d", level, digester.Levels())
+		return false, NewHashLevelErrorf("hkey elements level %d, expect < %d", level, digester.Levels())
 	}
 
 	ks, err := key.Storable(storage, address, maxInlineMapElementSize)
@@ -665,11 +660,11 @@ func (e *hkeyElements) Remove(storage SlabStorage, digester Digester, level int,
 
 	// Check digest level
 	if level >= digester.Levels() {
-		return nil, nil, fmt.Errorf("hkeyElements.Remove() level %d, expect < %d", level, digester.Levels())
+		return nil, nil, NewHashLevelErrorf("hkey elements level %d, expect < %d", level, digester.Levels())
 	}
 
 	if len(e.hkeys) == 0 || hkey < e.hkeys[0] || hkey > e.hkeys[len(e.hkeys)-1] {
-		return nil, nil, fmt.Errorf("key %s not found", key)
+		return nil, nil, NewKeyNotFoundError(key)
 	}
 
 	// binary search by hkey
@@ -691,7 +686,7 @@ func (e *hkeyElements) Remove(storage SlabStorage, digester Digester, level int,
 
 	// No matching hkey
 	if equalIndex == -1 {
-		return nil, nil, fmt.Errorf("key %s not found", key)
+		return nil, nil, NewKeyNotFoundError(key)
 	}
 
 	elem := e.elems[equalIndex]
@@ -730,7 +725,7 @@ func (e *hkeyElements) Remove(storage SlabStorage, digester Digester, level int,
 
 func (e *hkeyElements) Element(i int) (element, error) {
 	if i >= len(e.elems) {
-		return nil, errors.New("index out of bounds")
+		return nil, NewIndexOutOfBoundsError(uint64(i), 0, uint64(len(e.elems)))
 	}
 	return e.elems[i], nil
 }
@@ -739,7 +734,7 @@ func (e *hkeyElements) Merge(elems elements) error {
 
 	rElems, ok := elems.(*hkeyElements)
 	if !ok {
-		return fmt.Errorf("hkeyElements.Merge() elems type %T, want *hkeyElements", elems)
+		return NewSlabMergeError(fmt.Errorf("elems type %T, want *hkeyElements", elems))
 	}
 
 	e.hkeys = append(e.hkeys, rElems.hkeys...)
@@ -757,7 +752,7 @@ func (e *hkeyElements) Merge(elems elements) error {
 func (e *hkeyElements) Split() (elements, elements, error) {
 	if len(e.elems) < 2 {
 		// Can't split slab with less than two elements
-		return nil, nil, fmt.Errorf("can't split elements with less than 2 elements")
+		return nil, nil, NewSlabSplitErrorf("can't split elements with less than 2 elements")
 	}
 
 	// This computes the ceil of split to give the first slab more elements.
@@ -815,7 +810,7 @@ func (e *hkeyElements) LendToRight(re elements) error {
 	rightElements := re.(*hkeyElements)
 
 	if e.level != rightElements.level {
-		return fmt.Errorf("failed to lend elements because they have different levels %d vs %d", e.level, rightElements.level)
+		return NewSlabRebalanceError(NewHashLevelErrorf("left slab level %d, right slab level %d", e.level, rightElements.level))
 	}
 
 	count := len(e.elems) + len(rightElements.elems)
@@ -872,7 +867,7 @@ func (e *hkeyElements) BorrowFromRight(re elements) error {
 	rightElements := re.(*hkeyElements)
 
 	if e.level != rightElements.level {
-		return fmt.Errorf("failed to borrow elements because they have different levels %d vs %d", e.level, rightElements.level)
+		return NewSlabRebalanceError(NewHashLevelErrorf("left slab level %d, right slab level %d", e.level, rightElements.level))
 	}
 
 	size := e.size + rightElements.size
@@ -1013,7 +1008,7 @@ func (e *hkeyElements) String() string {
 func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapValue, error) {
 
 	if level != digester.Levels() {
-		return nil, fmt.Errorf("singleElements.Get() level %d, expect %d", level, digester.Levels())
+		return nil, NewHashLevelErrorf("single elements level %d, expect %d", level, digester.Levels())
 	}
 
 	// linear search by key
@@ -1027,13 +1022,13 @@ func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, 
 		}
 	}
 
-	return nil, fmt.Errorf("key %s not found", key)
+	return nil, NewKeyNotFoundError(key)
 }
 
 func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, key ComparableValue, value MapValue) (bool, error) {
 
 	if level != digester.Levels() {
-		return false, fmt.Errorf("singleElements.Set() level %d, expect %d", level, digester.Levels())
+		return false, NewHashLevelErrorf("single elements level %d, expect %d", level, digester.Levels())
 	}
 
 	// linear search key and update value
@@ -1071,7 +1066,7 @@ func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBui
 func (e *singleElements) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapKey, MapValue, error) {
 
 	if level != digester.Levels() {
-		panic(fmt.Sprintf("singleElements.Remove() level %d, expect %d", level, digester.Levels()))
+		return nil, nil, NewHashLevelErrorf("single elements level %d, expect %d", level, digester.Levels())
 	}
 
 	// linear search by key
@@ -1095,12 +1090,12 @@ func (e *singleElements) Remove(storage SlabStorage, digester Digester, level in
 		}
 	}
 
-	return nil, nil, fmt.Errorf("key %s not found", key)
+	return nil, nil, NewKeyNotFoundError(key)
 }
 
 func (e *singleElements) Element(i int) (element, error) {
 	if i >= len(e.elems) {
-		return nil, errors.New("index out of bounds")
+		return nil, NewIndexOutOfBoundsError(uint64(i), 0, uint64(len(e.elems)))
 	}
 	return e.elems[i], nil
 }
@@ -1108,7 +1103,7 @@ func (e *singleElements) Element(i int) (element, error) {
 func (e *singleElements) Merge(elems elements) error {
 	mElems, ok := elems.(*singleElements)
 	if !ok {
-		return fmt.Errorf("singleElements.Merge() elems type %T, want *hkeyElements", elems)
+		return NewSlabMergeError(fmt.Errorf("elems type %T, want *singleElements", elems))
 	}
 
 	e.elems = append(e.elems, mElems.elems...)
@@ -1125,7 +1120,7 @@ func (e *singleElements) Merge(elems elements) error {
 func (e *singleElements) Split() (elements, elements, error) {
 	if len(e.elems) < 2 {
 		// Can't split slab with less than two elements
-		return nil, nil, fmt.Errorf("can't split elements with less than 2 elements")
+		return nil, nil, NewSlabSplitErrorf("can't split elements with less than 2 elements")
 	}
 
 	// This computes the ceil of split to give the first slab more elements.
@@ -1172,11 +1167,11 @@ func (e *singleElements) Split() (elements, elements, error) {
 }
 
 func (e *singleElements) LendToRight(re elements) error {
-	return errors.New("not applicable")
+	return NewNotApplicableError("singleElements.LendToRight")
 }
 
 func (e *singleElements) BorrowFromRight(re elements) error {
-	return errors.New("not applicable")
+	return NewNotApplicableError("singleElements.BorrowFromRight")
 }
 
 func (e *singleElements) CanLendToLeft(size uint32) bool {
@@ -1226,7 +1221,7 @@ func (e *singleElements) String() string {
 
 func (m *MapDataSlab) Encode(enc *Encoder) error {
 	// TODO: implement me
-	return errors.New("not implemented")
+	return NewNotImplementedError("MapDataSlab's Encode")
 }
 
 // TODO: need to set DigesterBuilder for OrderedMap
@@ -1287,10 +1282,15 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		return nil, nil, err
 	}
 
+	sId, err := storage.GenerateStorageID(m.ID().Address)
+	if err != nil {
+		return nil, nil, NewStorageError(err)
+	}
+
 	// Create new right slab
 	rightSlab := &MapDataSlab{
 		header: MapSlabHeader{
-			id:       storage.GenerateStorageID(m.ID().Address),
+			id:       sId,
 			size:     mapDataSlabPrefixSize + rightElements.Size(),
 			firstKey: rightElements.firstKey(),
 		},
@@ -1325,11 +1325,10 @@ func (m *MapDataSlab) Merge(slab Slab) error {
 }
 
 func (m *MapDataSlab) LendToRight(slab Slab) error {
-
 	rightSlab := slab.(*MapDataSlab)
 
 	if m.anySize || rightSlab.anySize {
-		return errors.New("oversized data slab shouldn't be asked to LendToRight")
+		return NewSlabRebalanceError(errors.New("oversized data slab shouldn't be asked to rebalance"))
 	}
 
 	rightElements := rightSlab.elements
@@ -1354,7 +1353,7 @@ func (m *MapDataSlab) BorrowFromRight(slab Slab) error {
 	rightSlab := slab.(*MapDataSlab)
 
 	if m.anySize || rightSlab.anySize {
-		return errors.New("oversized data slab shouldn't be asked to BorrowFromRight")
+		return NewSlabRebalanceError(errors.New("oversized data slab shouldn't be asked to rebalance"))
 	}
 
 	rightElements := rightSlab.elements
@@ -1459,7 +1458,7 @@ func (m *MapDataSlab) String() string {
 
 func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 	// TODO: implement me
-	return errors.New("not implemented")
+	return NewNotImplementedError("MapMetaDataSlab's Encode")
 }
 
 // TODO: need to set DigesterBuilder for OrderedMap
@@ -1485,7 +1484,7 @@ func (m *MapMetaDataSlab) Get(storage SlabStorage, digester Digester, level int,
 	}
 
 	if ans == -1 {
-		return nil, fmt.Errorf("key %v not found", key)
+		return nil, NewKeyNotFoundError(key)
 	}
 
 	childHeaderIndex := ans
@@ -1573,7 +1572,7 @@ func (m *MapMetaDataSlab) Remove(storage SlabStorage, digester Digester, level i
 	}
 
 	if ans == -1 {
-		return nil, nil, fmt.Errorf("key %v not found", key)
+		return nil, nil, NewKeyNotFoundError(key)
 	}
 
 	childHeaderIndex := ans
@@ -1935,16 +1934,21 @@ func (m *MapMetaDataSlab) Merge(slab Slab) error {
 func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	if len(m.childrenHeaders) < 2 {
 		// Can't split meta slab with less than 2 headers
-		return nil, nil, errors.New("can't split meta slab with less than 2 headers")
+		return nil, nil, NewSlabSplitErrorf("can't split meta data slab with less than 2 child headers")
 	}
 
 	leftChildrenCount := int(math.Ceil(float64(len(m.childrenHeaders)) / 2))
 	leftSize := leftChildrenCount * mapSlabHeaderSize
 
+	sId, err := storage.GenerateStorageID(m.ID().Address)
+	if err != nil {
+		return nil, nil, NewStorageError(err)
+	}
+
 	// Construct right slab
 	rightSlab := &MapMetaDataSlab{
 		header: MapSlabHeader{
-			id:       storage.GenerateStorageID(m.ID().Address),
+			id:       sId,
 			size:     m.header.size - uint32(leftSize),
 			firstKey: m.childrenHeaders[leftChildrenCount].firstKey,
 		},
@@ -1961,7 +1965,6 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 }
 
 func (m *MapMetaDataSlab) LendToRight(slab Slab) error {
-
 	rightSlab := slab.(*MapMetaDataSlab)
 
 	childrenHeadersLen := len(m.childrenHeaders) + len(rightSlab.childrenHeaders)
@@ -2079,16 +2082,21 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 
 	extraData := &MapExtraData{TypeInfo: typeInfo}
 
+	sId, err := storage.GenerateStorageID(address)
+	if err != nil {
+		return nil, NewStorageError(err)
+	}
+
 	root := &MapDataSlab{
 		header: MapSlabHeader{
-			id:   storage.GenerateStorageID(address),
+			id:   sId,
 			size: mapDataSlabPrefixSize,
 		},
 		elements:  &hkeyElements{},
 		extraData: extraData,
 	}
 
-	err := storage.Store(root.header.id, root)
+	err = storage.Store(root.header.id, root)
 	if err != nil {
 		return nil, err
 	}
@@ -2201,8 +2209,13 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) error {
 		rootID := m.root.ID()
 
 		// Assign a new storage id to old root before splitting it.
+		sId, err := m.storage.GenerateStorageID(m.Address())
+		if err != nil {
+			return NewStorageError(err)
+		}
+
 		oldRoot := m.root
-		oldRoot.SetID(m.storage.GenerateStorageID(m.Address()))
+		oldRoot.SetID(sId)
 
 		// Split old root
 		leftSlab, rightSlab, err := oldRoot.Split(m.storage)
@@ -2307,8 +2320,13 @@ func (m *OrderedMap) Remove(key ComparableValue) (Value, Value, error) {
 		rootID := m.root.ID()
 
 		// Assign a new storage id to old root before splitting it.
+		id, err := m.storage.GenerateStorageID(m.Address())
+
+		if err != nil {
+			return nil, nil, NewStorageError(err)
+		}
 		oldRoot := m.root
-		oldRoot.SetID(m.storage.GenerateStorageID(m.Address()))
+		oldRoot.SetID(id)
 
 		// Split old root
 		leftSlab, rightSlab, err := oldRoot.Split(m.storage)
@@ -2365,12 +2383,12 @@ func (m *OrderedMap) StorageID() StorageID {
 
 func (m *OrderedMap) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	// TODO: implement me
-	return nil, errors.New("not implemented")
+	return nil, NewNotImplementedError("OrderedMap's DeepCopy")
 }
 
 func (m *OrderedMap) DeepRemove(storage SlabStorage) error {
 	// TODO: implement me
-	return errors.New("not implemented")
+	return NewNotImplementedError("OrderedMap's DeepRemove")
 }
 
 func (m *OrderedMap) StoredValue(_ SlabStorage) (Value, error) {
@@ -2430,7 +2448,7 @@ func getMapSlab(storage SlabStorage, id StorageID) (MapSlab, error) {
 		return mapSlab, nil
 	}
 
-	return nil, MapSlabNotFoundError{id, err}
+	return nil, NewSlabNotFoundErrorf(id, "get map slab failed: %w", err)
 }
 
 func firstMapDataSlab(storage SlabStorage, slab MapSlab) (MapSlab, error) {
@@ -2461,20 +2479,20 @@ type MapElementIterator struct {
 	nestedIterator *MapElementIterator
 }
 
-var ErrEOE = errors.New("end of elements")
+var errEOE = errors.New("end of elements")
 
 func (i *MapElementIterator) Next() (key Value, value Value, err error) {
 
 	if i.nestedIterator != nil {
 		key, value, err = i.nestedIterator.Next()
-		if err != ErrEOE {
+		if err != errEOE {
 			return key, value, err
 		}
 		i.nestedIterator = nil
 	}
 
 	if i.index >= int(i.elements.Count()) {
-		return nil, nil, ErrEOE
+		return nil, nil, errEOE
 	}
 
 	e, err := i.elements.Element(i.index)
@@ -2501,7 +2519,7 @@ func (i *MapElementIterator) Next() (key Value, value Value, err error) {
 
 	se, ok := e.(*singleElement)
 	if !ok {
-		return nil, nil, errors.New("iterate over an element that is not a elementGroup and not a singleElement")
+		return nil, nil, NewTypeAssertionError("*singleElement", fmt.Sprintf("%T", e))
 	}
 
 	k, err := se.key.StoredValue(i.storage)
@@ -2538,7 +2556,7 @@ func (i *MapIterator) Next() (key Value, value Value, err error) {
 			return nil, nil, err
 		}
 		if !found {
-			return nil, nil, fmt.Errorf("slab %d not found", i.id)
+			return nil, nil, NewSlabNotFoundErrorf(i.id, "next slab not found inside MapIterator")
 		}
 
 		dataSlab := slab.(*MapDataSlab)
@@ -2552,7 +2570,7 @@ func (i *MapIterator) Next() (key Value, value Value, err error) {
 	}
 
 	key, value, err = i.elemIterator.Next()
-	if err != ErrEOE {
+	if err != errEOE {
 		return key, value, err
 	}
 

@@ -133,7 +133,7 @@ func benchmarkGet(b *testing.B, initialArraySize, numberOfElements int) {
 		for i := 0; i < numberOfElements; i++ {
 			index := rand.Intn(int(array.Count()))
 			v, _ := array.Get(uint64(index))
-			storable, _ = v.Storable(storage, array.Address())
+			storable, _ = v.Storable(storage, array.Address(), MaxInlineElementSize)
 		}
 	}
 

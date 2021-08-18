@@ -17,6 +17,7 @@ type MapStats struct {
 	MetaDataSlabCount      uint64
 	DataSlabCount          uint64
 	CollisionDataSlabCount uint64
+	StorableSlabCount      uint64
 }
 
 // Stats returns stats about the map slabs.
@@ -27,6 +28,7 @@ func (m *OrderedMap) Stats() (MapStats, error) {
 	dataSlabCount := uint64(0)
 	dataSlabSize := uint64(0)
 	collisionDataSlabCount := uint64(0)
+	storableDataSlabCount := uint64(0)
 
 	nextLevelIDs := list.New()
 	nextLevelIDs.PushBack(m.root.Header().id)
@@ -59,6 +61,14 @@ func (m *OrderedMap) Stats() (MapStats, error) {
 						if !group.Inline() {
 							collisionDataSlabCount++
 						}
+					} else {
+						e := elem.(*singleElement)
+						if _, ok := e.key.(*StorageIDStorable); ok {
+							storableDataSlabCount++
+						}
+						if _, ok := e.value.(*StorageIDStorable); ok {
+							storableDataSlabCount++
+						}
 					}
 				}
 			} else {
@@ -80,6 +90,7 @@ func (m *OrderedMap) Stats() (MapStats, error) {
 		MetaDataSlabCount:      metaDataSlabCount,
 		DataSlabCount:          dataSlabCount,
 		CollisionDataSlabCount: collisionDataSlabCount,
+		StorableSlabCount:      storableDataSlabCount,
 	}, nil
 }
 
@@ -337,13 +348,22 @@ func (m *OrderedMap) _valid(id StorageID, level int) (bool, error) {
 
 		_, underflow := dataSlab.IsUnderflow()
 		validFill := (level == 0) || (!dataSlab.IsFull() && !underflow)
+		if !validFill {
+			return false, fmt.Errorf("slab %d doesn't have valid fill, full %t, underflow %t", id, dataSlab.IsFull(), underflow)
+		}
 
 		validFirstKey := dataSlab.elements.firstKey() == dataSlab.header.firstKey
+		if !validFirstKey {
+			return false, fmt.Errorf("slab %d doesn't have valid first key, %d vs %d", id, dataSlab.elements.firstKey(), dataSlab.header.firstKey)
+		}
 
 		computedSize := uint32(mapDataSlabPrefixSize) + elementSize
 		validSize := computedSize == dataSlab.header.size
+		if !validSize {
+			return false, fmt.Errorf("slab %d doesn't have valid size, %d vs %d", id, computedSize, dataSlab.header.size)
+		}
 
-		return validFill && validFirstKey && validSize, nil
+		return true, nil
 	}
 
 	meta, ok := slab.(*MapMetaDataSlab)
@@ -360,15 +380,27 @@ func (m *OrderedMap) _valid(id StorageID, level int) (bool, error) {
 
 	_, underflow := meta.IsUnderflow()
 	validFill := (level == 0) || (!meta.IsFull() && !underflow)
+	if !validFill {
+		return false, fmt.Errorf("slab %d doesn't have valid fill, full %t, underflow %t", id, meta.IsFull(), underflow)
+	}
 
 	validFirstKey := meta.childrenHeaders[0].firstKey == meta.header.firstKey
+	if !validFirstKey {
+		return false, fmt.Errorf("slab %d doesn't have valid first key, %d vs %d", id, meta.childrenHeaders[0].firstKey, meta.header.firstKey)
+	}
 
 	sortedHKey := sort.SliceIsSorted(meta.childrenHeaders, func(i, j int) bool {
 		return meta.childrenHeaders[i].firstKey < meta.childrenHeaders[j].firstKey
 	})
+	if !sortedHKey {
+		return false, fmt.Errorf("slab %d first key isn't sorted %+v", id, meta.childrenHeaders)
+	}
 
 	computedSize := uint32(len(meta.childrenHeaders)*mapSlabHeaderSize) + mapMetaDataSlabPrefixSize
 	validSize := computedSize == meta.header.size
+	if !validSize {
+		return false, fmt.Errorf("slab %d size is invalid, %d vs %d", id, computedSize, meta.header.size)
+	}
 
-	return validFill && validFirstKey && sortedHKey && validSize, nil
+	return true, nil
 }

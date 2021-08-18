@@ -274,22 +274,79 @@ func NewDecodingErrorf(msg string, args ...interface{}) error {
 }
 
 func (e *DecodingError) Error() string {
-	return fmt.Sprintf("Encoding has failed %s", e.err.Error())
+	return fmt.Sprintf("Decoding has failed %s", e.err.Error())
 }
 
 func (e *DecodingError) Unwrap() error { return e.err }
 
-// DecodingError is a fatal error returned when a method is called which is not yet implemented
+// NotImplementedError is a fatal error returned when a method is called which is not yet implemented
 // this is a temporary error
 type NotImplementedError struct {
 	methodName string
 }
 
-// NewDecodingError constructs a DecodingError
+// NewNotImplementedError constructs a NotImplementedError
 func NewNotImplementedError(methodName string) error {
 	return NewFatalError(&NotImplementedError{methodName: methodName})
 }
 
 func (e *NotImplementedError) Error() string {
 	return fmt.Sprintf("method (%s) is not implemented.", e.methodName)
+}
+
+// InterfaceNotImplementedError is a fatal error returned when an interface is not implemented.
+type InterfaceNotImplementedError struct {
+	interfaceName string
+}
+
+// NewInterfaceNotImplementedError constructs a InterfaceNotImplementedError
+func NewInterfaceNotImplementedError(interfaceName string) error {
+	return NewFatalError(&InterfaceNotImplementedError{interfaceName: interfaceName})
+}
+
+func (e *InterfaceNotImplementedError) Error() string {
+	return fmt.Sprintf("interface (%s) is not implemented.", e.interfaceName)
+}
+
+// HashLevelError is a fatal error returned when hash level is wrong.
+type HashLevelError struct {
+	msg string
+}
+
+// NewHashLevelError constructs a HashLevelError
+func NewHashLevelErrorf(msg string, args ...interface{}) error {
+	return NewFatalError(&HashLevelError{msg: fmt.Sprintf(msg, args...)})
+}
+
+func (e *HashLevelError) Error() string {
+	return fmt.Sprintf("atree hasher level failed: %s", e.msg)
+}
+
+// NotApplicableError is a fatal error returned when a not applicable method is called
+type NotApplicableError struct {
+	methodName string
+}
+
+// NewNotApplicableError constructs a NotImplementedError
+func NewNotApplicableError(methodName string) error {
+	return NewFatalError(&NotImplementedError{methodName: methodName})
+}
+
+func (e *NotApplicableError) Error() string {
+	return fmt.Sprintf("method (%s) is not applicable.", e.methodName)
+}
+
+// TypeAssertionError is a fatal error returned when an object can't be type asserted to an expected type.
+type TypeAssertionError struct {
+	wantType string
+	gotType  string
+}
+
+// NewTypeAssertionError constructs a TypeAssertionError.
+func NewTypeAssertionError(wantType string, gotType string) error {
+	return NewFatalError(&TypeAssertionError{wantType: wantType, gotType: gotType})
+}
+
+func (e *TypeAssertionError) Error() string {
+	return fmt.Sprintf("type assertion failed: want %s, got %s", e.wantType, e.gotType)
 }

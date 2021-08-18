@@ -95,13 +95,13 @@ func (a *BasicArray) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, err
 }
 
 func NewBasicArrayDataSlab(storage SlabStorage, address Address) *BasicArrayDataSlab {
-	sId, err := storage.GenerateStorageID(address)
+	sID, err := storage.GenerateStorageID(address)
 	if err != nil {
 		panic(err)
 	}
 	return &BasicArrayDataSlab{
 		header: ArraySlabHeader{
-			id:   sId,
+			id:   sID,
 			size: basicArrayDataSlabPrefixSize,
 		},
 	}

@@ -1282,7 +1282,7 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		return nil, nil, err
 	}
 
-	sId, err := storage.GenerateStorageID(m.ID().Address)
+	sID, err := storage.GenerateStorageID(m.ID().Address)
 	if err != nil {
 		return nil, nil, NewStorageError(err)
 	}
@@ -1290,7 +1290,7 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	// Create new right slab
 	rightSlab := &MapDataSlab{
 		header: MapSlabHeader{
-			id:       sId,
+			id:       sID,
 			size:     mapDataSlabPrefixSize + rightElements.Size(),
 			firstKey: rightElements.firstKey(),
 		},
@@ -1940,7 +1940,7 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	leftChildrenCount := int(math.Ceil(float64(len(m.childrenHeaders)) / 2))
 	leftSize := leftChildrenCount * mapSlabHeaderSize
 
-	sId, err := storage.GenerateStorageID(m.ID().Address)
+	sID, err := storage.GenerateStorageID(m.ID().Address)
 	if err != nil {
 		return nil, nil, NewStorageError(err)
 	}
@@ -1948,7 +1948,7 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	// Construct right slab
 	rightSlab := &MapMetaDataSlab{
 		header: MapSlabHeader{
-			id:       sId,
+			id:       sID,
 			size:     m.header.size - uint32(leftSize),
 			firstKey: m.childrenHeaders[leftChildrenCount].firstKey,
 		},
@@ -2082,14 +2082,14 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 
 	extraData := &MapExtraData{TypeInfo: typeInfo}
 
-	sId, err := storage.GenerateStorageID(address)
+	sID, err := storage.GenerateStorageID(address)
 	if err != nil {
 		return nil, NewStorageError(err)
 	}
 
 	root := &MapDataSlab{
 		header: MapSlabHeader{
-			id:   sId,
+			id:   sID,
 			size: mapDataSlabPrefixSize,
 		},
 		elements:  &hkeyElements{},
@@ -2209,13 +2209,13 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) error {
 		rootID := m.root.ID()
 
 		// Assign a new storage id to old root before splitting it.
-		sId, err := m.storage.GenerateStorageID(m.Address())
+		sID, err := m.storage.GenerateStorageID(m.Address())
 		if err != nil {
 			return NewStorageError(err)
 		}
 
 		oldRoot := m.root
-		oldRoot.SetID(sId)
+		oldRoot.SetID(sID)
 
 		// Split old root
 		leftSlab, rightSlab, err := oldRoot.Split(m.storage)

@@ -438,23 +438,7 @@ func (s *PersistentSlabStorage) Commit() error {
 	var err error
 
 	// this part ensures the keys are sorted so commit operation is deterministic
-	keysWithOwners := make([]StorageID, 0, len(s.deltas))
-	for k := range s.deltas {
-		// ignore the ones that are not owned by accounts
-		if k.Address != AddressUndefined {
-			keysWithOwners = append(keysWithOwners, k)
-		}
-	}
-
-	sort.Slice(keysWithOwners, func(i, j int) bool {
-		a := keysWithOwners[i]
-		b := keysWithOwners[j]
-		if a.Address == b.Address {
-			return a.IndexAsUint64() < b.IndexAsUint64()
-		}
-		return a.AddressAsUint64() < b.AddressAsUint64()
-	})
-
+	keysWithOwners := s.sortedOwnedDeltaKeys()
 	for _, id := range keysWithOwners {
 		slab := s.deltas[id]
 
@@ -487,9 +471,7 @@ func (s *PersistentSlabStorage) Commit() error {
 	return nil
 }
 
-func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
-
-	// this part ensures the keys are sorted so commit operation is deterministic
+func (s *PersistentSlabStorage) sortedOwnedDeltaKeys() []StorageID {
 	keysWithOwners := make([]StorageID, 0, len(s.deltas))
 	for k := range s.deltas {
 		// ignore the ones that are not owned by accounts
@@ -506,6 +488,13 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		}
 		return a.AddressAsUint64() < b.AddressAsUint64()
 	})
+	return keysWithOwners
+}
+
+func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
+
+	// this part ensures the keys are sorted so commit operation is deterministic
+	keysWithOwners := s.sortedOwnedDeltaKeys()
 
 	type encodedSlabs struct {
 		storageID StorageID

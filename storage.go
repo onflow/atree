@@ -496,22 +496,25 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 	// this part ensures the keys are sorted so commit operation is deterministic
 	keysWithOwners := s.sortedOwnedDeltaKeys()
 
+	// construct job queue
+	jobs := make(chan StorageID, len(keysWithOwners))
+	defer close(jobs)
+	for _, id := range keysWithOwners {
+		jobs <- id
+	}
+
 	type encodedSlabs struct {
 		storageID StorageID
 		data      []byte
 		err       error
 	}
 
-	jobs := make(chan StorageID, len(keysWithOwners))
-	defer close(jobs)
-
-	for _, id := range keysWithOwners {
-		jobs <- id
-	}
-
+	// construct result queue
 	results := make(chan *encodedSlabs, len(keysWithOwners))
 	defer close(results)
 
+	// define encoders (workers) and launch them
+	// encoders encodes slabs in parallel
 	encoder := func(jobs <-chan StorageID, results chan<- *encodedSlabs) {
 		for id := range jobs {
 			slab := s.deltas[id]
@@ -538,7 +541,9 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		go encoder(jobs, results)
 	}
 
-	// we need to capture them inside a map for sorted updates
+	// process the results while encoders are working
+	// we need to capture them inside a map
+	// again so we can apply them in order of keys
 	encSlabById := make(map[StorageID][]byte)
 	for i := 0; i < len(keysWithOwners); i++ {
 		result := <-results
@@ -549,6 +554,8 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		encSlabById[result.storageID] = result.data
 	}
 
+	// at this stage all results has been processed
+	// and ready to be passed to base storage layer
 	for _, id := range keysWithOwners {
 		data := encSlabById[id]
 
@@ -567,6 +574,9 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		if err != nil {
 			return err
 		}
+
+		// TODO: we might skip this since cadence
+		// never uses the storage after commit
 		// add to read cache
 		s.cache[id] = s.deltas[id]
 	}

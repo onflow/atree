@@ -487,6 +487,106 @@ func (s *PersistentSlabStorage) Commit() error {
 	return nil
 }
 
+func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
+
+	// this part ensures the keys are sorted so commit operation is deterministic
+	keysWithOwners := make([]StorageID, 0, len(s.deltas))
+	for k := range s.deltas {
+		// ignore the ones that are not owned by accounts
+		if k.Address != AddressUndefined {
+			keysWithOwners = append(keysWithOwners, k)
+		}
+	}
+
+	sort.Slice(keysWithOwners, func(i, j int) bool {
+		a := keysWithOwners[i]
+		b := keysWithOwners[j]
+		if a.Address == b.Address {
+			return a.IndexAsUint64() < b.IndexAsUint64()
+		}
+		return a.AddressAsUint64() < b.AddressAsUint64()
+	})
+
+	type encodedSlabs struct {
+		storageID StorageID
+		data      []byte
+		err       error
+	}
+
+	jobs := make(chan StorageID, len(keysWithOwners))
+	defer close(jobs)
+
+	for _, id := range keysWithOwners {
+		jobs <- id
+	}
+
+	results := make(chan *encodedSlabs, len(keysWithOwners))
+	defer close(results)
+
+	encoder := func(jobs <-chan StorageID, results chan<- *encodedSlabs) {
+		for id := range jobs {
+			slab := s.deltas[id]
+			if slab == nil {
+				results <- &encodedSlabs{
+					storageID: id,
+					data:      nil,
+					err:       nil,
+				}
+				continue
+			}
+			// serialize
+			// TODO is s.cborEncMode thread safe ?
+			data, err := Encode(slab, s.cborEncMode)
+			results <- &encodedSlabs{
+				storageID: id,
+				data:      data,
+				err:       err,
+			}
+		}
+	}
+
+	for i := 0; i < numWorkers; i++ {
+		go encoder(jobs, results)
+	}
+
+	// we need to capture them inside a map for sorted updates
+	encSlabById := make(map[StorageID][]byte)
+	for i := 0; i < len(keysWithOwners); i++ {
+		result := <-results
+		// if any error return
+		if result.err != nil {
+			return result.err
+		}
+		encSlabById[result.storageID] = result.data
+	}
+
+	for _, id := range keysWithOwners {
+		data := encSlabById[id]
+
+		var err error
+		// deleted slabs
+		if data == nil {
+			err = s.baseStorage.Remove(id)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		// store
+		err = s.baseStorage.Store(id, data)
+		if err != nil {
+			return err
+		}
+		// add to read cache
+		s.cache[id] = s.deltas[id]
+	}
+
+	// reset deltas
+	s.deltas = make(map[StorageID]Slab)
+	return nil
+}
+
 func (s *PersistentSlabStorage) DropDeltas() {
 	s.deltas = make(map[StorageID]Slab)
 }

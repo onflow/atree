@@ -406,7 +406,7 @@ func NewPersistentSlabStorage(
 		deltas:      make(map[StorageID]Slab),
 		cborEncMode: cborEncMode,
 		cborDecMode: cborDecMode,
-		autoCommit:  true,
+		autoCommit:  false,
 	}
 
 	for _, applyOption := range opts {
@@ -416,10 +416,10 @@ func NewPersistentSlabStorage(
 	return storage
 }
 
-// WithNoAutoCommit sets the autocommit functionality off
-func WithNoAutoCommit() StorageOption {
+// WithAutoCommit sets the autocommit functionality
+func WithAutoCommit() StorageOption {
 	return func(st *PersistentSlabStorage) *PersistentSlabStorage {
-		st.autoCommit = false
+		st.autoCommit = true
 		return st
 	}
 }

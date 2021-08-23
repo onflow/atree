@@ -46,7 +46,7 @@ func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, WithNoAutoCommit())
+	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode)
 	storage.DecodeStorable = decodeStorable
 	return storage
 }

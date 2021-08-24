@@ -787,7 +787,7 @@ func TestDeepCopy(t *testing.T) {
 
 	address2 := Address{11, 12, 13, 14, 15, 16, 17, 18}
 
-	copied, err := array.DeepCopy(storage, address2)
+	copied, _, err := array.DeepCopy(storage, address2)
 	require.NoError(t, err)
 	require.IsType(t, &Array{}, copied)
 

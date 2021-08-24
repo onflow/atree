@@ -2381,9 +2381,9 @@ func (m *OrderedMap) StorageID() StorageID {
 	return m.root.Header().id
 }
 
-func (m *OrderedMap) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
+func (m *OrderedMap) DeepCopy(_ SlabStorage, _ Address) (Value, bool, error) {
 	// TODO: implement me
-	return nil, NewNotImplementedError("OrderedMap's DeepCopy")
+	return nil, false, NewNotImplementedError("OrderedMap's DeepCopy")
 }
 
 func (m *OrderedMap) DeepRemove(storage SlabStorage) error {

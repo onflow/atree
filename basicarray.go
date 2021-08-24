@@ -36,27 +36,27 @@ type BasicArray struct {
 
 var _ Value = &BasicArray{}
 
-func (a *BasicArray) DeepCopy(storage SlabStorage, address Address) (Value, error) {
+func (a *BasicArray) DeepCopy(storage SlabStorage, address Address) (Value, bool, error) {
 	result := NewBasicArray(storage, address)
 
 	for i, element := range a.root.elements {
 		value, err := element.StoredValue(storage)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
-		valueCopy, err := value.DeepCopy(storage, address)
+		valueCopy, _, err := value.DeepCopy(storage, address)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		err = result.Insert(uint64(i), valueCopy)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 	}
 
-	return result, nil
+	return result, true, nil
 }
 
 func (a *BasicArray) DeepRemove(storage SlabStorage) error {

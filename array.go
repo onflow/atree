@@ -1908,16 +1908,16 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	}
 }
 
-func (a *Array) DeepCopy(storage SlabStorage, address Address) (Value, error) {
+func (a *Array) DeepCopy(storage SlabStorage, address Address) (Value, bool, error) {
 	result, err := NewArray(storage, address, a.Type())
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	var index uint64
 	err = a.Iterate(func(element Value) (resume bool, err error) {
 
-		elementCopy, err := element.DeepCopy(storage, address)
+		elementCopy, _, err := element.DeepCopy(storage, address)
 		if err != nil {
 			return false, err
 		}
@@ -1932,10 +1932,10 @@ func (a *Array) DeepCopy(storage SlabStorage, address Address) (Value, error) {
 		return true, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	return result, nil
+	return result, true, nil
 }
 
 func (a *Array) DeepRemove(storage SlabStorage) error {

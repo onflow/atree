@@ -6,7 +6,7 @@ package atree
 
 type Value interface {
 	Storable(SlabStorage, Address, uint64) (Storable, error)
-	DeepCopy(SlabStorage, Address) (Value, error)
+	DeepCopy(SlabStorage, Address) (result Value, isCopy bool, err error)
 	DeepRemove(storage SlabStorage) error
 }
 

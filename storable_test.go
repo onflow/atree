@@ -27,8 +27,8 @@ var _ Value = Uint8Value(0)
 var _ Storable = Uint8Value(0)
 var _ ComparableValue = Uint8Value(0)
 
-func (v Uint8Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
-	return v, nil
+func (v Uint8Value) DeepCopy(_ SlabStorage, _ Address) (Value, bool, error) {
+	return v, false, nil
 }
 
 func (v Uint8Value) StoredValue(_ SlabStorage) (Value, error) {
@@ -103,8 +103,8 @@ var _ Value = Uint16Value(0)
 var _ Storable = Uint16Value(0)
 var _ ComparableValue = Uint16Value(0)
 
-func (v Uint16Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
-	return v, nil
+func (v Uint16Value) DeepCopy(_ SlabStorage, _ Address) (Value, bool, error) {
+	return v, false, nil
 }
 
 func (v Uint16Value) StoredValue(_ SlabStorage) (Value, error) {
@@ -173,8 +173,8 @@ var _ Value = Uint32Value(0)
 var _ Storable = Uint32Value(0)
 var _ ComparableValue = Uint32Value(0)
 
-func (v Uint32Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
-	return v, nil
+func (v Uint32Value) DeepCopy(_ SlabStorage, _ Address) (Value, bool, error) {
+	return v, false, nil
 }
 
 func (v Uint32Value) StoredValue(_ SlabStorage) (Value, error) {
@@ -253,8 +253,8 @@ var _ Value = Uint64Value(0)
 var _ Storable = Uint64Value(0)
 var _ ComparableValue = Uint64Value(0)
 
-func (v Uint64Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
-	return v, nil
+func (v Uint64Value) DeepCopy(_ SlabStorage, _ Address) (Value, bool, error) {
+	return v, false, nil
 }
 
 func (v Uint64Value) StoredValue(_ SlabStorage) (Value, error) {
@@ -331,8 +331,8 @@ func NewStringValue(s string) *StringValue {
 	return &StringValue{str: s, size: size}
 }
 
-func (v *StringValue) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
-	return v, nil
+func (v *StringValue) DeepCopy(_ SlabStorage, _ Address) (Value, bool, error) {
+	return v, false, nil
 }
 
 func (v *StringValue) StoredValue(_ SlabStorage) (Value, error) {

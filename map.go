@@ -1318,6 +1318,7 @@ func (m *MapDataSlab) Merge(slab Slab) error {
 	}
 
 	m.header.size = mapDataSlabPrefixSize + m.elements.Size()
+	m.header.firstKey = m.elements.firstKey()
 
 	m.next = rightSlab.next
 
@@ -1369,6 +1370,7 @@ func (m *MapDataSlab) BorrowFromRight(slab Slab) error {
 
 	// Update left slab
 	m.header.size = mapDataSlabPrefixSize + m.elements.Size()
+	m.header.firstKey = m.elements.firstKey()
 
 	return nil
 }
@@ -1714,6 +1716,11 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 			m.childrenHeaders[childHeaderIndex] = child.Header()
 			m.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
 
+			// This is needed when child is at index 0 and it is empty.
+			if childHeaderIndex == 0 {
+				m.header.firstKey = child.Header().firstKey
+			}
+
 			// Store modified slabs
 			err = storage.Store(child.ID(), child)
 			if err != nil {
@@ -1787,6 +1794,11 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 			m.childrenHeaders[childHeaderIndex] = child.Header()
 			m.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
 
+			// This is needed when child is at index 0 and it is empty.
+			if childHeaderIndex == 0 {
+				m.header.firstKey = child.Header().firstKey
+			}
+
 			// Store modified slabs
 			err = storage.Store(child.ID(), child)
 			if err != nil {
@@ -1819,6 +1831,11 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		m.childrenHeaders = m.childrenHeaders[:len(m.childrenHeaders)-1]
 
 		m.header.size -= mapSlabHeaderSize
+
+		// This is needed when child is at index 0 and it is empty.
+		if childHeaderIndex == 0 {
+			m.header.firstKey = child.Header().firstKey
+		}
 
 		// Store modified slabs in storage
 		err = storage.Store(child.ID(), child)
@@ -1906,6 +1923,11 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		m.childrenHeaders = m.childrenHeaders[:len(m.childrenHeaders)-1]
 
 		m.header.size -= mapSlabHeaderSize
+
+		// This is needed when child is at index 0 and it is empty.
+		if childHeaderIndex == 0 {
+			m.header.firstKey = child.Header().firstKey
+		}
 
 		// Store modified slabs in storage
 		err = storage.Store(child.ID(), child)

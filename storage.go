@@ -406,7 +406,7 @@ func NewPersistentSlabStorage(
 		deltas:      make(map[StorageID]Slab),
 		cborEncMode: cborEncMode,
 		cborDecMode: cborDecMode,
-		autoCommit:  true,
+		autoCommit:  false,
 	}
 
 	for _, applyOption := range opts {
@@ -416,10 +416,10 @@ func NewPersistentSlabStorage(
 	return storage
 }
 
-// WithNoAutoCommit sets the autocommit functionality off
-func WithNoAutoCommit() StorageOption {
+// WithAutoCommit sets the autocommit functionality
+func WithAutoCommit() StorageOption {
 	return func(st *PersistentSlabStorage) *PersistentSlabStorage {
-		st.autoCommit = false
+		st.autoCommit = true
 		return st
 	}
 }
@@ -434,10 +434,7 @@ func (s *PersistentSlabStorage) GenerateStorageID(address Address) (StorageID, e
 	return s.baseStorage.GenerateStorageID(address)
 }
 
-func (s *PersistentSlabStorage) Commit() error {
-	var err error
-
-	// this part ensures the keys are sorted so commit operation is deterministic
+func (s *PersistentSlabStorage) sortedOwnedDeltaKeys() []StorageID {
 	keysWithOwners := make([]StorageID, 0, len(s.deltas))
 	for k := range s.deltas {
 		// ignore the ones that are not owned by accounts
@@ -454,6 +451,14 @@ func (s *PersistentSlabStorage) Commit() error {
 		}
 		return a.AddressAsUint64() < b.AddressAsUint64()
 	})
+	return keysWithOwners
+}
+
+func (s *PersistentSlabStorage) Commit() error {
+	var err error
+
+	// this part ensures the keys are sorted so commit operation is deterministic
+	keysWithOwners := s.sortedOwnedDeltaKeys()
 
 	for _, id := range keysWithOwners {
 		slab := s.deltas[id]
@@ -482,6 +487,100 @@ func (s *PersistentSlabStorage) Commit() error {
 		// add to read cache
 		s.cache[id] = slab
 	}
+	// reset deltas
+	s.deltas = make(map[StorageID]Slab)
+	return nil
+}
+
+func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
+
+	// this part ensures the keys are sorted so commit operation is deterministic
+	keysWithOwners := s.sortedOwnedDeltaKeys()
+
+	// construct job queue
+	jobs := make(chan StorageID, len(keysWithOwners))
+	defer close(jobs)
+	for _, id := range keysWithOwners {
+		jobs <- id
+	}
+
+	type encodedSlabs struct {
+		storageID StorageID
+		data      []byte
+		err       error
+	}
+
+	// construct result queue
+	results := make(chan *encodedSlabs, len(keysWithOwners))
+	defer close(results)
+
+	// define encoders (workers) and launch them
+	// encoders encodes slabs in parallel
+	encoder := func(jobs <-chan StorageID, results chan<- *encodedSlabs) {
+		for id := range jobs {
+			slab := s.deltas[id]
+			if slab == nil {
+				results <- &encodedSlabs{
+					storageID: id,
+					data:      nil,
+					err:       nil,
+				}
+				continue
+			}
+			// serialize
+			data, err := Encode(slab, s.cborEncMode)
+			results <- &encodedSlabs{
+				storageID: id,
+				data:      data,
+				err:       err,
+			}
+		}
+	}
+
+	for i := 0; i < numWorkers; i++ {
+		go encoder(jobs, results)
+	}
+
+	// process the results while encoders are working
+	// we need to capture them inside a map
+	// again so we can apply them in order of keys
+	encSlabById := make(map[StorageID][]byte)
+	for i := 0; i < len(keysWithOwners); i++ {
+		result := <-results
+		// if any error return
+		if result.err != nil {
+			return result.err
+		}
+		encSlabById[result.storageID] = result.data
+	}
+
+	// at this stage all results has been processed
+	// and ready to be passed to base storage layer
+	for _, id := range keysWithOwners {
+		data := encSlabById[id]
+
+		var err error
+		// deleted slabs
+		if data == nil {
+			err = s.baseStorage.Remove(id)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		// store
+		err = s.baseStorage.Store(id, data)
+		if err != nil {
+			return err
+		}
+
+		// TODO: we might skip this since cadence
+		// never uses the storage after commit
+		// add to read cache
+		s.cache[id] = s.deltas[id]
+	}
+
 	// reset deltas
 	s.deltas = make(map[StorageID]Slab)
 	return nil

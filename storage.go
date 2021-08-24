@@ -544,20 +544,20 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 	// process the results while encoders are working
 	// we need to capture them inside a map
 	// again so we can apply them in order of keys
-	encSlabById := make(map[StorageID][]byte)
+	encSlabByID := make(map[StorageID][]byte)
 	for i := 0; i < len(keysWithOwners); i++ {
 		result := <-results
 		// if any error return
 		if result.err != nil {
 			return result.err
 		}
-		encSlabById[result.storageID] = result.data
+		encSlabByID[result.storageID] = result.data
 	}
 
 	// at this stage all results has been processed
 	// and ready to be passed to base storage layer
 	for _, id := range keysWithOwners {
-		data := encSlabById[id]
+		data := encSlabByID[id]
 
 		var err error
 		// deleted slabs

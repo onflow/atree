@@ -528,7 +528,6 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 				continue
 			}
 			// serialize
-			// TODO is s.cborEncMode thread safe ?
 			data, err := Encode(slab, s.cborEncMode)
 			results <- &encodedSlabs{
 				storageID: id,

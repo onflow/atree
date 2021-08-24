@@ -31,8 +31,8 @@ func TestPersistentStorage(t *testing.T) {
 		permStorageID, err := NewStorageIDFromRawBytes([]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
 		require.NoError(t, err)
 
-		slab1 := &ArrayMetaDataSlab{childrenCountSum: []uint32{1}}
-		slab2 := &ArrayMetaDataSlab{childrenCountSum: []uint32{2}}
+		slab1 := &ArrayMetaDataSlab{childrenHeaders: []ArraySlabHeader{{size: uint32(100), count: uint32(1)}}}
+		slab2 := &ArrayMetaDataSlab{childrenHeaders: []ArraySlabHeader{{size: uint32(100), count: uint32(2)}}}
 
 		// no temp ids should be in the base storage
 		err = storage.Store(tempStorageID, slab1)
@@ -110,7 +110,7 @@ func TestPersistentStorage(t *testing.T) {
 }
 
 func generateRandomSlab() Slab {
-	return &ArrayMetaDataSlab{childrenCountSum: []uint32{rand.Uint32()}}
+	return &ArrayMetaDataSlab{childrenHeaders: []ArraySlabHeader{{size: rand.Uint32(), count: rand.Uint32()}}}
 }
 
 func generateRandomAddress() Address {

@@ -60,7 +60,17 @@ func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable 
 		}
 
 	case slabMap:
-		return nil, errors.New("not implemented")
+
+		switch mapDataType := getSlabMapType(flag); mapDataType {
+		case slabMapData:
+			return newMapDataSlabFromData(id, data, decMode, decodeStorable)
+		case slabMapMeta:
+			return newMapMetaDataSlabFromData(id, data, decMode)
+		case slabMapCollisionGroup:
+			return newMapDataSlabFromData(id, data, decMode, decodeStorable)
+		default:
+			return nil, fmt.Errorf("data has invalid flag %x", flag)
+		}
 
 	case slabStorable:
 		cborDec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])

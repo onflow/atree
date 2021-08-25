@@ -46,7 +46,7 @@ func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, WithNoAutoCommit())
+	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode)
 	storage.DecodeStorable = decodeStorable
 	return storage
 }
@@ -2327,7 +2327,7 @@ func TestStringElement(t *testing.T) {
 			e, err := array.Get(i)
 			require.NoError(t, err)
 
-			v, ok := e.(*StringValue)
+			v, ok := e.(StringValue)
 			require.True(t, ok)
 			require.Equal(t, strs[i], v.str)
 		}
@@ -2378,7 +2378,7 @@ func TestStringElement(t *testing.T) {
 			e, err := array.Get(i)
 			require.NoError(t, err)
 
-			v, ok := e.(*StringValue)
+			v, ok := e.(StringValue)
 			require.True(t, ok)
 			require.Equal(t, strs[i], v.str)
 		}

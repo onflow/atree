@@ -326,20 +326,20 @@ var _ Value = &StringValue{}
 var _ Storable = &StringValue{}
 var _ ComparableValue = &StringValue{}
 
-func NewStringValue(s string) *StringValue {
+func NewStringValue(s string) StringValue {
 	size := GetUintCBORSize(uint64(len(s))) + uint32(len(s))
-	return &StringValue{str: s, size: size}
+	return StringValue{str: s, size: size}
 }
 
-func (v *StringValue) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
+func (v StringValue) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
 }
 
-func (v *StringValue) StoredValue(_ SlabStorage) (Value, error) {
+func (v StringValue) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
-func (v *StringValue) Storable(storage SlabStorage, address Address, maxInlineSize uint64) (Storable, error) {
+func (v StringValue) Storable(storage SlabStorage, address Address, maxInlineSize uint64) (Storable, error) {
 	if uint64(v.ByteSize()) > maxInlineSize {
 
 		// Create StorableSlab
@@ -366,12 +366,12 @@ func (v *StringValue) Storable(storage SlabStorage, address Address, maxInlineSi
 	return v, nil
 }
 
-func (v *StringValue) Encode(enc *Encoder) error {
+func (v StringValue) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeString(v.str)
 }
 
 // TODO: cache encoded data and size
-func (v *StringValue) HashCode() ([]byte, error) {
+func (v StringValue) HashCode() ([]byte, error) {
 	encMode, err := cbor.EncOptions{}.EncMode()
 	if err != nil {
 		return nil, err
@@ -388,23 +388,23 @@ func (v *StringValue) HashCode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (v *StringValue) Equal(other Value) bool {
-	otherString, ok := other.(*StringValue)
+func (v StringValue) Equal(other Value) bool {
+	otherString, ok := other.(StringValue)
 	if !ok {
 		return false
 	}
 	return otherString.str == v.str
 }
 
-func (v *StringValue) ByteSize() uint32 {
+func (v StringValue) ByteSize() uint32 {
 	return v.size
 }
 
-func (v *StringValue) String() string {
+func (v StringValue) String() string {
 	return v.str
 }
 
-func (*StringValue) DeepRemove(_ SlabStorage) error {
+func (StringValue) DeepRemove(_ SlabStorage) error {
 	// NO-OP
 	return nil
 }

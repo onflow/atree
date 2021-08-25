@@ -2327,7 +2327,7 @@ func TestStringElement(t *testing.T) {
 			e, err := array.Get(i)
 			require.NoError(t, err)
 
-			v, ok := e.(*StringValue)
+			v, ok := e.(StringValue)
 			require.True(t, ok)
 			require.Equal(t, strs[i], v.str)
 		}
@@ -2378,7 +2378,7 @@ func TestStringElement(t *testing.T) {
 			e, err := array.Get(i)
 			require.NoError(t, err)
 
-			v, ok := e.(*StringValue)
+			v, ok := e.(StringValue)
 			require.True(t, ok)
 			require.Equal(t, strs[i], v.str)
 		}

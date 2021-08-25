@@ -111,7 +111,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.True(t, verified)
 
 		for k, v := range uniqueKeyValues {
-			strv := k.(*StringValue)
+			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
 			e, err := m.Get(NewStringValue(strv.str))
@@ -174,7 +174,7 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		for k, v := range uniqueKeyValues {
-			strv := k.(*StringValue)
+			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
 			e, err := m.Get(NewStringValue(strv.str))
@@ -231,7 +231,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.True(t, verified)
 
 		for k, v := range uniqueKeyValues {
-			strv := k.(*StringValue)
+			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
 			e, err := m.Get(NewStringValue(strv.str))
@@ -362,7 +362,7 @@ func TestMapRemove(t *testing.T) {
 
 		// Get elements
 		for k, v := range uniqueKeyValues {
-			strv := k.(*StringValue)
+			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
 			e, err := m.Get(NewStringValue(strv.str))
@@ -374,7 +374,7 @@ func TestMapRemove(t *testing.T) {
 
 		// Remove all elements
 		for k, v := range uniqueKeyValues {
-			strv := k.(*StringValue)
+			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
 			removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
@@ -448,7 +448,7 @@ func TestMapRemove(t *testing.T) {
 
 		// Get elements
 		for k, v := range uniqueKeyValues {
-			strv := k.(*StringValue)
+			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
 			e, err := m.Get(NewStringValue(strv.str))
@@ -460,7 +460,7 @@ func TestMapRemove(t *testing.T) {
 
 		// Remove all elements
 		for k, v := range uniqueKeyValues {
-			strv := k.(*StringValue)
+			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
 			removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
@@ -501,7 +501,7 @@ func TestMapIterate(t *testing.T) {
 
 		uniqueKeyValues := make(map[string]uint64, mapSize)
 
-		sortedKeys := make([]*StringValue, mapSize)
+		sortedKeys := make([]StringValue, mapSize)
 
 		for i := uint64(0); i < mapSize; i++ {
 			for {
@@ -546,7 +546,7 @@ func TestMapIterate(t *testing.T) {
 
 		i := uint64(0)
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
-			ks, ok := k.(*StringValue)
+			ks, ok := k.(StringValue)
 			require.True(t, ok)
 			require.Equal(t, sortedKeys[i].String(), ks.String())
 
@@ -728,7 +728,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
 	require.True(t, verified)
 
 	for k, v := range uniqueKeyValues {
-		strv := k.(*StringValue)
+		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
 		e, err := m.Get(NewStringValue(strv.str))
@@ -743,7 +743,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
 	require.Equal(t, uint64(mockDigestCount), stats.CollisionDataSlabCount)
 
 	for k, v := range uniqueKeyValues {
-		strv := k.(*StringValue)
+		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
 		removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
@@ -813,7 +813,7 @@ func testMapRandomHashCollision(t *testing.T, maxHashLevel int) {
 	require.True(t, verified)
 
 	for k, v := range uniqueKeyValues {
-		strv := k.(*StringValue)
+		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
 		e, err := m.Get(NewStringValue(strv.str))
@@ -827,7 +827,7 @@ func testMapRandomHashCollision(t *testing.T, maxHashLevel int) {
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
 
 	for k, v := range uniqueKeyValues {
-		strv := k.(*StringValue)
+		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
 		removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
@@ -909,7 +909,7 @@ func TestMapLargeElement(t *testing.T) {
 		e, err := m.Get(NewStringValue(k))
 		require.NoError(t, err)
 
-		sv, ok := e.(*StringValue)
+		sv, ok := e.(StringValue)
 		require.True(t, ok)
 		require.Equal(t, v, sv.str)
 	}

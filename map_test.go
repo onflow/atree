@@ -24,6 +24,9 @@ type mockDigester struct {
 
 var _ Digester = &mockDigester{}
 
+func (h *mockDigesterBuilder) SetSeed(_ uint64, _ uint64) {
+}
+
 func (h *mockDigesterBuilder) Digest(hashable Hashable) (Digester, error) {
 	args := h.Called(hashable)
 	return args.Get(0).(mockDigester), nil
@@ -46,13 +49,6 @@ func (d mockDigester) Digest(level int) (Digest, error) {
 func (d mockDigester) Levels() int {
 	return len(d.d)
 }
-
-var (
-	secretkey = [16]byte{
-		0x9e, 0x37, 0x79, 0xb9, 0x7f, 0x4a, 0x7c, 0x15,
-		0xb7, 0xe1, 0x51, 0x62, 0x8a, 0xed, 0x2a, 0x6b,
-	}
-)
 
 func newTestInMemoryStorage(t testing.TB) SlabStorage {
 
@@ -96,7 +92,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -153,7 +149,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -224,7 +220,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -287,7 +283,7 @@ func TestMapHas(t *testing.T) {
 		}
 	}
 
-	m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	for i, k := range keysToInsert {
@@ -355,7 +351,7 @@ func TestMapRemove(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		// Insert elements
@@ -442,7 +438,7 @@ func TestMapRemove(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		// Insert elements
@@ -510,7 +506,7 @@ func TestMapIterate(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		digesterBuilder := newBasicDigesterBuilder(secretkey)
+		digesterBuilder := newBasicDigesterBuilder()
 
 		uniqueKeyValues := make(map[string]uint64, mapSize)
 
@@ -525,6 +521,14 @@ func TestMapIterate(t *testing.T) {
 					break
 				}
 			}
+		}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range uniqueKeyValues {
+			err := m.Set(NewStringValue(k), Uint64Value(v))
+			require.NoError(t, err)
 		}
 
 		// Sort keys by hashed value
@@ -548,14 +552,6 @@ func TestMapIterate(t *testing.T) {
 			}
 			return i < j // sort by insertion order with hash collision
 		})
-
-		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		for k, v := range uniqueKeyValues {
-			err := m.Set(NewStringValue(k), Uint64Value(v))
-			require.NoError(t, err)
-		}
 
 		i := uint64(0)
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
@@ -677,12 +673,12 @@ func TestMapIterate(t *testing.T) {
 	})
 }
 
-func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
+func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 
 	const mapSize = 2 * 1024
 
 	// mockDigestCount is the number of unique set of digests.
-	// Each set has maxHashLevel of digest.
+	// Each set has maxDigestLevel of digest.
 	const mockDigestCount = 8
 
 	const typeInfo = "map[String]String"
@@ -691,10 +687,10 @@ func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
 
 	digesterBuilder := &mockDigesterBuilder{}
 
-	// Generate mockDigestCount*maxHashLevel number of unique digest
-	digests := make([]Digest, 0, mockDigestCount*maxHashLevel)
+	// Generate mockDigestCount*maxDigestLevel number of unique digest
+	digests := make([]Digest, 0, mockDigestCount*maxDigestLevel)
 	uniqueDigest := make(map[Digest]bool)
-	for len(uniqueDigest) < mockDigestCount*maxHashLevel {
+	for len(uniqueDigest) < mockDigestCount*maxDigestLevel {
 		d := Digest(uint64(rand.Intn(256)))
 		if !uniqueDigest[d] {
 			uniqueDigest[d] = true
@@ -716,8 +712,8 @@ func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
 				uniqueKeyValues[k] = NewStringValue(randStr(16))
 
 				index := (i % mockDigestCount)
-				startIndex := int(index) * maxHashLevel
-				endIndex := int(index)*maxHashLevel + maxHashLevel
+				startIndex := int(index) * maxDigestLevel
+				endIndex := int(index)*maxDigestLevel + maxDigestLevel
 
 				digests := digests[startIndex:endIndex]
 
@@ -781,7 +777,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
 	require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
 }
 
-func testMapRandomHashCollision(t *testing.T, maxHashLevel int) {
+func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 	const mapSize = 2 * 1024
 
@@ -806,7 +802,7 @@ func testMapRandomHashCollision(t *testing.T, maxHashLevel int) {
 				uniqueKeyValues[k] = NewStringValue(randStr(16))
 
 				var digests []Digest
-				for i := 0; i < maxHashLevel; i++ {
+				for i := 0; i < maxDigestLevel; i++ {
 					digests = append(digests, Digest(rand.Intn(256)))
 				}
 
@@ -876,16 +872,16 @@ func TestMapHashCollision(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	const maxHashLevel = 4
+	const maxDigestLevel = 4
 
-	for hashLevel := 1; hashLevel <= maxHashLevel; hashLevel++ {
+	for hashLevel := 1; hashLevel <= maxDigestLevel; hashLevel++ {
 		name := fmt.Sprintf("deterministic max hash level %d", hashLevel)
 		t.Run(name, func(t *testing.T) {
 			testMapDeterministicHashCollision(t, hashLevel)
 		})
 	}
 
-	for hashLevel := 1; hashLevel <= maxHashLevel; hashLevel++ {
+	for hashLevel := 1; hashLevel <= maxDigestLevel; hashLevel++ {
 		name := fmt.Sprintf("random max hash level %d", hashLevel)
 		t.Run(name, func(t *testing.T) {
 			testMapRandomHashCollision(t, hashLevel)
@@ -918,7 +914,7 @@ func TestMapLargeElement(t *testing.T) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	for k, v := range strs {
@@ -1146,12 +1142,14 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x00,
 				// flag: root + map meta
 				0x89,
-				// extra data (CBOR encoded array of 2 elements)
-				0x82,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
 				// type info: "map"
 				0x63, 0x6d, 0x61, 0x70,
 				// count: 10
 				0x0a,
+				// seed
+				0x1b, 0xa7, 0xce, 0x44, 0xac, 0x4b, 0x41, 0x6d, 0x5e,
 
 				// version
 				0x00,
@@ -1362,12 +1360,14 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x00,
 				// flag: root + map meta
 				0x89,
-				// extra data (CBOR encoded array of 2 elements)
-				0x82,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
 				// type info: "map"
 				0x63, 0x6d, 0x61, 0x70,
 				// count: 10
 				0x0a,
+				// seed
+				0x1b, 0xa7, 0xce, 0x44, 0xac, 0x4b, 0x41, 0x6d, 0x5e,
 
 				// version
 				0x00,
@@ -1631,12 +1631,14 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x00,
 				// flag: root + meta
 				0x89,
-				// extra data (CBOR encoded array of 2 elements)
-				0x82,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
 				// type info: "map"
 				0x63, 0x6d, 0x61, 0x70,
 				// count: 10
 				0x0a,
+				// seed
+				0x1b, 0xa7, 0xce, 0x44, 0xac, 0x4b, 0x41, 0x6d, 0x5e,
 
 				// version
 				0x00,
@@ -1898,12 +1900,14 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x00,
 				// flag: root + meta
 				0x89,
-				// extra data (CBOR encoded array of 2 elements)
-				0x82,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
 				// type info: "map"
 				0x63, 0x6d, 0x61, 0x70,
 				// count: 10
 				0x0a,
+				// seed
+				0x1b, 0xa7, 0xce, 0x44, 0xac, 0x4b, 0x41, 0x6d, 0x5e,
 
 				// version
 				0x00,
@@ -2212,12 +2216,14 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x00,
 				// flag: root + has pointer + map data
 				0xc8,
-				// extra data (CBOR encoded array of 2 elements)
-				0x82,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
 				// type info: "map"
 				0x63, 0x6d, 0x61, 0x70,
 				// count: 10
 				0x14,
+				// seed
+				0x1b, 0xa7, 0xce, 0x44, 0xac, 0x4b, 0x41, 0x6d, 0x5e,
 
 				// version
 				0x00,
@@ -2449,10 +2455,6 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 
 	const actionCount = 2 * 1024
 
-	const digestMaxValue = 256
-
-	const digestMaxLevels = 4
-
 	const stringMaxSize = 512
 
 	const typeInfo = "[AnyType]"
@@ -2468,7 +2470,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	digesterBuilder := &mockDigesterBuilder{}
+	digesterBuilder := newBasicDigesterBuilder()
 
 	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
@@ -2523,13 +2525,6 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 			}
 
 			keyValues[k] = v
-
-			var digests []Digest
-			for i := 0; i < digestMaxLevels; i++ {
-				digests = append(digests, Digest(rand.Intn(digestMaxValue)))
-			}
-
-			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			oldCount := m.Count()
 
@@ -2588,7 +2583,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 	// Get and check every element from new map.
 
 	for k, v := range keyValues {
-		e, err := m.Get(k)
+		e, err := m2.Get(k)
 		require.NoError(t, err)
 		require.Equal(t, v, e)
 	}

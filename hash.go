@@ -15,6 +15,7 @@ type Hashable interface {
 type Digest uint64
 
 type DigesterBuilder interface {
+	SetSeed(k0 uint64, k1 uint64)
 	Digest(Hashable) (Digester, error)
 }
 
@@ -30,13 +31,15 @@ type Digester interface {
 }
 
 type basicDigesterBuilder struct {
-	secretKey [16]byte
+	k0 uint64
+	k1 uint64
 }
 
 var _ DigesterBuilder = &basicDigesterBuilder{}
 
 type basicDigester struct {
-	secretKey  [16]byte
+	k0         uint64
+	k1         uint64
 	sipHash    [2]uint64
 	blake3Hash [4]uint64
 	msg        []byte
@@ -47,17 +50,26 @@ var (
 	emptyBlake3Hash [4]uint64
 )
 
-func newBasicDigesterBuilder(key [16]byte) *basicDigesterBuilder {
-	return &basicDigesterBuilder{secretKey: key}
+func newBasicDigesterBuilder() *basicDigesterBuilder {
+	return &basicDigesterBuilder{}
+}
+
+func (bdb *basicDigesterBuilder) SetSeed(k0 uint64, k1 uint64) {
+	bdb.k0 = k0
+	bdb.k1 = k1
 }
 
 func (bdb *basicDigesterBuilder) Digest(hashable Hashable) (Digester, error) {
+	if bdb.k0 == 0 {
+		return nil, NewHashError(errors.New("k0 is uninitialized"))
+	}
+
 	msg, err := hashable.HashCode()
 	if err != nil {
 		return nil, err
 	}
 
-	return &basicDigester{secretKey: bdb.secretKey, msg: msg}, nil
+	return &basicDigester{k0: bdb.k0, k1: bdb.k1, msg: msg}, nil
 }
 
 func (bd *basicDigester) DigestPrefix(level int) ([]Digest, error) {
@@ -84,9 +96,7 @@ func (bd *basicDigester) Digest(level int) (Digest, error) {
 	case 0, 1:
 		{
 			if bd.sipHash == emptySipHash {
-				k0 := binary.BigEndian.Uint64(bd.secretKey[:])
-				k1 := binary.BigEndian.Uint64(bd.secretKey[8:])
-				bd.sipHash[0], bd.sipHash[1] = siphash.Hash128(k0, k1, bd.msg)
+				bd.sipHash[0], bd.sipHash[1] = siphash.Hash128(bd.k0, bd.k1, bd.msg)
 			}
 			return Digest(bd.sipHash[level]), nil
 		}

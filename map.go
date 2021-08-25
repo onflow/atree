@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/fxamacker/cbor/v2"
+	"github.com/zeebo/xxh3"
 )
 
 const (
@@ -44,7 +45,14 @@ const (
 	// version (1 byte) + flag (1 byte) + prev id (16 bytes) + next id (16 bytes)
 	mapDataSlabPrefixSize = 2 + storageIDSize + storageIDSize
 
-	maxHashLevel = 23
+	// maxDigestLevel is max levels of 64-bit digests allowed
+	maxDigestLevel = 8
+
+	// typicalRandomConstant is a 64-bit value that has qualities
+	// of a typical random value (e.g. hamming weight, number of
+	// consecutive groups of 1-bits, etc.) so it can be useful as
+	// a const part of a seed, round constant inside a permutation, etc.
+	typicalRandomConstant = uint64(0x1BD11BDAA9FC1A22) // DO NOT MODIFY
 )
 
 type MapKey Storable
@@ -163,6 +171,7 @@ type MapExtraData struct {
 	_        struct{} `cbor:",toarray"`
 	TypeInfo string
 	Count    uint64
+	Seed     uint64
 }
 
 // MapDataSlab is leaf node, implementing MapSlab.
@@ -921,8 +930,8 @@ func newHkeyElements(level int) *hkeyElements {
 //   ]
 func (e *hkeyElements) Encode(enc *Encoder) error {
 
-	if e.level > maxHashLevel {
-		return NewEncodingError(fmt.Errorf("hash level %d exceeds max hash level %d", e.level, maxHashLevel))
+	if e.level > maxDigestLevel {
+		return NewEncodingError(fmt.Errorf("hash level %d exceeds max digest level %d", e.level, maxDigestLevel))
 	}
 
 	// Encode CBOR array head of 3 elements (level, hkeys, elements)
@@ -1490,8 +1499,8 @@ func newSingleElements(level int) *singleElements {
 //   ]
 func (e *singleElements) Encode(enc *Encoder) error {
 
-	if e.level > maxHashLevel {
-		return NewEncodingError(fmt.Errorf("hash level %d exceeds max hash level %d", e.level, maxHashLevel))
+	if e.level > maxDigestLevel {
+		return NewEncodingError(fmt.Errorf("hash level %d exceeds max digest level %d", e.level, maxDigestLevel))
 	}
 
 	// Encode CBOR array header for 3 elements (level, hkeys, elements)
@@ -2955,12 +2964,34 @@ func (m *MapMetaDataSlab) String() string {
 
 func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder, typeInfo string) (*OrderedMap, error) {
 
-	extraData := &MapExtraData{TypeInfo: typeInfo}
-
+	// Create root storage id
 	sID, err := storage.GenerateStorageID(address)
 	if err != nil {
 		return nil, NewStorageError(err)
 	}
+
+	sIDBytes := make([]byte, storageIDSize)
+	_, err = sID.ToRawBytes(sIDBytes)
+	if err != nil {
+		return nil, NewStorageError(err)
+	}
+
+	// Create seed for non-crypto hash algos (XXH128, SipHash) to use.
+	// Ideally, seed should be a nondeterministic 128-bit secret key because
+	// SipHash relies on its key being secret for its security.  Since
+	// we handle collisions and based on other factors such as storage space,
+	// the team decided we can use a 64-bit non-secret key instead of
+	// a 128-bit secret key. And for performance reasons, we first use
+	// noncrypto hash algos and fall back to crypto algo after collisions.
+	k0 := xxh3.Hash128(sIDBytes).Lo
+	// To save storage space, only store 64-bits of the seed.
+	// Use a 64-bit const for the unstored half to create 128-bit seed.
+	k1 := typicalRandomConstant
+
+	digestBuilder.SetSeed(k0, k1)
+
+	// Create extra data with type info and seed
+	extraData := &MapExtraData{TypeInfo: typeInfo, Seed: k0}
 
 	root := &MapDataSlab{
 		header: MapSlabHeader{
@@ -2988,6 +3019,14 @@ func NewMapWithRootID(storage SlabStorage, rootID StorageID, digestBuilder Diges
 	if err != nil {
 		return nil, err
 	}
+
+	extraData := root.ExtraData()
+	if extraData == nil {
+		return nil, NewDecodingError(fmt.Errorf("root doesn't have extra data"))
+	}
+
+	digestBuilder.SetSeed(extraData.Seed, typicalRandomConstant)
+
 	return &OrderedMap{
 		storage:         storage,
 		root:            root,

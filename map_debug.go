@@ -276,7 +276,7 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, elemen
 		var buf bytes.Buffer
 		mode, _ := cbor.EncOptions{}.EncMode()
 		enc := NewEncoder(&buf, mode)
-		elements.Encode(enc)
+		_ = elements.Encode(enc)
 		return 0, fmt.Errorf("slab %d, element level %d, elements size %d, computed size %d, encoded 0x%x",
 			id, level, elements.Size(), size, buf.Bytes())
 	}
@@ -334,7 +334,7 @@ func (m *OrderedMap) _validSingleElements(id StorageID, db DigesterBuilder, elem
 		var buf bytes.Buffer
 		mode, _ := cbor.EncOptions{}.EncMode()
 		enc := NewEncoder(&buf, mode)
-		elements.Encode(enc)
+		_ = elements.Encode(enc)
 		return 0, fmt.Errorf("slab %d, element level %d, elements size %d, computed size %d, encoded 0x%x",
 			id, level, elements.Size(), size, buf.Bytes())
 	}

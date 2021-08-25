@@ -374,7 +374,7 @@ func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable Storab
 //
 //   CBOR encoded array of 2 elements (key, value).
 //
-func (m *singleElement) Encode(enc *Encoder) error {
+func (e *singleElement) Encode(enc *Encoder) error {
 
 	// Encode CBOR array head for 2 elements
 	err := enc.CBOR.EncodeRawBytes([]byte{0x82})
@@ -383,13 +383,13 @@ func (m *singleElement) Encode(enc *Encoder) error {
 	}
 
 	// Encode key
-	err = m.key.Encode(enc)
+	err = e.key.Encode(enc)
 	if err != nil {
 		return NewEncodingError(err)
 	}
 
 	// Encode value
-	err = m.value.Encode(enc)
+	err = e.value.Encode(enc)
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -520,7 +520,7 @@ func newInlineCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorable
 //
 //   CBOR tag (number: CBORTagInlineCollisionGroup, content: elements)
 //
-func (m *inlineCollisionGroup) Encode(enc *Encoder) error {
+func (e *inlineCollisionGroup) Encode(enc *Encoder) error {
 
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number CBORTagInlineCollisionGroup
@@ -530,7 +530,7 @@ func (m *inlineCollisionGroup) Encode(enc *Encoder) error {
 		return NewEncodingError(err)
 	}
 
-	err = m.elements.Encode(enc)
+	err = e.elements.Encode(enc)
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -677,7 +677,7 @@ func newExternalCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorab
 //
 //   CBOR tag (number: CBORTagExternalCollisionGroup, content: storage ID)
 //
-func (m *externalCollisionGroup) Encode(enc *Encoder) error {
+func (e *externalCollisionGroup) Encode(enc *Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number CBORTagExternalCollisionGroup
 		0xd8, CBORTagExternalCollisionGroup,
@@ -686,7 +686,7 @@ func (m *externalCollisionGroup) Encode(enc *Encoder) error {
 		return NewEncodingError(err)
 	}
 
-	err = StorageIDStorable(m.id).Encode(enc)
+	err = StorageIDStorable(e.id).Encode(enc)
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -3351,12 +3351,12 @@ func firstMapDataSlab(storage SlabStorage, slab MapSlab) (MapSlab, error) {
 	return firstMapDataSlab(storage, firstChild)
 }
 
-func (extra *MapExtraData) incrementCount() {
-	extra.Count++
+func (a *MapExtraData) incrementCount() {
+	a.Count++
 }
 
-func (extra *MapExtraData) decrementCount() {
-	extra.Count--
+func (a *MapExtraData) decrementCount() {
+	a.Count--
 }
 
 type MapElementIterator struct {

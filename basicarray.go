@@ -25,70 +25,12 @@ func (a *BasicArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &BasicArray{storage: storage, root: a}, nil
 }
 
-func (a *BasicArrayDataSlab) DeepRemove(storage SlabStorage) error {
-	return storage.Remove(a.ID())
-}
-
 type BasicArray struct {
 	storage SlabStorage
 	root    *BasicArrayDataSlab
 }
 
 var _ Value = &BasicArray{}
-
-func (a *BasicArray) DeepCopy(storage SlabStorage, address Address) (Value, error) {
-	result := NewBasicArray(storage, address)
-
-	for i, element := range a.root.elements {
-		value, err := element.StoredValue(storage)
-		if err != nil {
-			return nil, err
-		}
-
-		valueCopy, err := value.DeepCopy(storage, address)
-		if err != nil {
-			return nil, err
-		}
-
-		err = result.Insert(uint64(i), valueCopy)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return result, nil
-}
-
-func (a *BasicArray) DeepRemove(storage SlabStorage) error {
-	count := a.Count()
-
-	// TODO: use backward iterator
-	for prevIndex := count; prevIndex > 0; prevIndex-- {
-		index := prevIndex - 1
-
-		storable, err := a.root.Get(storage, index)
-		if err != nil {
-			return err
-		}
-
-		value, err := a.Remove(index)
-		if err != nil {
-			return err
-		}
-
-		err = value.DeepRemove(storage)
-		if err != nil {
-			return err
-		}
-
-		err = storable.DeepRemove(storage)
-		if err != nil {
-			return err
-		}
-	}
-
-	return a.root.DeepRemove(storage)
-}
 
 func (a *BasicArray) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
 	return a.root, nil

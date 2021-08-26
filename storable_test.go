@@ -27,10 +27,6 @@ var _ Value = Uint8Value(0)
 var _ Storable = Uint8Value(0)
 var _ ComparableValue = Uint8Value(0)
 
-func (v Uint8Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
-	return v, nil
-}
-
 func (v Uint8Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
@@ -92,20 +88,11 @@ func (v Uint8Value) String() string {
 	return fmt.Sprintf("%d", uint8(v))
 }
 
-func (v Uint8Value) DeepRemove(_ SlabStorage) error {
-	// NO-OP
-	return nil
-}
-
 type Uint16Value uint16
 
 var _ Value = Uint16Value(0)
 var _ Storable = Uint16Value(0)
 var _ ComparableValue = Uint16Value(0)
-
-func (v Uint16Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
-	return v, nil
-}
 
 func (v Uint16Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -160,11 +147,6 @@ func (v Uint16Value) ByteSize() uint32 {
 
 func (v Uint16Value) String() string {
 	return fmt.Sprintf("%d", uint16(v))
-}
-
-func (v Uint16Value) DeepRemove(_ SlabStorage) error {
-	// NO-OP
-	return nil
 }
 
 type Uint32Value uint32
@@ -237,25 +219,11 @@ func (v Uint32Value) String() string {
 	return fmt.Sprintf("%d", uint32(v))
 }
 
-func (v Uint32Value) DeepRemove(_ SlabStorage) error {
-	// NO-OP
-	return nil
-}
-
 type Uint64Value uint64
-
-func (v Uint64Value) DeepRemove(_ SlabStorage) error {
-	// NO-OP
-	return nil
-}
 
 var _ Value = Uint64Value(0)
 var _ Storable = Uint64Value(0)
 var _ ComparableValue = Uint64Value(0)
-
-func (v Uint64Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
-	return v, nil
-}
 
 func (v Uint64Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -331,10 +299,6 @@ func NewStringValue(s string) StringValue {
 	return StringValue{str: s, size: size}
 }
 
-func (v StringValue) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
-	return v, nil
-}
-
 func (v StringValue) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
@@ -402,11 +366,6 @@ func (v StringValue) ByteSize() uint32 {
 
 func (v StringValue) String() string {
 	return v.str
-}
-
-func (StringValue) DeepRemove(_ SlabStorage) error {
-	// NO-OP
-	return nil
 }
 
 func decodeStorable(dec *cbor.StreamDecoder, _ StorageID) (Storable, error) {

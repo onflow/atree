@@ -51,10 +51,6 @@ func (s StorableSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return s.Storable.StoredValue(storage)
 }
 
-func (s StorableSlab) DeepRemove(storage SlabStorage) error {
-	return storage.Remove(s.StorageID)
-}
-
 func (StorableSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, errors.New("not applicable")
 }

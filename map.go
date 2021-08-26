@@ -2120,10 +2120,6 @@ func (m *MapDataSlab) CanLendToRight(size uint32) bool {
 	return m.elements.CanLendToRight(size)
 }
 
-func (m *MapDataSlab) DeepRemove(storage SlabStorage) error {
-	return storage.Remove(m.ID())
-}
-
 func (m *MapDataSlab) SetID(id StorageID) {
 	m.header.id = id
 }
@@ -2916,10 +2912,6 @@ func (m *MapMetaDataSlab) CanLendToRight(size uint32) bool {
 	return m.header.size-mapSlabHeaderSize*n > uint32(minThreshold)
 }
 
-func (m *MapMetaDataSlab) DeepRemove(storage SlabStorage) error {
-	return storage.Remove(m.ID())
-}
-
 func (m MapMetaDataSlab) IsData() bool {
 	return false
 }
@@ -3305,16 +3297,6 @@ func (m *OrderedMap) Remove(key ComparableValue) (Value, Value, error) {
 
 func (m *OrderedMap) StorageID() StorageID {
 	return m.root.Header().id
-}
-
-func (m *OrderedMap) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
-	// TODO: implement me
-	return nil, NewNotImplementedError("OrderedMap's DeepCopy")
-}
-
-func (m *OrderedMap) DeepRemove(storage SlabStorage) error {
-	// TODO: implement me
-	return NewNotImplementedError("OrderedMap's DeepRemove")
 }
 
 func (m *OrderedMap) StoredValue(_ SlabStorage) (Value, error) {

@@ -17,7 +17,6 @@ type Storable interface {
 	ByteSize() uint32
 
 	StoredValue(storage SlabStorage) (Value, error)
-	DeepRemove(storage SlabStorage) error
 }
 
 const (
@@ -76,10 +75,6 @@ func (v StorageIDStorable) String() string {
 	return fmt.Sprintf("StorageIDStorable(%d)", v)
 }
 
-func (v StorageIDStorable) DeepRemove(storage SlabStorage) error {
-	return storage.Remove(StorageID(v))
-}
-
 // NonStorable represents a value that cannot be stored
 //
 type NonStorable struct {
@@ -98,11 +93,6 @@ func (n NonStorable) ByteSize() uint32 {
 
 func (n NonStorable) StoredValue(_ SlabStorage) (Value, error) {
 	return n.Value, nil
-}
-
-func (NonStorable) DeepRemove(_ SlabStorage) error {
-	// NO-OP
-	return nil
 }
 
 // Encode is a wrapper for Storable.Encode()

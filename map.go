@@ -169,7 +169,7 @@ type MapSlabHeader struct {
 
 type MapExtraData struct {
 	_        struct{} `cbor:",toarray"`
-	TypeInfo string
+	TypeInfo cbor.RawMessage
 	Count    uint64
 	Seed     uint64
 }
@@ -2962,7 +2962,7 @@ func (m *MapMetaDataSlab) String() string {
 	return strings.Join(hStr, " ")
 }
 
-func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder, typeInfo string) (*OrderedMap, error) {
+func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder, typeInfo cbor.RawMessage) (*OrderedMap, error) {
 
 	// Create root storage id
 	sID, err := storage.GenerateStorageID(address)
@@ -3333,11 +3333,11 @@ func (m *OrderedMap) Address() Address {
 	return m.root.ID().Address
 }
 
-func (m *OrderedMap) Type() string {
+func (m *OrderedMap) Type() cbor.RawMessage {
 	if extraData := m.root.ExtraData(); extraData != nil {
 		return extraData.TypeInfo
 	}
-	return ""
+	return nil
 }
 
 func (m *OrderedMap) String() string {

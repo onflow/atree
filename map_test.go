@@ -71,7 +71,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		const mapSize = 64 * 1024
 
-		const typeInfo = "map[String]Uint64"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -128,7 +128,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		const mapSize = 64 * 1024
 
-		const typeInfo = "map[String]Uint64"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -197,7 +197,7 @@ func TestMapSetAndGet(t *testing.T) {
 		const mapSize = 64 * 1024
 		const maxKeyLength = 224
 
-		const typeInfo = "map[String]AnyType"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -257,7 +257,7 @@ func TestMapHas(t *testing.T) {
 
 	const mapSize = 64 * 1024
 
-	const typeInfo = "map[String]Uint64"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -330,7 +330,7 @@ func TestMapRemove(t *testing.T) {
 
 		const valueStringMaxSize = 16
 
-		const typeInfo = "map[String]Uint64"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -417,7 +417,7 @@ func TestMapRemove(t *testing.T) {
 
 		const valueStringMaxSize = 512
 
-		const typeInfo = "map[String]Uint64"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -500,7 +500,7 @@ func TestMapIterate(t *testing.T) {
 	t.Run("no collision", func(t *testing.T) {
 		const mapSize = 64 * 1024
 
-		const typeInfo = "map[String]Uint64"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -577,7 +577,7 @@ func TestMapIterate(t *testing.T) {
 	t.Run("collision", func(t *testing.T) {
 		const mapSize = 1024
 
-		const typeInfo = "map[String]String"
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -681,7 +681,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	// Each set has maxDigestLevel of digest.
 	const mockDigestCount = 8
 
-	const typeInfo = "map[String]String"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -781,7 +781,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 	const mapSize = 2 * 1024
 
-	const typeInfo = "map[String]String"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -896,7 +896,7 @@ func TestMapLargeElement(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	const typeInfo = "map[string]string"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	const mapSize = 2 * 1024
 
@@ -976,7 +976,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 
 	const stringMaxSize = 512
 
-	const typeInfo = "[AnyType]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	storage := newTestInMemoryStorage(t)
 
@@ -1093,7 +1093,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	typeInfo := "map"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1145,7 +1145,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// extra data (CBOR encoded array of 3 elements)
 				0x83,
 				// type info: "map"
-				0x63, 0x6d, 0x61, 0x70,
+				//0x63, 0x6d, 0x61, 0x70,
+				0x18, 0x2A,
 				// count: 10
 				0x0a,
 				// seed
@@ -1363,7 +1364,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// extra data (CBOR encoded array of 3 elements)
 				0x83,
 				// type info: "map"
-				0x63, 0x6d, 0x61, 0x70,
+				//0x63, 0x6d, 0x61, 0x70,
+				0x18, 0x2A,
 				// count: 10
 				0x0a,
 				// seed
@@ -1634,7 +1636,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// extra data (CBOR encoded array of 3 elements)
 				0x83,
 				// type info: "map"
-				0x63, 0x6d, 0x61, 0x70,
+				//0x63, 0x6d, 0x61, 0x70,
+				0x18, 0x2A,
 				// count: 10
 				0x0a,
 				// seed
@@ -1903,7 +1906,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// extra data (CBOR encoded array of 3 elements)
 				0x83,
 				// type info: "map"
-				0x63, 0x6d, 0x61, 0x70,
+				//0x63, 0x6d, 0x61, 0x70,
+				0x18, 0x2A,
 				// count: 10
 				0x0a,
 				// seed
@@ -2219,7 +2223,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// extra data (CBOR encoded array of 3 elements)
 				0x83,
 				// type info: "map"
-				0x63, 0x6d, 0x61, 0x70,
+				//0x63, 0x6d, 0x61, 0x70,
+				0x18, 0x2A,
 				// count: 10
 				0x14,
 				// seed
@@ -2457,7 +2462,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 
 	const stringMaxSize = 512
 
-	const typeInfo = "[AnyType]"
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)

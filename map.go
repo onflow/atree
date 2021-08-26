@@ -5,26 +5,54 @@
 package atree
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
 	"strings"
 
 	"github.com/fxamacker/cbor/v2"
+	"github.com/zeebo/xxh3"
 )
 
 const (
-	digestKeySize = 8
+	digestSize = 8
 
-	// slab header size: storage id (16 bytes) + size (4 bytes) + hashed first key (8 bytes)
-	mapSlabHeaderSize = storageIDSize + 4 + digestKeySize
+	// single element prefix size: CBOR array header (1 byte)
+	singleElementPrefixSize = 1
+
+	// inline collision group prefix size: CBOR tag number (2 bytes)
+	inlineCollisionGroupPrefixSize = 2
+
+	// external collision group prefix size: CBOR tag number (2 bytes)
+	externalCollisionGroupPrefixSize = 2
+
+	// hkey elements prefix size:
+	// CBOR array header (1 byte) + level (1 byte) + hkeys byte string header (9 bytes) + elements array header (9 bytes)
+	hkeyElementsPrefixSize = 1 + 1 + 9 + 9
+
+	// single elements prefix size:
+	// CBOR array header (1 byte) + encoded level (1 byte) + hkeys byte string header (1 bytes) + elements array header (9 bytes)
+	singleElementsPrefixSize = 1 + 1 + 1 + 9
+
+	// slab header size: storage id (16 bytes) + size (4 bytes) + first digest (8 bytes)
+	mapSlabHeaderSize = storageIDSize + 4 + digestSize
 
 	// meta data slab prefix size: version (1 byte) + flag (1 byte) + child header count (2 bytes)
 	mapMetaDataSlabPrefixSize = 1 + 1 + 2
 
-	// version (1 byte) + flag (1 byte) + prev id (16 bytes) + next id (16 bytes) + CBOR array size (3 bytes) for keys and values
-	// (3 bytes of array size support up to 65535 array elements)
-	mapDataSlabPrefixSize = 2 + storageIDSize + storageIDSize + 3
+	// version (1 byte) + flag (1 byte) + prev id (16 bytes) + next id (16 bytes)
+	mapDataSlabPrefixSize = 2 + storageIDSize + storageIDSize
+
+	// maxDigestLevel is max levels of 64-bit digests allowed
+	maxDigestLevel = 8
+
+	// typicalRandomConstant is a 64-bit value that has qualities
+	// of a typical random value (e.g. hamming weight, number of
+	// consecutive groups of 1-bits, etc.) so it can be useful as
+	// a const part of a seed, round constant inside a permutation, etc.
+	typicalRandomConstant = uint64(0x1BD11BDAA9FC1A22) // DO NOT MODIFY
 )
 
 type MapKey Storable
@@ -43,6 +71,10 @@ type element interface {
 	// Remove returns matched key, value, and updated element.
 	// Updated element may be nil, modified, or a different type of element.
 	Remove(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapKey, MapValue, element, error)
+
+	Encode(*Encoder) error
+
+	HasPointer() bool
 
 	Size() uint32
 }
@@ -76,6 +108,10 @@ type elements interface {
 
 	Element(int) (element, error)
 
+	Encode(*Encoder) error
+
+	HasPointer() bool
+
 	firstKey() Digest
 
 	Count() uint32
@@ -84,9 +120,11 @@ type elements interface {
 }
 
 type singleElement struct {
-	key   MapKey
-	value MapValue
-	size  uint32
+	key          MapKey
+	value        MapValue
+	size         uint32
+	keyPointer   bool
+	valuePointer bool
 }
 
 var _ element = &singleElement{}
@@ -133,6 +171,7 @@ type MapExtraData struct {
 	_        struct{} `cbor:",toarray"`
 	TypeInfo cbor.RawMessage
 	Count    uint64
+	Seed     uint64
 }
 
 // MapDataSlab is leaf node, implementing MapSlab.
@@ -148,7 +187,8 @@ type MapDataSlab struct {
 	// It isn't included in slab size calculation for splitting and merging.
 	extraData *MapExtraData
 
-	anySize bool
+	anySize        bool
+	collisionGroup bool
 }
 
 var _ MapSlab = &MapDataSlab{}
@@ -197,12 +237,178 @@ type OrderedMap struct {
 
 var _ Value = &OrderedMap{}
 
-func newSingleElement(key MapKey, value MapValue) *singleElement {
-	return &singleElement{
-		key:   key,
-		value: value,
-		size:  key.ByteSize() + value.ByteSize(),
+func newMapExtraDataFromData(data []byte, decMode cbor.DecMode) (*MapExtraData, []byte, error) {
+	// Check data length
+	if len(data) < versionAndFlagSize {
+		return nil, data, NewDecodingErrorf("data is too short for map extra data")
 	}
+
+	// Check flag
+	flag := data[1]
+	if !isRoot(flag) {
+		return nil, data, NewDecodingErrorf("data has invalid flag 0x%x, want root flag", flag)
+	}
+
+	// Decode extra data
+
+	var extraData MapExtraData
+
+	r := bytes.NewReader(data[versionAndFlagSize:])
+	dec := decMode.NewDecoder(r)
+	err := dec.Decode(&extraData)
+	if err != nil {
+		return nil, data, err
+	}
+
+	// Reslice for remaining data
+	n := dec.NumBytesRead()
+	data = data[versionAndFlagSize+n:]
+
+	return &extraData, data, nil
+}
+
+// Encode encodes extra data to the given encoder.
+//
+// Header (2 bytes):
+//
+//     +-----------------------------+--------------------------+
+//     | extra data version (1 byte) | extra data flag (1 byte) |
+//     +-----------------------------+--------------------------+
+//
+// Content (for now):
+//
+//   CBOR encoded array of extra data
+//
+// Extra data flag is the same as the slab flag it prepends.
+//
+func (a *MapExtraData) Encode(enc *Encoder, version byte, flag byte) error {
+
+	// Encode version
+	enc.Scratch[0] = version
+
+	// Encode flag
+	enc.Scratch[1] = flag
+
+	// Write scratch content to encoder
+	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
+	if err != nil {
+		return err
+	}
+
+	// Encode extra data
+	err = enc.CBOR.Encode(a)
+	if err != nil {
+		return err
+	}
+
+	return enc.CBOR.Flush()
+}
+
+func newElementFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (element, error) {
+	nt, err := cborDec.NextType()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	switch nt {
+	case cbor.ArrayType:
+		return newSingleElementFromData(cborDec, decodeStorable)
+
+	case cbor.TagType:
+		tagNum, err := cborDec.DecodeTagNumber()
+		if err != nil {
+			return nil, NewDecodingError(err)
+		}
+		switch tagNum {
+		case CBORTagInlineCollisionGroup:
+			return newInlineCollisionGroupFromData(cborDec, decodeStorable)
+		case CBORTagExternalCollisionGroup:
+			return newExternalCollisionGroupFromData(cborDec, decodeStorable)
+		default:
+			return nil, NewDecodingError(fmt.Errorf("failed to decode element: unrecognized tag number %d", tagNum))
+		}
+
+	default:
+		return nil, NewDecodingError(fmt.Errorf("failed to decode element: unrecognized CBOR type %s", nt))
+	}
+}
+
+func newSingleElement(key MapKey, value MapValue) *singleElement {
+
+	var keyPointer bool
+	if _, ok := key.(StorageIDStorable); ok {
+		keyPointer = true
+	}
+
+	var valuePointer bool
+	if _, ok := value.(StorageIDStorable); ok {
+		valuePointer = true
+	}
+
+	return &singleElement{
+		key:          key,
+		value:        value,
+		size:         singleElementPrefixSize + key.ByteSize() + value.ByteSize(),
+		keyPointer:   keyPointer,
+		valuePointer: valuePointer,
+	}
+}
+
+func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (*singleElement, error) {
+	elemCount, err := cborDec.DecodeArrayHead()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	if elemCount != 2 {
+		return nil, NewDecodingError(
+			fmt.Errorf("failed to decode single element: expect array of 2 elements, got %d elements", elemCount),
+		)
+	}
+
+	key, err := decodeStorable(cborDec, StorageIDUndefined)
+	if err != nil {
+		return nil, err
+	}
+
+	value, err := decodeStorable(cborDec, StorageIDUndefined)
+	if err != nil {
+		return nil, err
+	}
+
+	return newSingleElement(key, value), nil
+}
+
+// Encode encodes singleElement to the given encoder.
+//
+//   CBOR encoded array of 2 elements (key, value).
+//
+func (e *singleElement) Encode(enc *Encoder) error {
+
+	// Encode CBOR array head for 2 elements
+	err := enc.CBOR.EncodeRawBytes([]byte{0x82})
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// Encode key
+	err = e.key.Encode(enc)
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// Encode value
+	err = e.value.Encode(enc)
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	err = enc.CBOR.Flush()
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	return nil
 }
 
 func (e *singleElement) Get(storage SlabStorage, _ Digester, _ int, _ Digest, key ComparableValue) (MapValue, error) {
@@ -234,8 +440,14 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 	}
 
 	if key.Equal(kv) {
+		valuePointer := false
+		if _, ok := e.value.(StorageIDStorable); ok {
+			valuePointer = true
+		}
+
 		e.value = value
-		e.size = e.key.ByteSize() + e.value.ByteSize()
+		e.size = singleElementPrefixSize + e.key.ByteSize() + e.value.ByteSize()
+		e.valuePointer = valuePointer
 		return e, false, nil
 	}
 
@@ -250,9 +462,9 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 	// Create collision group with existing and new elements
 	var elements elements
 	if level+1 == digester.Levels() {
-		elements = &singleElements{level: level + 1}
+		elements = newSingleElements(level + 1)
 	} else {
-		elements = &hkeyElements{level: level + 1}
+		elements = newHkeyElements(level + 1)
 	}
 
 	var newElem element
@@ -292,12 +504,48 @@ func (e *singleElement) Remove(storage SlabStorage, digester Digester, level int
 	return nil, nil, nil, NewKeyNotFoundError(key)
 }
 
+func (e *singleElement) HasPointer() bool {
+	return e.keyPointer || e.valuePointer
+}
+
 func (e *singleElement) Size() uint32 {
 	return e.size
 }
 
 func (e *singleElement) String() string {
 	return fmt.Sprintf("%s:%s", e.key, e.value)
+}
+
+func newInlineCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (*inlineCollisionGroup, error) {
+	elements, err := newElementsFromData(cborDec, decodeStorable)
+	if err != nil {
+		return nil, err
+	}
+
+	return &inlineCollisionGroup{elements}, nil
+}
+
+// Encode encodes inlineCollisionGroup to the given encoder.
+//
+//   CBOR tag (number: CBORTagInlineCollisionGroup, content: elements)
+//
+func (e *inlineCollisionGroup) Encode(enc *Encoder) error {
+
+	err := enc.CBOR.EncodeRawBytes([]byte{
+		// tag number CBORTagInlineCollisionGroup
+		0xd8, CBORTagInlineCollisionGroup,
+	})
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	err = e.elements.Encode(enc)
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// TODO: is Flush necessary?
+	return enc.CBOR.Flush()
 }
 
 func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapValue, error) {
@@ -330,7 +578,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 	if level == 1 {
 		// Export oversized inline collision group to separete slab (external collision group)
 		// for first level collision.
-		if e.elements.Size() > uint32(MaxInlineElementSize) {
+		if e.Size() > uint32(MaxInlineElementSize) {
 
 			id, err := storage.GenerateStorageID(address)
 
@@ -345,8 +593,9 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 					size:     mapDataSlabPrefixSize + e.elements.Size(),
 					firstKey: e.elements.firstKey(),
 				},
-				elements: e.elements, // elems shouldn't be copied
-				anySize:  true,
+				elements:       e.elements, // elems shouldn't be copied
+				anySize:        true,
+				collisionGroup: true,
 			}
 
 			err = storage.Store(id, slab)
@@ -357,7 +606,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 			// Create and return externalCollisionGroup (wrapper of newly created MapDataSlab)
 			return &externalCollisionGroup{
 				id:   id,
-				size: StorageIDStorable(id).ByteSize(),
+				size: externalCollisionGroupPrefixSize + StorageIDStorable(id).ByteSize(),
 			}, isNewElem, nil
 		}
 	}
@@ -395,8 +644,12 @@ func (e *inlineCollisionGroup) Remove(storage SlabStorage, digester Digester, le
 	return k, v, e, nil
 }
 
+func (e *inlineCollisionGroup) HasPointer() bool {
+	return e.elements.HasPointer()
+}
+
 func (e *inlineCollisionGroup) Size() uint32 {
-	return e.elements.Size()
+	return inlineCollisionGroupPrefixSize + e.elements.Size()
 }
 
 func (e *inlineCollisionGroup) Inline() bool {
@@ -409,6 +662,46 @@ func (e *inlineCollisionGroup) Elements(_ SlabStorage) (elements, error) {
 
 func (e *inlineCollisionGroup) String() string {
 	return "inline [" + e.elements.String() + "]"
+}
+
+func newExternalCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (*externalCollisionGroup, error) {
+
+	storable, err := decodeStorable(cborDec, StorageIDUndefined)
+	if err != nil {
+		return nil, err
+	}
+
+	idStorable, ok := storable.(StorageIDStorable)
+	if !ok {
+		return nil, NewDecodingError(fmt.Errorf("failed to decode external collision group: expect storage id, got %T", storable))
+	}
+
+	return &externalCollisionGroup{
+		id:   StorageID(idStorable),
+		size: externalCollisionGroupPrefixSize + idStorable.ByteSize(),
+	}, nil
+}
+
+// Encode encodes externalCollisionGroup to the given encoder.
+//
+//   CBOR tag (number: CBORTagExternalCollisionGroup, content: storage ID)
+//
+func (e *externalCollisionGroup) Encode(enc *Encoder) error {
+	err := enc.CBOR.EncodeRawBytes([]byte{
+		// tag number CBORTagExternalCollisionGroup
+		0xd8, CBORTagExternalCollisionGroup,
+	})
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	err = StorageIDStorable(e.id).Encode(enc)
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// TODO: is Flush necessary?
+	return enc.CBOR.Flush()
 }
 
 func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapValue, error) {
@@ -495,6 +788,10 @@ func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, 
 	return k, v, e, nil
 }
 
+func (e *externalCollisionGroup) HasPointer() bool {
+	return true
+}
+
 func (e *externalCollisionGroup) Size() uint32 {
 	return e.size
 }
@@ -517,6 +814,176 @@ func (e *externalCollisionGroup) Elements(storage SlabStorage) (elements, error)
 
 func (e *externalCollisionGroup) String() string {
 	return fmt.Sprintf("external group(%d)", e.id)
+}
+
+func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (elements, error) {
+
+	arrayCount, err := cborDec.DecodeArrayHead()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	if arrayCount != 3 {
+		return nil, NewDecodingError(fmt.Errorf(
+			"decoding elements failed: expect array of 3 elements, got %d elements", arrayCount),
+		)
+	}
+
+	level, err := cborDec.DecodeUint64()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	digestBytes, err := cborDec.DecodeBytes()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	if len(digestBytes)%digestSize != 0 {
+		return nil, NewDecodingError(fmt.Errorf(
+			"decoding digests failed: number of bytes is not multiple of %d", digestSize),
+		)
+	}
+
+	digestCount := len(digestBytes) / digestSize
+	hkeys := make([]Digest, digestCount)
+	for i := 0; i < digestCount; i++ {
+		hkeys[i] = Digest(binary.BigEndian.Uint64(digestBytes[i*digestSize:]))
+	}
+
+	elemCount, err := cborDec.DecodeArrayHead()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	if digestCount != 0 && uint64(digestCount) != elemCount {
+		return nil, NewDecodingError(
+			fmt.Errorf("decoding elements failed: number of hkeys %d isn't the same as number of elements %d", digestCount, elemCount),
+		)
+	}
+
+	if len(hkeys) == 0 {
+		// elements are singleElements
+
+		// Decode elements
+		size := uint32(singleElementsPrefixSize)
+		elems := make([]*singleElement, elemCount)
+		for i := 0; i < int(elemCount); i++ {
+			elem, err := newSingleElementFromData(cborDec, decodeStorable)
+			if err != nil {
+				return nil, err
+			}
+
+			elems[i] = elem
+			size += elem.Size()
+		}
+
+		// Create singleElements
+		elements := &singleElements{
+			elems: elems,
+			level: int(level),
+			size:  size,
+		}
+
+		return elements, nil
+	}
+
+	// elements are hkeyElements
+
+	// Decode elements
+	size := uint32(hkeyElementsPrefixSize)
+	elems := make([]element, elemCount)
+	for i := 0; i < int(elemCount); i++ {
+		elem, err := newElementFromData(cborDec, decodeStorable)
+		if err != nil {
+			return nil, err
+		}
+
+		elems[i] = elem
+		size += digestSize + elem.Size()
+	}
+
+	// Create hkeyElements
+	elements := &hkeyElements{
+		hkeys: hkeys,
+		elems: elems,
+		level: int(level),
+		size:  size,
+	}
+
+	return elements, nil
+}
+
+func newHkeyElements(level int) *hkeyElements {
+	return &hkeyElements{
+		level: level,
+		size:  hkeyElementsPrefixSize,
+	}
+}
+
+// Encode encodes hkeyElements to the given encoder.
+//
+//   CBOR encoded array [
+//       0: level (uint)
+//       1: hkeys (byte string)
+//       2: elements (array)
+//   ]
+func (e *hkeyElements) Encode(enc *Encoder) error {
+
+	if e.level > maxDigestLevel {
+		return NewEncodingError(fmt.Errorf("hash level %d exceeds max digest level %d", e.level, maxDigestLevel))
+	}
+
+	// Encode CBOR array head of 3 elements (level, hkeys, elements)
+	enc.Scratch[0] = 0x83
+
+	// Encode hash level
+	enc.Scratch[1] = byte(e.level)
+
+	// Encode hkeys as byte string
+
+	// Encode hkeys bytes header manually for fix-sized encoding
+	// TODO: maybe make this header dynamic to reduce size
+	enc.Scratch[2] = 0x5b
+	binary.BigEndian.PutUint64(enc.Scratch[3:], uint64(len(e.hkeys)*8))
+
+	// Write scratch content to encoder
+	const totalSize = 11
+	err := enc.CBOR.EncodeRawBytes(enc.Scratch[:totalSize])
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// Encode hkeys
+	for i := 0; i < len(e.hkeys); i++ {
+		binary.BigEndian.PutUint64(enc.Scratch[:], uint64(e.hkeys[i]))
+		err = enc.CBOR.EncodeRawBytes(enc.Scratch[:digestSize])
+		if err != nil {
+			return NewEncodingError(err)
+		}
+	}
+
+	// Encode elements
+
+	// Encode elements array header manually for fix-sized encoding
+	// TODO: maybe make this header dynamic to reduce size
+	enc.Scratch[0] = 0x9b
+	binary.BigEndian.PutUint64(enc.Scratch[1:], uint64(len(e.elems)))
+	err = enc.CBOR.EncodeRawBytes(enc.Scratch[:9])
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// Encode each element
+	for _, e := range e.elems {
+		err = e.Encode(enc)
+		if err != nil {
+			return NewEncodingError(err)
+		}
+	}
+
+	// TODO: is Flush necessary
+	return enc.CBOR.Flush()
 }
 
 func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapValue, error) {
@@ -573,7 +1040,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 
 		e.elems = []element{newElem}
 
-		e.size += newElem.size
+		e.size += digestSize + newElem.Size()
 
 		return true, nil
 	}
@@ -589,7 +1056,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 		copy(e.elems[1:], e.elems)
 		e.elems[0] = newElem
 
-		e.size += newElem.size
+		e.size += digestSize + newElem.Size()
 
 		return true, nil
 	}
@@ -601,7 +1068,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 
 		e.elems = append(e.elems, newElem)
 
-		e.size += newElem.size
+		e.size += digestSize + newElem.Size()
 
 		return true, nil
 	}
@@ -653,7 +1120,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 	copy(e.elems[lessThanIndex+1:], e.elems[lessThanIndex:])
 	e.elems[lessThanIndex] = newElem
 
-	e.size += newElem.Size()
+	e.size += digestSize + newElem.Size()
 
 	return true, nil
 }
@@ -713,7 +1180,7 @@ func (e *hkeyElements) Remove(storage SlabStorage, digester Digester, level int,
 		e.hkeys = e.hkeys[:len(e.hkeys)-1]
 
 		// Adjust size
-		e.size -= oldElemSize
+		e.size -= digestSize + oldElemSize
 
 		return k, v, nil
 	}
@@ -732,6 +1199,15 @@ func (e *hkeyElements) Element(i int) (element, error) {
 	return e.elems[i], nil
 }
 
+func (e *hkeyElements) HasPointer() bool {
+	for _, elem := range e.elems {
+		if elem.HasPointer() {
+			return true
+		}
+	}
+	return false
+}
+
 func (e *hkeyElements) Merge(elems elements) error {
 
 	rElems, ok := elems.(*hkeyElements)
@@ -741,7 +1217,7 @@ func (e *hkeyElements) Merge(elems elements) error {
 
 	e.hkeys = append(e.hkeys, rElems.hkeys...)
 	e.elems = append(e.elems, rElems.elems...)
-	e.size += rElems.size
+	e.size += rElems.Size() - hkeyElementsPrefixSize
 
 	// Set merged elements to nil to prevent memory leak
 	for i := 0; i < len(rElems.elems); i++ {
@@ -758,13 +1234,13 @@ func (e *hkeyElements) Split() (elements, elements, error) {
 	}
 
 	// This computes the ceil of split to give the first slab more elements.
-	dataSize := e.size
+	dataSize := e.Size() - hkeyElementsPrefixSize
 	midPoint := (dataSize + 1) >> 1
 
 	leftSize := uint32(0)
 	leftCount := 0
-	for i, e := range e.elems {
-		elemSize := e.Size()
+	for i, elem := range e.elems {
+		elemSize := elem.Size() + digestSize
 		if leftSize+elemSize >= midPoint {
 			// i is mid point element.  Place i on the small side.
 			if leftSize <= dataSize-leftSize-elemSize {
@@ -782,7 +1258,7 @@ func (e *hkeyElements) Split() (elements, elements, error) {
 	rightCount := len(e.elems) - leftCount
 
 	// Create right slab elements
-	rightElements := &hkeyElements{}
+	rightElements := &hkeyElements{level: e.level}
 
 	rightElements.hkeys = make([]Digest, rightCount)
 	copy(rightElements.hkeys, e.hkeys[leftCount:])
@@ -790,11 +1266,11 @@ func (e *hkeyElements) Split() (elements, elements, error) {
 	rightElements.elems = make([]element, rightCount)
 	copy(rightElements.elems, e.elems[leftCount:])
 
-	rightElements.size = dataSize - leftSize
+	rightElements.size = dataSize - leftSize + hkeyElementsPrefixSize
 
 	e.hkeys = e.hkeys[:leftCount]
 	e.elems = e.elems[:leftCount]
-	e.size = leftSize
+	e.size = hkeyElementsPrefixSize + leftSize
 
 	// NOTE: prevent memory leak
 	for i := leftCount; i < len(e.hkeys); i++ {
@@ -807,7 +1283,7 @@ func (e *hkeyElements) Split() (elements, elements, error) {
 // LendToRight rebalances elements by moving elements from left to right
 func (e *hkeyElements) LendToRight(re elements) error {
 
-	minSize := minThreshold - mapDataSlabPrefixSize
+	minSize := minThreshold - mapDataSlabPrefixSize - hkeyElementsPrefixSize
 
 	rightElements := re.(*hkeyElements)
 
@@ -816,16 +1292,16 @@ func (e *hkeyElements) LendToRight(re elements) error {
 	}
 
 	count := len(e.elems) + len(rightElements.elems)
-	size := e.size + rightElements.size
+	size := e.Size() + rightElements.Size() - hkeyElementsPrefixSize*2
 
 	leftCount := len(e.elems)
-	leftSize := e.size
+	leftSize := e.Size() - hkeyElementsPrefixSize
 
 	midPoint := (size + 1) >> 1
 
 	// Left elements size is as close to midPoint as possible while right elements size >= minThreshold
 	for i := len(e.elems) - 1; i >= 0; i-- {
-		elemSize := e.elems[i].Size()
+		elemSize := e.elems[i].Size() + digestSize
 		if leftSize-elemSize < midPoint && size-leftSize >= uint32(minSize) {
 			break
 		}
@@ -847,7 +1323,7 @@ func (e *hkeyElements) LendToRight(re elements) error {
 
 	rightElements.hkeys = hkeys
 	rightElements.elems = elements
-	rightElements.size = size - leftSize
+	rightElements.size = size - leftSize + hkeyElementsPrefixSize
 
 	// Update left slab
 	// NOTE: prevent memory leak
@@ -856,7 +1332,7 @@ func (e *hkeyElements) LendToRight(re elements) error {
 	}
 	e.hkeys = e.hkeys[:leftCount]
 	e.elems = e.elems[:leftCount]
-	e.size = leftSize
+	e.size = hkeyElementsPrefixSize + leftSize
 
 	return nil
 }
@@ -864,7 +1340,7 @@ func (e *hkeyElements) LendToRight(re elements) error {
 // BorrowFromRight rebalances slabs by moving elements from right slab to left slab.
 func (e *hkeyElements) BorrowFromRight(re elements) error {
 
-	minSize := minThreshold - mapDataSlabPrefixSize
+	minSize := minThreshold - mapDataSlabPrefixSize - hkeyElementsPrefixSize
 
 	rightElements := re.(*hkeyElements)
 
@@ -872,15 +1348,15 @@ func (e *hkeyElements) BorrowFromRight(re elements) error {
 		return NewSlabRebalanceError(NewHashLevelErrorf("left slab level %d, right slab level %d", e.level, rightElements.level))
 	}
 
-	size := e.size + rightElements.size
+	size := e.Size() + rightElements.Size() - hkeyElementsPrefixSize*2
 
 	leftCount := len(e.elems)
-	leftSize := e.size
+	leftSize := e.Size() - hkeyElementsPrefixSize
 
 	midPoint := (size + 1) >> 1
 
-	for _, e := range rightElements.elems {
-		elemSize := e.Size()
+	for _, elem := range rightElements.elems {
+		elemSize := elem.Size() + digestSize
 		if leftSize+elemSize > midPoint {
 			if size-leftSize-elemSize >= uint32(minSize) {
 				// Include this element in left elements
@@ -898,7 +1374,7 @@ func (e *hkeyElements) BorrowFromRight(re elements) error {
 	// Update left elements
 	e.hkeys = append(e.hkeys, rightElements.hkeys[:rightStartIndex]...)
 	e.elems = append(e.elems, rightElements.elems[:rightStartIndex]...)
-	e.size = leftSize
+	e.size = leftSize + hkeyElementsPrefixSize
 
 	// Update right slab
 	// TODO: copy elements to front instead?
@@ -908,7 +1384,7 @@ func (e *hkeyElements) BorrowFromRight(re elements) error {
 	}
 	rightElements.hkeys = rightElements.hkeys[rightStartIndex:]
 	rightElements.elems = rightElements.elems[rightStartIndex:]
-	rightElements.size = size - leftSize
+	rightElements.size = size - leftSize + hkeyElementsPrefixSize
 
 	return nil
 }
@@ -923,14 +1399,14 @@ func (e *hkeyElements) CanLendToLeft(size uint32) bool {
 	}
 
 	minSize := minThreshold - mapDataSlabPrefixSize
-	if e.size-size < uint32(minSize) {
+	if e.Size()-size < uint32(minSize) {
 		return false
 	}
 
 	lendSize := uint32(0)
 	for i := 0; i < len(e.elems); i++ {
-		lendSize += e.elems[i].Size()
-		if e.size-lendSize < uint32(minSize) {
+		lendSize += e.elems[i].Size() + digestSize
+		if e.Size()-lendSize < uint32(minSize) {
 			return false
 		}
 		if lendSize >= size {
@@ -950,14 +1426,14 @@ func (e *hkeyElements) CanLendToRight(size uint32) bool {
 	}
 
 	minSize := minThreshold - mapDataSlabPrefixSize
-	if e.size-size < uint32(minSize) {
+	if e.Size()-size < uint32(minSize) {
 		return false
 	}
 
 	lendSize := uint32(0)
 	for i := len(e.elems) - 1; i >= 0; i-- {
-		lendSize += e.elems[i].Size()
-		if e.size-lendSize < uint32(minSize) {
+		lendSize += e.elems[i].Size() + digestSize
+		if e.Size()-lendSize < uint32(minSize) {
 			return false
 		}
 		if lendSize >= size {
@@ -1007,6 +1483,61 @@ func (e *hkeyElements) String() string {
 	return strings.Join(s, " ")
 }
 
+func newSingleElements(level int) *singleElements {
+	return &singleElements{
+		level: level,
+		size:  singleElementsPrefixSize,
+	}
+}
+
+// Encode encodes singleElements to the given encoder.
+//
+//   CBOR encoded array [
+//       0: level (uint)
+//       1: hkeys (0 length byte string)
+//       2: elements (array)
+//   ]
+func (e *singleElements) Encode(enc *Encoder) error {
+
+	if e.level > maxDigestLevel {
+		return NewEncodingError(fmt.Errorf("hash level %d exceeds max digest level %d", e.level, maxDigestLevel))
+	}
+
+	// Encode CBOR array header for 3 elements (level, hkeys, elements)
+	enc.Scratch[0] = 0x83
+
+	// Encode hash level
+	enc.Scratch[1] = byte(e.level)
+
+	// Encode hkeys (empty byte string)
+	enc.Scratch[2] = 0x40
+
+	// Encode elements
+
+	// Encode elements array header manually for fix-sized encoding
+	// TODO: maybe make this header dynamic to reduce size
+	enc.Scratch[3] = 0x9b
+	binary.BigEndian.PutUint64(enc.Scratch[4:], uint64(len(e.elems)))
+
+	// Write scratch content to encoder
+	const totalSize = 12
+	err := enc.CBOR.EncodeRawBytes(enc.Scratch[:totalSize])
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// Encode each element
+	for _, e := range e.elems {
+		err = e.Encode(enc)
+		if err != nil {
+			return NewEncodingError(err)
+		}
+	}
+
+	// TODO: is Flush necessar?
+	return enc.CBOR.Flush()
+}
+
 func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapValue, error) {
 
 	if level != digester.Levels() {
@@ -1044,7 +1575,7 @@ func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBui
 			oldSize := elem.Size()
 
 			elem.value = value
-			elem.size = elem.key.ByteSize() + elem.value.ByteSize()
+			elem.size = singleElementPrefixSize + elem.key.ByteSize() + elem.value.ByteSize()
 
 			e.size += elem.Size() - oldSize
 
@@ -1126,13 +1657,13 @@ func (e *singleElements) Split() (elements, elements, error) {
 	}
 
 	// This computes the ceil of split to give the first slab more elements.
-	dataSize := e.size
+	dataSize := e.Size() - singleElementsPrefixSize
 	midPoint := (dataSize + 1) >> 1
 
 	leftSize := uint32(0)
 	leftCount := 0
-	for i, e := range e.elems {
-		elemSize := e.Size()
+	for i, elem := range e.elems {
+		elemSize := elem.Size()
 		if leftSize+elemSize >= midPoint {
 			// i is mid point element.  Place i on the small side.
 			if leftSize <= dataSize-leftSize-elemSize {
@@ -1150,15 +1681,15 @@ func (e *singleElements) Split() (elements, elements, error) {
 	rightCount := len(e.elems) - leftCount
 
 	// Create right slab elements
-	rightElements := &singleElements{}
+	rightElements := &singleElements{level: e.level}
 
 	rightElements.elems = make([]*singleElement, rightCount)
 	copy(rightElements.elems, e.elems[leftCount:])
 
-	rightElements.size = dataSize - leftSize
+	rightElements.size = dataSize - leftSize + singleElementsPrefixSize
 
 	e.elems = e.elems[:leftCount]
-	e.size = leftSize
+	e.size = leftSize + singleElementsPrefixSize
 
 	// NOTE: prevent memory leak
 	for i := leftCount; i < len(e.elems); i++ {
@@ -1181,6 +1712,15 @@ func (e *singleElements) CanLendToLeft(size uint32) bool {
 }
 
 func (e *singleElements) CanLendToRight(size uint32) bool {
+	return false
+}
+
+func (e *singleElements) HasPointer() bool {
+	for _, elem := range e.elems {
+		if elem.HasPointer() {
+			return true
+		}
+	}
 	return false
 }
 
@@ -1221,9 +1761,171 @@ func (e *singleElements) String() string {
 	return strings.Join(s, " ")
 }
 
+func newMapDataSlabFromData(
+	id StorageID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeStorable StorableDecoder,
+) (
+	*MapDataSlab,
+	error,
+) {
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short for map data slab")
+	}
+
+	var extraData *MapExtraData
+
+	// Check flag for extra data
+	if isRoot(data[1]) {
+		// Decode extra data
+		var err error
+		extraData, data, err = newMapExtraDataFromData(data, decMode)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Check data length (after decoding extra data if present)
+	if len(data) < mapDataSlabPrefixSize {
+		return nil, NewDecodingErrorf("data is too short for map data slab")
+	}
+
+	// Check flag
+	flag := data[1]
+
+	mapType := getSlabMapType(flag)
+
+	if mapType != slabMapData && mapType != slabMapCollisionGroup {
+		return nil, NewDecodingErrorf(
+			"data has invalid flag 0x%x, want 0x%x or 0x%x",
+			flag,
+			maskMapData,
+			maskCollisionGroup,
+		)
+	}
+
+	// Decode prev storage ID
+	const prevStorageIDOffset = versionAndFlagSize
+	prev, err := NewStorageIDFromRawBytes(data[prevStorageIDOffset:])
+	if err != nil {
+		return nil, err
+	}
+
+	// Decode next storage ID
+	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
+	next, err := NewStorageIDFromRawBytes(data[nextStorageIDOffset:])
+	if err != nil {
+		return nil, err
+	}
+
+	// Decode elements
+	const contentOffset = nextStorageIDOffset + storageIDSize
+	cborDec := decMode.NewByteStreamDecoder(data[contentOffset:])
+	elements, err := newElementsFromData(cborDec, decodeStorable)
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	header := MapSlabHeader{
+		id:       id,
+		size:     uint32(len(data)),
+		firstKey: elements.firstKey(),
+	}
+
+	return &MapDataSlab{
+		prev:           prev,
+		next:           next,
+		header:         header,
+		elements:       elements,
+		extraData:      extraData,
+		anySize:        !hasSizeLimit(flag),
+		collisionGroup: mapType == slabMapCollisionGroup,
+	}, nil
+}
+
+// Encode encodes this map data slab to the given encoder.
+//
+// Header (34 bytes):
+//
+//   +-------------------------------+--------------------------------+--------------------------------+
+//   | slab version + flag (2 bytes) | prev sib storage ID (16 bytes) | next sib storage ID (16 bytes) |
+//   +-------------------------------+--------------------------------+--------------------------------+
+//
+// Content (for now):
+//
+//   CBOR array of 3 elements (level, hkeys, elements)
+//
+// If this is root slab, extra data section is prepended to slab's encoded content.
+// See MapExtraData.Encode() for extra data section format.
+//
 func (m *MapDataSlab) Encode(enc *Encoder) error {
-	// TODO: implement me
-	return NewNotImplementedError("MapDataSlab's Encode")
+
+	version := byte(0)
+
+	flag := maskMapData
+
+	if m.collisionGroup {
+		flag = maskCollisionGroup
+	}
+
+	if m.hasPointer() {
+		flag = setHasPointers(flag)
+	}
+
+	if m.anySize {
+		flag = setNoSizeLimit(flag)
+	}
+
+	// Encode extra data if present
+	if m.extraData != nil {
+		flag = setRoot(flag)
+
+		err := m.extraData.Encode(enc, version, flag)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Encode version
+	enc.Scratch[0] = version
+
+	// Encode flag
+	enc.Scratch[1] = flag
+
+	// Encode prev storage ID to scratch
+	const prevStorageIDOffset = versionAndFlagSize
+	_, err := m.prev.ToRawBytes(enc.Scratch[prevStorageIDOffset:])
+	if err != nil {
+		return err
+	}
+
+	// Encode next storage ID to scratch
+	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
+	_, err = m.next.ToRawBytes(enc.Scratch[nextStorageIDOffset:])
+	if err != nil {
+		return err
+	}
+
+	// Write scratch content to encoder
+	const totalSize = nextStorageIDOffset + storageIDSize
+	_, err = enc.Write(enc.Scratch[:totalSize])
+	if err != nil {
+		return err
+	}
+
+	// Encode elements
+	err = m.elements.Encode(enc)
+	if err != nil {
+		return err
+	}
+
+	return enc.CBOR.Flush()
+}
+
+func (m *MapDataSlab) hasPointer() bool {
+	return m.elements.HasPointer()
 }
 
 // TODO: need to set DigesterBuilder for OrderedMap
@@ -1460,9 +2162,167 @@ func (m *MapDataSlab) String() string {
 	return fmt.Sprintf("{%s}", m.elements.String())
 }
 
+func newMapMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMode) (*MapMetaDataSlab, error) {
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short for map metadata slab")
+	}
+
+	var extraData *MapExtraData
+
+	// Check flag for extra data
+	if isRoot(data[1]) {
+		// Decode extra data
+		var err error
+		extraData, data, err = newMapExtraDataFromData(data, decMode)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Check data length (after decoding extra data if present)
+	if len(data) < mapMetaDataSlabPrefixSize {
+		return nil, NewDecodingErrorf("data is too short for map metadata slab")
+	}
+
+	// Check flag
+	flag := data[1]
+	if getSlabMapType(flag) != slabMapMeta {
+		return nil, NewDecodingErrorf(
+			"data has invalid flag 0x%x, want 0x%x",
+			flag,
+			maskMapMeta,
+		)
+	}
+
+	// Decode number of child headers
+	const childHeaderCountOffset = versionAndFlagSize
+	childHeaderCount := binary.BigEndian.Uint16(data[childHeaderCountOffset:])
+
+	expectedDataLength := mapMetaDataSlabPrefixSize + mapSlabHeaderSize*int(childHeaderCount)
+	if len(data) != expectedDataLength {
+		return nil, NewDecodingErrorf(
+			"data has unexpected length %d, want %d",
+			len(data),
+			expectedDataLength,
+		)
+	}
+
+	// Decode child headers
+	childrenHeaders := make([]MapSlabHeader, childHeaderCount)
+	offset := childHeaderCountOffset + 2
+
+	for i := 0; i < int(childHeaderCount); i++ {
+		storageID, err := NewStorageIDFromRawBytes(data[offset:])
+		if err != nil {
+			return nil, err
+		}
+
+		firstKeyOffset := offset + storageIDSize
+		firstKey := binary.BigEndian.Uint64(data[firstKeyOffset:])
+
+		sizeOffset := firstKeyOffset + digestSize
+		size := binary.BigEndian.Uint32(data[sizeOffset:])
+
+		childrenHeaders[i] = MapSlabHeader{
+			id:       StorageID(storageID),
+			size:     size,
+			firstKey: Digest(firstKey),
+		}
+
+		offset += mapSlabHeaderSize
+	}
+
+	var firstKey Digest
+	if len(childrenHeaders) > 0 {
+		firstKey = childrenHeaders[0].firstKey
+	}
+
+	header := MapSlabHeader{
+		id:       id,
+		size:     uint32(len(data)),
+		firstKey: firstKey,
+	}
+
+	return &MapMetaDataSlab{
+		header:          header,
+		childrenHeaders: childrenHeaders,
+		extraData:       extraData,
+	}, nil
+}
+
+// Encode encodes this array meta-data slab to the given encoder.
+//
+// Header (4 bytes):
+//
+//     +-----------------------+--------------------+------------------------------+
+//     | slab version (1 byte) | slab flag (1 byte) | child header count (2 bytes) |
+//     +-----------------------+--------------------+------------------------------+
+//
+// Content (n * 28 bytes):
+//
+// 	[[storage id, first key, size], ...]
+//
+// If this is root slab, extra data section is prepended to slab's encoded content.
+// See MapExtraData.Encode() for extra data section format.
+//
 func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
-	// TODO: implement me
-	return NewNotImplementedError("MapMetaDataSlab's Encode")
+
+	version := byte(0)
+
+	flag := maskMapMeta
+
+	// Encode extra data if present
+	if m.extraData != nil {
+		flag = setRoot(flag)
+
+		err := m.extraData.Encode(enc, version, flag)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Encode version
+	enc.Scratch[0] = version
+
+	// Encode flag
+	enc.Scratch[1] = flag
+
+	// Encode child header count to scratch
+	const childHeaderCountOffset = versionAndFlagSize
+	binary.BigEndian.PutUint16(
+		enc.Scratch[childHeaderCountOffset:],
+		uint16(len(m.childrenHeaders)),
+	)
+
+	// Write scratch content to encoder
+	const totalSize = childHeaderCountOffset + 2
+	_, err := enc.Write(enc.Scratch[:totalSize])
+	if err != nil {
+		return err
+	}
+
+	// Encode children headers
+	for _, h := range m.childrenHeaders {
+		_, err := h.id.ToRawBytes(enc.Scratch[:])
+		if err != nil {
+			return err
+		}
+
+		const firstKeyOffset = storageIDSize
+		binary.BigEndian.PutUint64(enc.Scratch[firstKeyOffset:], uint64(h.firstKey))
+
+		const sizeOffset = firstKeyOffset + digestSize
+		binary.BigEndian.PutUint32(enc.Scratch[sizeOffset:], h.size)
+
+		const totalSize = sizeOffset + 4
+		_, err = enc.Write(enc.Scratch[:totalSize])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // TODO: need to set DigesterBuilder for OrderedMap
@@ -2104,19 +2964,41 @@ func (m *MapMetaDataSlab) String() string {
 
 func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder, typeInfo cbor.RawMessage) (*OrderedMap, error) {
 
-	extraData := &MapExtraData{TypeInfo: typeInfo}
-
+	// Create root storage id
 	sID, err := storage.GenerateStorageID(address)
 	if err != nil {
 		return nil, NewStorageError(err)
 	}
 
+	sIDBytes := make([]byte, storageIDSize)
+	_, err = sID.ToRawBytes(sIDBytes)
+	if err != nil {
+		return nil, NewStorageError(err)
+	}
+
+	// Create seed for non-crypto hash algos (XXH128, SipHash) to use.
+	// Ideally, seed should be a nondeterministic 128-bit secret key because
+	// SipHash relies on its key being secret for its security.  Since
+	// we handle collisions and based on other factors such as storage space,
+	// the team decided we can use a 64-bit non-secret key instead of
+	// a 128-bit secret key. And for performance reasons, we first use
+	// noncrypto hash algos and fall back to crypto algo after collisions.
+	k0 := xxh3.Hash128(sIDBytes).Lo
+	// To save storage space, only store 64-bits of the seed.
+	// Use a 64-bit const for the unstored half to create 128-bit seed.
+	k1 := typicalRandomConstant
+
+	digestBuilder.SetSeed(k0, k1)
+
+	// Create extra data with type info and seed
+	extraData := &MapExtraData{TypeInfo: typeInfo, Seed: k0}
+
 	root := &MapDataSlab{
 		header: MapSlabHeader{
 			id:   sID,
-			size: mapDataSlabPrefixSize,
+			size: mapDataSlabPrefixSize + hkeyElementsPrefixSize,
 		},
-		elements:  &hkeyElements{},
+		elements:  newHkeyElements(0),
 		extraData: extraData,
 	}
 
@@ -2124,6 +3006,26 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 	if err != nil {
 		return nil, err
 	}
+
+	return &OrderedMap{
+		storage:         storage,
+		root:            root,
+		digesterBuilder: digestBuilder,
+	}, nil
+}
+
+func NewMapWithRootID(storage SlabStorage, rootID StorageID, digestBuilder DigesterBuilder) (*OrderedMap, error) {
+	root, err := getMapSlab(storage, rootID)
+	if err != nil {
+		return nil, err
+	}
+
+	extraData := root.ExtraData()
+	if extraData == nil {
+		return nil, NewDecodingError(fmt.Errorf("root doesn't have extra data"))
+	}
+
+	digestBuilder.SetSeed(extraData.Seed, typicalRandomConstant)
 
 	return &OrderedMap{
 		storage:         storage,
@@ -2488,12 +3390,12 @@ func firstMapDataSlab(storage SlabStorage, slab MapSlab) (MapSlab, error) {
 	return firstMapDataSlab(storage, firstChild)
 }
 
-func (extra *MapExtraData) incrementCount() {
-	extra.Count++
+func (a *MapExtraData) incrementCount() {
+	a.Count++
 }
 
-func (extra *MapExtraData) decrementCount() {
-	extra.Count--
+func (a *MapExtraData) decrementCount() {
+	a.Count--
 }
 
 type MapElementIterator struct {

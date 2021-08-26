@@ -23,6 +23,16 @@ const (
 	slabBasicArray
 )
 
+type slabMapType int
+
+const (
+	slabMapUndefined slabMapType = iota
+	slabMapData
+	slabMapMeta
+	slabMapLargeEntry
+	slabMapCollisionGroup
+)
+
 const (
 	// Slab flags: 3 high bits
 	maskSlabRoot        byte = 0b100_00000
@@ -32,14 +42,14 @@ const (
 	// Array flags: 3 low bits (4th and 5th bits are 0)
 	maskArrayData byte = 0b000_00000
 	maskArrayMeta byte = 0b000_00001
-	//maskLargeImmutableArray byte = 0b000_00010 // not used for now
+	// maskLargeImmutableArray byte = 0b000_00010 // not used for now
 	maskBasicArray byte = 0b000_00011 // used for benchmarking
 
 	// Map flags: 3 low bits (4th bit is 0, 5th bit is 1)
-	//maskMapData        byte = 0b000_01000
-	//maskMapMeta        byte = 0b000_01001
-	//maskLargeMapEntry  byte = 0b000_01010 // not used for now
-	//maskCollisiongroup byte = 0b000_01011
+	maskMapData byte = 0b000_01000
+	maskMapMeta byte = 0b000_01001
+	// maskLargeMapEntry  byte = 0b000_01010 // not used for now
+	maskCollisionGroup byte = 0b000_01011
 
 	// Storable flags: 3 low bits (4th bit is 1, 5th bit is 1)
 	maskStorable byte = 0b000_11111
@@ -70,6 +80,7 @@ func hasSizeLimit(f byte) bool {
 }
 
 func getSlabType(f byte) slabType {
+	// Extract 4th and 5th bits for slab type.
 	dataType := (f & byte(0b000_11000)) >> 3
 	switch dataType {
 	case 0:
@@ -90,6 +101,8 @@ func getSlabArrayType(f byte) slabArrayType {
 	if getSlabType(f) != slabArray {
 		return slabArrayUndefined
 	}
+
+	// Extract 3 low bits for slab array type.
 	dataType := (f & byte(0b000_00111))
 	switch dataType {
 	case 0:
@@ -102,5 +115,26 @@ func getSlabArrayType(f byte) slabArrayType {
 		return slabBasicArray
 	default:
 		return slabArrayUndefined
+	}
+}
+
+func getSlabMapType(f byte) slabMapType {
+	if getSlabType(f) != slabMap {
+		return slabMapUndefined
+	}
+
+	// Extract 3 low bits for slab map type.
+	dataType := (f & byte(0b000_00111))
+	switch dataType {
+	case 0:
+		return slabMapData
+	case 1:
+		return slabMapMeta
+	case 2:
+		return slabMapLargeEntry
+	case 3:
+		return slabMapCollisionGroup
+	default:
+		return slabMapUndefined
 	}
 }

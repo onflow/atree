@@ -187,7 +187,7 @@ func newArrayExtraDataFromData(data []byte, decMode cbor.DecMode) (*ArrayExtraDa
 //
 //   CBOR encoded array of extra data: cborArray{type info}
 //
-// Extra data flag is flagExtraData + the slab flag.
+// Extra data flag is the same as the slab flag it prepends.
 //
 func (a *ArrayExtraData) Encode(enc *Encoder, flag byte) error {
 	// Encode version

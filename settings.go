@@ -8,7 +8,6 @@ var (
 	// Default slab size
 	targetThreshold = uint64(1024) // 1kb
 
-	// minThreshold = targetThreshold / 4
 	minThreshold = targetThreshold / 2
 	maxThreshold = uint64(float64(targetThreshold) * 1.5)
 

@@ -5,10 +5,13 @@
 package atree
 
 import (
+	"bytes"
 	"container/list"
 	"fmt"
 	"reflect"
 	"sort"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 type MapStats struct {
@@ -199,9 +202,11 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, elemen
 			id, level, elements.hkeys)
 	}
 
-	size := uint32(0)
+	size := uint32(hkeyElementsPrefixSize)
 	for i := 0; i < len(elements.elems); i++ {
 		e := elements.elems[i]
+
+		size += digestSize
 
 		if group, ok := e.(elementGroup); ok {
 			ge, err := group.Elements(m.storage)
@@ -218,7 +223,7 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, elemen
 				return 0, err
 			}
 
-			size += group.Size()
+			size += e.Size()
 
 		} else {
 
@@ -238,7 +243,7 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, elemen
 			}
 
 			// Verify single element size
-			computedSize := se.key.ByteSize() + se.value.ByteSize()
+			computedSize := singleElementPrefixSize + se.key.ByteSize() + se.value.ByteSize()
 			if computedSize != e.Size() {
 				return 0, fmt.Errorf("slab %d, element level %d, element %s, size %d, computed size %d",
 					id, level, elements.String(), e.Size(), computedSize)
@@ -267,9 +272,13 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, elemen
 		}
 	}
 
-	if size != elements.size {
-		return 0, fmt.Errorf("slab %d, element level %d, elements size %d, computed size %d",
-			id, level, elements.size, size)
+	if size != elements.Size() {
+		var buf bytes.Buffer
+		mode, _ := cbor.EncOptions{}.EncMode()
+		enc := NewEncoder(&buf, mode)
+		_ = elements.Encode(enc)
+		return 0, fmt.Errorf("slab %d, element level %d, elements size %d, computed size %d, encoded 0x%x",
+			id, level, elements.Size(), size, buf.Bytes())
 	}
 
 	return size, nil
@@ -282,7 +291,7 @@ func (m *OrderedMap) _validSingleElements(id StorageID, db DigesterBuilder, elem
 			id, elements.level, level)
 	}
 
-	size := uint32(0)
+	size := uint32(singleElementsPrefixSize)
 
 	for _, e := range elements.elems {
 
@@ -297,7 +306,7 @@ func (m *OrderedMap) _validSingleElements(id StorageID, db DigesterBuilder, elem
 		}
 
 		// Verify single element size
-		computedSize := e.key.ByteSize() + e.value.ByteSize()
+		computedSize := singleElementPrefixSize + e.key.ByteSize() + e.value.ByteSize()
 		if computedSize != e.Size() {
 			return 0, fmt.Errorf("slab %d, element level %d, element %s, size %d, computed size %d",
 				id, level, elements.String(), e.Size(), computedSize)
@@ -321,9 +330,13 @@ func (m *OrderedMap) _validSingleElements(id StorageID, db DigesterBuilder, elem
 		size += computedSize
 	}
 
-	if size != elements.size {
-		return 0, fmt.Errorf("slab %d, element level %d, elements size %d, computed size %d",
-			id, level, elements.size, size)
+	if size != elements.Size() {
+		var buf bytes.Buffer
+		mode, _ := cbor.EncOptions{}.EncMode()
+		enc := NewEncoder(&buf, mode)
+		_ = elements.Encode(enc)
+		return 0, fmt.Errorf("slab %d, element level %d, elements size %d, computed size %d, encoded 0x%x",
+			id, level, elements.Size(), size, buf.Bytes())
 	}
 
 	return size, nil

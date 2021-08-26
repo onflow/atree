@@ -24,6 +24,9 @@ type mockDigester struct {
 
 var _ Digester = &mockDigester{}
 
+func (h *mockDigesterBuilder) SetSeed(_ uint64, _ uint64) {
+}
+
 func (h *mockDigesterBuilder) Digest(hashable Hashable) (Digester, error) {
 	args := h.Called(hashable)
 	return args.Get(0).(mockDigester), nil
@@ -46,12 +49,6 @@ func (d mockDigester) Digest(level int) (Digest, error) {
 func (d mockDigester) Levels() int {
 	return len(d.d)
 }
-
-var (
-	secretkey = [16]byte{
-		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-	}
-)
 
 func newTestInMemoryStorage(t testing.TB) SlabStorage {
 
@@ -95,7 +92,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -106,6 +103,7 @@ func TestMapSetAndGet(t *testing.T) {
 		verified, err := m.valid()
 		if !verified {
 			m.Print()
+			fmt.Printf("err: %s\n", err)
 		}
 		require.NoError(t, err)
 		require.True(t, verified)
@@ -151,7 +149,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -160,6 +158,10 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		verified, err := m.valid()
+		if !verified {
+			m.Print()
+			fmt.Printf("err: %s\n", err)
+		}
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -218,7 +220,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
@@ -227,6 +229,10 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		verified, err := m.valid()
+		if !verified {
+			m.Print()
+			fmt.Printf("err: %s\n", err)
+		}
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -277,7 +283,7 @@ func TestMapHas(t *testing.T) {
 		}
 	}
 
-	m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	for i, k := range keysToInsert {
@@ -288,6 +294,7 @@ func TestMapHas(t *testing.T) {
 	verified, err := m.valid()
 	if !verified {
 		m.Print()
+		fmt.Printf("err: %s\n", err)
 	}
 	require.NoError(t, err)
 	require.True(t, verified)
@@ -344,7 +351,7 @@ func TestMapRemove(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		// Insert elements
@@ -356,6 +363,7 @@ func TestMapRemove(t *testing.T) {
 		verified, err := m.valid()
 		if !verified {
 			m.Print()
+			fmt.Printf("err: %s\n", err)
 		}
 		require.NoError(t, err)
 		require.True(t, verified)
@@ -430,7 +438,7 @@ func TestMapRemove(t *testing.T) {
 			}
 		}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		// Insert elements
@@ -442,6 +450,7 @@ func TestMapRemove(t *testing.T) {
 		verified, err := m.valid()
 		if !verified {
 			m.Print()
+			fmt.Printf("err: %s\n", err)
 		}
 		require.NoError(t, err)
 		require.True(t, verified)
@@ -497,7 +506,7 @@ func TestMapIterate(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		digesterBuilder := newBasicDigesterBuilder(secretkey)
+		digesterBuilder := newBasicDigesterBuilder()
 
 		uniqueKeyValues := make(map[string]uint64, mapSize)
 
@@ -512,6 +521,14 @@ func TestMapIterate(t *testing.T) {
 					break
 				}
 			}
+		}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range uniqueKeyValues {
+			err := m.Set(NewStringValue(k), Uint64Value(v))
+			require.NoError(t, err)
 		}
 
 		// Sort keys by hashed value
@@ -535,14 +552,6 @@ func TestMapIterate(t *testing.T) {
 			}
 			return i < j // sort by insertion order with hash collision
 		})
-
-		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		for k, v := range uniqueKeyValues {
-			err := m.Set(NewStringValue(k), Uint64Value(v))
-			require.NoError(t, err)
-		}
 
 		i := uint64(0)
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
@@ -664,12 +673,12 @@ func TestMapIterate(t *testing.T) {
 	})
 }
 
-func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
+func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 
 	const mapSize = 2 * 1024
 
 	// mockDigestCount is the number of unique set of digests.
-	// Each set has maxHashLevel of digest.
+	// Each set has maxDigestLevel of digest.
 	const mockDigestCount = 8
 
 	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
@@ -678,10 +687,10 @@ func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
 
 	digesterBuilder := &mockDigesterBuilder{}
 
-	// Generate mockDigestCount*maxHashLevel number of unique digest
-	digests := make([]Digest, 0, mockDigestCount*maxHashLevel)
+	// Generate mockDigestCount*maxDigestLevel number of unique digest
+	digests := make([]Digest, 0, mockDigestCount*maxDigestLevel)
 	uniqueDigest := make(map[Digest]bool)
-	for len(uniqueDigest) < mockDigestCount*maxHashLevel {
+	for len(uniqueDigest) < mockDigestCount*maxDigestLevel {
 		d := Digest(uint64(rand.Intn(256)))
 		if !uniqueDigest[d] {
 			uniqueDigest[d] = true
@@ -703,8 +712,8 @@ func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
 				uniqueKeyValues[k] = NewStringValue(randStr(16))
 
 				index := (i % mockDigestCount)
-				startIndex := int(index) * maxHashLevel
-				endIndex := int(index)*maxHashLevel + maxHashLevel
+				startIndex := int(index) * maxDigestLevel
+				endIndex := int(index)*maxDigestLevel + maxDigestLevel
 
 				digests := digests[startIndex:endIndex]
 
@@ -724,6 +733,10 @@ func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
 	}
 
 	verified, err := m.valid()
+	if !verified {
+		m.Print()
+		fmt.Printf("err: %s\n", err)
+	}
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -764,7 +777,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxHashLevel int) {
 	require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
 }
 
-func testMapRandomHashCollision(t *testing.T, maxHashLevel int) {
+func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 	const mapSize = 2 * 1024
 
@@ -789,7 +802,7 @@ func testMapRandomHashCollision(t *testing.T, maxHashLevel int) {
 				uniqueKeyValues[k] = NewStringValue(randStr(16))
 
 				var digests []Digest
-				for i := 0; i < maxHashLevel; i++ {
+				for i := 0; i < maxDigestLevel; i++ {
 					digests = append(digests, Digest(rand.Intn(256)))
 				}
 
@@ -809,6 +822,10 @@ func testMapRandomHashCollision(t *testing.T, maxHashLevel int) {
 	}
 
 	verified, err := m.valid()
+	if !verified {
+		m.Print()
+		fmt.Printf("err: %s\n", err)
+	}
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -855,16 +872,16 @@ func TestMapHashCollision(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	const maxHashLevel = 4
+	const maxDigestLevel = 4
 
-	for hashLevel := 1; hashLevel <= maxHashLevel; hashLevel++ {
+	for hashLevel := 1; hashLevel <= maxDigestLevel; hashLevel++ {
 		name := fmt.Sprintf("deterministic max hash level %d", hashLevel)
 		t.Run(name, func(t *testing.T) {
 			testMapDeterministicHashCollision(t, hashLevel)
 		})
 	}
 
-	for hashLevel := 1; hashLevel <= maxHashLevel; hashLevel++ {
+	for hashLevel := 1; hashLevel <= maxDigestLevel; hashLevel++ {
 		name := fmt.Sprintf("random max hash level %d", hashLevel)
 		t.Run(name, func(t *testing.T) {
 			testMapRandomHashCollision(t, hashLevel)
@@ -897,7 +914,7 @@ func TestMapLargeElement(t *testing.T) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	m, err := NewMap(storage, address, newBasicDigesterBuilder(secretkey), typeInfo)
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	for k, v := range strs {
@@ -918,6 +935,10 @@ func TestMapLargeElement(t *testing.T) {
 	require.Equal(t, uint64(mapSize), m.Count())
 
 	verified, err := m.valid()
+	if !verified {
+		m.Print()
+		fmt.Printf("err: %s\n", err)
+	}
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -1056,6 +1077,1519 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 	}
 
 	verified, err := m.valid()
+	if !verified {
+		m.Print()
+		fmt.Printf("err: %s\n", err)
+	}
 	require.NoError(t, err)
 	require.True(t, verified)
+}
+
+func TestMapEncodeDecode(t *testing.T) {
+
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	t.Run("no pointer no collision", func(t *testing.T) {
+
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		// Create and populate map in memory
+		storage := NewBasicSlabStorage(encMode, decMode)
+		storage.DecodeStorable = decodeStorable
+
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// Create map
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		const mapSize = 10
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i * 2)
+
+			digests := []Digest{Digest(i), Digest(i * 2)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+
+			err = m.Set(k, v)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+
+		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+
+		// Expected serialized slab data with storage id
+		expected := map[StorageID][]byte{
+
+			// metadata slab
+			id1: {
+				// extra data
+				// version
+				0x00,
+				// flag: root + map meta
+				0x89,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
+				// type info: "map"
+				//0x63, 0x6d, 0x61, 0x70,
+				0x18, 0x2A,
+				// count: 10
+				0x0a,
+				// seed
+				0x1b, 0xa7, 0xce, 0x44, 0xac, 0x4b, 0x41, 0x6d, 0x5e,
+
+				// version
+				0x00,
+				// flag: root + meta
+				0x89,
+				// child header count
+				0x00, 0x02,
+				// child header 1 (storage id, first key, size)
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x72,
+				// child header 2
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				0x00, 0x00, 0x00, 0x90,
+			},
+
+			// data slab
+			id2: {
+				// version
+				0x00,
+				// flag: map data
+				0x08,
+				// prev storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// next storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 4)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// hkey: 1
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				// hkey: 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// hkey: 3
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+
+				// elements (array of 4 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				// element: [uint64(0), uint64(0)]
+				0x82, 0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x00,
+				// element: [uint64(1), uint64(2)]
+				0x82, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02,
+				// element: [uint64(2), uint64(4)]
+				0x82, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x04,
+				// element: [uint64(3), uint64(6)]
+				0x82, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x06,
+			},
+
+			// data slab
+			id3: {
+				// version
+				0x00,
+				// flag: map data
+				0x08,
+				// prev storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// next storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 6)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30,
+				// hkey: 4
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				// hkey: 5
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+				// hkey: 6
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06,
+				// hkey: 7
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07,
+				// hkey: 8
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+				// hkey: 9
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
+
+				// elements (array of 6 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06,
+				// element: [uint64(4), uint64(8)]
+				0x82, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x08,
+				// element: [uint64(5), uint64(10)]
+				0x82, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x0a,
+				// element: [uint64(6), uint64(12)]
+				0x82, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x0c,
+				// element: [uint64(7), uint64(14)]
+				0x82, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x0e,
+				// element: [uint64(8), uint64(16)]
+				0x82, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x10,
+				// element: [uint64(9), uint64(18)]
+				0x82, 0xd8, 0xa4, 0x09, 0xd8, 0xa4, 0x12,
+			},
+		}
+
+		// Verify encoded data
+		stored, err := storage.Encode()
+		require.NoError(t, err)
+
+		require.Equal(t, expected[id1], stored[id1])
+		require.Equal(t, expected[id2], stored[id2])
+		require.Equal(t, expected[id3], stored[id3])
+
+		// Verify slab size in header is correct.
+		meta, ok := m.root.(*MapMetaDataSlab)
+		require.True(t, ok)
+		require.Equal(t, 2, len(meta.childrenHeaders))
+		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
+		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
+
+		// Decode data to new storage
+		storage2 := NewBasicSlabStorage(encMode, decMode)
+		storage2.DecodeStorable = decodeStorable
+
+		err = storage2.Load(stored)
+		require.NoError(t, err)
+
+		// Test new map from storage2
+		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(mapSize), decodedMap.Count())
+		require.Equal(t, typeInfo, decodedMap.Type())
+
+		for i := uint64(0); i < mapSize; i++ {
+			v, err := decodedMap.Get(Uint64Value(i))
+			require.NoError(t, err)
+			require.Equal(t, Uint64Value(i*2), v)
+		}
+	})
+
+	t.Run("has pointer no collision", func(t *testing.T) {
+
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		// Create and populate map in memory
+		storage := NewBasicSlabStorage(encMode, decMode)
+		storage.DecodeStorable = decodeStorable
+
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// Create map
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		const mapSize = 10
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i * 2)
+
+			digests := []Digest{Digest(i), Digest(i * 2)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+
+			if i == mapSize-1 {
+				// Create nested array
+				typeInfo2 := cbor.RawMessage{0x18, 0x2B} // unsigned(43)
+
+				array, err := NewArray(storage, address, typeInfo2)
+				require.NoError(t, err)
+
+				err = array.Append(Uint64Value(0))
+				require.NoError(t, err)
+
+				// Insert array to map
+				err = m.Set(k, array)
+				require.NoError(t, err)
+			} else {
+				err = m.Set(k, v)
+				require.NoError(t, err)
+			}
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+
+		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id4 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		id5 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 5}}
+
+		// Expected serialized slab data with storage id
+		expected := map[StorageID][]byte{
+
+			// metadata slab
+			id1: {
+				// extra data
+				// version
+				0x00,
+				// flag: root + map meta
+				0x89,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
+				// type info: "map"
+				//0x63, 0x6d, 0x61, 0x70,
+				0x18, 0x2A,
+				// count: 10
+				0x0a,
+				// seed
+				0x1b, 0xa7, 0xce, 0x44, 0xac, 0x4b, 0x41, 0x6d, 0x5e,
+
+				// version
+				0x00,
+				// flag: root + map meta
+				0x89,
+				// child header count
+				0x00, 0x03,
+				// child header 1 (storage id, first key, size)
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x72,
+				// child header 2
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				0x00, 0x00, 0x00, 0x72,
+				// child header 3
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+				0x00, 0x00, 0x00, 0x64,
+			},
+			// data slab
+			id2: {
+				// version
+				0x00,
+				// flag: map data
+				0x08,
+				// prev storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// next storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 4)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// hkey: 1
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				// hkey: 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// hkey: 3
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+
+				// elements (array of 4 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				// element: [uint64(0), uint64(0)]
+				0x82, 0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x00,
+				// element: [uint64(1), uint64(2)]
+				0x82, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02,
+				// element: [uint64(2), uint64(4)]
+				0x82, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x04,
+				// element: [uint64(3), uint64(6)]
+				0x82, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x06,
+			},
+			// data slab
+			id3: {
+				// version
+				0x00,
+				// flag: map data
+				0x08,
+				// prev storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// next storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 4)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20,
+				// hkey: 4
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				// hkey: 5
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+				// hkey: 6
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06,
+				// hkey: 7
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07,
+
+				// elements (array of 4 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				// element: [uint64(4), uint64(8)]
+				0x82, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x08,
+				// element: [uint64(5), uint64(10)]
+				0x82, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x0a,
+				// element: [uint64(6), uint64(12)]
+				0x82, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x0c,
+				// element: [uint64(7), uint64(14)]
+				0x82, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x0e,
+			},
+			// data slab
+			id5: {
+				// version
+				0x00,
+				// flag: has pointer + map data
+				0x48,
+				// prev storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// next storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 2)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+				// hkey: 8
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+				// hkey: 9
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
+
+				// elements (array of 2 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// element: [uint64(8), uint64(16)]
+				0x82, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x10,
+				// element: [uint64(9), StorageID(1,2,3,4,5,6,7,8,0,0,0,0,0,0,0,4)]
+				0x82, 0xd8, 0xa4, 0x09, 0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+			},
+			// array data slab
+			id4: {
+				// extra data
+				// version
+				0x00,
+				// flag: root + array data
+				0x80,
+				// extra data (CBOR encoded array of 1 elements)
+				0x81,
+				// type info
+				0x18, 0x2b,
+
+				// version
+				0x00,
+				// flag: root + array data
+				0x80,
+				// prev storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// next storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x01,
+				// CBOR encoded array elements
+				0xd8, 0xa4, 0x00,
+			},
+		}
+
+		stored, err := storage.Encode()
+		require.NoError(t, err)
+
+		require.Equal(t, expected[id1], stored[id1])
+		require.Equal(t, expected[id2], stored[id2])
+		require.Equal(t, expected[id3], stored[id3])
+		require.Equal(t, expected[id4], stored[id4])
+		require.Equal(t, expected[id5], stored[id5])
+
+		// Verify slab size in header is correct.
+		meta, ok := m.root.(*MapMetaDataSlab)
+		require.True(t, ok)
+		require.Equal(t, 3, len(meta.childrenHeaders))
+		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
+		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
+		require.Equal(t, uint32(len(stored[id5])), meta.childrenHeaders[2].size)
+
+		// Decode data to new storage
+		storage2 := NewBasicSlabStorage(encMode, decMode)
+		storage2.DecodeStorable = decodeStorable
+
+		err = storage2.Load(stored)
+		require.NoError(t, err)
+
+		// Test new map from storage2
+		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(mapSize), decodedMap.Count())
+		require.Equal(t, typeInfo, decodedMap.Type())
+
+		for i := uint64(0); i < mapSize; i++ {
+
+			if i == mapSize-1 {
+				// Get nested array
+				v, err := decodedMap.Get(Uint64Value(i))
+				require.NoError(t, err)
+
+				a, ok := v.(*Array)
+				require.True(t, ok)
+
+				require.Equal(t, uint64(1), a.Count())
+				v, err = a.Get(0)
+				require.NoError(t, err)
+				require.Equal(t, Uint64Value(0), v)
+			} else {
+				v, err := decodedMap.Get(Uint64Value(i))
+				require.NoError(t, err)
+				require.Equal(t, Uint64Value(i*2), v)
+			}
+		}
+	})
+
+	t.Run("inline collision 1 level", func(t *testing.T) {
+
+		SetThreshold(150)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		// Create and populate map in memory
+		storage := NewBasicSlabStorage(encMode, decMode)
+		storage.DecodeStorable = decodeStorable
+
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// Create map
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		const mapSize = 10
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i * 2)
+
+			digests := []Digest{Digest(i % 4), Digest(i)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+
+			err = m.Set(k, v)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+
+		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+
+		// Expected serialized slab data with storage id
+		expected := map[StorageID][]byte{
+
+			// map metadata slab
+			id1: {
+				// extra data
+				// version
+				0x00,
+				// flag: root + meta
+				0x89,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
+				// type info: "map"
+				//0x63, 0x6d, 0x61, 0x70,
+				0x18, 0x2A,
+				// count: 10
+				0x0a,
+				// seed
+				0x1b, 0xa7, 0xce, 0x44, 0xac, 0x4b, 0x41, 0x6d, 0x5e,
+
+				// version
+				0x00,
+				// flag: root + map meta
+				0x89,
+				// child header count
+				0x00, 0x02,
+				// child header 1 (storage id, first key, size)
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0xcc,
+				// child header 2
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0xae,
+			},
+			// map data slab
+			id2: {
+				// version
+				0x00,
+				// flag: map data
+				0x08,
+				// prev storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// next storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 2)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// hkey: 1
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+
+				// elements (array of 2 elements)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+
+				// inline collision group corresponding to hkey 0
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level: 1
+				0x01,
+
+				// hkeys (byte string of length 8 * 3)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// hkey: 4
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				// hkey: 8
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+
+				// elements (array of 3 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// element: [uint64(0), uint64(0)]
+				0x82, 0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x00,
+				// element: [uint64(4), uint64(8)]
+				0x82, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x08,
+				// element: [uint64(8), uint64(16)]
+				0x82, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x10,
+
+				// inline collision group corresponding to hkey 1
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level: 1
+				0x01,
+
+				// hkeys (byte string of length 8 * 3)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18,
+				// hkey: 1
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				// hkey: 5
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+				// hkey: 9
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
+
+				// elements (array of 3 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// element: [uint64(1), uint64(2)]
+				0x82, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02,
+				// element: [uint64(5), uint64(10)]
+				0x82, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x0a,
+				// element: [uint64(9), uint64(18)]
+				0x82, 0xd8, 0xa4, 0x09, 0xd8, 0xa4, 0x12,
+			},
+
+			// map data slab
+			id3: {
+				// version
+				0x00,
+				// flag: map data
+				0x08,
+				// prev storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// next storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 2)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+				// hkey: 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// hkey: 3
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+
+				// elements (array of 2 elements)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+
+				// inline collision group corresponding to hkey 2
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level: 1
+				0x01,
+
+				// hkeys (byte string of length 8 * 2)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+				// hkey: 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// hkey: 6
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06,
+
+				// elements (array of 2 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// element: [uint64(2), uint64(4)]
+				0x82, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x04,
+				// element: [uint64(6), uint64(12)]
+				0x82, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x0c,
+
+				// inline collision group corresponding to hkey 3
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level: 1
+				0x01,
+
+				// hkeys (byte string of length 8 * 2)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+				// hkey: 3
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// hkey: 7
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07,
+
+				// elements (array of 2 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// element: [uint64(3), uint64(6)]
+				0x82, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x06,
+				// element: [uint64(7), uint64(14)]
+				0x82, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x0e,
+			},
+		}
+
+		stored, err := storage.Encode()
+		require.NoError(t, err)
+
+		require.Equal(t, expected[id1], stored[id1])
+		require.Equal(t, expected[id2], stored[id2])
+		require.Equal(t, expected[id3], stored[id3])
+
+		// Verify slab size in header is correct.
+		meta, ok := m.root.(*MapMetaDataSlab)
+		require.True(t, ok)
+		require.Equal(t, 2, len(meta.childrenHeaders))
+		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
+		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
+
+		// Decode data to new storage
+		storage2 := NewBasicSlabStorage(encMode, decMode)
+		storage2.DecodeStorable = decodeStorable
+
+		err = storage2.Load(stored)
+		require.NoError(t, err)
+
+		// Test new map from storage2
+		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(mapSize), decodedMap.Count())
+		require.Equal(t, typeInfo, decodedMap.Type())
+
+		for i := uint64(0); i < mapSize; i++ {
+			v, err := decodedMap.Get(Uint64Value(i))
+			require.NoError(t, err)
+			require.Equal(t, Uint64Value(i*2), v)
+		}
+	})
+
+	t.Run("inline collision 2 levels", func(t *testing.T) {
+
+		SetThreshold(150)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		// Create and populate map in memory
+		storage := NewBasicSlabStorage(encMode, decMode)
+		storage.DecodeStorable = decodeStorable
+
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// Create map
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		const mapSize = 10
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i * 2)
+
+			digests := []Digest{Digest(i % 4), Digest(i % 2)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+
+			err = m.Set(k, v)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+
+		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+
+		// Expected serialized slab data with storage id
+		expected := map[StorageID][]byte{
+
+			// map metadata slab
+			id1: {
+				// extra data
+				// version
+				0x00,
+				// flag: root + meta
+				0x89,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
+				// type info: "map"
+				//0x63, 0x6d, 0x61, 0x70,
+				0x18, 0x2A,
+				// count: 10
+				0x0a,
+				// seed
+				0x1b, 0xa7, 0xce, 0x44, 0xac, 0x4b, 0x41, 0x6d, 0x5e,
+
+				// version
+				0x00,
+				// flag: root + map meta
+				0x89,
+				// child header count
+				0x00, 0x02,
+				// child header 1 (storage id, first key, size)
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0xc8,
+				// child header 2
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0xba,
+			},
+
+			// map data slab
+			id2: {
+				// version
+				0x00,
+				// flag: map data
+				0x08,
+				// prev storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// next storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 2)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// hkey: 1
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+
+				// elements (array of 2 elements)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+
+				// inline collision group corresponding to hkey 0
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level 1
+				0x01,
+
+				// hkeys (byte string of length 8 * 1)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// elements (array of 1 elements)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+
+				// inline collision group corresponding to hkey [0, 0]
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level: 2
+				0x02,
+
+				// hkeys (empty byte string)
+				0x40,
+
+				// elements (array of 3 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// element: [uint64(0), uint64(0)]
+				0x82, 0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x00,
+				// element: [uint64(4), uint64(8)]
+				0x82, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x08,
+				// element: [uint64(8), uint64(16)]
+				0x82, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x10,
+
+				// inline collision group corresponding to hkey 1
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level: 1
+				0x01,
+
+				// hkeys (byte string of length 8 * 1)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+				// hkey: 1
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+
+				// elements (array of 1 elements)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+
+				// inline collision group corresponding to hkey [1, 1]
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level: 2
+				0x02,
+
+				// hkeys (empty byte string)
+				0x40,
+
+				// elements (array of 3 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// element: [uint64(1), uint64(2)]
+				0x82, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02,
+				// element: [uint64(5), uint64(10)]
+				0x82, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x0a,
+				// element: [uint64(9), uint64(18)]
+				0x82, 0xd8, 0xa4, 0x09, 0xd8, 0xa4, 0x12,
+			},
+
+			// map data slab
+			id3: {
+				// version
+				0x00,
+				// flag: map data
+				0x08,
+				// prev storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// next storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 2)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+				// hkey: 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// hkey: 3
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+
+				// elements (array of 2 elements)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+
+				// inline collision group corresponding to hkey 2
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level: 1
+				0x01,
+
+				// hkeys (byte string of length 8 * 1)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// elements (array of 1 element)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+
+				// inline collision group corresponding to hkey [2, 0]
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level: 2
+				0x02,
+
+				// hkeys (empty byte string)
+				0x40,
+
+				// elements (array of 2 element)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// element: [uint64(2), uint64(4)]
+				0x82, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x04,
+				// element: [uint64(6), uint64(12)]
+				0x82, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x0c,
+
+				// inline collision group corresponding to hkey 3
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level: 1
+				0x01,
+
+				// hkeys (byte string of length 8 * 1)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+				// hkey: 1
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+
+				// elements (array of 1 element)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+
+				// inline collision group corresponding to hkey [3, 1]
+				// (tag number CBORTagInlineCollisionGroup)
+				0xd8, 0xfd,
+				// (tag content: array of 3 elements)
+				0x83,
+
+				// level: 2
+				0x02,
+
+				// hkeys (empty byte string)
+				0x40,
+
+				// elements (array of 2 element)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// element: [uint64(3), uint64(6)]
+				0x82, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x06,
+				// element: [uint64(7), uint64(14)]
+				0x82, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x0e,
+			},
+		}
+
+		stored, err := storage.Encode()
+		require.NoError(t, err)
+
+		require.Equal(t, expected[id1], stored[id1])
+		require.Equal(t, expected[id2], stored[id2])
+		require.Equal(t, expected[id3], stored[id3])
+
+		// Verify slab size in header is correct.
+		meta, ok := m.root.(*MapMetaDataSlab)
+		require.True(t, ok)
+		require.Equal(t, 2, len(meta.childrenHeaders))
+		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
+		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
+
+		// Decode data to new storage
+		storage2 := NewBasicSlabStorage(encMode, decMode)
+		storage2.DecodeStorable = decodeStorable
+
+		err = storage2.Load(stored)
+		require.NoError(t, err)
+
+		// Test new map from storage2
+		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(mapSize), decodedMap.Count())
+		require.Equal(t, typeInfo, decodedMap.Type())
+
+		for i := uint64(0); i < mapSize; i++ {
+			v, err := decodedMap.Get(Uint64Value(i))
+			require.NoError(t, err)
+			require.Equal(t, Uint64Value(i*2), v)
+		}
+	})
+
+	t.Run("external collision", func(t *testing.T) {
+
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		// Create and populate map in memory
+		storage := NewBasicSlabStorage(encMode, decMode)
+		storage.DecodeStorable = decodeStorable
+
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// Create map
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		const mapSize = 20
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i * 2)
+
+			digests := []Digest{Digest(i % 2), Digest(i)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+
+			err = m.Set(k, v)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+
+		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+
+		// Expected serialized slab data with storage id
+		expected := map[StorageID][]byte{
+
+			// map data slab
+			id1: {
+				// extra data
+				// version
+				0x00,
+				// flag: root + has pointer + map data
+				0xc8,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
+				// type info: "map"
+				//0x63, 0x6d, 0x61, 0x70,
+				0x18, 0x2A,
+				// count: 10
+				0x14,
+				// seed
+				0x1b, 0xa7, 0xce, 0x44, 0xac, 0x4b, 0x41, 0x6d, 0x5e,
+
+				// version
+				0x00,
+				// flag: root + has pointer + map data
+				0xc8,
+
+				// prev storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// next storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 2)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+
+				// elements (array of 2 elements)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+
+				// external collision group corresponding to hkey 0
+				// (tag number CBORTagExternalCollisionGroup)
+				0xd8, 0xfe,
+				// (tag content: storage id)
+				0xd8, 0xff, 0x50,
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+
+				// external collision group corresponding to hkey 1
+				// (tag number CBORTagExternalCollisionGroup)
+				0xd8, 0xfe,
+				// (tag content: storage id)
+				0xd8, 0xff, 0x50,
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+			},
+
+			// external collision group
+			id2: {
+				// version
+				0x00,
+				// flag: any size + collision group
+				0x2b,
+				// prev storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// next storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 1
+				0x01,
+
+				// hkeys (byte string of length 8 * 10)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x50,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// hkey: 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// hkey: 4
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				// hkey: 6
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06,
+				// hkey: 8
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+				// hkey: 10
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a,
+				// hkey: 12
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c,
+				// hkey: 14
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0e,
+				// hkey: 16
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+				// hkey: 18
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12,
+
+				// elements (array of 10 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a,
+				// element: [uint64(0), uint64(0)]
+				0x82, 0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x00,
+				// element: [uint64(2), uint64(4)]
+				0x82, 0xd8, 0xa4, 0x02, 0xd8, 0xa4, 0x04,
+				// element: [uint64(4), uint64(8)]
+				0x82, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x08,
+				// element: [uint64(6), uint64(12)]
+				0x82, 0xd8, 0xa4, 0x06, 0xd8, 0xa4, 0x0c,
+				// element: [uint64(8), uint64(16)]
+				0x82, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x10,
+				// element: [uint64(10), uint64(20)]
+				0x82, 0xd8, 0xa4, 0x0a, 0xd8, 0xa4, 0x14,
+				// element: [uint64(12), uint64(24)]
+				0x82, 0xd8, 0xa4, 0x0c, 0xd8, 0xa4, 0x18, 0x18,
+				// element: [uint64(14), uint64(28)]
+				0x82, 0xd8, 0xa4, 0x0e, 0xd8, 0xa4, 0x18, 0x1c,
+				// element: [uint64(16), uint64(32)]
+				0x82, 0xd8, 0xa4, 0x10, 0xd8, 0xa4, 0x18, 0x20,
+				// element: [uint64(18), uint64(36)]
+				0x82, 0xd8, 0xa4, 0x12, 0xd8, 0xa4, 0x18, 0x24,
+			},
+
+			// external collision group
+			id3: {
+				// version
+				0x00,
+				// flag: any size + collision group
+				0x2b,
+				// prev storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// next storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 1
+				0x01,
+
+				// hkeys (byte string of length 8 * 10)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x50,
+				// hkey: 1
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				// hkey: 3
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// hkey: 5
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+				// hkey: 7
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07,
+				// hkey: 9
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
+				// hkey: 11
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0b,
+				// hkey: 13
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d,
+				// hkey: 15
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0f,
+				// hkey: 17
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11,
+				// hkey: 19
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x13,
+
+				// elements (array of 10 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a,
+				// element: [uint64(1), uint64(2)]
+				0x82, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02,
+				// element: [uint64(3), uint64(6)]
+				0x82, 0xd8, 0xa4, 0x03, 0xd8, 0xa4, 0x06,
+				// element: [uint64(5), uint64(10)]
+				0x82, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x0a,
+				// element: [uint64(7), uint64(14)]
+				0x82, 0xd8, 0xa4, 0x07, 0xd8, 0xa4, 0x0e,
+				// element: [uint64(9), uint64(18)]
+				0x82, 0xd8, 0xa4, 0x09, 0xd8, 0xa4, 0x12,
+				// element: [uint64(11), uint64(22))]
+				0x82, 0xd8, 0xa4, 0x0b, 0xd8, 0xa4, 0x16,
+				// element: [uint64(13), uint64(26)]
+				0x82, 0xd8, 0xa4, 0x0d, 0xd8, 0xa4, 0x18, 0x1a,
+				// element: [uint64(15), uint64(30)]
+				0x82, 0xd8, 0xa4, 0x0f, 0xd8, 0xa4, 0x18, 0x1e,
+				// element: [uint64(17), uint64(34)]
+				0x82, 0xd8, 0xa4, 0x11, 0xd8, 0xa4, 0x18, 0x22,
+				// element: [uint64(19), uint64(38)]
+				0x82, 0xd8, 0xa4, 0x13, 0xd8, 0xa4, 0x18, 0x26,
+			},
+		}
+
+		stored, err := storage.Encode()
+		require.NoError(t, err)
+
+		require.Equal(t, expected[id1], stored[id1])
+		require.Equal(t, expected[id2], stored[id2])
+		require.Equal(t, expected[id3], stored[id3])
+
+		// Decode data to new storage
+		storage2 := NewBasicSlabStorage(encMode, decMode)
+		storage2.DecodeStorable = decodeStorable
+
+		err = storage2.Load(stored)
+		require.NoError(t, err)
+
+		// Test new map from storage2
+		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(mapSize), decodedMap.Count())
+		require.Equal(t, typeInfo, decodedMap.Type())
+
+		for i := uint64(0); i < mapSize; i++ {
+			v, err := decodedMap.Get(Uint64Value(i))
+			require.NoError(t, err)
+			require.Equal(t, Uint64Value(i*2), v)
+		}
+	})
+}
+
+func TestMapEncodeDecodeRandomData(t *testing.T) {
+
+	const (
+		SetAction = iota
+		RemoveAction
+		MaxAction
+	)
+
+	const (
+		Uint8Type = iota
+		Uint16Type
+		Uint32Type
+		Uint64Type
+		StringType
+		MaxType
+	)
+
+	SetThreshold(256)
+	defer func() {
+		SetThreshold(1024)
+	}()
+
+	const actionCount = 2 * 1024
+
+	const stringMaxSize = 512
+
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	storage := NewBasicSlabStorage(encMode, decMode)
+	storage.DecodeStorable = decodeStorable
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	digesterBuilder := newBasicDigesterBuilder()
+
+	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+	require.NoError(t, err)
+
+	keyValues := make(map[ComparableValue]Value)
+	var keys []ComparableValue
+
+	for i := uint64(0); i < actionCount; i++ {
+
+		action := SetAction
+
+		if len(keys) > 0 {
+			action = rand.Intn(MaxAction)
+		}
+
+		switch action {
+
+		case SetAction:
+
+			var k ComparableValue
+
+			switch rand.Intn(MaxType) {
+			case Uint8Type:
+				n := rand.Intn(math.MaxUint8 + 1)
+				k = Uint8Value(n)
+			case Uint16Type:
+				n := rand.Intn(math.MaxUint16 + 1)
+				k = Uint16Value(n)
+			case Uint32Type:
+				k = Uint32Value(rand.Uint32())
+			case Uint64Type:
+				k = Uint64Value(rand.Uint64())
+			case StringType:
+				k = NewStringValue(randStr(rand.Intn(stringMaxSize)))
+			}
+
+			var v Value
+
+			switch rand.Intn(MaxType) {
+			case Uint8Type:
+				n := rand.Intn(math.MaxUint8 + 1)
+				v = Uint8Value(n)
+			case Uint16Type:
+				n := rand.Intn(math.MaxUint16 + 1)
+				v = Uint16Value(n)
+			case Uint32Type:
+				v = Uint32Value(rand.Uint32())
+			case Uint64Type:
+				v = Uint64Value(rand.Uint64())
+			case StringType:
+				v = NewStringValue(randStr(rand.Intn(stringMaxSize)))
+			}
+
+			keyValues[k] = v
+
+			oldCount := m.Count()
+
+			err := m.Set(k, v)
+			require.NoError(t, err)
+
+			newCount := m.Count()
+
+			if newCount > oldCount {
+				keys = append(keys, k)
+			}
+
+		case RemoveAction:
+
+			ki := rand.Intn(len(keys))
+			k := keys[ki]
+
+			removedKey, removedValue, err := m.Remove(k)
+			require.NoError(t, err)
+			require.Equal(t, k, removedKey)
+			require.Equal(t, keyValues[k], removedValue)
+
+			delete(keyValues, k)
+			copy(keys[ki:], keys[ki+1:])
+			keys = keys[:len(keys)-1]
+		}
+
+		require.Equal(t, m.Count(), uint64(len(keys)))
+		require.Equal(t, typeInfo, m.Type())
+	}
+
+	verified, err := m.valid()
+	require.NoError(t, err)
+	require.True(t, verified)
+
+	rootID := m.StorageID()
+
+	// Encode slabs with random data of mixed types
+	encodedData, err := storage.Encode()
+	require.NoError(t, err)
+
+	// Decode data to new storage
+	storage2 := NewBasicSlabStorage(encMode, decMode)
+	storage2.DecodeStorable = decodeStorable
+
+	err = storage2.Load(encodedData)
+	require.NoError(t, err)
+
+	// Create new map from new storage
+	m2, err := NewMapWithRootID(storage2, rootID, digesterBuilder)
+	require.NoError(t, err)
+
+	require.Equal(t, typeInfo, m2.Type())
+	require.Equal(t, uint64(len(keys)), m2.Count())
+
+	// Get and check every element from new map.
+
+	for k, v := range keyValues {
+		e, err := m2.Get(k)
+		require.NoError(t, err)
+		require.Equal(t, v, e)
+	}
 }

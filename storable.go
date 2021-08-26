@@ -20,7 +20,12 @@ type Storable interface {
 	DeepRemove(storage SlabStorage) error
 }
 
-const CBORTagStorageID = 255
+const (
+	CBORTagInlineCollisionGroup   = 253
+	CBORTagExternalCollisionGroup = 254
+
+	CBORTagStorageID = 255
+)
 
 type StorageIDStorable StorageID
 

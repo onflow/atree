@@ -19,21 +19,12 @@ type Uint64Value uint64
 var _ atree.Value = Uint64Value(0)
 var _ atree.Storable = Uint64Value(0)
 
-func (v Uint64Value) DeepCopy(_ atree.SlabStorage, _ atree.Address) (atree.Value, error) {
-	return v, nil
-}
-
 func (v Uint64Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
 func (v Uint64Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (atree.Storable, error) {
 	return v, nil
-}
-
-func (v Uint64Value) DeepRemove(_ atree.SlabStorage) error {
-	// NO-OP
-	return nil
 }
 
 // Encode encodes UInt64Value as

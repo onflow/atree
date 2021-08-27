@@ -57,11 +57,6 @@ type ArrayDataSlab struct {
 	extraData *ArrayExtraData
 }
 
-func (a *ArrayDataSlab) DeepRemove(_ SlabStorage) error {
-	// Slab will be removed by parent
-	return nil
-}
-
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return &Array{
 		Storage: storage,
@@ -92,11 +87,6 @@ func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		Storage: storage,
 		root:    a,
 	}, nil
-}
-
-func (a *ArrayMetaDataSlab) DeepRemove(_ SlabStorage) error {
-	// Slab will be removed by parent
-	return nil
 }
 
 type ArraySlab interface {
@@ -1906,69 +1896,6 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 			return nil
 		}
 	}
-}
-
-func (a *Array) DeepCopy(storage SlabStorage, address Address) (Value, error) {
-	result, err := NewArray(storage, address, a.Type())
-	if err != nil {
-		return nil, err
-	}
-
-	var index uint64
-	err = a.Iterate(func(element Value) (resume bool, err error) {
-
-		elementCopy, err := element.DeepCopy(storage, address)
-		if err != nil {
-			return false, err
-		}
-
-		err = result.Insert(index, elementCopy)
-		if err != nil {
-			return false, err
-		}
-
-		index++
-
-		return true, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (a *Array) DeepRemove(storage SlabStorage) error {
-	count := a.Count()
-
-	// TODO: use backward iterator
-	for prevIndex := count; prevIndex > 0; prevIndex-- {
-		index := prevIndex - 1
-
-		storable, err := a.root.Get(storage, index)
-		if err != nil {
-			return err
-		}
-
-		value, err := a.Remove(index)
-		if err != nil {
-			return err
-		}
-
-		err = value.DeepRemove(storage)
-		if err != nil {
-			return err
-		}
-
-		err = storable.DeepRemove(storage)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Root slab will be removed by parent
-
-	return nil
 }
 
 func (a *Array) Count() uint64 {

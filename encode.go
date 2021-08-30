@@ -68,6 +68,8 @@ func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable 
 			return newMapMetaDataSlabFromData(id, data, decMode)
 		case slabMapCollisionGroup:
 			return newMapDataSlabFromData(id, data, decMode, decodeStorable)
+		case slabBasicDictionary:
+			return newBasicDictDataSlabFromData(id, data, decMode, decodeStorable)
 		default:
 			return nil, fmt.Errorf("data has invalid flag %x", flag)
 		}

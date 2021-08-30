@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -88,6 +89,10 @@ func (v Uint8Value) String() string {
 	return fmt.Sprintf("%d", uint8(v))
 }
 
+func (v Uint8Value) KeyString() string {
+	return strconv.FormatInt(int64(v), 10)
+}
+
 type Uint16Value uint16
 
 var _ Value = Uint16Value(0)
@@ -149,15 +154,15 @@ func (v Uint16Value) String() string {
 	return fmt.Sprintf("%d", uint16(v))
 }
 
+func (v Uint16Value) KeyString() string {
+	return strconv.FormatInt(int64(v), 10)
+}
+
 type Uint32Value uint32
 
 var _ Value = Uint32Value(0)
 var _ Storable = Uint32Value(0)
 var _ ComparableValue = Uint32Value(0)
-
-func (v Uint32Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
-	return v, nil
-}
 
 func (v Uint32Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -217,6 +222,10 @@ func (v Uint32Value) ByteSize() uint32 {
 
 func (v Uint32Value) String() string {
 	return fmt.Sprintf("%d", uint32(v))
+}
+
+func (v Uint32Value) KeyString() string {
+	return strconv.FormatInt(int64(v), 10)
 }
 
 type Uint64Value uint64
@@ -283,6 +292,10 @@ func (v Uint64Value) ByteSize() uint32 {
 
 func (v Uint64Value) String() string {
 	return fmt.Sprintf("%d", uint64(v))
+}
+
+func (v Uint64Value) KeyString() string {
+	return strconv.FormatInt(int64(v), 10)
 }
 
 type StringValue struct {
@@ -365,6 +378,10 @@ func (v StringValue) ByteSize() uint32 {
 }
 
 func (v StringValue) String() string {
+	return v.str
+}
+
+func (v StringValue) KeyString() string {
 	return v.str
 }
 

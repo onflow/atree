@@ -31,6 +31,7 @@ const (
 	slabMapMeta
 	slabMapLargeEntry
 	slabMapCollisionGroup
+	slabBasicDictionary
 )
 
 const (
@@ -49,7 +50,8 @@ const (
 	maskMapData byte = 0b000_01000
 	maskMapMeta byte = 0b000_01001
 	// maskLargeMapEntry  byte = 0b000_01010 // not used for now
-	maskCollisionGroup byte = 0b000_01011
+	maskCollisionGroup  byte = 0b000_01011
+	maskBasicDictionary byte = 0b000_01100 // used for benchmarking
 
 	// Storable flags: 3 low bits (4th bit is 1, 5th bit is 1)
 	maskStorable byte = 0b000_11111
@@ -134,6 +136,8 @@ func getSlabMapType(f byte) slabMapType {
 		return slabMapLargeEntry
 	case 3:
 		return slabMapCollisionGroup
+	case 4:
+		return slabBasicDictionary
 	default:
 		return slabMapUndefined
 	}

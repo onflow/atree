@@ -2279,3 +2279,45 @@ func TestStringElement(t *testing.T) {
 		)
 	})
 }
+
+func TestArrayStoredValue(t *testing.T) {
+
+	const arraySize = 64 * 1024
+
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	storage := newTestPersistentStorage(t)
+
+	array, err := NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	for i := uint64(0); i < arraySize; i++ {
+		err := array.Append(Uint64Value(i))
+		require.NoError(t, err)
+	}
+
+	value, err := array.root.StoredValue(storage)
+	require.NoError(t, err)
+
+	array2, ok := value.(*Array)
+	require.True(t, ok)
+
+	require.Equal(t, uint64(arraySize), array2.Count())
+	require.Equal(t, typeInfo, array2.Type())
+
+	for i := uint64(0); i < arraySize; i++ {
+		v, err := array2.Get(i)
+		require.NoError(t, err)
+		require.Equal(t, Uint64Value(i), v)
+	}
+
+	firstDataSlab, err := firstArrayDataSlab(storage, array.root)
+	require.NoError(t, err)
+
+	if firstDataSlab.ID() != array.StorageID() {
+		_, err = firstDataSlab.StoredValue(storage)
+		require.Error(t, err)
+	}
+}

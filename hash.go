@@ -50,6 +50,10 @@ var (
 	emptyBlake3Hash [4]uint64
 )
 
+func newDefaultDigesterBuilder() DigesterBuilder {
+	return newBasicDigesterBuilder()
+}
+
 func newBasicDigesterBuilder() *basicDigesterBuilder {
 	return &basicDigesterBuilder{}
 }

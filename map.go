@@ -1928,11 +1928,19 @@ func (m *MapDataSlab) hasPointer() bool {
 	return m.elements.HasPointer()
 }
 
-// TODO: need to set DigesterBuilder for OrderedMap
 func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
+	if m.extraData == nil {
+		return nil, NewNotValueError()
+	}
+
+	digestBuilder := newDefaultDigesterBuilder()
+
+	digestBuilder.SetSeed(m.extraData.Seed, typicalRandomConstant)
+
 	return &OrderedMap{
-		storage: storage,
-		root:    m,
+		storage:         storage,
+		root:            m,
+		digesterBuilder: digestBuilder,
 	}, nil
 }
 
@@ -2321,11 +2329,19 @@ func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
-// TODO: need to set DigesterBuilder for OrderedMap
 func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
+	if m.extraData == nil {
+		return nil, NewNotValueError()
+	}
+
+	digestBuilder := newDefaultDigesterBuilder()
+
+	digestBuilder.SetSeed(m.extraData.Seed, typicalRandomConstant)
+
 	return &OrderedMap{
-		storage: storage,
-		root:    m,
+		storage:         storage,
+		root:            m,
+		digesterBuilder: digestBuilder,
 	}, nil
 }
 

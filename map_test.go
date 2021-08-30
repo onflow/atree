@@ -2593,3 +2593,63 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 		require.Equal(t, v, e)
 	}
 }
+
+func TestMapStoredValue(t *testing.T) {
+
+	const mapSize = 64 * 1024
+
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	storage := newTestInMemoryStorage(t)
+
+	uniqueKeys := make(map[string]bool, mapSize)
+	uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+	for i := uint64(0); i < mapSize; i++ {
+		for {
+			s := randStr(16)
+			if !uniqueKeys[s] {
+				uniqueKeys[s] = true
+
+				k := NewStringValue(s)
+				uniqueKeyValues[k] = Uint64Value(i)
+				break
+			}
+		}
+	}
+
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	for k, v := range uniqueKeyValues {
+		err := m.Set(k, v)
+		require.NoError(t, err)
+	}
+
+	value, err := m.root.StoredValue(storage)
+	require.NoError(t, err)
+
+	m2, ok := value.(*OrderedMap)
+	require.True(t, ok)
+
+	require.Equal(t, typeInfo, m2.Type())
+	require.Equal(t, uint64(len(uniqueKeyValues)), m2.Count())
+
+	for k, v := range uniqueKeyValues {
+		strv := k.(StringValue)
+		require.NotNil(t, strv)
+
+		e, err := m2.Get(NewStringValue(strv.str))
+		require.NoError(t, err)
+		require.Equal(t, v, e)
+	}
+
+	firstDataSlab, err := firstMapDataSlab(storage, m.root)
+	require.NoError(t, err)
+
+	if firstDataSlab.ID() != m.StorageID() {
+		_, err = firstDataSlab.StoredValue(storage)
+		require.Error(t, err)
+	}
+}

@@ -52,6 +52,19 @@ func (e *MaxArraySizeError) Fatal() error {
 	return NewFatalError(e)
 }
 
+// NotValueError is returned when we try to create Value objects from non-root slabs.
+type NotValueError struct {
+}
+
+// NewNotValueError constructs a NotValueError.
+func NewNotValueError() *NotValueError {
+	return &NotValueError{}
+}
+
+func (e *NotValueError) Error() string {
+	return "non-root slabs must not be used to create Value object"
+}
+
 // NonStorableElementError is returned when we try to store a non-storable element.
 type NonStorableElementError struct {
 	element interface{}

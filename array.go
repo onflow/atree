@@ -58,6 +58,9 @@ type ArrayDataSlab struct {
 }
 
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
+	if a.extraData == nil {
+		return nil, NewNotValueError()
+	}
 	return &Array{
 		Storage: storage,
 		root:    a,
@@ -83,6 +86,9 @@ type ArrayMetaDataSlab struct {
 var _ ArraySlab = &ArrayMetaDataSlab{}
 
 func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
+	if a.extraData == nil {
+		return nil, NewNotValueError()
+	}
 	return &Array{
 		Storage: storage,
 		root:    a,

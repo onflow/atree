@@ -43,7 +43,9 @@ func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
 
-	decMode, err := cbor.DecOptions{}.DecMode()
+	decMode, err := cbor.DecOptions{
+		MaxArrayElements: 9223372036854775807,
+	}.DecMode()
 	require.NoError(t, err)
 
 	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode)

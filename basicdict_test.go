@@ -93,7 +93,7 @@ func TestBasicDictRemove(t *testing.T) {
 	for i := uint64(0); i < dictSize; i += 2 {
 		k := Uint64Value(i)
 
-		v, err := dict.Remove(k)
+		_, v, err := dict.Remove(k)
 		require.NoError(t, err)
 		require.Equal(t, Uint64Value(i+1), v)
 	}
@@ -139,7 +139,7 @@ func TestBasicDictRandomSetRemoveMixedTypes(t *testing.T) {
 	dict := NewBasicDict(storage, address)
 
 	keyValues := make(map[string]Value)
-	var keys []Value
+	var keys []ComparableValue
 
 	for i := uint64(0); i < actionCount; i++ {
 
@@ -153,7 +153,7 @@ func TestBasicDictRandomSetRemoveMixedTypes(t *testing.T) {
 
 		case SetAction:
 
-			var k Value
+			var k ComparableValue
 
 			switch rand.Intn(MaxType) {
 			case Uint8Type:
@@ -204,7 +204,7 @@ func TestBasicDictRandomSetRemoveMixedTypes(t *testing.T) {
 
 			keyString := dictionaryKey(k)
 
-			v, err := dict.Remove(k)
+			_, v, err := dict.Remove(k)
 			require.NoError(t, err)
 			require.Equal(t, keyValues[keyString], v)
 
@@ -264,7 +264,7 @@ func TestBasicDictDecodeEncodeRandomData(t *testing.T) {
 	dict := NewBasicDict(storage, address)
 
 	keyValues := make(map[string]Value)
-	var keys []Value
+	var keys []ComparableValue
 
 	for i := uint64(0); i < actionCount; i++ {
 
@@ -278,7 +278,7 @@ func TestBasicDictDecodeEncodeRandomData(t *testing.T) {
 
 		case SetAction:
 
-			var k Value
+			var k ComparableValue
 
 			switch rand.Intn(MaxType) {
 			case Uint8Type:
@@ -329,7 +329,7 @@ func TestBasicDictDecodeEncodeRandomData(t *testing.T) {
 
 			keyString := dictionaryKey(k)
 
-			v, err := dict.Remove(k)
+			_, v, err := dict.Remove(k)
 			require.NoError(t, err)
 			require.Equal(t, keyValues[keyString], v)
 

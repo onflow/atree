@@ -267,7 +267,7 @@ func (m *BasicDictDataSlab) Get(_ SlabStorage, keyValue Value) (Storable, error)
 		return value, nil
 	}
 
-	return nil, &KeyNotFoundError{}
+	return nil, &KeyNotFoundError{keyValue}
 }
 
 func (a *BasicDictDataSlab) Set(storage SlabStorage, address Address, keyValue Value, value Storable) error {
@@ -423,7 +423,7 @@ func NewBasicDictWithRootID(storage SlabStorage, id StorageID) (*BasicDict, erro
 	return &BasicDict{storage: storage, root: dataSlab}, nil
 }
 
-func (a *BasicDict) Get(key Value) (Value, error) {
+func (a *BasicDict) Get(key ComparableValue) (Value, error) {
 	storable, err := a.root.Get(a.storage, key)
 	if err != nil {
 		return nil, err
@@ -431,7 +431,7 @@ func (a *BasicDict) Get(key Value) (Value, error) {
 	return storable.StoredValue(a.storage)
 }
 
-func (a *BasicDict) Set(key Value, v Value) error {
+func (a *BasicDict) Set(key ComparableValue, v Value) error {
 	// don't inline large value
 	storable, err := v.Storable(a.storage, a.Address(), math.MaxUint64)
 	if err != nil {
@@ -440,12 +440,16 @@ func (a *BasicDict) Set(key Value, v Value) error {
 	return a.root.Set(a.storage, a.Address(), key, storable)
 }
 
-func (a *BasicDict) Remove(key Value) (Value, error) {
+func (a *BasicDict) Remove(key ComparableValue) (Value, Value, error) {
 	storable, err := a.root.Remove(a.storage, key)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return storable.StoredValue(a.storage)
+	v, err := storable.StoredValue(a.storage)
+	if err != nil {
+		return nil, nil, err
+	}
+	return key, v, nil
 }
 
 func (a *BasicDict) Count() uint64 {
@@ -454,4 +458,8 @@ func (a *BasicDict) Count() uint64 {
 
 func (a *BasicDict) String() string {
 	return a.root.String()
+}
+
+func (a *BasicDict) Print() {
+	fmt.Printf("keys: %v\nkey strings: %v\nentries: %v\n", a.root.keys, a.root.keyStrings, a.root.entries)
 }

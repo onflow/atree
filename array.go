@@ -100,7 +100,7 @@ type ArraySlab interface {
 	fmt.Stringer
 
 	Get(storage SlabStorage, index uint64) (Storable, error)
-	Set(storage SlabStorage, index uint64, v Storable) error
+	Set(storage SlabStorage, index uint64, v Storable) (Storable, error)
 	Insert(storage SlabStorage, index uint64, v Storable) error
 	Remove(storage SlabStorage, index uint64) (Storable, error)
 
@@ -392,15 +392,23 @@ func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
 	return a.elements[index], nil
 }
 
-func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error {
+func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
-		return NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
+		return nil, NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
-	oldSize := a.elements[index].ByteSize()
+
+	oldElem := a.elements[index]
+	oldSize := oldElem.ByteSize()
+
 	a.elements[index] = v
 	a.header.size = a.header.size - oldSize + v.ByteSize()
 
-	return storage.Store(a.header.id, a)
+	err := storage.Store(a.header.id, a)
+	if err != nil {
+		return nil, err
+	}
+
+	return oldElem, nil
 }
 
 func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
@@ -966,21 +974,21 @@ func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, er
 	return child.Get(storage, adjustedIndex)
 }
 
-func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) error {
+func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) (Storable, error) {
 
 	childHeaderIndex, adjustedIndex, childID, err := a.childSlabIndexInfo(index)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	child, err := getArraySlab(storage, childID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = child.Set(storage, adjustedIndex, v)
+	existingElem, err := child.Set(storage, adjustedIndex, v)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	a.childrenHeaders[childHeaderIndex] = child.Header()
@@ -989,14 +997,26 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) e
 	// check if full and for underflow
 
 	if child.IsFull() {
-		return a.SplitChildSlab(storage, child, childHeaderIndex)
+		err = a.SplitChildSlab(storage, child, childHeaderIndex)
+		if err != nil {
+			return nil, err
+		}
+		return existingElem, nil
 	}
 
 	if underflowSize, underflow := child.IsUnderflow(); underflow {
-		return a.MergeOrRebalanceChildSlab(storage, child, childHeaderIndex, underflowSize)
+		err = a.MergeOrRebalanceChildSlab(storage, child, childHeaderIndex, underflowSize)
+		if err != nil {
+			return nil, err
+		}
+		return existingElem, nil
 	}
 
-	return storage.Store(a.header.id, a)
+	err = storage.Store(a.header.id, a)
+	if err != nil {
+		return nil, err
+	}
+	return existingElem, nil
 }
 
 // Insert inserts v into the correct child slab.
@@ -1700,12 +1720,18 @@ func (a *Array) Get(i uint64) (Value, error) {
 	return storable.StoredValue(a.Storage)
 }
 
-func (a *Array) Set(index uint64, value Value) error {
+func (a *Array) Set(index uint64, value Value) (Value, error) {
 	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineElementSize)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return a.root.Set(a.Storage, index, storable)
+
+	existingElem, err := a.root.Set(a.Storage, index, storable)
+	if err != nil {
+		return nil, err
+	}
+
+	return existingElem.StoredValue(a.Storage)
 }
 
 func (a *Array) Append(value Value) error {

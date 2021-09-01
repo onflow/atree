@@ -115,8 +115,9 @@ func TestSetAndGet(t *testing.T) {
 	}
 
 	for i := uint64(0); i < arraySize; i++ {
-		err := array.Set(i, Uint64Value(i*10))
+		existingElem, err := array.Set(i, Uint64Value(i*10))
 		require.NoError(t, err)
+		require.Equal(t, Uint64Value(i), existingElem)
 	}
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -590,8 +591,9 @@ func TestIterate(t *testing.T) {
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
-			err := array.Set(i, Uint64Value(i*10))
+			existingElem, err := array.Set(i, Uint64Value(i*10))
 			require.NoError(t, err)
+			require.Equal(t, Uint64Value(i), existingElem)
 		}
 
 		i := uint64(0)
@@ -837,10 +839,13 @@ func TestSetRandomValue(t *testing.T) {
 		k := rand.Intn(arraySize)
 		v := rand.Uint64()
 
+		oldV := values[k]
+
 		values[k] = v
 
-		err := array.Set(uint64(k), Uint64Value(v))
+		existingElem, err := array.Set(uint64(k), Uint64Value(v))
 		require.NoError(t, err)
+		require.Equal(t, Uint64Value(oldV), existingElem)
 	}
 
 	for k, v := range values {
@@ -1123,10 +1128,13 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 			k := rand.Intn(int(array.Count()))
 			v := rand.Uint64()
 
+			oldV := values[k]
+
 			values[k] = v
 
-			err := array.Set(uint64(k), Uint64Value(v))
+			existingElem, err := array.Set(uint64(k), Uint64Value(v))
 			require.NoError(t, err)
+			require.Equal(t, Uint64Value(oldV), existingElem)
 
 		case InsertAction:
 			k := rand.Intn(int(array.Count() + 1))
@@ -1243,10 +1251,13 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 			k := rand.Intn(int(array.Count()))
 			v := rand.Intn(math.MaxUint8 + 1)
 
+			oldV := values[k]
+
 			values[k] = uint8(v)
 
-			err := array.Set(uint64(k), Uint8Value(v))
+			existingElem, err := array.Set(uint64(k), Uint8Value(v))
 			require.NoError(t, err)
+			require.Equal(t, Uint8Value(oldV), existingElem)
 
 		case InsertAction:
 			k := rand.Intn(int(array.Count() + 1))
@@ -1380,10 +1391,13 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 			}
 			k := rand.Intn(int(array.Count()))
 
+			oldV := values[k]
+
 			values[k] = v
 
-			err := array.Set(uint64(k), v)
+			existingElem, err := array.Set(uint64(k), v)
 			require.NoError(t, err)
+			require.Equal(t, oldV, existingElem)
 
 		case InsertAction:
 			k := rand.Intn(int(array.Count() + 1))
@@ -2094,8 +2108,9 @@ func TestEmptyArray(t *testing.T) {
 	})
 
 	t.Run("set", func(t *testing.T) {
-		err := array.Set(0, Uint64Value(0))
+		existingElem, err := array.Set(0, Uint64Value(0))
 		require.Error(t, err, IndexOutOfBoundsError{})
+		require.Equal(t, nil, existingElem)
 	})
 
 	t.Run("insert", func(t *testing.T) {

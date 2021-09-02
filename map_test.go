@@ -96,8 +96,9 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
-			err := m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		verified, err := m.valid()
@@ -156,8 +157,9 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
-			err := m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		verified, err := m.valid()
@@ -170,12 +172,17 @@ func TestMapSetAndGet(t *testing.T) {
 
 		// Overwrite previously inserted values
 		for k := range uniqueKeyValues {
-			v, _ := uniqueKeyValues[k].(Uint64Value)
-			v = Uint64Value(uint64(v) + mapSize)
+			oldv, _ := uniqueKeyValues[k].(Uint64Value)
+			v := Uint64Value(uint64(oldv) + mapSize)
 			uniqueKeyValues[k] = v
 
-			err := m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
+			require.NotNil(t, existingStorable)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, oldv, existingValue)
 		}
 
 		for k, v := range uniqueKeyValues {
@@ -230,8 +237,9 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
-			err := m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		verified, err := m.valid()
@@ -296,8 +304,9 @@ func TestMapHas(t *testing.T) {
 	require.NoError(t, err)
 
 	for i, k := range keysToInsert {
-		err := m.Set(NewStringValue(k), Uint64Value(i))
+		existingStorable, err := m.Set(NewStringValue(k), Uint64Value(i))
 		require.NoError(t, err)
+		require.Nil(t, existingStorable)
 	}
 
 	verified, err := m.valid()
@@ -365,8 +374,9 @@ func TestMapRemove(t *testing.T) {
 
 		// Insert elements
 		for k, v := range uniqueKeyValues {
-			err := m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		verified, err := m.valid()
@@ -461,8 +471,9 @@ func TestMapRemove(t *testing.T) {
 
 		// Insert elements
 		for k, v := range uniqueKeyValues {
-			err := m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		verified, err := m.valid()
@@ -554,8 +565,9 @@ func TestMapIterate(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
-			err := m.Set(NewStringValue(k), Uint64Value(v))
+			existingStorable, err := m.Set(NewStringValue(k), Uint64Value(v))
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		// Sort keys by hashed value
@@ -677,8 +689,9 @@ func TestMapIterate(t *testing.T) {
 			v, ok := uniqueKeyValues[k]
 			require.True(t, ok)
 
-			err := m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		i := uint64(0)
@@ -755,8 +768,9 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	require.NoError(t, err)
 
 	for k, v := range uniqueKeyValues {
-		err := m.Set(k, v)
+		existingStorable, err := m.Set(k, v)
 		require.NoError(t, err)
+		require.Nil(t, existingStorable)
 	}
 
 	verified, err := m.valid()
@@ -853,8 +867,9 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 	require.NoError(t, err)
 
 	for k, v := range uniqueKeyValues {
-		err := m.Set(k, v)
+		existingStorable, err := m.Set(k, v)
 		require.NoError(t, err)
+		require.Nil(t, existingStorable)
 	}
 
 	verified, err := m.valid()
@@ -963,8 +978,9 @@ func TestMapLargeElement(t *testing.T) {
 	require.NoError(t, err)
 
 	for k, v := range strs {
-		err := m.Set(NewStringValue(k), NewStringValue(v))
+		existingStorable, err := m.Set(NewStringValue(k), NewStringValue(v))
 		require.NoError(t, err)
+		require.Nil(t, existingStorable)
 	}
 
 	for k, v := range strs {
@@ -1078,8 +1094,6 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 				v = NewStringValue(randStr(rand.Intn(stringMaxSize)))
 			}
 
-			keyValues[k] = v
-
 			var digests []Digest
 			for i := 0; i < digestMaxLevels; i++ {
 				digests = append(digests, Digest(rand.Intn(digestMaxValue)))
@@ -1087,16 +1101,24 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			oldCount := m.Count()
-
-			err := m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
 
-			newCount := m.Count()
+			if oldv, ok := keyValues[k]; ok {
+				require.NotNil(t, existingStorable)
 
-			if newCount > oldCount {
+				existingValue, err := existingStorable.StoredValue(storage)
+				require.NoError(t, err)
+				require.Equal(t, oldv, existingValue)
+			} else {
+				require.Nil(t, existingStorable)
+			}
+
+			if existingStorable == nil {
 				keys = append(keys, k)
 			}
+
+			keyValues[k] = v
 
 		case RemoveAction:
 			if len(keys) > 0 {
@@ -1179,8 +1201,9 @@ func TestMapEncodeDecode(t *testing.T) {
 			digests := []Digest{Digest(i), Digest(i * 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			err = m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
@@ -1395,11 +1418,13 @@ func TestMapEncodeDecode(t *testing.T) {
 				require.NoError(t, err)
 
 				// Insert array to map
-				err = m.Set(k, array)
+				existingStorable, err := m.Set(k, array)
 				require.NoError(t, err)
+				require.Nil(t, existingStorable)
 			} else {
-				err = m.Set(k, v)
+				existingStorable, err := m.Set(k, v)
 				require.NoError(t, err)
+				require.Nil(t, existingStorable)
 			}
 		}
 
@@ -1682,8 +1707,9 @@ func TestMapEncodeDecode(t *testing.T) {
 			digests := []Digest{Digest(i % 4), Digest(i)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			err = m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
@@ -1955,8 +1981,9 @@ func TestMapEncodeDecode(t *testing.T) {
 			digests := []Digest{Digest(i % 4), Digest(i % 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			err = m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
@@ -2275,8 +2302,9 @@ func TestMapEncodeDecode(t *testing.T) {
 			digests := []Digest{Digest(i % 2), Digest(i)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			err = m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
@@ -2609,14 +2637,10 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 
 			keyValues[k] = v
 
-			oldCount := m.Count()
-
-			err := m.Set(k, v)
+			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
 
-			newCount := m.Count()
-
-			if newCount > oldCount {
+			if existingStorable == nil {
 				keys = append(keys, k)
 			}
 
@@ -2710,8 +2734,9 @@ func TestMapStoredValue(t *testing.T) {
 	require.NoError(t, err)
 
 	for k, v := range uniqueKeyValues {
-		err := m.Set(k, v)
+		existingStorable, err := m.Set(k, v)
 		require.NoError(t, err)
+		require.Nil(t, existingStorable)
 	}
 
 	value, err := m.root.StoredValue(storage)

@@ -112,7 +112,10 @@ func TestMapSetAndGet(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			e, err := m.Get(NewStringValue(strv.str))
+			s, err := m.Get(NewStringValue(strv.str))
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, v, e)
 		}
@@ -179,7 +182,10 @@ func TestMapSetAndGet(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			e, err := m.Get(NewStringValue(strv.str))
+			s, err := m.Get(NewStringValue(strv.str))
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, v, e)
 		}
@@ -240,7 +246,10 @@ func TestMapSetAndGet(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			e, err := m.Get(NewStringValue(strv.str))
+			s, err := m.Get(NewStringValue(strv.str))
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, v, e)
 		}
@@ -373,7 +382,10 @@ func TestMapRemove(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			e, err := m.Get(NewStringValue(strv.str))
+			s, err := m.Get(NewStringValue(strv.str))
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, v, e)
 		}
@@ -385,15 +397,21 @@ func TestMapRemove(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
+			removedKeyStorable, removedValueStorable, err := m.Remove(NewStringValue(strv.str))
+			require.NoError(t, err)
+
+			removedKey, err := removedKeyStorable.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, k, removedKey)
+
+			removedValue, err := removedValueStorable.StoredValue(storage)
+			require.NoError(t, err)
 			require.Equal(t, v, removedValue)
 
-			removedKey, removedValue, err = m.Remove(NewStringValue(strv.str))
+			removedKeyStorable, removedValueStorable, err = m.Remove(NewStringValue(strv.str))
 			require.Error(t, err)
-			require.Nil(t, removedKey)
-			require.Nil(t, removedValue)
+			require.Nil(t, removedKeyStorable)
+			require.Nil(t, removedValueStorable)
 
 			count--
 
@@ -460,7 +478,10 @@ func TestMapRemove(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			e, err := m.Get(NewStringValue(strv.str))
+			s, err := m.Get(NewStringValue(strv.str))
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, v, e)
 		}
@@ -472,15 +493,21 @@ func TestMapRemove(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
+			removedKeyStorable, removedValueStorable, err := m.Remove(NewStringValue(strv.str))
+			require.NoError(t, err)
+
+			removedKey, err := removedKeyStorable.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, k, removedKey)
+
+			removedValue, err := removedValueStorable.StoredValue(storage)
+			require.NoError(t, err)
 			require.Equal(t, v, removedValue)
 
-			removedKey, removedValue, err = m.Remove(NewStringValue(strv.str))
+			removedKeyStorable, removedValueStorable, err = m.Remove(NewStringValue(strv.str))
 			require.Error(t, err)
-			require.Nil(t, removedKey)
-			require.Nil(t, removedValue)
+			require.Nil(t, removedKeyStorable)
+			require.Nil(t, removedValueStorable)
 
 			count--
 
@@ -744,7 +771,10 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
-		e, err := m.Get(NewStringValue(strv.str))
+		s, err := m.Get(NewStringValue(strv.str))
+		require.NoError(t, err)
+
+		e, err := s.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, v, e)
 	}
@@ -759,9 +789,15 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
-		removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
+		removedKeyStorable, removedValueStorable, err := m.Remove(NewStringValue(strv.str))
+		require.NoError(t, err)
+
+		removedKey, err := removedKeyStorable.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, k, removedKey)
+
+		removedValue, err := removedValueStorable.StoredValue(storage)
+		require.NoError(t, err)
 		require.Equal(t, v, removedValue)
 	}
 
@@ -833,7 +869,10 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
-		e, err := m.Get(NewStringValue(strv.str))
+		s, err := m.Get(NewStringValue(strv.str))
+		require.NoError(t, err)
+
+		e, err := s.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, v, e)
 	}
@@ -847,9 +886,15 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
-		removedKey, removedValue, err := m.Remove(NewStringValue(strv.str))
+		removedKeyStorable, removedValueStorable, err := m.Remove(NewStringValue(strv.str))
+		require.NoError(t, err)
+
+		removedKey, err := removedKeyStorable.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, k, removedKey)
+
+		removedValue, err := removedValueStorable.StoredValue(storage)
+		require.NoError(t, err)
 		require.Equal(t, v, removedValue)
 	}
 
@@ -923,7 +968,10 @@ func TestMapLargeElement(t *testing.T) {
 	}
 
 	for k, v := range strs {
-		e, err := m.Get(NewStringValue(k))
+		s, err := m.Get(NewStringValue(k))
+		require.NoError(t, err)
+
+		e, err := s.StoredValue(storage)
 		require.NoError(t, err)
 
 		sv, ok := e.(StringValue)
@@ -1055,9 +1103,15 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 				ki := rand.Intn(len(keys))
 				k := keys[ki]
 
-				removedKey, removedValue, err := m.Remove(k)
+				removedKeyStorable, removedValueStorable, err := m.Remove(k)
+				require.NoError(t, err)
+
+				removedKey, err := removedKeyStorable.StoredValue(storage)
 				require.NoError(t, err)
 				require.Equal(t, k, removedKey)
+
+				removedValue, err := removedValueStorable.StoredValue(storage)
+				require.NoError(t, err)
 				require.Equal(t, keyValues[k], removedValue)
 
 				delete(keyValues, k)
@@ -1071,7 +1125,10 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 	}
 
 	for k, v := range keyValues {
-		e, err := m.Get(k)
+		s, err := m.Get(k)
+		require.NoError(t, err)
+
+		e, err := s.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, v, e)
 	}
@@ -1293,7 +1350,10 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, typeInfo, decodedMap.Type())
 
 		for i := uint64(0); i < mapSize; i++ {
-			v, err := decodedMap.Get(Uint64Value(i))
+			s, err := decodedMap.Get(Uint64Value(i))
+			require.NoError(t, err)
+
+			v, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, Uint64Value(i*2), v)
 		}
@@ -1570,18 +1630,27 @@ func TestMapEncodeDecode(t *testing.T) {
 
 			if i == mapSize-1 {
 				// Get nested array
-				v, err := decodedMap.Get(Uint64Value(i))
+				storable, err := decodedMap.Get(Uint64Value(i))
+				require.NoError(t, err)
+
+				v, err := storable.StoredValue(storage)
 				require.NoError(t, err)
 
 				a, ok := v.(*Array)
 				require.True(t, ok)
 
 				require.Equal(t, uint64(1), a.Count())
-				s, err := a.Get(0)
+				storable, err = a.Get(0)
+				require.NoError(t, err)
+
+				s, err := storable.StoredValue(storage)
 				require.NoError(t, err)
 				require.Equal(t, Uint64Value(0), s)
 			} else {
-				v, err := decodedMap.Get(Uint64Value(i))
+				s, err := decodedMap.Get(Uint64Value(i))
+				require.NoError(t, err)
+
+				v, err := s.StoredValue(storage)
 				require.NoError(t, err)
 				require.Equal(t, Uint64Value(i*2), v)
 			}
@@ -1852,7 +1921,10 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, typeInfo, decodedMap.Type())
 
 		for i := uint64(0); i < mapSize; i++ {
-			v, err := decodedMap.Get(Uint64Value(i))
+			s, err := decodedMap.Get(Uint64Value(i))
+			require.NoError(t, err)
+
+			v, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, Uint64Value(i*2), v)
 		}
@@ -2169,7 +2241,10 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, typeInfo, decodedMap.Type())
 
 		for i := uint64(0); i < mapSize; i++ {
-			v, err := decodedMap.Get(Uint64Value(i))
+			s, err := decodedMap.Get(Uint64Value(i))
+			require.NoError(t, err)
+
+			v, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, Uint64Value(i*2), v)
 		}
@@ -2429,7 +2504,10 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, typeInfo, decodedMap.Type())
 
 		for i := uint64(0); i < mapSize; i++ {
-			v, err := decodedMap.Get(Uint64Value(i))
+			s, err := decodedMap.Get(Uint64Value(i))
+			require.NoError(t, err)
+
+			v, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, Uint64Value(i*2), v)
 		}
@@ -2547,9 +2625,15 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 			ki := rand.Intn(len(keys))
 			k := keys[ki]
 
-			removedKey, removedValue, err := m.Remove(k)
+			removedKeyStorable, removedValueStorable, err := m.Remove(k)
+			require.NoError(t, err)
+
+			removedKey, err := removedKeyStorable.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, k, removedKey)
+
+			removedValue, err := removedValueStorable.StoredValue(storage)
+			require.NoError(t, err)
 			require.Equal(t, keyValues[k], removedValue)
 
 			delete(keyValues, k)
@@ -2588,7 +2672,10 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 	// Get and check every element from new map.
 
 	for k, v := range keyValues {
-		e, err := m2.Get(k)
+		s, err := m2.Get(k)
+		require.NoError(t, err)
+
+		e, err := s.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, v, e)
 	}
@@ -2640,7 +2727,10 @@ func TestMapStoredValue(t *testing.T) {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
-		e, err := m2.Get(NewStringValue(strv.str))
+		s, err := m2.Get(NewStringValue(strv.str))
+		require.NoError(t, err)
+
+		e, err := s.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, v, e)
 	}

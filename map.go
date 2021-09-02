@@ -3050,7 +3050,7 @@ func (m *OrderedMap) Has(key ComparableValue) (bool, error) {
 	return true, nil
 }
 
-func (m *OrderedMap) Get(key ComparableValue) (Value, error) {
+func (m *OrderedMap) Get(key ComparableValue) (Storable, error) {
 
 	keyDigest, err := m.digesterBuilder.Digest(key)
 	if err != nil {
@@ -3064,12 +3064,7 @@ func (m *OrderedMap) Get(key ComparableValue) (Value, error) {
 		return nil, err
 	}
 
-	v, err := m.root.Get(m.storage, keyDigest, level, hkey, key)
-	if err != nil {
-		return nil, err
-	}
-
-	return v.StoredValue(m.storage)
+	return m.root.Get(m.storage, keyDigest, level, hkey, key)
 }
 
 func (m *OrderedMap) Set(key ComparableValue, value Value) error {
@@ -3190,7 +3185,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) error {
 	return nil
 }
 
-func (m *OrderedMap) Remove(key ComparableValue) (Value, Value, error) {
+func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 
 	keyDigest, err := m.digesterBuilder.Digest(key)
 	if err != nil {
@@ -3298,17 +3293,7 @@ func (m *OrderedMap) Remove(key ComparableValue) (Value, Value, error) {
 		}
 	}
 
-	kv, err := k.StoredValue(m.storage)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	vv, err := v.StoredValue(m.storage)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return kv, vv, nil
+	return k, v, nil
 }
 
 func (m *OrderedMap) StorageID() StorageID {

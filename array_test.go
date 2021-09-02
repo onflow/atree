@@ -409,9 +409,11 @@ func TestRemove(t *testing.T) {
 			e, err := array.Get(i)
 			require.NoError(t, err)
 
-			v, err := array.Remove(i)
+			s, err := array.Remove(i)
 			require.NoError(t, err)
 
+			v, err := s.StoredValue(storage)
+			require.NoError(t, err)
 			require.Equal(t, e, v)
 
 			require.Equal(t, typeInfo, array.Type())
@@ -1435,9 +1437,11 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 			if array.Count() > 0 {
 				k := rand.Intn(int(array.Count()))
 
-				v, err := array.Remove(uint64(k))
+				s, err := array.Remove(uint64(k))
 				require.NoError(t, err)
 
+				v, err := s.StoredValue(storage)
+				require.NoError(t, err)
 				require.Equal(t, values[k], v)
 
 				copy(values[k:], values[k+1:])
@@ -2128,7 +2132,7 @@ func TestEmptyArray(t *testing.T) {
 	t.Run("set", func(t *testing.T) {
 		existingStorable, err := array.Set(0, Uint64Value(0))
 		require.Error(t, err, IndexOutOfBoundsError{})
-		require.Equal(t, nil, existingStorable)
+		require.Nil(t, existingStorable)
 	})
 
 	t.Run("insert", func(t *testing.T) {
@@ -2137,8 +2141,9 @@ func TestEmptyArray(t *testing.T) {
 	})
 
 	t.Run("remove", func(t *testing.T) {
-		_, err := array.Remove(0)
+		s, err := array.Remove(0)
 		require.Error(t, err, IndexOutOfBoundsError{})
+		require.Nil(t, s)
 	})
 
 	t.Run("iterate", func(t *testing.T) {

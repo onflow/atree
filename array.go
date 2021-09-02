@@ -1800,7 +1800,7 @@ func (a *Array) Insert(index uint64, value Value) error {
 	return nil
 }
 
-func (a *Array) Remove(index uint64) (Value, error) {
+func (a *Array) Remove(index uint64) (Storable, error) {
 	storable, err := a.root.Remove(a.Storage, index)
 	if err != nil {
 		return nil, err
@@ -1839,7 +1839,7 @@ func (a *Array) Remove(index uint64) (Value, error) {
 		}
 	}
 
-	return storable.StoredValue(a.Storage)
+	return storable, nil
 }
 
 type ArrayIterator struct {

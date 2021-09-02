@@ -1577,9 +1577,9 @@ func TestMapEncodeDecode(t *testing.T) {
 				require.True(t, ok)
 
 				require.Equal(t, uint64(1), a.Count())
-				v, err = a.Get(0)
+				s, err := a.Get(0)
 				require.NoError(t, err)
-				require.Equal(t, Uint64Value(0), v)
+				require.Equal(t, Uint64Value(0), s)
 			} else {
 				v, err := decodedMap.Get(Uint64Value(i))
 				require.NoError(t, err)

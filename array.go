@@ -1711,13 +1711,8 @@ func NewArrayWithRootID(storage SlabStorage, rootID StorageID) (*Array, error) {
 	}, nil
 }
 
-func (a *Array) Get(i uint64) (Value, error) {
-	storable, err := a.root.Get(a.Storage, i)
-	if err != nil {
-		return nil, err
-	}
-
-	return storable.StoredValue(a.Storage)
+func (a *Array) Get(i uint64) (Storable, error) {
+	return a.root.Get(a.Storage, i)
 }
 
 func (a *Array) Set(index uint64, value Value) (Storable, error) {

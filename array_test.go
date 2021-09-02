@@ -409,12 +409,10 @@ func TestRemove(t *testing.T) {
 			e, err := array.Get(i)
 			require.NoError(t, err)
 
-			s, err := array.Remove(i)
+			removedStorable, err := array.Remove(i)
 			require.NoError(t, err)
 
-			v, err := s.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, e, v)
+			require.Equal(t, e, removedStorable)
 
 			require.Equal(t, typeInfo, array.Type())
 
@@ -1458,7 +1456,10 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	}
 
 	for k, v := range values {
-		e, err := array.Get(uint64(k))
+		s, err := array.Get(uint64(k))
+		require.NoError(t, err)
+
+		e, err := s.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, v, e)
 	}
@@ -1526,7 +1527,10 @@ func TestNestedArray(t *testing.T) {
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
-			e, err := array.Get(i)
+			s, err := array.Get(i)
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, nestedArrays[i], e)
 		}
@@ -1572,7 +1576,10 @@ func TestNestedArray(t *testing.T) {
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
-			e, err := array.Get(i)
+			s, err := array.Get(i)
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, nestedArrays[i], e)
 		}
@@ -2094,7 +2101,10 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 
 	// Get and check every element from new array.
 	for i := uint64(0); i < arraySize; i++ {
-		e, err := array2.Get(i)
+		s, err := array2.Get(i)
+		require.NoError(t, err)
+
+		e, err := s.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, values[i], e)
 	}
@@ -2125,8 +2135,9 @@ func TestEmptyArray(t *testing.T) {
 	require.Equal(t, 1, storage.Count())
 
 	t.Run("get", func(t *testing.T) {
-		_, err := array.Get(0)
+		s, err := array.Get(0)
 		require.Error(t, err, IndexOutOfBoundsError{})
+		require.Nil(t, s)
 	})
 
 	t.Run("set", func(t *testing.T) {
@@ -2293,7 +2304,10 @@ func TestStringElement(t *testing.T) {
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
-			e, err := array.Get(i)
+			s, err := array.Get(i)
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
 			require.NoError(t, err)
 
 			v, ok := e.(StringValue)

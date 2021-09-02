@@ -31,6 +31,13 @@ type xxh128pDigesterBuilder struct {
 
 var _ DigesterBuilder = &xxh128pDigesterBuilder{}
 
+type xxh128pDigesterBuilder2 struct {
+	k0 uint64
+	k1 uint64
+}
+
+var _ DigesterBuilder = &xxh128pDigesterBuilder2{}
+
 // wyv3DigesterBuilder creates Digester with wyhash v3 and BLAKE3.
 type wyv3DigesterBuilder struct {
 	k0 uint64
@@ -47,6 +54,14 @@ var _ DigesterBuilder = &wyv3DigesterBuilder{}
 //    BLAKE3 -- next 64 bit of digest, without key
 //    no more hashing, linear search all collisions
 type xxh128Digester struct {
+	xxh128Hash [2]uint64
+	blake3Hash [4]uint64
+	prefix     []byte
+	msg        []byte
+}
+
+type xxh128Digester2 struct {
+	hasher     *xxh3.Hasher
 	xxh128Hash [2]uint64
 	blake3Hash [4]uint64
 	prefix     []byte
@@ -116,6 +131,31 @@ func (bdb *xxh128pDigesterBuilder) Digest(hashable Hashable) (Digester, error) {
 	return &xxh128Digester{prefix: prefix, msg: msg}, nil
 }
 
+func newXXH128pDigesterBuilder2() *xxh128pDigesterBuilder2 {
+	return &xxh128pDigesterBuilder2{}
+}
+
+func (bdb *xxh128pDigesterBuilder2) SetSeed(k0 uint64, k1 uint64) {
+	bdb.k0 = k0
+	bdb.k1 = k1
+}
+
+func (bdb *xxh128pDigesterBuilder2) Digest(hashable Hashable) (Digester, error) {
+	if bdb.k0 == 0 {
+		return nil, NewHashError(errors.New("k0 is uninitialized"))
+	}
+
+	msg, err := hashable.HashCode()
+	if err != nil {
+		return nil, err
+	}
+
+	prefix := make([]byte, 8)
+	binary.BigEndian.PutUint64(prefix, bdb.k0)
+
+	return &xxh128Digester2{hasher: xxh3.New(), prefix: prefix, msg: msg}, nil
+}
+
 func (bd *xxh128Digester) DigestPrefix(level int) ([]Digest, error) {
 	if level > bd.Levels() {
 		return nil, errors.New("digest level out of bounds")
@@ -176,6 +216,63 @@ func (bd *xxh128Digester) Levels() int {
 	return 4
 }
 
+func (bd *xxh128Digester2) DigestPrefix(level int) ([]Digest, error) {
+	if level > bd.Levels() {
+		return nil, errors.New("digest level out of bounds")
+	}
+	var prefix []Digest
+	for i := 0; i < level; i++ {
+		d, err := bd.Digest(i)
+		if err != nil {
+			return nil, err
+		}
+		prefix = append(prefix, d)
+	}
+	return prefix, nil
+}
+
+func (bd *xxh128Digester2) Digest(level int) (Digest, error) {
+	if level >= bd.Levels() {
+		return 0, errors.New("digest level out of bounds")
+	}
+
+	switch level {
+	case 0, 1:
+		{
+			if bd.xxh128Hash == emptyXXH128Hash {
+				var uint128 xxh3.Uint128
+
+				if len(bd.prefix) == 0 {
+					uint128 = xxh3.Hash128(bd.msg)
+				} else {
+					bd.hasher.Write(bd.prefix)
+					bd.hasher.Write(bd.msg)
+					uint128 = bd.hasher.Sum128()
+				}
+
+				bd.xxh128Hash[0], bd.xxh128Hash[1] = uint128.Lo, uint128.Hi
+			}
+			return Digest(bd.xxh128Hash[level]), nil
+		}
+	case 2, 3:
+		{
+			if bd.blake3Hash == emptyBlake3Hash {
+				sum := blake3.Sum256(bd.msg)
+				bd.blake3Hash[0] = binary.BigEndian.Uint64(sum[:])
+				bd.blake3Hash[1] = binary.BigEndian.Uint64(sum[8:])
+				bd.blake3Hash[2] = binary.BigEndian.Uint64(sum[16:])
+				bd.blake3Hash[3] = binary.BigEndian.Uint64(sum[24:])
+			}
+			return Digest(bd.blake3Hash[level-2]), nil
+		}
+	default: // list mode
+		return 0, nil
+	}
+}
+
+func (bd *xxh128Digester2) Levels() int {
+	return 4
+}
 func newWYV3DigesterBuilder() *wyv3DigesterBuilder {
 	return &wyv3DigesterBuilder{}
 }
@@ -330,6 +427,12 @@ func BenchmarkMapHashCombo(b *testing.B) {
 		{"XXH128p_1000elems", 1000, newXXH128pDigesterBuilder()},
 		{"XXH128p_10000elems", 10_000, newXXH128pDigesterBuilder()},
 		{"XXH128p_100000elems", 100_000, newXXH128pDigesterBuilder()},
+
+		// XXH128 hasher with prefix + BLAKE3
+		{"XXH128p2_10elems", 10, newXXH128pDigesterBuilder2()},
+		{"XXH128p2_1000elems", 1000, newXXH128pDigesterBuilder2()},
+		{"XXH128p2_10000elems", 10_000, newXXH128pDigesterBuilder2()},
+		{"XXH128p2_100000elems", 100_000, newXXH128pDigesterBuilder2()},
 	}
 
 	// Keys and values can be reused.

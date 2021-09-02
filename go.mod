@@ -8,6 +8,7 @@ require (
 	github.com/orisano/wyhash/v3 v3.0.0-20210630132850-c61f29962b99
 	github.com/stretchr/testify v1.7.0
 	github.com/zeebo/blake3 v0.2.0
-	github.com/zeebo/xxh3 v0.12.0
+	github.com/zeebo/xxh3 v0.13.0
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
+	golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e // indirect
 )

@@ -34,6 +34,26 @@ func xxh128WithPrefix(msg []byte) (uint64, uint64) {
 	return uint128.Lo, uint128.Hi
 }
 
+func xxh128Hasher(msg []byte) (uint64, uint64) {
+	hasher := xxh3.New()
+	hasher.Write(msg)
+	uint128 := hasher.Sum128()
+	return uint128.Lo, uint128.Hi
+}
+
+func xxh128HasherWithPrefix(msg []byte) (uint64, uint64) {
+	const k0 = uint64(0x9E3779B97F4A7C15)
+
+	var b [8]byte
+	binary.BigEndian.PutUint64(b[:], k0)
+
+	hasher := xxh3.New()
+	hasher.Write(b[:])
+	hasher.Write(msg)
+	uint128 := hasher.Sum128()
+	return uint128.Lo, uint128.Hi
+}
+
 func siphash64(msg []byte) (uint64, uint64) {
 	const k0 = uint64(0x9E3779B97F4A7C15)
 	const k1 = uint64(0x1BD11BDAA9FC1A22)
@@ -87,6 +107,18 @@ func BenchmarkHash(b *testing.B) {
 		{"XXH128P_5bytes", Uint64Value(1000), xxh128WithPrefix},
 		{"XXH128P_7bytes", Uint64Value(1000000), xxh128WithPrefix},
 		{"XXH128P_11bytes", Uint64Value(1000000000000), xxh128WithPrefix},
+
+		{"XXH128Hasher_3bytes", Uint64Value(0), xxh128Hasher},
+		{"XXH128Hasher_4bytes", Uint64Value(24), xxh128Hasher},
+		{"XXH128Hasher_5bytes", Uint64Value(1000), xxh128Hasher},
+		{"XXH128Hasher_7bytes", Uint64Value(1000000), xxh128Hasher},
+		{"XXH128Hasher_11bytes", Uint64Value(1000000000000), xxh128Hasher},
+
+		{"XXH128PHasher_3bytes", Uint64Value(0), xxh128HasherWithPrefix},
+		{"XXH128PHasher_4bytes", Uint64Value(24), xxh128HasherWithPrefix},
+		{"XXH128PHasher_5bytes", Uint64Value(1000), xxh128HasherWithPrefix},
+		{"XXH128PHasher_7bytes", Uint64Value(1000000), xxh128HasherWithPrefix},
+		{"XXH128PHasher_11bytes", Uint64Value(1000000000000), xxh128HasherWithPrefix},
 
 		{"Sip64_3bytes", Uint64Value(0), siphash64},
 		{"Sip64_4bytes", Uint64Value(24), siphash64},

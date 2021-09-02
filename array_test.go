@@ -115,8 +115,12 @@ func TestSetAndGet(t *testing.T) {
 	}
 
 	for i := uint64(0); i < arraySize; i++ {
-		err := array.Set(i, Uint64Value(i*10))
+		existingStorable, err := array.Set(i, Uint64Value(i*10))
 		require.NoError(t, err)
+
+		existingElem, err := existingStorable.StoredValue(storage)
+		require.NoError(t, err)
+		require.Equal(t, Uint64Value(i), existingElem)
 	}
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -405,10 +409,10 @@ func TestRemove(t *testing.T) {
 			e, err := array.Get(i)
 			require.NoError(t, err)
 
-			v, err := array.Remove(i)
+			removedStorable, err := array.Remove(i)
 			require.NoError(t, err)
 
-			require.Equal(t, e, v)
+			require.Equal(t, e, removedStorable)
 
 			require.Equal(t, typeInfo, array.Type())
 
@@ -590,8 +594,12 @@ func TestIterate(t *testing.T) {
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
-			err := array.Set(i, Uint64Value(i*10))
+			existingStorable, err := array.Set(i, Uint64Value(i*10))
 			require.NoError(t, err)
+
+			existingElem, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, Uint64Value(i), existingElem)
 		}
 
 		i := uint64(0)
@@ -837,10 +845,16 @@ func TestSetRandomValue(t *testing.T) {
 		k := rand.Intn(arraySize)
 		v := rand.Uint64()
 
+		oldV := values[k]
+
 		values[k] = v
 
-		err := array.Set(uint64(k), Uint64Value(v))
+		existingStorable, err := array.Set(uint64(k), Uint64Value(v))
 		require.NoError(t, err)
+
+		existingElem, err := existingStorable.StoredValue(storage)
+		require.NoError(t, err)
+		require.Equal(t, Uint64Value(oldV), existingElem)
 	}
 
 	for k, v := range values {
@@ -1123,10 +1137,16 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 			k := rand.Intn(int(array.Count()))
 			v := rand.Uint64()
 
+			oldV := values[k]
+
 			values[k] = v
 
-			err := array.Set(uint64(k), Uint64Value(v))
+			existingStorable, err := array.Set(uint64(k), Uint64Value(v))
 			require.NoError(t, err)
+
+			existingElem, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, Uint64Value(oldV), existingElem)
 
 		case InsertAction:
 			k := rand.Intn(int(array.Count() + 1))
@@ -1243,10 +1263,16 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 			k := rand.Intn(int(array.Count()))
 			v := rand.Intn(math.MaxUint8 + 1)
 
+			oldV := values[k]
+
 			values[k] = uint8(v)
 
-			err := array.Set(uint64(k), Uint8Value(v))
+			existingStorable, err := array.Set(uint64(k), Uint8Value(v))
 			require.NoError(t, err)
+
+			existingElem, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, Uint8Value(oldV), existingElem)
 
 		case InsertAction:
 			k := rand.Intn(int(array.Count() + 1))
@@ -1380,10 +1406,16 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 			}
 			k := rand.Intn(int(array.Count()))
 
+			oldV := values[k]
+
 			values[k] = v
 
-			err := array.Set(uint64(k), v)
+			existingStorable, err := array.Set(uint64(k), v)
 			require.NoError(t, err)
+
+			existingElem, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, oldV, existingElem)
 
 		case InsertAction:
 			k := rand.Intn(int(array.Count() + 1))
@@ -1403,9 +1435,11 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 			if array.Count() > 0 {
 				k := rand.Intn(int(array.Count()))
 
-				v, err := array.Remove(uint64(k))
+				s, err := array.Remove(uint64(k))
 				require.NoError(t, err)
 
+				v, err := s.StoredValue(storage)
+				require.NoError(t, err)
 				require.Equal(t, values[k], v)
 
 				copy(values[k:], values[k+1:])
@@ -1422,7 +1456,10 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	}
 
 	for k, v := range values {
-		e, err := array.Get(uint64(k))
+		s, err := array.Get(uint64(k))
+		require.NoError(t, err)
+
+		e, err := s.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, v, e)
 	}
@@ -1490,7 +1527,10 @@ func TestNestedArray(t *testing.T) {
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
-			e, err := array.Get(i)
+			s, err := array.Get(i)
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, nestedArrays[i], e)
 		}
@@ -1536,7 +1576,10 @@ func TestNestedArray(t *testing.T) {
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
-			e, err := array.Get(i)
+			s, err := array.Get(i)
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, nestedArrays[i], e)
 		}
@@ -2058,7 +2101,10 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 
 	// Get and check every element from new array.
 	for i := uint64(0); i < arraySize; i++ {
-		e, err := array2.Get(i)
+		s, err := array2.Get(i)
+		require.NoError(t, err)
+
+		e, err := s.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, values[i], e)
 	}
@@ -2089,13 +2135,15 @@ func TestEmptyArray(t *testing.T) {
 	require.Equal(t, 1, storage.Count())
 
 	t.Run("get", func(t *testing.T) {
-		_, err := array.Get(0)
+		s, err := array.Get(0)
 		require.Error(t, err, IndexOutOfBoundsError{})
+		require.Nil(t, s)
 	})
 
 	t.Run("set", func(t *testing.T) {
-		err := array.Set(0, Uint64Value(0))
+		existingStorable, err := array.Set(0, Uint64Value(0))
 		require.Error(t, err, IndexOutOfBoundsError{})
+		require.Nil(t, existingStorable)
 	})
 
 	t.Run("insert", func(t *testing.T) {
@@ -2104,8 +2152,9 @@ func TestEmptyArray(t *testing.T) {
 	})
 
 	t.Run("remove", func(t *testing.T) {
-		_, err := array.Remove(0)
+		s, err := array.Remove(0)
 		require.Error(t, err, IndexOutOfBoundsError{})
+		require.Nil(t, s)
 	})
 
 	t.Run("iterate", func(t *testing.T) {
@@ -2255,7 +2304,10 @@ func TestStringElement(t *testing.T) {
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
-			e, err := array.Get(i)
+			s, err := array.Get(i)
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
 			require.NoError(t, err)
 
 			v, ok := e.(StringValue)

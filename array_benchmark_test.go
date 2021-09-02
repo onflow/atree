@@ -117,9 +117,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
-		s, err := array.Remove(uint64(ind))
-		require.NoError(b, err)
-		storable, err := s.Storable(storage, array.Address(), MaxInlineElementSize)
+		storable, err := array.Remove(uint64(ind))
 		require.NoError(b, err)
 		totalRawDataSize -= storable.ByteSize()
 	}
@@ -226,9 +224,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 		// select opt
 		switch rand.Intn(2) {
 		case 0: // remove
-			v, err := array.Remove(uint64(ind))
-			require.NoError(b, err)
-			storable, err := v.Storable(storage, array.Address(), MaxInlineElementSize)
+			storable, err := array.Remove(uint64(ind))
 			require.NoError(b, err)
 			totalRawDataSize -= storable.ByteSize()
 		case 1: // insert

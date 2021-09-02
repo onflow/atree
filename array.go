@@ -1720,18 +1720,13 @@ func (a *Array) Get(i uint64) (Value, error) {
 	return storable.StoredValue(a.Storage)
 }
 
-func (a *Array) Set(index uint64, value Value) (Value, error) {
+func (a *Array) Set(index uint64, value Value) (Storable, error) {
 	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineElementSize)
 	if err != nil {
 		return nil, err
 	}
 
-	existingElem, err := a.root.Set(a.Storage, index, storable)
-	if err != nil {
-		return nil, err
-	}
-
-	return existingElem.StoredValue(a.Storage)
+	return a.root.Set(a.Storage, index, storable)
 }
 
 func (a *Array) Append(value Value) error {

@@ -115,7 +115,10 @@ func TestSetAndGet(t *testing.T) {
 	}
 
 	for i := uint64(0); i < arraySize; i++ {
-		existingElem, err := array.Set(i, Uint64Value(i*10))
+		existingStorable, err := array.Set(i, Uint64Value(i*10))
+		require.NoError(t, err)
+
+		existingElem, err := existingStorable.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, Uint64Value(i), existingElem)
 	}
@@ -591,7 +594,10 @@ func TestIterate(t *testing.T) {
 		}
 
 		for i := uint64(0); i < arraySize; i++ {
-			existingElem, err := array.Set(i, Uint64Value(i*10))
+			existingStorable, err := array.Set(i, Uint64Value(i*10))
+			require.NoError(t, err)
+
+			existingElem, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, Uint64Value(i), existingElem)
 		}
@@ -843,7 +849,10 @@ func TestSetRandomValue(t *testing.T) {
 
 		values[k] = v
 
-		existingElem, err := array.Set(uint64(k), Uint64Value(v))
+		existingStorable, err := array.Set(uint64(k), Uint64Value(v))
+		require.NoError(t, err)
+
+		existingElem, err := existingStorable.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, Uint64Value(oldV), existingElem)
 	}
@@ -1132,7 +1141,10 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 
 			values[k] = v
 
-			existingElem, err := array.Set(uint64(k), Uint64Value(v))
+			existingStorable, err := array.Set(uint64(k), Uint64Value(v))
+			require.NoError(t, err)
+
+			existingElem, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, Uint64Value(oldV), existingElem)
 
@@ -1255,7 +1267,10 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 
 			values[k] = uint8(v)
 
-			existingElem, err := array.Set(uint64(k), Uint8Value(v))
+			existingStorable, err := array.Set(uint64(k), Uint8Value(v))
+			require.NoError(t, err)
+
+			existingElem, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, Uint8Value(oldV), existingElem)
 
@@ -1395,7 +1410,10 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 			values[k] = v
 
-			existingElem, err := array.Set(uint64(k), v)
+			existingStorable, err := array.Set(uint64(k), v)
+			require.NoError(t, err)
+
+			existingElem, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, oldV, existingElem)
 
@@ -2108,9 +2126,9 @@ func TestEmptyArray(t *testing.T) {
 	})
 
 	t.Run("set", func(t *testing.T) {
-		existingElem, err := array.Set(0, Uint64Value(0))
+		existingStorable, err := array.Set(0, Uint64Value(0))
 		require.Error(t, err, IndexOutOfBoundsError{})
-		require.Equal(t, nil, existingElem)
+		require.Equal(t, nil, existingStorable)
 	})
 
 	t.Run("insert", func(t *testing.T) {

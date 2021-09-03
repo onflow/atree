@@ -21,9 +21,9 @@ import (
 // will track the heap allocations for the Benchmarks
 
 type Map interface {
-	Get(key ComparableValue) (Value, error)
-	Set(key ComparableValue, value Value) error
-	Remove(key ComparableValue) (Value, Value, error)
+	Get(key ComparableValue) (Storable, error)
+	Set(key ComparableValue, value Value) (Storable, error)
+	Remove(key ComparableValue) (Storable, Storable, error)
 
 	Count() uint64
 	StorageID() StorageID
@@ -292,14 +292,10 @@ func benchmarkMap(b *testing.B, initialMapSize, numberOfElements int, mapFactory
 
 		v := RandomMapValue()
 
-		oldCount := m.Count()
-
-		err = m.Set(k, v)
+		existingStorable, err := m.Set(k, v)
 		require.NoError(b, err)
 
-		newCount := m.Count()
-
-		if newCount > oldCount {
+		if existingStorable == nil {
 			keys = append(keys, k)
 
 			storable, err := k.Storable(storage, address, math.MaxUint64)
@@ -326,17 +322,14 @@ func benchmarkMap(b *testing.B, initialMapSize, numberOfElements int, mapFactory
 	require.NoError(b, err)
 
 	for i := 0; i < numberOfElements; i++ {
-		oldCount := m.Count()
 
 		k := randomKey()
 		v := RandomMapValue()
 
-		err = m.Set(k, v)
+		existingStorable, err := m.Set(k, v)
 		require.NoError(b, err)
 
-		newCount := m.Count()
-
-		if newCount > oldCount {
+		if existingStorable == nil {
 
 			keys = append(keys, k)
 
@@ -363,16 +356,12 @@ func benchmarkMap(b *testing.B, initialMapSize, numberOfElements int, mapFactory
 		ind := rand.Intn(len(keys))
 		key := keys[ind]
 
-		k, v, err := m.Remove(key)
+		keyStorable, vStorable, err := m.Remove(key)
 		require.NoError(b, err)
 
-		storable, err := k.Storable(storage, address, math.MaxUint64)
-		require.NoError(b, err)
-		totalRawDataSize -= storable.ByteSize()
+		totalRawDataSize -= keyStorable.ByteSize()
 
-		storable, err = v.Storable(storage, address, math.MaxUint64)
-		require.NoError(b, err)
-		totalRawDataSize -= storable.ByteSize()
+		totalRawDataSize -= vStorable.ByteSize()
 
 		copy(keys[ind:], keys[ind+1:])
 		keys = keys[:len(keys)-1]
@@ -447,18 +436,15 @@ func benchmarkMapLongTermImpactOnMemory(b *testing.B, initialMapSize, numberOfOp
 
 	// setup
 	for m.Count() < uint64(initialMapSize) {
-		oldCount := m.Count()
 
 		k := randomKey()
 
 		v := RandomMapValue()
 
-		err = m.Set(k, v)
+		existingStorable, err := m.Set(k, v)
 		require.NoError(b, err)
 
-		newCount := m.Count()
-
-		if newCount > oldCount {
+		if existingStorable == nil {
 			keys = append(keys, k)
 
 			storable, err := k.Storable(storage, m.Address(), math.MaxUint64)
@@ -483,16 +469,12 @@ func benchmarkMapLongTermImpactOnMemory(b *testing.B, initialMapSize, numberOfOp
 		switch action {
 		case 0: // remove
 			ind := rand.Intn(len(keys))
-			k, v, err := m.Remove(keys[ind])
+			keyStorable, vStorable, err := m.Remove(keys[ind])
 			require.NoError(b, err)
 
-			storable, err := k.Storable(storage, m.Address(), math.MaxUint64)
-			require.NoError(b, err)
-			totalRawDataSize -= storable.ByteSize()
+			totalRawDataSize -= keyStorable.ByteSize()
 
-			storable, err = v.Storable(storage, m.Address(), math.MaxUint64)
-			require.NoError(b, err)
-			totalRawDataSize -= storable.ByteSize()
+			totalRawDataSize -= vStorable.ByteSize()
 
 			copy(keys[ind:], keys[ind+1:])
 			keys = keys[:len(keys)-1]
@@ -508,7 +490,7 @@ func benchmarkMapLongTermImpactOnMemory(b *testing.B, initialMapSize, numberOfOp
 			require.NoError(b, err)
 			totalRawDataSize += storable.ByteSize()
 
-			err = m.Set(k, v)
+			_, err = m.Set(k, v)
 			require.NoError(b, err)
 		}
 	}

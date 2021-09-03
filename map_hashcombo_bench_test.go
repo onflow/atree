@@ -7,6 +7,7 @@ package atree
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/dchest/siphash"
@@ -386,9 +387,12 @@ func setupMap(storage *PersistentSlabStorage, digesterBuilder DigesterBuilder, k
 	}
 
 	for i, k := range keys {
-		err = m.Set(k, values[i])
+		existingStorable, err := m.Set(k, values[i])
 		if err != nil {
 			return nil, err
+		}
+		if existingStorable != nil {
+			return nil, fmt.Errorf("found duplicate keys %s", k)
 		}
 	}
 
@@ -466,9 +470,7 @@ func BenchmarkMapHashCombo(b *testing.B) {
 					index = 0
 				}
 
-				v, _ := m.Get(keys[index])
-
-				storable, _ = v.Storable(storage, m.Address(), maxInlineMapElementSize)
+				storable, _ = m.Get(keys[index])
 
 				index++
 			}

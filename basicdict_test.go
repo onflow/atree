@@ -27,8 +27,9 @@ func TestBasicDictSetAndGet(t *testing.T) {
 	for i := uint64(0); i < dictSize; i++ {
 		k := Uint64Value(i)
 		v := Uint64Value(i + 1)
-		err := dict.Set(k, v)
+		existingStorable, err := dict.Set(k, v)
 		require.NoError(t, err)
+		require.Nil(t, existingStorable)
 	}
 
 	require.Equal(t, uint64(dictSize), dict.Count())
@@ -45,8 +46,9 @@ func TestBasicDictSetAndGet(t *testing.T) {
 	for i := uint64(0); i < dictSize; i++ {
 		k := Uint64Value(i)
 		v := Uint64Value(i * 10)
-		err := dict.Set(k, v)
+		existingStorable, err := dict.Set(k, v)
 		require.NoError(t, err)
+		require.Equal(t, Uint64Value(i+1), existingStorable)
 	}
 
 	require.Equal(t, uint64(dictSize), dict.Count())
@@ -83,8 +85,9 @@ func TestBasicDictRemove(t *testing.T) {
 	for i := uint64(0); i < dictSize; i++ {
 		k := Uint64Value(i)
 		v := Uint64Value(i + 1)
-		err := dict.Set(k, v)
+		existingValue, err := dict.Set(k, v)
 		require.NoError(t, err)
+		require.Nil(t, existingValue)
 	}
 
 	require.Equal(t, uint64(dictSize), dict.Count())
@@ -187,16 +190,22 @@ func TestBasicDictRandomSetRemoveMixedTypes(t *testing.T) {
 				v = NewStringValue(randStr(rand.Intn(stringMaxSize)))
 			}
 
+			existingStorable, err := dict.Set(k, v)
+			require.NoError(t, err)
+
 			keyString := dictionaryKey(k)
 
-			if _, ok := keyValues[keyString]; !ok {
+			if oldValue, ok := keyValues[keyString]; !ok {
 				keys = append(keys, k)
+				require.Nil(t, existingStorable)
+			} else {
+				existingValue, err := existingStorable.StoredValue(storage)
+				require.NoError(t, err)
+
+				require.Equal(t, oldValue, existingValue)
 			}
 
 			keyValues[keyString] = v
-
-			err := dict.Set(k, v)
-			require.NoError(t, err)
 
 		case RemoveAction:
 			ki := rand.Intn(len(keys))
@@ -312,16 +321,21 @@ func TestBasicDictDecodeEncodeRandomData(t *testing.T) {
 				v = NewStringValue(randStr(rand.Intn(stringMaxSize)))
 			}
 
+			existingStorable, err := dict.Set(k, v)
+			require.NoError(t, err)
+
 			keyString := dictionaryKey(k)
 
-			if _, ok := keyValues[keyString]; !ok {
+			if oldValue, ok := keyValues[keyString]; !ok {
 				keys = append(keys, k)
+				require.Nil(t, existingStorable)
+			} else {
+				existingValue, err := existingStorable.StoredValue(storage)
+				require.NoError(t, err)
+				require.Equal(t, oldValue, existingValue)
 			}
 
 			keyValues[keyString] = v
-
-			err := dict.Set(k, v)
-			require.NoError(t, err)
 
 		case RemoveAction:
 			ki := rand.Intn(len(keys))

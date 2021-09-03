@@ -444,7 +444,7 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 		existingValue := e.value
 
 		valuePointer := false
-		if _, ok := e.value.(StorageIDStorable); ok {
+		if _, ok := value.(StorageIDStorable); ok {
 			valuePointer = true
 		}
 

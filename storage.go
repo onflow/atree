@@ -13,6 +13,8 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
+const LedgerBaseStorageSlabPrefix = "/slab/"
+
 type (
 	Address      [8]byte
 	StorageIndex [8]byte
@@ -233,18 +235,21 @@ func NewLedgerBaseStorage(ledger Ledger) *LedgerBaseStorage {
 }
 
 func (s *LedgerBaseStorage) Retrieve(id StorageID) ([]byte, bool, error) {
-	v, err := s.ledger.GetValue(id.Address[:], id.Index[:])
+	prefixedKey := []byte(LedgerBaseStorageSlabPrefix + string(id.Index[:]))
+	v, err := s.ledger.GetValue(id.Address[:], prefixedKey)
 	s.bytesRetrieved += len(v)
 	return v, len(v) > 0, err
 }
 
 func (s *LedgerBaseStorage) Store(id StorageID, data []byte) error {
 	s.bytesStored += len(data)
-	return s.ledger.SetValue(id.Address[:], id.Index[:], data)
+	prefixedKey := []byte(LedgerBaseStorageSlabPrefix + string(id.Index[:]))
+	return s.ledger.SetValue(id.Address[:], prefixedKey, data)
 }
 
 func (s *LedgerBaseStorage) Remove(id StorageID) error {
-	return s.ledger.SetValue(id.Address[:], id.Index[:], nil)
+	prefixedKey := []byte(LedgerBaseStorageSlabPrefix + string(id.Index[:]))
+	return s.ledger.SetValue(id.Address[:], prefixedKey, nil)
 }
 
 func (s *LedgerBaseStorage) GenerateStorageID(address Address) (StorageID, error) {

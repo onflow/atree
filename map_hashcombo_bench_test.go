@@ -245,8 +245,14 @@ func (bd *xxh128Digester2) Digest(level int) (Digest, error) {
 				if len(bd.prefix) == 0 {
 					uint128 = xxh3.Hash128(bd.msg)
 				} else {
-					bd.hasher.Write(bd.prefix)
-					bd.hasher.Write(bd.msg)
+					_, err := bd.hasher.Write(bd.prefix)
+					if err != nil {
+						return Digest(0), err
+					}
+					_, err = bd.hasher.Write(bd.msg)
+					if err != nil {
+						return Digest(0), err
+					}
 					uint128 = bd.hasher.Sum128()
 				}
 

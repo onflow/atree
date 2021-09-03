@@ -42,8 +42,8 @@ type BasicDictDataSlab struct {
 	entries    map[string]Storable
 }
 
-func (a *BasicDictDataSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return &BasicDict{storage: storage, root: a}, nil
+func (d *BasicDictDataSlab) StoredValue(storage SlabStorage) (Value, error) {
+	return &BasicDict{storage: storage, root: d}, nil
 }
 
 type BasicDict struct {
@@ -53,8 +53,8 @@ type BasicDict struct {
 
 var _ Value = &BasicDict{}
 
-func (a *BasicDict) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
-	return a.root, nil
+func (d *BasicDict) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
+	return d.root, nil
 }
 
 func NewBasicDictDataSlab(storage SlabStorage, address Address) *BasicDictDataSlab {
@@ -167,7 +167,7 @@ func newBasicDictDataSlabFromData(
 //				encodedDictionaryValues:        []interface{}(keyString + value),
 //			},
 // }
-func (a *BasicDictDataSlab) Encode(enc *Encoder) error {
+func (d *BasicDictDataSlab) Encode(enc *Encoder) error {
 
 	flag := maskSlabRoot | maskSlabAnySize | maskBasicDictionary
 
@@ -186,7 +186,7 @@ func (a *BasicDictDataSlab) Encode(enc *Encoder) error {
 
 	// Encode CBOR array size for 9 bytes
 	enc.Scratch[5] = 0x80 | 27
-	binary.BigEndian.PutUint64(enc.Scratch[6:], uint64(len(a.keys)))
+	binary.BigEndian.PutUint64(enc.Scratch[6:], uint64(len(d.keys)))
 
 	_, err := enc.Write(enc.Scratch[:14])
 	if err != nil {
@@ -194,8 +194,8 @@ func (a *BasicDictDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode keys
-	for i := 0; i < len(a.keys); i++ {
-		err := a.keys[i].Encode(enc)
+	for i := 0; i < len(d.keys); i++ {
+		err := d.keys[i].Encode(enc)
 		if err != nil {
 			return err
 		}
@@ -208,7 +208,7 @@ func (a *BasicDictDataSlab) Encode(enc *Encoder) error {
 
 	// Encode CBOR array size for 9 bytes
 	enc.Scratch[0] = 0x80 | 27
-	binary.BigEndian.PutUint64(enc.Scratch[1:], uint64(len(a.entries)*2))
+	binary.BigEndian.PutUint64(enc.Scratch[1:], uint64(len(d.entries)*2))
 
 	_, err = enc.Write(enc.Scratch[:9])
 	if err != nil {
@@ -216,7 +216,7 @@ func (a *BasicDictDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode values
-	for _, keyString := range a.keyStrings {
+	for _, keyString := range d.keyStrings {
 		// Encode key string
 
 		// Encode CBOR text string size for 9 bytes
@@ -234,7 +234,7 @@ func (a *BasicDictDataSlab) Encode(enc *Encoder) error {
 		}
 
 		// Encode value
-		value, ok := a.entries[keyString]
+		value, ok := d.entries[keyString]
 		if !ok {
 			return NewEncodingError(NewKeyNotFoundError(keyString))
 		}
@@ -258,10 +258,10 @@ func (a *BasicDictDataSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (m *BasicDictDataSlab) Get(_ SlabStorage, keyValue Value) (Storable, error) {
+func (d *BasicDictDataSlab) Get(_ SlabStorage, keyValue Value) (Storable, error) {
 	key := dictionaryKey(keyValue)
 
-	value, ok := m.entries[key]
+	value, ok := d.entries[key]
 
 	if ok {
 		return value, nil
@@ -270,19 +270,19 @@ func (m *BasicDictDataSlab) Get(_ SlabStorage, keyValue Value) (Storable, error)
 	return nil, &KeyNotFoundError{keyValue}
 }
 
-func (a *BasicDictDataSlab) Set(storage SlabStorage, address Address, keyValue Value, value Storable) error {
+func (d *BasicDictDataSlab) Set(storage SlabStorage, address Address, keyValue Value, value Storable) error {
 
 	keyString := dictionaryKey(keyValue)
 
-	oldValue, ok := a.entries[keyString]
+	oldValue, ok := d.entries[keyString]
 
 	if ok {
 
 		// Replace existing value
-		a.entries[keyString] = value
+		d.entries[keyString] = value
 
 		// Adjust slab size
-		a.header.size = a.header.size - oldValue.ByteSize() + value.ByteSize()
+		d.header.size = d.header.size - oldValue.ByteSize() + value.ByteSize()
 
 	} else {
 
@@ -292,15 +292,15 @@ func (a *BasicDictDataSlab) Set(storage SlabStorage, address Address, keyValue V
 			return err
 		}
 
-		a.keyStrings = append(a.keyStrings, keyString)
-		a.keys = append(a.keys, key)
-		a.entries[keyString] = value
+		d.keyStrings = append(d.keyStrings, keyString)
+		d.keys = append(d.keys, key)
+		d.entries[keyString] = value
 
 		// Adjust slab size
-		a.header.size += 9 + uint32(len(keyString)) + key.ByteSize() + value.ByteSize()
+		d.header.size += 9 + uint32(len(keyString)) + key.ByteSize() + value.ByteSize()
 	}
 
-	err := storage.Store(a.header.id, a)
+	err := storage.Store(d.header.id, d)
 	if err != nil {
 		return err
 	}
@@ -308,37 +308,37 @@ func (a *BasicDictDataSlab) Set(storage SlabStorage, address Address, keyValue V
 	return nil
 }
 
-func (a *BasicDictDataSlab) Remove(storage SlabStorage, keyValue Value) (Storable, error) {
+func (d *BasicDictDataSlab) Remove(storage SlabStorage, keyValue Value) (Storable, error) {
 
 	keyString := dictionaryKey(keyValue)
 
-	oldValue, ok := a.entries[keyString]
+	oldValue, ok := d.entries[keyString]
 
 	if !ok {
 		return nil, NewKeyNotFoundError(keyValue)
 	}
 
-	for i, ks := range a.keyStrings {
+	for i, ks := range d.keyStrings {
 		if ks == keyString {
-			oldKey := a.keys[i]
-			oldKeyString := a.keyStrings[i]
+			oldKey := d.keys[i]
+			oldKeyString := d.keyStrings[i]
 
 			// Remove from keyStrings
-			copy(a.keyStrings[i:], a.keyStrings[i+1:])
-			a.keyStrings = a.keyStrings[:len(a.keyStrings)-1]
+			copy(d.keyStrings[i:], d.keyStrings[i+1:])
+			d.keyStrings = d.keyStrings[:len(d.keyStrings)-1]
 
 			// Remove from keys
-			copy(a.keys[i:], a.keys[i+1:])
-			a.keys = a.keys[:len(a.keys)-1]
+			copy(d.keys[i:], d.keys[i+1:])
+			d.keys = d.keys[:len(d.keys)-1]
 
 			// Remove from entries
-			delete(a.entries, keyString)
+			delete(d.entries, keyString)
 
 			// Adjust size
-			a.header.size -= 9 + uint32(len(oldKeyString)) + oldKey.ByteSize() + oldValue.ByteSize()
+			d.header.size -= 9 + uint32(len(oldKeyString)) + oldKey.ByteSize() + oldValue.ByteSize()
 
 			// Store slab
-			err := storage.Store(a.header.id, a)
+			err := storage.Store(d.header.id, d)
 			if err != nil {
 				return nil, err
 			}
@@ -350,43 +350,43 @@ func (a *BasicDictDataSlab) Remove(storage SlabStorage, keyValue Value) (Storabl
 	panic("shouldn't reach here")
 }
 
-func (a *BasicDictDataSlab) Count() uint64 {
-	return uint64(len(a.keys))
+func (d *BasicDictDataSlab) Count() uint64 {
+	return uint64(len(d.keys))
 }
 
-func (a *BasicDictDataSlab) Header() MapSlabHeader {
-	return a.header
+func (d *BasicDictDataSlab) Header() MapSlabHeader {
+	return d.header
 }
 
-func (a *BasicDictDataSlab) ByteSize() uint32 {
-	return a.header.size
+func (d *BasicDictDataSlab) ByteSize() uint32 {
+	return d.header.size
 }
 
-func (a *BasicDictDataSlab) ID() StorageID {
-	return a.header.id
+func (d *BasicDictDataSlab) ID() StorageID {
+	return d.header.id
 }
 
-func (a *BasicDictDataSlab) String() string {
+func (d *BasicDictDataSlab) String() string {
 	var s []string
-	for k, v := range a.entries {
+	for k, v := range d.entries {
 		s = append(s, fmt.Sprintf("%s:%s", k, v))
 	}
 	return "[" + strings.Join(s, " ") + "]"
 }
 
-func (a *BasicDictDataSlab) Split(_ SlabStorage) (Slab, Slab, error) {
+func (d *BasicDictDataSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, errors.New("not applicable")
 }
 
-func (a *BasicDictDataSlab) Merge(_ Slab) error {
+func (d *BasicDictDataSlab) Merge(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (a *BasicDictDataSlab) LendToRight(_ Slab) error {
+func (d *BasicDictDataSlab) LendToRight(_ Slab) error {
 	return errors.New("not applicable")
 }
 
-func (a *BasicDictDataSlab) BorrowFromRight(_ Slab) error {
+func (d *BasicDictDataSlab) BorrowFromRight(_ Slab) error {
 	return errors.New("not applicable")
 }
 
@@ -397,12 +397,12 @@ func NewBasicDict(storage SlabStorage, address Address) *BasicDict {
 	}
 }
 
-func (a *BasicDict) StorageID() StorageID {
-	return a.root.ID()
+func (d *BasicDict) StorageID() StorageID {
+	return d.root.ID()
 }
 
-func (a *BasicDict) Address() Address {
-	return a.StorageID().Address
+func (d *BasicDict) Address() Address {
+	return d.StorageID().Address
 }
 
 func NewBasicDictWithRootID(storage SlabStorage, id StorageID) (*BasicDict, error) {
@@ -423,43 +423,43 @@ func NewBasicDictWithRootID(storage SlabStorage, id StorageID) (*BasicDict, erro
 	return &BasicDict{storage: storage, root: dataSlab}, nil
 }
 
-func (a *BasicDict) Get(key ComparableValue) (Value, error) {
-	storable, err := a.root.Get(a.storage, key)
+func (d *BasicDict) Get(key ComparableValue) (Value, error) {
+	storable, err := d.root.Get(d.storage, key)
 	if err != nil {
 		return nil, err
 	}
-	return storable.StoredValue(a.storage)
+	return storable.StoredValue(d.storage)
 }
 
-func (a *BasicDict) Set(key ComparableValue, v Value) error {
-	// don't inline large value
-	storable, err := v.Storable(a.storage, a.Address(), math.MaxUint64)
+func (d *BasicDict) Set(key ComparableValue, v Value) error {
+	// inline large value
+	storable, err := v.Storable(d.storage, d.Address(), math.MaxUint64)
 	if err != nil {
 		return err
 	}
-	return a.root.Set(a.storage, a.Address(), key, storable)
+	return d.root.Set(d.storage, d.Address(), key, storable)
 }
 
-func (a *BasicDict) Remove(key ComparableValue) (Value, Value, error) {
-	storable, err := a.root.Remove(a.storage, key)
+func (d *BasicDict) Remove(key ComparableValue) (Value, Value, error) {
+	storable, err := d.root.Remove(d.storage, key)
 	if err != nil {
 		return nil, nil, err
 	}
-	v, err := storable.StoredValue(a.storage)
+	v, err := storable.StoredValue(d.storage)
 	if err != nil {
 		return nil, nil, err
 	}
 	return key, v, nil
 }
 
-func (a *BasicDict) Count() uint64 {
-	return a.root.Count()
+func (d *BasicDict) Count() uint64 {
+	return d.root.Count()
 }
 
-func (a *BasicDict) String() string {
-	return a.root.String()
+func (d *BasicDict) String() string {
+	return d.root.String()
 }
 
-func (a *BasicDict) Print() {
-	fmt.Printf("keys: %v\nkey strings: %v\nentries: %v\n", a.root.keys, a.root.keyStrings, a.root.entries)
+func (d *BasicDict) Print() {
+	fmt.Printf("keys: %v\nkey strings: %v\nentries: %v\n", d.root.keys, d.root.keyStrings, d.root.entries)
 }

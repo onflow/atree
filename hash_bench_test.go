@@ -6,6 +6,7 @@ package atree
 
 import (
 	"encoding/binary"
+	"fmt"
 	"testing"
 
 	"github.com/dchest/siphash"
@@ -36,7 +37,12 @@ func xxh128WithPrefix(msg []byte) (uint64, uint64) {
 
 func xxh128Hasher(msg []byte) (uint64, uint64) {
 	hasher := xxh3.New()
-	hasher.Write(msg)
+
+	_, err := hasher.Write(msg)
+	if err != nil {
+		panic(fmt.Sprintf("hasher.Write failed: %s", err))
+	}
+
 	uint128 := hasher.Sum128()
 	return uint128.Lo, uint128.Hi
 }
@@ -48,8 +54,17 @@ func xxh128HasherWithPrefix(msg []byte) (uint64, uint64) {
 	binary.BigEndian.PutUint64(b[:], k0)
 
 	hasher := xxh3.New()
-	hasher.Write(b[:])
-	hasher.Write(msg)
+
+	_, err := hasher.Write(b[:])
+	if err != nil {
+		panic(fmt.Sprintf("hasher.Write failed: %s", err))
+	}
+
+	_, err = hasher.Write(msg)
+	if err != nil {
+		panic(fmt.Sprintf("hasher.Write failed: %s", err))
+	}
+
 	uint128 := hasher.Sum128()
 	return uint128.Lo, uint128.Hi
 }

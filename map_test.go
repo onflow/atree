@@ -2558,8 +2558,9 @@ func TestMapEncodeDecode(t *testing.T) {
 		digests := []Digest{Digest(0), Digest(1)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-		err = m.Set(k, v)
+		existingStorable, err := m.Set(k, v)
 		require.NoError(t, err)
+		require.Nil(t, existingStorable)
 
 		require.Equal(t, uint64(1), m.Count())
 
@@ -2618,8 +2619,12 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		// Overwrite existing value with long string
 		vs := NewStringValue(randStr(512))
-		err = m.Set(k, vs)
+		existingStorable, err = m.Set(k, vs)
 		require.NoError(t, err)
+
+		existingValue, err := existingStorable.StoredValue(storage)
+		require.NoError(t, err)
+		require.Equal(t, v, existingValue)
 
 		expectedHasPointer := []byte{
 

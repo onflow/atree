@@ -101,14 +101,12 @@ func uniqueKeyValues(size int) ([]ComparableValue, []Value) {
 func setupMapWithCollision(
 	storage *PersistentSlabStorage,
 	digesterBuilder *mockDigesterBuilder,
+	keys []ComparableValue,
+	values []Value,
 	collisionLevel int,
 	totalLevel int,
-	keys []ComparableValue,
-	values []Value) (*OrderedMap, error) {
-
-	const numOfElemsInCollisionGroup = 2
-
-	numOfCollisionGroups := len(keys) / numOfElemsInCollisionGroup
+	numOfCollisionGroups int,
+) (*OrderedMap, error) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -124,8 +122,8 @@ func setupMapWithCollision(
 		var digests []Digest
 
 		// Append colliding digests
-		collisionDigest := Digest(i % numOfCollisionGroups)
 		for j := 0; j < collisionLevel; j++ {
+			collisionDigest := Digest(i % numOfCollisionGroups)
 			digests = append(digests, collisionDigest)
 		}
 
@@ -157,7 +155,13 @@ func setupMapWithCollision(
 	return NewMapWithRootID(storage, mapID, digesterBuilder)
 }
 
-func BenchmarkMapHashComboCollision(b *testing.B) {
+func BenchmarkMapHashCollisionGet(b *testing.B) {
+
+	type collisionSetting struct {
+		collisionGroup int
+		collisionLevel int
+	}
+
 	benchmarks := []struct {
 		name            string
 		initialMapSize  int
@@ -203,15 +207,29 @@ func BenchmarkMapHashComboCollision(b *testing.B) {
 	// Keys and values can be reused.
 	keys, values := uniqueKeyValues(100_000)
 
+	// Benchmark different hash combos with:
+	// - no collision to max collision level
+	// - 1 to len(keys) / 2 collision groups
 	for _, bm := range benchmarks {
 
-		for collisionLevel := 0; collisionLevel <= bm.maxDigestLevel; collisionLevel++ {
+		collisionSettings := []collisionSetting{{0, 0}}
+
+		collisionGroups := []int{1, bm.initialMapSize / 2}
+
+		for collisionLevel := 1; collisionLevel <= bm.maxDigestLevel; collisionLevel++ {
+			for _, collisionGroup := range collisionGroups {
+				collisionSettings = append(collisionSettings,
+					collisionSetting{collisionLevel: collisionLevel, collisionGroup: collisionGroup})
+			}
+		}
+
+		for _, setting := range collisionSettings {
 
 			var name string
-			if collisionLevel == 0 {
+			if setting.collisionLevel == 0 {
 				name = fmt.Sprintf("%s_no_collision", bm.name)
 			} else {
-				name = fmt.Sprintf("%s_collision_level_%d", bm.name, collisionLevel)
+				name = fmt.Sprintf("%s_collision_level_%d_collision_group_%d", bm.name, setting.collisionLevel, setting.collisionGroup)
 			}
 
 			b.Run(name, func(b *testing.B) {
@@ -224,10 +242,12 @@ func BenchmarkMapHashComboCollision(b *testing.B) {
 				m, err := setupMapWithCollision(
 					storage,
 					digesterBuilder,
-					collisionLevel,
-					bm.maxDigestLevel,
 					keys[:bm.initialMapSize],
-					values[:bm.initialMapSize])
+					values[:bm.initialMapSize],
+					setting.collisionLevel,
+					bm.maxDigestLevel,
+					setting.collisionGroup,
+				)
 				require.NoError(b, err)
 
 				count := m.Count()

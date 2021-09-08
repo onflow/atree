@@ -12,41 +12,41 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type mockDigesterBuilder struct {
+type mockSimpleDigesterBuilder struct {
 	mock.Mock
 }
 
-var _ DigesterBuilder = &mockDigesterBuilder{}
+var _ DigesterBuilder = &mockSimpleDigesterBuilder{}
 
-type mockDigester struct {
+type mockSimpleDigester struct {
 	d []Digest
 }
 
-var _ Digester = &mockDigester{}
+var _ Digester = &mockSimpleDigester{}
 
-func (h *mockDigesterBuilder) SetSeed(_ uint64, _ uint64) {
+func (h *mockSimpleDigesterBuilder) SetSeed(_ uint64, _ uint64) {
 }
 
-func (h *mockDigesterBuilder) Digest(hashable Hashable) (Digester, error) {
+func (h *mockSimpleDigesterBuilder) Digest(hashable Hashable) (Digester, error) {
 	args := h.Called(hashable)
-	return args.Get(0).(mockDigester), nil
+	return args.Get(0).(mockSimpleDigester), nil
 }
 
-func (d mockDigester) DigestPrefix(level int) ([]Digest, error) {
+func (d mockSimpleDigester) DigestPrefix(level int) ([]Digest, error) {
 	if level > len(d.d) {
 		return nil, fmt.Errorf("digest level %d out of bounds", level)
 	}
 	return d.d[:level], nil
 }
 
-func (d mockDigester) Digest(level int) (Digest, error) {
+func (d mockSimpleDigester) Digest(level int) (Digest, error) {
 	if level >= len(d.d) {
 		return 0, fmt.Errorf("digest level %d out of bounds", level)
 	}
 	return d.d[level], nil
 }
 
-func (d mockDigester) Levels() int {
+func (d mockSimpleDigester) Levels() int {
 	return len(d.d)
 }
 
@@ -620,7 +620,7 @@ func TestMapIterate(t *testing.T) {
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		digesterBuilder := &mockDigesterBuilder{}
+		digesterBuilder := &mockSimpleDigesterBuilder{}
 
 		storage := newTestInMemoryStorage(t)
 
@@ -653,7 +653,7 @@ func TestMapIterate(t *testing.T) {
 						Digest(rand.Intn(256)),
 					}
 
-					digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+					digesterBuilder.On("Digest", k).Return(mockSimpleDigester{digests})
 					break
 				}
 			}
@@ -725,7 +725,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	digesterBuilder := &mockDigesterBuilder{}
+	digesterBuilder := &mockSimpleDigesterBuilder{}
 
 	// Generate mockDigestCount*maxDigestLevel number of unique digest
 	digests := make([]Digest, 0, mockDigestCount*maxDigestLevel)
@@ -757,7 +757,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 
 				digests := digests[startIndex:endIndex]
 
-				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+				digesterBuilder.On("Digest", k).Return(mockSimpleDigester{digests})
 
 				break
 			}
@@ -835,7 +835,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	digesterBuilder := &mockDigesterBuilder{}
+	digesterBuilder := &mockSimpleDigesterBuilder{}
 
 	storage := newTestInMemoryStorage(t)
 
@@ -856,7 +856,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 					digests = append(digests, Digest(rand.Intn(256)))
 				}
 
-				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+				digesterBuilder.On("Digest", k).Return(mockSimpleDigester{digests})
 
 				break
 			}
@@ -1046,7 +1046,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	digesterBuilder := &mockDigesterBuilder{}
+	digesterBuilder := &mockSimpleDigesterBuilder{}
 
 	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
@@ -1099,7 +1099,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 				digests = append(digests, Digest(rand.Intn(digestMaxValue)))
 			}
 
-			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+			digesterBuilder.On("Digest", k).Return(mockSimpleDigester{digests})
 
 			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
@@ -1187,7 +1187,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		storage := NewBasicSlabStorage(encMode, decMode)
 		storage.DecodeStorable = decodeStorable
 
-		digesterBuilder := &mockDigesterBuilder{}
+		digesterBuilder := &mockSimpleDigesterBuilder{}
 
 		// Create map
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
@@ -1199,7 +1199,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			v := Uint64Value(i * 2)
 
 			digests := []Digest{Digest(i), Digest(i * 2)}
-			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+			digesterBuilder.On("Digest", k).Return(mockSimpleDigester{d: digests})
 
 			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
@@ -1393,7 +1393,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		storage := NewBasicSlabStorage(encMode, decMode)
 		storage.DecodeStorable = decodeStorable
 
-		digesterBuilder := &mockDigesterBuilder{}
+		digesterBuilder := &mockSimpleDigesterBuilder{}
 
 		// Create map
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
@@ -1405,7 +1405,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			v := Uint64Value(i * 2)
 
 			digests := []Digest{Digest(i), Digest(i * 2)}
-			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+			digesterBuilder.On("Digest", k).Return(mockSimpleDigester{d: digests})
 
 			if i == mapSize-1 {
 				// Create nested array
@@ -1693,7 +1693,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		storage := NewBasicSlabStorage(encMode, decMode)
 		storage.DecodeStorable = decodeStorable
 
-		digesterBuilder := &mockDigesterBuilder{}
+		digesterBuilder := &mockSimpleDigesterBuilder{}
 
 		// Create map
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
@@ -1705,7 +1705,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			v := Uint64Value(i * 2)
 
 			digests := []Digest{Digest(i % 4), Digest(i)}
-			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+			digesterBuilder.On("Digest", k).Return(mockSimpleDigester{d: digests})
 
 			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
@@ -1967,7 +1967,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		storage := NewBasicSlabStorage(encMode, decMode)
 		storage.DecodeStorable = decodeStorable
 
-		digesterBuilder := &mockDigesterBuilder{}
+		digesterBuilder := &mockSimpleDigesterBuilder{}
 
 		// Create map
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
@@ -1979,7 +1979,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			v := Uint64Value(i * 2)
 
 			digests := []Digest{Digest(i % 4), Digest(i % 2)}
-			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+			digesterBuilder.On("Digest", k).Return(mockSimpleDigester{d: digests})
 
 			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
@@ -2288,7 +2288,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		storage := NewBasicSlabStorage(encMode, decMode)
 		storage.DecodeStorable = decodeStorable
 
-		digesterBuilder := &mockDigesterBuilder{}
+		digesterBuilder := &mockSimpleDigesterBuilder{}
 
 		// Create map
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
@@ -2300,7 +2300,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			v := Uint64Value(i * 2)
 
 			digests := []Digest{Digest(i % 2), Digest(i)}
-			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+			digesterBuilder.On("Digest", k).Return(mockSimpleDigester{d: digests})
 
 			existingStorable, err := m.Set(k, v)
 			require.NoError(t, err)
@@ -2546,7 +2546,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		storage := NewBasicSlabStorage(encMode, decMode)
 		storage.DecodeStorable = decodeStorable
 
-		digesterBuilder := &mockDigesterBuilder{}
+		digesterBuilder := &mockSimpleDigesterBuilder{}
 
 		// Create map
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
@@ -2556,7 +2556,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		v := Uint64Value(0)
 
 		digests := []Digest{Digest(0), Digest(1)}
-		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+		digesterBuilder.On("Digest", k).Return(mockSimpleDigester{d: digests})
 
 		existingStorable, err := m.Set(k, v)
 		require.NoError(t, err)

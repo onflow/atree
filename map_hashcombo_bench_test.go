@@ -272,3 +272,146 @@ func BenchmarkMapHashCollisionGet(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkMapHashCollisionSet100NewElem(b *testing.B) {
+
+	type collisionSetting struct {
+		collisionGroup int
+		collisionLevel int
+	}
+
+	benchmarks := []struct {
+		name            string
+		initialMapSize  int
+		digesterBuilder DigesterBuilder
+		maxDigestLevel  int
+	}{
+		// wyhash v3 + SipHash + BLAKE3
+		{"wyv3_10elems", 10, newWYV3DigesterBuilder(), 5},
+		{"wyv3_100elems", 100, newWYV3DigesterBuilder(), 5},
+		{"wyv3_1000elems", 1000, newWYV3DigesterBuilder(), 5},
+		//{"wyv3_10000elems", 10_000, newWYV3DigesterBuilder(), 5},
+		//{"wyv3_100000elems", 100_000, newWYV3DigesterBuilder(), 5},
+
+		// XXH128 + BLAKE3
+		{"XXH128_10elems", 10, newXXH128DigesterBuilder(), 4},
+		{"XXH128_100elems", 100, newXXH128DigesterBuilder(), 4},
+		{"XXH128_1000elems", 1000, newXXH128DigesterBuilder(), 4},
+		//{"XXH128_10000elems", 10_000, newXXH128DigesterBuilder(), 4},
+		//{"XXH128_100000elems", 100_000, newXXH128DigesterBuilder(), 4},
+
+		// SipHash + BLAKE3
+		{"Sip128_10elems", 10, newBasicDigesterBuilder(), 4},
+		{"Sip128_100elems", 100, newBasicDigesterBuilder(), 4},
+		{"Sip128_1000elems", 1000, newBasicDigesterBuilder(), 4},
+		//{"Sip128_10000elems", 10_000, newBasicDigesterBuilder(), 4},
+		//{"Sip128_100000elems", 100_000, newBasicDigesterBuilder(), 4},
+
+		// XXH128 with prefix + BLAKE3
+		{"XXH128p_10elems", 10, newXXH128pDigesterBuilder(), 4},
+		{"XXH128p_100elems", 100, newXXH128pDigesterBuilder(), 4},
+		{"XXH128p_1000elems", 1000, newXXH128pDigesterBuilder(), 4},
+		//{"XXH128p_10000elems", 10_000, newXXH128pDigesterBuilder(), 4},
+		//{"XXH128p_100000elems", 100_000, newXXH128pDigesterBuilder(), 4},
+
+		// XXH128 hasher with prefix + BLAKE3
+		{"XXH128p2_10elems", 10, newXXH128pDigesterBuilder2(), 4},
+		{"XXH128p2_100elems", 100, newXXH128pDigesterBuilder2(), 4},
+		{"XXH128p2_1000elems", 1000, newXXH128pDigesterBuilder2(), 4},
+		//{"XXH128p2_10000elems", 10_000, newXXH128pDigesterBuilder2(), 4},
+		//{"XXH128p2_100000elems", 100_000, newXXH128pDigesterBuilder2(), 4},
+	}
+
+	const numberOfInsertion = 100
+
+	// Keys and values can be reused.
+	keys, values := uniqueKeyValues(100_000)
+
+	// Benchmark different hash combos with:
+	// - no collision to max collision level
+	// - 1 to len(keys) / 2 collision groups
+	for _, bm := range benchmarks {
+
+		if bm.initialMapSize+numberOfInsertion >= len(keys) {
+			b.Fatalf("not enough unique keys: initial map size %d, number of insertion %d", bm.initialMapSize, numberOfInsertion)
+		}
+
+		collisionSettings := []collisionSetting{{0, 0}}
+
+		collisionGroups := []int{1, numberOfInsertion / 2}
+
+		for collisionLevel := 1; collisionLevel <= bm.maxDigestLevel; collisionLevel++ {
+			for _, collisionGroup := range collisionGroups {
+				collisionSettings = append(collisionSettings,
+					collisionSetting{collisionLevel: collisionLevel, collisionGroup: collisionGroup})
+			}
+		}
+
+		for _, setting := range collisionSettings {
+
+			var name string
+			if setting.collisionLevel == 0 {
+				name = fmt.Sprintf("%s_no_collision", bm.name)
+			} else {
+				name = fmt.Sprintf("%s_collision_level_%d_collision_group_%d", bm.name, setting.collisionLevel, setting.collisionGroup)
+			}
+
+			b.Run(name, func(b *testing.B) {
+
+				for i := 0; i < b.N; i++ {
+
+					b.StopTimer()
+
+					digesterBuilder := &mockDigesterBuilder{digesterBuilder: bm.digesterBuilder}
+
+					storage := newTestPersistentStorage(b)
+
+					// new map without collision
+					m, err := setupMapWithCollision(
+						storage,
+						digesterBuilder,
+						keys[:bm.initialMapSize],
+						values[:bm.initialMapSize],
+						0,
+						bm.maxDigestLevel,
+						0,
+					)
+					require.NoError(b, err)
+
+					count := m.Count()
+
+					// create and register mock digests for new elements
+					for i := 0; i < numberOfInsertion; i++ {
+						// Set up mock digests
+						var digests []Digest
+
+						// Append colliding digests
+						for j := 0; j < setting.collisionLevel; j++ {
+							collisionDigest := Digest(i % setting.collisionGroup)
+							digests = append(digests, collisionDigest)
+						}
+
+						// Append not colliding digests
+						for j := setting.collisionLevel; j < bm.maxDigestLevel; j++ {
+							digests = append(digests, Digest(int(count)+i))
+						}
+
+						digesterBuilder.On("Digest", keys[int(count)+i]).Return(digests)
+					}
+
+					var storable Storable
+
+					b.StartTimer()
+
+					for j := 0; j < numberOfInsertion; j++ {
+						storable, _ = m.Set(keys[int(count)+j], values[int(count)+j])
+					}
+
+					noop = storable
+
+					require.Equal(b, uint64(bm.initialMapSize+numberOfInsertion), m.Count())
+				}
+			})
+		}
+	}
+}

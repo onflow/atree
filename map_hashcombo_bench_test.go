@@ -415,3 +415,120 @@ func BenchmarkMapHashCollisionSet100NewElem(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkMapHashCollisionRemove100Elem(b *testing.B) {
+
+	type collisionSetting struct {
+		collisionGroup int
+		collisionLevel int
+	}
+
+	benchmarks := []struct {
+		name            string
+		initialMapSize  int
+		digesterBuilder DigesterBuilder
+		maxDigestLevel  int
+	}{
+		// wyhash v3 + SipHash + BLAKE3
+		//{"wyv3_10elems", 10, newWYV3DigesterBuilder(), 5},
+		{"wyv3_100elems", 100, newWYV3DigesterBuilder(), 5},
+		{"wyv3_1000elems", 1000, newWYV3DigesterBuilder(), 5},
+		//{"wyv3_10000elems", 10_000, newWYV3DigesterBuilder(), 5},
+		//{"wyv3_100000elems", 100_000, newWYV3DigesterBuilder(), 5},
+
+		// XXH128 + BLAKE3
+		//{"XXH128_10elems", 10, newXXH128DigesterBuilder(), 4},
+		{"XXH128_100elems", 100, newXXH128DigesterBuilder(), 4},
+		{"XXH128_1000elems", 1000, newXXH128DigesterBuilder(), 4},
+		//{"XXH128_10000elems", 10_000, newXXH128DigesterBuilder(), 4},
+		//{"XXH128_100000elems", 100_000, newXXH128DigesterBuilder(), 4},
+
+		// SipHash + BLAKE3
+		//{"Sip128_10elems", 10, newBasicDigesterBuilder(), 4},
+		{"Sip128_100elems", 100, newBasicDigesterBuilder(), 4},
+		{"Sip128_1000elems", 1000, newBasicDigesterBuilder(), 4},
+		//{"Sip128_10000elems", 10_000, newBasicDigesterBuilder(), 4},
+		//{"Sip128_100000elems", 100_000, newBasicDigesterBuilder(), 4},
+
+		// XXH128 with prefix + BLAKE3
+		//{"XXH128p_10elems", 10, newXXH128pDigesterBuilder(), 4},
+		{"XXH128p_100elems", 100, newXXH128pDigesterBuilder(), 4},
+		{"XXH128p_1000elems", 1000, newXXH128pDigesterBuilder(), 4},
+		//{"XXH128p_10000elems", 10_000, newXXH128pDigesterBuilder(), 4},
+		//{"XXH128p_100000elems", 100_000, newXXH128pDigesterBuilder(), 4},
+
+		// XXH128 hasher with prefix + BLAKE3
+		//{"XXH128p2_10elems", 10, newXXH128pDigesterBuilder2(), 4},
+		{"XXH128p2_100elems", 100, newXXH128pDigesterBuilder2(), 4},
+		{"XXH128p2_1000elems", 1000, newXXH128pDigesterBuilder2(), 4},
+		//{"XXH128p2_10000elems", 10_000, newXXH128pDigesterBuilder2(), 4},
+		//{"XXH128p2_100000elems", 100_000, newXXH128pDigesterBuilder2(), 4},
+	}
+
+	const numberOfRemoval = 100
+
+	// Keys and values can be reused.
+	keys, values := uniqueKeyValues(100_000)
+
+	// Benchmark different hash combos with:
+	// - no collision to max collision level
+	// - 1 to len(keys) / 2 collision groups
+	for _, bm := range benchmarks {
+
+		collisionSettings := []collisionSetting{{0, 0}}
+
+		collisionGroups := []int{1, bm.initialMapSize / 2}
+
+		for collisionLevel := 1; collisionLevel <= bm.maxDigestLevel; collisionLevel++ {
+			for _, collisionGroup := range collisionGroups {
+				collisionSettings = append(collisionSettings,
+					collisionSetting{collisionLevel: collisionLevel, collisionGroup: collisionGroup})
+			}
+		}
+
+		for _, setting := range collisionSettings {
+
+			var name string
+			if setting.collisionLevel == 0 {
+				name = fmt.Sprintf("%s_no_collision", bm.name)
+			} else {
+				name = fmt.Sprintf("%s_collision_level_%d_collision_group_%d", bm.name, setting.collisionLevel, setting.collisionGroup)
+			}
+
+			b.Run(name, func(b *testing.B) {
+
+				for i := 0; i < b.N; i++ {
+
+					b.StopTimer()
+
+					digesterBuilder := &mockDigesterBuilder{digesterBuilder: bm.digesterBuilder}
+
+					storage := newTestPersistentStorage(b)
+
+					m, err := setupMapWithCollision(
+						storage,
+						digesterBuilder,
+						keys[:bm.initialMapSize],
+						values[:bm.initialMapSize],
+						setting.collisionLevel,
+						bm.maxDigestLevel,
+						setting.collisionGroup,
+					)
+					require.NoError(b, err)
+
+					count := m.Count()
+
+					var storable Storable
+
+					b.StartTimer()
+
+					for j := 0; j < numberOfRemoval && j < int(count); j++ {
+						storable, _, _ = m.Remove(keys[j])
+					}
+
+					noop = storable
+				}
+			})
+		}
+	}
+}

@@ -53,7 +53,7 @@ func (v Uint8Value) Encode(enc *Encoder) error {
 
 // TODO: cache hash code
 // TODO: cache EncMode
-func (v Uint8Value) HashCode() ([]byte, error) {
+func (v Uint8Value) GetHashInput() ([]byte, error) {
 	encMode, err := cbor.EncOptions{}.EncMode()
 	if err != nil {
 		return nil, err
@@ -114,7 +114,7 @@ func (v Uint16Value) Encode(enc *Encoder) error {
 }
 
 // TODO: cache encoded data and size
-func (v Uint16Value) HashCode() ([]byte, error) {
+func (v Uint16Value) GetHashInput() ([]byte, error) {
 	encMode, err := cbor.EncOptions{}.EncMode()
 	if err != nil {
 		return nil, err
@@ -184,7 +184,7 @@ func (v Uint32Value) Encode(enc *Encoder) error {
 }
 
 // TODO: cache encoded data and size
-func (v Uint32Value) HashCode() ([]byte, error) {
+func (v Uint32Value) GetHashInput() ([]byte, error) {
 	encMode, err := cbor.EncOptions{}.EncMode()
 	if err != nil {
 		return nil, err
@@ -250,7 +250,7 @@ func (v Uint64Value) Encode(enc *Encoder) error {
 }
 
 // TODO: cache encoded data and size
-func (v Uint64Value) HashCode() ([]byte, error) {
+func (v Uint64Value) GetHashInput() ([]byte, error) {
 	encMode, err := cbor.EncOptions{}.EncMode()
 	if err != nil {
 		return nil, err
@@ -335,7 +335,7 @@ func (v StringValue) Encode(enc *Encoder) error {
 }
 
 // TODO: cache encoded data and size
-func (v StringValue) HashCode() ([]byte, error) {
+func (v StringValue) GetHashInput() ([]byte, error) {
 	encMode, err := cbor.EncOptions{}.EncMode()
 	if err != nil {
 		return nil, err

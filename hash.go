@@ -9,7 +9,7 @@ import (
 )
 
 type Hashable interface {
-	HashCode() ([]byte, error)
+	GetHashInput() ([]byte, error)
 }
 
 type Digest uint64
@@ -68,7 +68,7 @@ func (bdb *basicDigesterBuilder) Digest(hashable Hashable) (Digester, error) {
 		return nil, NewHashError(errors.New("k0 is uninitialized"))
 	}
 
-	msg, err := hashable.HashCode()
+	msg, err := hashable.GetHashInput()
 	if err != nil {
 		return nil, err
 	}

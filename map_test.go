@@ -78,7 +78,7 @@ func TestMapSetAndGet(t *testing.T) {
 		storage := newTestInMemoryStorage(t)
 
 		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
@@ -96,7 +96,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -113,7 +113,7 @@ func TestMapSetAndGet(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			s, err := m.Get(NewStringValue(strv.str))
+			s, err := m.Get(compare, NewStringValue(strv.str))
 			require.NoError(t, err)
 
 			e, err := s.StoredValue(storage)
@@ -139,7 +139,7 @@ func TestMapSetAndGet(t *testing.T) {
 		storage := newTestInMemoryStorage(t)
 
 		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
@@ -157,7 +157,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -176,7 +176,7 @@ func TestMapSetAndGet(t *testing.T) {
 			v := Uint64Value(uint64(oldv) + mapSize)
 			uniqueKeyValues[k] = v
 
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -189,7 +189,7 @@ func TestMapSetAndGet(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			s, err := m.Get(NewStringValue(strv.str))
+			s, err := m.Get(compare, NewStringValue(strv.str))
 			require.NoError(t, err)
 
 			e, err := s.StoredValue(storage)
@@ -215,7 +215,7 @@ func TestMapSetAndGet(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				slen := rand.Intn(maxKeyLength + 1)
@@ -237,7 +237,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -254,7 +254,7 @@ func TestMapSetAndGet(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			s, err := m.Get(NewStringValue(strv.str))
+			s, err := m.Get(compare, NewStringValue(strv.str))
 			require.NoError(t, err)
 
 			e, err := s.StoredValue(storage)
@@ -304,7 +304,7 @@ func TestMapHas(t *testing.T) {
 	require.NoError(t, err)
 
 	for i, k := range keysToInsert {
-		existingStorable, err := m.Set(NewStringValue(k), Uint64Value(i))
+		existingStorable, err := m.Set(compare, NewStringValue(k), Uint64Value(i))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
@@ -318,13 +318,13 @@ func TestMapHas(t *testing.T) {
 	require.True(t, verified)
 
 	for _, k := range keysToInsert {
-		exist, err := m.Has(NewStringValue(k))
+		exist, err := m.Has(compare, NewStringValue(k))
 		require.NoError(t, err)
 		require.Equal(t, true, exist)
 	}
 
 	for _, k := range keysToNotInsert {
-		exist, err := m.Has(NewStringValue(k))
+		exist, err := m.Has(compare, NewStringValue(k))
 		require.NoError(t, err)
 		require.Equal(t, false, exist)
 	}
@@ -355,7 +355,7 @@ func TestMapRemove(t *testing.T) {
 		storage := newTestInMemoryStorage(t)
 
 		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(keyStringMaxSize)
@@ -374,7 +374,7 @@ func TestMapRemove(t *testing.T) {
 
 		// Insert elements
 		for k, v := range uniqueKeyValues {
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -392,7 +392,7 @@ func TestMapRemove(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			s, err := m.Get(NewStringValue(strv.str))
+			s, err := m.Get(compare, NewStringValue(strv.str))
 			require.NoError(t, err)
 
 			e, err := s.StoredValue(storage)
@@ -407,7 +407,7 @@ func TestMapRemove(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			removedKeyStorable, removedValueStorable, err := m.Remove(NewStringValue(strv.str))
+			removedKeyStorable, removedValueStorable, err := m.Remove(compare, NewStringValue(strv.str))
 			require.NoError(t, err)
 
 			removedKey, err := removedKeyStorable.StoredValue(storage)
@@ -418,7 +418,7 @@ func TestMapRemove(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, v, removedValue)
 
-			removedKeyStorable, removedValueStorable, err = m.Remove(NewStringValue(strv.str))
+			removedKeyStorable, removedValueStorable, err = m.Remove(compare, NewStringValue(strv.str))
 			require.Error(t, err)
 			require.Nil(t, removedKeyStorable)
 			require.Nil(t, removedValueStorable)
@@ -452,7 +452,7 @@ func TestMapRemove(t *testing.T) {
 		storage := newTestInMemoryStorage(t)
 
 		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(keyStringMaxSize)
@@ -471,7 +471,7 @@ func TestMapRemove(t *testing.T) {
 
 		// Insert elements
 		for k, v := range uniqueKeyValues {
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -489,7 +489,7 @@ func TestMapRemove(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			s, err := m.Get(NewStringValue(strv.str))
+			s, err := m.Get(compare, NewStringValue(strv.str))
 			require.NoError(t, err)
 
 			e, err := s.StoredValue(storage)
@@ -504,7 +504,7 @@ func TestMapRemove(t *testing.T) {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
 
-			removedKeyStorable, removedValueStorable, err := m.Remove(NewStringValue(strv.str))
+			removedKeyStorable, removedValueStorable, err := m.Remove(compare, NewStringValue(strv.str))
 			require.NoError(t, err)
 
 			removedKey, err := removedKeyStorable.StoredValue(storage)
@@ -515,7 +515,7 @@ func TestMapRemove(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, v, removedValue)
 
-			removedKeyStorable, removedValueStorable, err = m.Remove(NewStringValue(strv.str))
+			removedKeyStorable, removedValueStorable, err = m.Remove(compare, NewStringValue(strv.str))
 			require.Error(t, err)
 			require.Nil(t, removedKeyStorable)
 			require.Nil(t, removedValueStorable)
@@ -565,7 +565,7 @@ func TestMapIterate(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range uniqueKeyValues {
-			existingStorable, err := m.Set(NewStringValue(k), Uint64Value(v))
+			existingStorable, err := m.Set(compare, NewStringValue(k), Uint64Value(v))
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -624,13 +624,13 @@ func TestMapIterate(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 
 		uniqueKeys := make(map[string]bool, mapSize)
 
-		sortedKeys := make([]ComparableValue, mapSize)
+		sortedKeys := make([]HashableValue, mapSize)
 
-		keys := make([]ComparableValue, mapSize)
+		keys := make([]HashableValue, mapSize)
 
 		for i := uint64(0); i < mapSize; i++ {
 			for {
@@ -689,7 +689,7 @@ func TestMapIterate(t *testing.T) {
 			v, ok := uniqueKeyValues[k]
 			require.True(t, ok)
 
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -698,7 +698,7 @@ func TestMapIterate(t *testing.T) {
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
 			require.Equal(t, sortedKeys[i], k)
 
-			mk, ok := k.(ComparableValue)
+			mk, ok := k.(HashableValue)
 			require.True(t, ok)
 			require.Equal(t, uniqueKeyValues[mk], v)
 
@@ -740,7 +740,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 
 	storage := newTestInMemoryStorage(t)
 
-	uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+	uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 	uniqueKeys := make(map[string]bool)
 	for i := uint64(0); i < mapSize; i++ {
 		for {
@@ -768,7 +768,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	require.NoError(t, err)
 
 	for k, v := range uniqueKeyValues {
-		existingStorable, err := m.Set(k, v)
+		existingStorable, err := m.Set(compare, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
@@ -785,7 +785,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
-		s, err := m.Get(NewStringValue(strv.str))
+		s, err := m.Get(compare, NewStringValue(strv.str))
 		require.NoError(t, err)
 
 		e, err := s.StoredValue(storage)
@@ -803,7 +803,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
-		removedKeyStorable, removedValueStorable, err := m.Remove(NewStringValue(strv.str))
+		removedKeyStorable, removedValueStorable, err := m.Remove(compare, NewStringValue(strv.str))
 		require.NoError(t, err)
 
 		removedKey, err := removedKeyStorable.StoredValue(storage)
@@ -839,7 +839,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 	storage := newTestInMemoryStorage(t)
 
-	uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+	uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 	uniqueKeys := make(map[string]bool)
 	for i := uint64(0); i < mapSize; i++ {
 		for {
@@ -867,7 +867,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 	require.NoError(t, err)
 
 	for k, v := range uniqueKeyValues {
-		existingStorable, err := m.Set(k, v)
+		existingStorable, err := m.Set(compare, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
@@ -884,7 +884,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
-		s, err := m.Get(NewStringValue(strv.str))
+		s, err := m.Get(compare, NewStringValue(strv.str))
 		require.NoError(t, err)
 
 		e, err := s.StoredValue(storage)
@@ -901,7 +901,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
-		removedKeyStorable, removedValueStorable, err := m.Remove(NewStringValue(strv.str))
+		removedKeyStorable, removedValueStorable, err := m.Remove(compare, NewStringValue(strv.str))
 		require.NoError(t, err)
 
 		removedKey, err := removedKeyStorable.StoredValue(storage)
@@ -978,13 +978,13 @@ func TestMapLargeElement(t *testing.T) {
 	require.NoError(t, err)
 
 	for k, v := range strs {
-		existingStorable, err := m.Set(NewStringValue(k), NewStringValue(v))
+		existingStorable, err := m.Set(compare, NewStringValue(k), NewStringValue(v))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
 
 	for k, v := range strs {
-		s, err := m.Get(NewStringValue(k))
+		s, err := m.Get(compare, NewStringValue(k))
 		require.NoError(t, err)
 
 		e, err := s.StoredValue(storage)
@@ -1051,8 +1051,8 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
 
-	keyValues := make(map[ComparableValue]Value)
-	var keys []ComparableValue
+	keyValues := make(map[HashableValue]Value)
+	var keys []HashableValue
 
 	for i := uint64(0); i < actionCount; i++ {
 
@@ -1060,7 +1060,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 
 		case SetAction:
 
-			var k ComparableValue
+			var k HashableValue
 
 			switch rand.Intn(MaxType) {
 			case Uint8Type:
@@ -1101,7 +1101,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 
 			if oldv, ok := keyValues[k]; ok {
@@ -1125,7 +1125,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 				ki := rand.Intn(len(keys))
 				k := keys[ki]
 
-				removedKeyStorable, removedValueStorable, err := m.Remove(k)
+				removedKeyStorable, removedValueStorable, err := m.Remove(compare, k)
 				require.NoError(t, err)
 
 				removedKey, err := removedKeyStorable.StoredValue(storage)
@@ -1147,7 +1147,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 	}
 
 	for k, v := range keyValues {
-		s, err := m.Get(k)
+		s, err := m.Get(compare, k)
 		require.NoError(t, err)
 
 		e, err := s.StoredValue(storage)
@@ -1201,7 +1201,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			digests := []Digest{Digest(i), Digest(i * 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1373,7 +1373,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, typeInfo, decodedMap.Type())
 
 		for i := uint64(0); i < mapSize; i++ {
-			s, err := decodedMap.Get(Uint64Value(i))
+			s, err := decodedMap.Get(compare, Uint64Value(i))
 			require.NoError(t, err)
 
 			v, err := s.StoredValue(storage)
@@ -1418,11 +1418,11 @@ func TestMapEncodeDecode(t *testing.T) {
 				require.NoError(t, err)
 
 				// Insert array to map
-				existingStorable, err := m.Set(k, array)
+				existingStorable, err := m.Set(compare, k, array)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 			} else {
-				existingStorable, err := m.Set(k, v)
+				existingStorable, err := m.Set(compare, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 			}
@@ -1655,7 +1655,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 			if i == mapSize-1 {
 				// Get nested array
-				storable, err := decodedMap.Get(Uint64Value(i))
+				storable, err := decodedMap.Get(compare, Uint64Value(i))
 				require.NoError(t, err)
 
 				v, err := storable.StoredValue(storage)
@@ -1672,7 +1672,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, Uint64Value(0), s)
 			} else {
-				s, err := decodedMap.Get(Uint64Value(i))
+				s, err := decodedMap.Get(compare, Uint64Value(i))
 				require.NoError(t, err)
 
 				v, err := s.StoredValue(storage)
@@ -1707,7 +1707,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			digests := []Digest{Digest(i % 4), Digest(i)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1947,7 +1947,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, typeInfo, decodedMap.Type())
 
 		for i := uint64(0); i < mapSize; i++ {
-			s, err := decodedMap.Get(Uint64Value(i))
+			s, err := decodedMap.Get(compare, Uint64Value(i))
 			require.NoError(t, err)
 
 			v, err := s.StoredValue(storage)
@@ -1981,7 +1981,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			digests := []Digest{Digest(i % 4), Digest(i % 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -2268,7 +2268,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, typeInfo, decodedMap.Type())
 
 		for i := uint64(0); i < mapSize; i++ {
-			s, err := decodedMap.Get(Uint64Value(i))
+			s, err := decodedMap.Get(compare, Uint64Value(i))
 			require.NoError(t, err)
 
 			v, err := s.StoredValue(storage)
@@ -2302,7 +2302,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			digests := []Digest{Digest(i % 2), Digest(i)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -2532,7 +2532,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, typeInfo, decodedMap.Type())
 
 		for i := uint64(0); i < mapSize; i++ {
-			s, err := decodedMap.Get(Uint64Value(i))
+			s, err := decodedMap.Get(compare, Uint64Value(i))
 			require.NoError(t, err)
 
 			v, err := s.StoredValue(storage)
@@ -2558,7 +2558,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		digests := []Digest{Digest(0), Digest(1)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-		existingStorable, err := m.Set(k, v)
+		existingStorable, err := m.Set(compare, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -2619,7 +2619,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		// Overwrite existing value with long string
 		vs := NewStringValue(randStr(512))
-		existingStorable, err = m.Set(k, vs)
+		existingStorable, err = m.Set(compare, k, vs)
 		require.NoError(t, err)
 
 		existingValue, err := existingStorable.StoredValue(storage)
@@ -2726,8 +2726,8 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
 
-	keyValues := make(map[ComparableValue]Value)
-	var keys []ComparableValue
+	keyValues := make(map[HashableValue]Value)
+	var keys []HashableValue
 
 	for i := uint64(0); i < actionCount; i++ {
 
@@ -2741,7 +2741,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 
 		case SetAction:
 
-			var k ComparableValue
+			var k HashableValue
 
 			switch rand.Intn(MaxType) {
 			case Uint8Type:
@@ -2777,7 +2777,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 
 			keyValues[k] = v
 
-			existingStorable, err := m.Set(k, v)
+			existingStorable, err := m.Set(compare, k, v)
 			require.NoError(t, err)
 
 			if existingStorable == nil {
@@ -2789,7 +2789,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 			ki := rand.Intn(len(keys))
 			k := keys[ki]
 
-			removedKeyStorable, removedValueStorable, err := m.Remove(k)
+			removedKeyStorable, removedValueStorable, err := m.Remove(compare, k)
 			require.NoError(t, err)
 
 			removedKey, err := removedKeyStorable.StoredValue(storage)
@@ -2836,7 +2836,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 	// Get and check every element from new map.
 
 	for k, v := range keyValues {
-		s, err := m2.Get(k)
+		s, err := m2.Get(compare, k)
 		require.NoError(t, err)
 
 		e, err := s.StoredValue(storage)
@@ -2856,7 +2856,7 @@ func TestMapStoredValue(t *testing.T) {
 	storage := newTestInMemoryStorage(t)
 
 	uniqueKeys := make(map[string]bool, mapSize)
-	uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+	uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 	for i := uint64(0); i < mapSize; i++ {
 		for {
 			s := randStr(16)
@@ -2874,7 +2874,7 @@ func TestMapStoredValue(t *testing.T) {
 	require.NoError(t, err)
 
 	for k, v := range uniqueKeyValues {
-		existingStorable, err := m.Set(k, v)
+		existingStorable, err := m.Set(compare, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
@@ -2892,7 +2892,7 @@ func TestMapStoredValue(t *testing.T) {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
 
-		s, err := m2.Get(NewStringValue(strv.str))
+		s, err := m2.Get(compare, NewStringValue(strv.str))
 		require.NoError(t, err)
 
 		e, err := s.StoredValue(storage)

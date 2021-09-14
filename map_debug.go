@@ -237,9 +237,9 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, elemen
 				return 0, err
 			}
 
-			ck, ok := ks.(ComparableValue)
+			ck, ok := ks.(HashableValue)
 			if !ok {
-				return 0, fmt.Errorf("key %s doesn't implement ComparableValue", ks)
+				return 0, fmt.Errorf("key %s doesn't implement HashableValue", ks)
 			}
 
 			// Verify single element size
@@ -300,9 +300,9 @@ func (m *OrderedMap) _validSingleElements(id StorageID, db DigesterBuilder, elem
 			return 0, err
 		}
 
-		ck, ok := ks.(ComparableValue)
+		ck, ok := ks.(HashableValue)
 		if !ok {
-			return 0, fmt.Errorf("key %s doesn't implement ComparableValue", ks)
+			return 0, fmt.Errorf("key %s doesn't implement HashableValue", ks)
 		}
 
 		// Verify single element size

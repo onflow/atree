@@ -8,8 +8,9 @@ type Value interface {
 	Storable(SlabStorage, Address, uint64) (Storable, error)
 }
 
-type ComparableValue interface {
+type HashableValue interface {
 	Value
 	Hashable
-	Equal(other Value) bool
 }
+
+type Comparator func(SlabStorage, Value, Storable) (bool, error)

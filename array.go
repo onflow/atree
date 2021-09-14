@@ -458,6 +458,73 @@ func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, err
 	return v, nil
 }
 
+func (a *ArrayDataSlab) SplitIntoSeveral(storage SlabStorage) ([]ArrayDataSlab, error) {
+	if len(a.elements) < 2 {
+		// Can't split slab with less than two elements
+		return nil, NewSlabSplitErrorf("can't split slab with less than 2 elements")
+	}
+
+	slabCounts := make([]uint32, 0)
+	slabSizes := make([]uint32, 0)
+	slabSize := uint32(0)
+	slabCount := 0
+
+	for _, e := range a.elements {
+		elemSize := e.ByteSize()
+		if slabSize+elemSize >= uint32(targetThreshold) {
+			// close the bucket and move on
+			slabCounts = append(slabCounts, uint32(slabCount))
+			slabSizes = append(slabSizes, slabSize)
+			slabCount = 0
+			slabSize = 0
+		}
+		slabCount += 1
+		slabSize += elemSize
+	}
+	// consider last count
+	slabCounts = append(slabCounts, uint32(slabCount))
+	slabSizes = append(slabSizes, slabSize)
+
+	// construct slabs
+	address := a.header.id.Address
+	numberOfSlabs := len(slabCounts)
+	slabs := make([]ArrayDataSlab, numberOfSlabs)
+	slabs[0] = *a
+	// set last next
+	slabs[numberOfSlabs-1].next = a.next
+	prevId := a.header.id
+	startIndex := slabCounts[0]
+	// we already have 1 slab
+	for i := 1; i < numberOfSlabs; i++ {
+		sID, err := storage.GenerateStorageID(address)
+		if err != nil {
+			return nil, NewStorageError(err)
+		}
+		slabs[i].header.id = sID
+		slabs[i].header.size = slabSizes[i]
+		slabs[i].header.count = slabCounts[i]
+		slabs[i].elements = make([]Storable, slabCounts[i])
+		copy(slabs[i].elements, a.elements[startIndex:startIndex+slabCounts[i]])
+		slabs[i].prev = prevId
+		slabs[i-1].next = sID
+
+		startIndex += slabCounts[i]
+		prevId = sID
+	}
+
+	// Modify (original) slab
+	// NOTE: prevent memory leak
+	firstSlabCount := slabCounts[0]
+	for i := int(firstSlabCount); i < len(a.elements); i++ {
+		a.elements[i] = nil
+	}
+	a.elements = a.elements[:firstSlabCount]
+	a.header.size = arrayDataSlabPrefixSize + slabSizes[0]
+	a.header.count = uint32(firstSlabCount)
+
+	return slabs, nil
+}
+
 func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	if len(a.elements) < 2 {
 		// Can't split slab with less than two elements
@@ -1482,6 +1549,16 @@ func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
 	}
 
 	return nil
+}
+
+func (a *ArrayMetaDataSlab) SplitIntoSeveral(storage SlabStorage) ([]ArrayMetaDataSlab, error) {
+	if len(a.childrenHeaders) < 2 {
+		// Can't split meta slab with less than 2 headers
+		return nil, NewSlabDataErrorf("can't split meta slab with less than 2 headers")
+	}
+
+	// TODO implement me
+	return nil, nil
 }
 
 func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {

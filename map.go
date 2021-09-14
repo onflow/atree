@@ -230,7 +230,7 @@ type MapSlab interface {
 }
 
 type OrderedMap struct {
-	storage         SlabStorage
+	Storage         SlabStorage
 	root            MapSlab
 	digesterBuilder DigesterBuilder
 }
@@ -1943,7 +1943,7 @@ func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	digestBuilder.SetSeed(m.extraData.Seed, typicalRandomConstant)
 
 	return &OrderedMap{
-		storage:         storage,
+		Storage:         storage,
 		root:            m,
 		digesterBuilder: digestBuilder,
 	}, nil
@@ -2344,7 +2344,7 @@ func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	digestBuilder.SetSeed(m.extraData.Seed, typicalRandomConstant)
 
 	return &OrderedMap{
-		storage:         storage,
+		Storage:         storage,
 		root:            m,
 		digesterBuilder: digestBuilder,
 	}, nil
@@ -3021,7 +3021,7 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 	}
 
 	return &OrderedMap{
-		storage:         storage,
+		Storage:         storage,
 		root:            root,
 		digesterBuilder: digestBuilder,
 	}, nil
@@ -3041,7 +3041,7 @@ func NewMapWithRootID(storage SlabStorage, rootID StorageID, digestBuilder Diges
 	digestBuilder.SetSeed(extraData.Seed, typicalRandomConstant)
 
 	return &OrderedMap{
-		storage:         storage,
+		Storage:         storage,
 		root:            root,
 		digesterBuilder: digestBuilder,
 	}, nil
@@ -3069,7 +3069,7 @@ func (m *OrderedMap) Get(key ComparableValue) (Storable, error) {
 		return nil, err
 	}
 
-	return m.root.Get(m.storage, keyDigest, level, hkey, key)
+	return m.root.Get(m.Storage, keyDigest, level, hkey, key)
 }
 
 func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
@@ -3086,12 +3086,12 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 		return nil, err
 	}
 
-	valueStorable, err := value.Storable(m.storage, m.Address(), maxInlineMapElementSize)
+	valueStorable, err := value.Storable(m.Storage, m.Address(), maxInlineMapElementSize)
 	if err != nil {
 		return nil, err
 	}
 
-	existingValue, err := m.root.Set(m.storage, m.digesterBuilder, keyDigest, level, hkey, key, valueStorable)
+	existingValue, err := m.root.Set(m.Storage, m.digesterBuilder, keyDigest, level, hkey, key, valueStorable)
 	if err != nil {
 		return nil, err
 	}
@@ -3111,7 +3111,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 
 			childID := root.childrenHeaders[0].id
 
-			child, err := getMapSlab(m.storage, childID)
+			child, err := getMapSlab(m.Storage, childID)
 			if err != nil {
 				return nil, err
 			}
@@ -3122,12 +3122,12 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 
 			m.root.SetExtraData(extraData)
 
-			err = m.storage.Store(rootID, m.root)
+			err = m.Storage.Store(rootID, m.root)
 			if err != nil {
 				return nil, err
 			}
 
-			err = m.storage.Remove(childID)
+			err = m.Storage.Remove(childID)
 			if err != nil {
 				return nil, err
 			}
@@ -3143,7 +3143,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 		rootID := m.root.ID()
 
 		// Assign a new storage id to old root before splitting it.
-		sID, err := m.storage.GenerateStorageID(m.Address())
+		sID, err := m.Storage.GenerateStorageID(m.Address())
 		if err != nil {
 			return nil, NewStorageError(err)
 		}
@@ -3152,7 +3152,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 		oldRoot.SetID(sID)
 
 		// Split old root
-		leftSlab, rightSlab, err := oldRoot.Split(m.storage)
+		leftSlab, rightSlab, err := oldRoot.Split(m.Storage)
 		if err != nil {
 			return nil, err
 		}
@@ -3173,15 +3173,15 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 
 		m.root = newRoot
 
-		err = m.storage.Store(left.ID(), left)
+		err = m.Storage.Store(left.ID(), left)
 		if err != nil {
 			return nil, err
 		}
-		err = m.storage.Store(right.ID(), right)
+		err = m.Storage.Store(right.ID(), right)
 		if err != nil {
 			return nil, err
 		}
-		err = m.storage.Store(m.root.ID(), m.root)
+		err = m.Storage.Store(m.root.ID(), m.root)
 		if err != nil {
 			return nil, err
 		}
@@ -3204,7 +3204,7 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 		return nil, nil, err
 	}
 
-	k, v, err := m.root.Remove(m.storage, keyDigest, level, hkey, key)
+	k, v, err := m.root.Remove(m.Storage, keyDigest, level, hkey, key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -3222,7 +3222,7 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 
 			childID := root.childrenHeaders[0].id
 
-			child, err := getMapSlab(m.storage, childID)
+			child, err := getMapSlab(m.Storage, childID)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -3233,12 +3233,12 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 
 			m.root.SetExtraData(extraData)
 
-			err = m.storage.Store(rootID, m.root)
+			err = m.Storage.Store(rootID, m.root)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			err = m.storage.Remove(childID)
+			err = m.Storage.Remove(childID)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -3254,7 +3254,7 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 		rootID := m.root.ID()
 
 		// Assign a new storage id to old root before splitting it.
-		id, err := m.storage.GenerateStorageID(m.Address())
+		id, err := m.Storage.GenerateStorageID(m.Address())
 
 		if err != nil {
 			return nil, nil, NewStorageError(err)
@@ -3263,7 +3263,7 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 		oldRoot.SetID(id)
 
 		// Split old root
-		leftSlab, rightSlab, err := oldRoot.Split(m.storage)
+		leftSlab, rightSlab, err := oldRoot.Split(m.Storage)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -3284,15 +3284,15 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 
 		m.root = newRoot
 
-		err = m.storage.Store(left.ID(), left)
+		err = m.Storage.Store(left.ID(), left)
 		if err != nil {
 			return nil, nil, err
 		}
-		err = m.storage.Store(right.ID(), right)
+		err = m.Storage.Store(right.ID(), right)
 		if err != nil {
 			return nil, nil, err
 		}
-		err = m.storage.Store(m.root.ID(), m.root)
+		err = m.Storage.Store(m.root.ID(), m.root)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -3340,7 +3340,7 @@ func (m *OrderedMap) string(meta *MapMetaDataSlab) string {
 	var elemsStr []string
 
 	for _, h := range meta.childrenHeaders {
-		child, err := getMapSlab(m.storage, h.id)
+		child, err := getMapSlab(m.Storage, h.id)
 		if err != nil {
 			return err.Error()
 		}
@@ -3494,13 +3494,13 @@ func (i *MapIterator) Next() (key Value, value Value, err error) {
 }
 
 func (m *OrderedMap) Iterator() (*MapIterator, error) {
-	slab, err := firstMapDataSlab(m.storage, m.root)
+	slab, err := firstMapDataSlab(m.Storage, m.root)
 	if err != nil {
 		return nil, err
 	}
 
 	return &MapIterator{
-		storage: m.storage,
+		storage: m.Storage,
 		id:      slab.ID(),
 	}, nil
 }

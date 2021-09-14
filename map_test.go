@@ -125,7 +125,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
 
 		stats, _ := m.Stats()
-		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
 	})
 
 	t.Run("replicate keys", func(t *testing.T) {
@@ -201,7 +201,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
 
 		stats, _ := m.Stats()
-		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
 	})
 
 	// Test random string with random length as key and random uint as value
@@ -266,7 +266,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
 
 		stats, _ := m.Stats()
-		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
 	})
 }
 
@@ -435,7 +435,7 @@ func TestMapRemove(t *testing.T) {
 		require.Equal(t, uint64(0), stats.MetaDataSlabCount)
 		require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
 
-		require.Equal(t, int(1), m.storage.Count())
+		require.Equal(t, int(1), m.Storage.Count())
 	})
 
 	t.Run("large key and value", func(t *testing.T) {
@@ -796,7 +796,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	require.Equal(t, typeInfo, m.Type())
 
 	stats, _ := m.Stats()
-	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
 	require.Equal(t, uint64(mockDigestCount), stats.CollisionDataSlabCount)
 
 	for k, v := range uniqueKeyValues {
@@ -819,7 +819,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 
 	require.Equal(t, typeInfo, m.Type())
 
-	require.Equal(t, uint64(1), uint64(m.storage.Count()))
+	require.Equal(t, uint64(1), uint64(m.Storage.Count()))
 
 	stats, _ = m.Stats()
 	require.Equal(t, uint64(1), stats.DataSlabCount)
@@ -895,7 +895,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 	require.Equal(t, typeInfo, m.Type())
 
 	stats, _ := m.Stats()
-	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.storage.Count()))
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
 
 	for k, v := range uniqueKeyValues {
 		strv := k.(StringValue)
@@ -917,7 +917,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 	require.Equal(t, typeInfo, m.Type())
 
-	require.Equal(t, uint64(1), uint64(m.storage.Count()))
+	require.Equal(t, uint64(1), uint64(m.Storage.Count()))
 
 	stats, _ = m.Stats()
 	require.Equal(t, uint64(1), stats.DataSlabCount)
@@ -1007,7 +1007,7 @@ func TestMapLargeElement(t *testing.T) {
 	require.True(t, verified)
 
 	stats, _ := m.Stats()
-	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+mapSize*2, uint64(m.storage.Count()))
+	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+mapSize*2, uint64(m.Storage.Count()))
 }
 
 func TestMapRandomSetRemoveMixedTypes(t *testing.T) {

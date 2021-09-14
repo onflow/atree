@@ -26,7 +26,7 @@ type Uint8Value uint8
 
 var _ Value = Uint8Value(0)
 var _ Storable = Uint8Value(0)
-var _ ComparableValue = Uint8Value(0)
+var _ HashableValue = Uint8Value(0)
 
 func (v Uint8Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -89,7 +89,7 @@ type Uint16Value uint16
 
 var _ Value = Uint16Value(0)
 var _ Storable = Uint16Value(0)
-var _ ComparableValue = Uint16Value(0)
+var _ HashableValue = Uint16Value(0)
 
 func (v Uint16Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -146,7 +146,7 @@ type Uint32Value uint32
 
 var _ Value = Uint32Value(0)
 var _ Storable = Uint32Value(0)
-var _ ComparableValue = Uint32Value(0)
+var _ HashableValue = Uint32Value(0)
 
 func (v Uint32Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
@@ -212,7 +212,7 @@ type Uint64Value uint64
 
 var _ Value = Uint64Value(0)
 var _ Storable = Uint64Value(0)
-var _ ComparableValue = Uint64Value(0)
+var _ HashableValue = Uint64Value(0)
 
 func (v Uint64Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -277,7 +277,7 @@ type StringValue struct {
 
 var _ Value = &StringValue{}
 var _ Storable = &StringValue{}
-var _ ComparableValue = &StringValue{}
+var _ HashableValue = &StringValue{}
 
 func NewStringValue(s string) StringValue {
 	size := GetUintCBORSize(uint64(len(s))) + uint32(len(s))

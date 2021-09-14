@@ -8,7 +8,7 @@ type Value interface {
 	Storable(SlabStorage, Address, uint64) (Storable, error)
 }
 
-type ComparableValue interface {
+type HashableValue interface {
 	Value
 	Hashable
 }

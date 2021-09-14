@@ -78,7 +78,7 @@ func TestMapSetAndGet(t *testing.T) {
 		storage := newTestInMemoryStorage(t)
 
 		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
@@ -139,7 +139,7 @@ func TestMapSetAndGet(t *testing.T) {
 		storage := newTestInMemoryStorage(t)
 
 		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(16)
@@ -215,7 +215,7 @@ func TestMapSetAndGet(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				slen := rand.Intn(maxKeyLength + 1)
@@ -355,7 +355,7 @@ func TestMapRemove(t *testing.T) {
 		storage := newTestInMemoryStorage(t)
 
 		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(keyStringMaxSize)
@@ -452,7 +452,7 @@ func TestMapRemove(t *testing.T) {
 		storage := newTestInMemoryStorage(t)
 
 		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			for {
 				s := randStr(keyStringMaxSize)
@@ -624,13 +624,13 @@ func TestMapIterate(t *testing.T) {
 
 		storage := newTestInMemoryStorage(t)
 
-		uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+		uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 
 		uniqueKeys := make(map[string]bool, mapSize)
 
-		sortedKeys := make([]ComparableValue, mapSize)
+		sortedKeys := make([]HashableValue, mapSize)
 
-		keys := make([]ComparableValue, mapSize)
+		keys := make([]HashableValue, mapSize)
 
 		for i := uint64(0); i < mapSize; i++ {
 			for {
@@ -698,7 +698,7 @@ func TestMapIterate(t *testing.T) {
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
 			require.Equal(t, sortedKeys[i], k)
 
-			mk, ok := k.(ComparableValue)
+			mk, ok := k.(HashableValue)
 			require.True(t, ok)
 			require.Equal(t, uniqueKeyValues[mk], v)
 
@@ -740,7 +740,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 
 	storage := newTestInMemoryStorage(t)
 
-	uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+	uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 	uniqueKeys := make(map[string]bool)
 	for i := uint64(0); i < mapSize; i++ {
 		for {
@@ -839,7 +839,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 	storage := newTestInMemoryStorage(t)
 
-	uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+	uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 	uniqueKeys := make(map[string]bool)
 	for i := uint64(0); i < mapSize; i++ {
 		for {
@@ -1051,8 +1051,8 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
 
-	keyValues := make(map[ComparableValue]Value)
-	var keys []ComparableValue
+	keyValues := make(map[HashableValue]Value)
+	var keys []HashableValue
 
 	for i := uint64(0); i < actionCount; i++ {
 
@@ -1060,7 +1060,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 
 		case SetAction:
 
-			var k ComparableValue
+			var k HashableValue
 
 			switch rand.Intn(MaxType) {
 			case Uint8Type:
@@ -2726,8 +2726,8 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
 
-	keyValues := make(map[ComparableValue]Value)
-	var keys []ComparableValue
+	keyValues := make(map[HashableValue]Value)
+	var keys []HashableValue
 
 	for i := uint64(0); i < actionCount; i++ {
 
@@ -2741,7 +2741,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 
 		case SetAction:
 
-			var k ComparableValue
+			var k HashableValue
 
 			switch rand.Intn(MaxType) {
 			case Uint8Type:
@@ -2856,7 +2856,7 @@ func TestMapStoredValue(t *testing.T) {
 	storage := newTestInMemoryStorage(t)
 
 	uniqueKeys := make(map[string]bool, mapSize)
-	uniqueKeyValues := make(map[ComparableValue]Value, mapSize)
+	uniqueKeyValues := make(map[HashableValue]Value, mapSize)
 	for i := uint64(0); i < mapSize; i++ {
 		for {
 			s := randStr(16)

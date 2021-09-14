@@ -5,7 +5,7 @@
 package atree
 
 import (
-	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math"
 
@@ -51,23 +51,25 @@ func (v Uint8Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint8(uint8(v))
 }
 
-// TODO: cache hash code
-// TODO: cache EncMode
-func (v Uint8Value) GetHashInput() ([]byte, error) {
-	encMode, err := cbor.EncOptions{}.EncMode()
-	if err != nil {
-		return nil, err
+func (v Uint8Value) GetHashInput(scratch []byte) ([]byte, error) {
+
+	const cborTypePositiveInt = 0x00
+
+	buf := scratch
+	if len(scratch) < 4 {
+		buf = make([]byte, 4)
 	}
 
-	var buf bytes.Buffer
-	enc := NewEncoder(&buf, encMode)
+	buf[0], buf[1] = 0xd8, cborTagUInt8Value // Tag number
 
-	err = v.Encode(enc)
-	if err != nil {
-		return nil, err
+	if v <= 23 {
+		buf[2] = cborTypePositiveInt | byte(v)
+		return buf[:3], nil
 	}
-	enc.CBOR.Flush()
-	return buf.Bytes(), nil
+
+	buf[2] = cborTypePositiveInt | byte(24)
+	buf[3] = byte(v)
+	return buf[:4], nil
 }
 
 func (v Uint8Value) Equal(other Value) bool {
@@ -113,22 +115,30 @@ func (v Uint16Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint16(uint16(v))
 }
 
-// TODO: cache encoded data and size
-func (v Uint16Value) GetHashInput() ([]byte, error) {
-	encMode, err := cbor.EncOptions{}.EncMode()
-	if err != nil {
-		return nil, err
-	}
-	var buf bytes.Buffer
-	enc := NewEncoder(&buf, encMode)
+func (v Uint16Value) GetHashInput(scratch []byte) ([]byte, error) {
+	const cborTypePositiveInt = 0x00
 
-	err = v.Encode(enc)
-	if err != nil {
-		return nil, err
+	buf := scratch
+	if len(buf) < 8 {
+		buf = make([]byte, 8)
 	}
 
-	enc.CBOR.Flush()
-	return buf.Bytes(), nil
+	buf[0], buf[1] = 0xd8, cborTagUInt16Value // Tag number
+
+	if v <= 23 {
+		buf[2] = cborTypePositiveInt | byte(v)
+		return buf[:3], nil
+	}
+
+	if v <= math.MaxUint8 {
+		buf[2] = cborTypePositiveInt | byte(24)
+		buf[3] = byte(v)
+		return buf[:4], nil
+	}
+
+	buf[2] = cborTypePositiveInt | byte(25)
+	binary.BigEndian.PutUint16(buf[3:], uint16(v))
+	return buf[:5], nil
 }
 
 func (v Uint16Value) Equal(other Value) bool {
@@ -183,22 +193,37 @@ func (v Uint32Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint32(uint32(v))
 }
 
-// TODO: cache encoded data and size
-func (v Uint32Value) GetHashInput() ([]byte, error) {
-	encMode, err := cbor.EncOptions{}.EncMode()
-	if err != nil {
-		return nil, err
+func (v Uint32Value) GetHashInput(scratch []byte) ([]byte, error) {
+
+	const cborTypePositiveInt = 0x00
+
+	buf := scratch
+	if len(buf) < 8 {
+		buf = make([]byte, 8)
 	}
 
-	var buf bytes.Buffer
-	enc := NewEncoder(&buf, encMode)
+	buf[0], buf[1] = 0xd8, cborTagUInt32Value // Tag number
 
-	err = v.Encode(enc)
-	if err != nil {
-		return nil, err
+	if v <= 23 {
+		buf[2] = cborTypePositiveInt | byte(v)
+		return buf[:3], nil
 	}
-	enc.CBOR.Flush()
-	return buf.Bytes(), nil
+
+	if v <= math.MaxUint8 {
+		buf[2] = cborTypePositiveInt | byte(24)
+		buf[3] = byte(v)
+		return buf[:4], nil
+	}
+
+	if v <= math.MaxUint16 {
+		buf[2] = cborTypePositiveInt | byte(25)
+		binary.BigEndian.PutUint16(buf[3:], uint16(v))
+		return buf[:5], nil
+	}
+
+	buf[2] = cborTypePositiveInt | byte(26)
+	binary.BigEndian.PutUint32(buf[3:], uint32(v))
+	return buf[:7], nil
 }
 
 func (v Uint32Value) Equal(other Value) bool {
@@ -249,22 +274,42 @@ func (v Uint64Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint64(uint64(v))
 }
 
-// TODO: cache encoded data and size
-func (v Uint64Value) GetHashInput() ([]byte, error) {
-	encMode, err := cbor.EncOptions{}.EncMode()
-	if err != nil {
-		return nil, err
+func (v Uint64Value) GetHashInput(scratch []byte) ([]byte, error) {
+	const cborTypePositiveInt = 0x00
+
+	buf := scratch
+	if len(buf) < 16 {
+		buf = make([]byte, 16)
 	}
 
-	var buf bytes.Buffer
-	enc := NewEncoder(&buf, encMode)
+	buf[0], buf[1] = 0xd8, cborTagUInt64Value // Tag number
 
-	err = v.Encode(enc)
-	if err != nil {
-		return nil, err
+	if v <= 23 {
+		buf[2] = cborTypePositiveInt | byte(v)
+		return buf[:3], nil
 	}
-	enc.CBOR.Flush()
-	return buf.Bytes(), nil
+
+	if v <= math.MaxUint8 {
+		buf[2] = cborTypePositiveInt | byte(24)
+		buf[3] = byte(v)
+		return buf[:4], nil
+	}
+
+	if v <= math.MaxUint16 {
+		buf[2] = cborTypePositiveInt | byte(25)
+		binary.BigEndian.PutUint16(buf[3:], uint16(v))
+		return buf[:5], nil
+	}
+
+	if v <= math.MaxUint32 {
+		buf[2] = cborTypePositiveInt | byte(26)
+		binary.BigEndian.PutUint32(buf[3:], uint32(v))
+		return buf[:7], nil
+	}
+
+	buf[2] = cborTypePositiveInt | byte(27)
+	binary.BigEndian.PutUint64(buf[3:], uint64(v))
+	return buf[:11], nil
 }
 
 func (v Uint64Value) Equal(other Value) bool {
@@ -334,22 +379,50 @@ func (v StringValue) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeString(v.str)
 }
 
-// TODO: cache encoded data and size
-func (v StringValue) GetHashInput() ([]byte, error) {
-	encMode, err := cbor.EncOptions{}.EncMode()
-	if err != nil {
-		return nil, err
+func (v StringValue) GetHashInput(scratch []byte) ([]byte, error) {
+
+	const cborTypeTextString = 0x60
+
+	buf := scratch
+	if uint32(len(buf)) < v.size {
+		buf = make([]byte, v.size)
+	} else {
+		buf = buf[:v.size]
 	}
 
-	var buf bytes.Buffer
-	enc := NewEncoder(&buf, encMode)
+	slen := len(v.str)
 
-	err = v.Encode(enc)
-	if err != nil {
-		return nil, err
+	if slen <= 23 {
+		buf[0] = cborTypeTextString | byte(slen)
+		copy(buf[1:], v.str)
+		return buf, nil
 	}
-	enc.CBOR.Flush()
-	return buf.Bytes(), nil
+
+	if slen <= math.MaxUint8 {
+		buf[0] = cborTypeTextString | byte(24)
+		buf[1] = byte(slen)
+		copy(buf[2:], v.str)
+		return buf, nil
+	}
+
+	if slen <= math.MaxUint16 {
+		buf[0] = cborTypeTextString | byte(25)
+		binary.BigEndian.PutUint16(buf[1:], uint16(slen))
+		copy(buf[3:], v.str)
+		return buf, nil
+	}
+
+	if slen <= math.MaxUint32 {
+		buf[0] = cborTypeTextString | byte(26)
+		binary.BigEndian.PutUint32(buf[1:], uint32(slen))
+		copy(buf[5:], v.str)
+		return buf, nil
+	}
+
+	buf[0] = cborTypeTextString | byte(27)
+	binary.BigEndian.PutUint64(buf[1:], uint64(slen))
+	copy(buf[9:], v.str)
+	return buf, nil
 }
 
 func (v StringValue) Equal(other Value) bool {

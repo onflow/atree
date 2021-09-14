@@ -461,6 +461,7 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 	if err != nil {
 		return nil, nil, err
 	}
+	defer putBasicDigester(existingKeyDigest)
 
 	// Create collision group with existing and new elements
 	var elements elements
@@ -3061,6 +3062,7 @@ func (m *OrderedMap) Get(key ComparableValue) (Storable, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer putBasicDigester(keyDigest)
 
 	level := 0
 
@@ -3078,6 +3080,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer putBasicDigester(keyDigest)
 
 	level := 0
 
@@ -3196,6 +3199,7 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	defer putBasicDigester(keyDigest)
 
 	level := 0
 

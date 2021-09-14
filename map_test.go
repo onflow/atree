@@ -50,6 +50,8 @@ func (d mockDigester) Levels() int {
 	return len(d.d)
 }
 
+func (d mockDigester) Reset() {}
+
 func newTestInMemoryStorage(t testing.TB) SlabStorage {
 
 	encMode, err := cbor.EncOptions{}.EncMode()

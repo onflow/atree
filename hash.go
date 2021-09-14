@@ -3,13 +3,14 @@ package atree
 import (
 	"encoding/binary"
 	"errors"
+	"sync"
 
 	"github.com/dchest/siphash"
 	"github.com/zeebo/blake3"
 )
 
 type Hashable interface {
-	GetHashInput() ([]byte, error)
+	GetHashInput([]byte) ([]byte, error)
 }
 
 type Digest uint64
@@ -27,6 +28,9 @@ type Digester interface {
 	// Digest returns digest at specified level.
 	Digest(level int) (Digest, error)
 
+	// Reset data for reuse
+	Reset()
+
 	Levels() int
 }
 
@@ -42,7 +46,27 @@ type basicDigester struct {
 	k1         uint64
 	sipHash    [2]uint64
 	blake3Hash [4]uint64
+	scratch    [32]byte
 	msg        []byte
+}
+
+// basicDigesterPool caches unused basicDigester objects for later reuse.
+var basicDigesterPool = sync.Pool{
+	New: func() interface{} {
+		return &basicDigester{}
+	},
+}
+
+func getBasicDigester() *basicDigester {
+	return basicDigesterPool.Get().(*basicDigester)
+}
+
+func putBasicDigester(e Digester) {
+	if _, ok := e.(*basicDigester); !ok {
+		return
+	}
+	e.Reset()
+	basicDigesterPool.Put(e)
 }
 
 var (
@@ -68,12 +92,26 @@ func (bdb *basicDigesterBuilder) Digest(hashable Hashable) (Digester, error) {
 		return nil, NewHashError(errors.New("k0 is uninitialized"))
 	}
 
-	msg, err := hashable.GetHashInput()
+	digester := getBasicDigester()
+
+	msg, err := hashable.GetHashInput(digester.scratch[:])
 	if err != nil {
+		putBasicDigester(digester)
 		return nil, err
 	}
 
-	return &basicDigester{k0: bdb.k0, k1: bdb.k1, msg: msg}, nil
+	digester.k0 = bdb.k0
+	digester.k1 = bdb.k1
+	digester.msg = msg
+	return digester, nil
+}
+
+func (bd *basicDigester) Reset() {
+	bd.k0 = 0
+	bd.k1 = 0
+	bd.sipHash = emptySipHash
+	bd.blake3Hash = emptyBlake3Hash
+	bd.msg = nil
 }
 
 func (bd *basicDigester) DigestPrefix(level int) ([]Digest, error) {

@@ -1938,7 +1938,7 @@ func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		return nil, NewNotValueError()
 	}
 
-	digestBuilder := newDefaultDigesterBuilder()
+	digestBuilder := NewDefaultDigesterBuilder()
 
 	digestBuilder.SetSeed(m.extraData.Seed, typicalRandomConstant)
 
@@ -2339,7 +2339,7 @@ func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		return nil, NewNotValueError()
 	}
 
-	digestBuilder := newDefaultDigesterBuilder()
+	digestBuilder := NewDefaultDigesterBuilder()
 
 	digestBuilder.SetSeed(m.extraData.Seed, typicalRandomConstant)
 

@@ -11,5 +11,6 @@ type Value interface {
 type ComparableValue interface {
 	Value
 	Hashable
-	Equal(other Value) bool
 }
+
+type Comparator func(SlabStorage, Value, Storable) (bool, error)

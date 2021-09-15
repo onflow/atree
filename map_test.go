@@ -592,6 +592,7 @@ func TestMapIterate(t *testing.T) {
 			return i < j // sort by insertion order with hash collision
 		})
 
+		// Iterate key value pairs
 		i := uint64(0)
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
 			ks, ok := k.(StringValue)
@@ -601,6 +602,38 @@ func TestMapIterate(t *testing.T) {
 			vi, ok := v.(Uint64Value)
 			require.True(t, ok)
 			require.Equal(t, uniqueKeyValues[ks.String()], uint64(vi))
+
+			i++
+
+			return true, nil
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, i, uint64(mapSize))
+
+		// Iterate keys
+		i = uint64(0)
+		err = m.IterateKeys(func(k Value) (resume bool, err error) {
+			ks, ok := k.(StringValue)
+			require.True(t, ok)
+			require.Equal(t, sortedKeys[i].String(), ks.String())
+
+			i++
+
+			return true, nil
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, i, uint64(mapSize))
+
+		// Iterate values
+		i = uint64(0)
+		err = m.IterateValues(func(v Value) (resume bool, err error) {
+			key := sortedKeys[i]
+
+			vi, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, uniqueKeyValues[key.str], uint64(vi))
 
 			i++
 
@@ -694,6 +727,7 @@ func TestMapIterate(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
+		// Iterate key value pairs
 		i := uint64(0)
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
 			require.Equal(t, sortedKeys[i], k)
@@ -704,6 +738,26 @@ func TestMapIterate(t *testing.T) {
 
 			i++
 
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, i, uint64(mapSize))
+
+		// Iterate keys
+		i = uint64(0)
+		err = m.IterateKeys(func(k Value) (resume bool, err error) {
+			require.Equal(t, sortedKeys[i], k)
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, i, uint64(mapSize))
+
+		// Iterate values
+		i = uint64(0)
+		err = m.IterateValues(func(v Value) (resume bool, err error) {
+			require.Equal(t, uniqueKeyValues[sortedKeys[i]], v)
+			i++
 			return true, nil
 		})
 		require.NoError(t, err)

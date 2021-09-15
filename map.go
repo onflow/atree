@@ -3454,7 +3454,7 @@ type MapElementIterator struct {
 
 var errEOE = errors.New("end of elements")
 
-func (i *MapElementIterator) Next() (key Value, value Value, err error) {
+func (i *MapElementIterator) Next() (key MapKey, value MapValue, err error) {
 
 	if i.nestedIterator != nil {
 		key, value, err = i.nestedIterator.Next()
@@ -3495,22 +3495,13 @@ func (i *MapElementIterator) Next() (key Value, value Value, err error) {
 		return nil, nil, NewTypeAssertionError("*singleElement", fmt.Sprintf("%T", e))
 	}
 
-	k, err := se.key.StoredValue(i.storage)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	v, err := se.value.StoredValue(i.storage)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	i.index++
 
-	return k, v, nil
+	return se.key, se.value, nil
 }
 
-type MapIterationFunc func(Value, Value) (resume bool, err error)
+type MapEntryIterationFunc func(Value, Value) (resume bool, err error)
+type MapElementIterationFunc func(Value) (resume bool, err error)
 
 type MapIterator struct {
 	storage      SlabStorage
@@ -3524,32 +3515,117 @@ func (i *MapIterator) Next() (key Value, value Value, err error) {
 			return nil, nil, nil
 		}
 
-		slab, found, err := i.storage.Retrieve(i.id)
+		err = i.advance()
 		if err != nil {
 			return nil, nil, err
 		}
-		if !found {
-			return nil, nil, NewSlabNotFoundErrorf(i.id, "next slab not found inside MapIterator")
-		}
-
-		dataSlab := slab.(*MapDataSlab)
-
-		i.id = dataSlab.next
-
-		i.elemIterator = &MapElementIterator{
-			storage:  i.storage,
-			elements: dataSlab.elements,
-		}
 	}
 
-	key, value, err = i.elemIterator.Next()
+	var ks, vs Storable
+	ks, vs, err = i.elemIterator.Next()
+	if err == nil {
+		key, err = ks.StoredValue(i.storage)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		value, err = vs.StoredValue(i.storage)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return key, value, nil
+	}
 	if err != errEOE {
-		return key, value, err
+		return nil, nil, err
 	}
 
 	i.elemIterator = nil
 
 	return i.Next()
+}
+
+func (i *MapIterator) NextKey() (key Value, err error) {
+	if i.elemIterator == nil {
+		if i.id == StorageIDUndefined {
+			return nil, nil
+		}
+
+		err = i.advance()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var ks Storable
+	ks, _, err = i.elemIterator.Next()
+	if err == nil {
+		key, err = ks.StoredValue(i.storage)
+		if err != nil {
+			return nil, err
+		}
+
+		return key, nil
+	}
+	if err != errEOE {
+		return nil, err
+	}
+
+	i.elemIterator = nil
+
+	return i.NextKey()
+}
+
+func (i *MapIterator) NextValue() (value Value, err error) {
+	if i.elemIterator == nil {
+		if i.id == StorageIDUndefined {
+			return nil, nil
+		}
+
+		err = i.advance()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var vs Storable
+	_, vs, err = i.elemIterator.Next()
+	if err == nil {
+		value, err = vs.StoredValue(i.storage)
+		if err != nil {
+			return nil, err
+		}
+
+		return value, nil
+	}
+	if err != errEOE {
+		return nil, err
+	}
+
+	i.elemIterator = nil
+
+	return i.NextValue()
+}
+
+func (i *MapIterator) advance() error {
+	slab, found, err := i.storage.Retrieve(i.id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return NewSlabNotFoundErrorf(i.id, "next slab not found inside MapIterator")
+	}
+
+	dataSlab := slab.(*MapDataSlab)
+
+	i.id = dataSlab.next
+
+	i.elemIterator = &MapElementIterator{
+		storage:  i.storage,
+		elements: dataSlab.elements,
+	}
+
+	return nil
 }
 
 func (m *OrderedMap) Iterator() (*MapIterator, error) {
@@ -3564,15 +3640,16 @@ func (m *OrderedMap) Iterator() (*MapIterator, error) {
 	}, nil
 }
 
-func (m *OrderedMap) Iterate(fn MapIterationFunc) error {
+func (m *OrderedMap) Iterate(fn MapEntryIterationFunc) error {
 
 	iterator, err := m.Iterator()
 	if err != nil {
 		return err
 	}
 
+	var key, value Value
 	for {
-		key, value, err := iterator.Next()
+		key, value, err = iterator.Next()
 		if err != nil {
 			return err
 		}
@@ -3580,6 +3657,58 @@ func (m *OrderedMap) Iterate(fn MapIterationFunc) error {
 			return nil
 		}
 		resume, err := fn(key, value)
+		if err != nil {
+			return err
+		}
+		if !resume {
+			return nil
+		}
+	}
+}
+
+func (m *OrderedMap) IterateKeys(fn MapElementIterationFunc) error {
+
+	iterator, err := m.Iterator()
+	if err != nil {
+		return err
+	}
+
+	var key Value
+	for {
+		key, err = iterator.NextKey()
+		if err != nil {
+			return err
+		}
+		if key == nil {
+			return nil
+		}
+		resume, err := fn(key)
+		if err != nil {
+			return err
+		}
+		if !resume {
+			return nil
+		}
+	}
+}
+
+func (m *OrderedMap) IterateValues(fn MapElementIterationFunc) error {
+
+	iterator, err := m.Iterator()
+	if err != nil {
+		return err
+	}
+
+	var value Value
+	for {
+		value, err = iterator.NextValue()
+		if err != nil {
+			return err
+		}
+		if value == nil {
+			return nil
+		}
+		resume, err := fn(value)
 		if err != nil {
 			return err
 		}

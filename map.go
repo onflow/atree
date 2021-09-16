@@ -501,7 +501,6 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 	if err != nil {
 		return nil, nil, err
 	}
-	defer putBasicDigester(existingKeyDigest)
 
 	kv, ok := v.(HashableValue)
 	if !ok {
@@ -512,6 +511,7 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 	if err != nil {
 		return nil, nil, err
 	}
+	defer putBasicDigester(existingKeyDigest)
 
 	d, err := existingKeyDigest.Digest(level + 1)
 	if err != nil {

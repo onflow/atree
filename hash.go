@@ -61,7 +61,7 @@ func getBasicDigester() *basicDigester {
 	return basicDigesterPool.Get().(*basicDigester)
 }
 
-func putBasicDigester(e Digester) {
+func putDigester(e Digester) {
 	if _, ok := e.(*basicDigester); !ok {
 		return
 	}
@@ -96,7 +96,7 @@ func (bdb *basicDigesterBuilder) Digest(hashable Hashable) (Digester, error) {
 
 	msg, err := hashable.GetHashInput(digester.scratch[:])
 	if err != nil {
-		putBasicDigester(digester)
+		putDigester(digester)
 		return nil, err
 	}
 

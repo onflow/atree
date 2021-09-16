@@ -511,6 +511,7 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 	if err != nil {
 		return nil, nil, err
 	}
+	defer putDigester(existingKeyDigest)
 
 	d, err := existingKeyDigest.Digest(level + 1)
 	if err != nil {
@@ -3125,6 +3126,7 @@ func (m *OrderedMap) Get(comparator Comparator, key HashableValue) (Storable, er
 	if err != nil {
 		return nil, err
 	}
+	defer putDigester(keyDigest)
 
 	level := 0
 
@@ -3142,6 +3144,7 @@ func (m *OrderedMap) Set(comparator Comparator, key HashableValue, value Value) 
 	if err != nil {
 		return nil, err
 	}
+	defer putDigester(keyDigest)
 
 	level := 0
 
@@ -3255,6 +3258,7 @@ func (m *OrderedMap) Remove(comparator Comparator, key HashableValue) (Storable,
 	if err != nil {
 		return nil, nil, err
 	}
+	defer putDigester(keyDigest)
 
 	level := 0
 

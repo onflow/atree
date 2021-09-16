@@ -26,7 +26,6 @@ type Uint8Value uint8
 
 var _ Value = Uint8Value(0)
 var _ Storable = Uint8Value(0)
-var _ HashableValue = Uint8Value(0)
 
 func (v Uint8Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -52,7 +51,7 @@ func (v Uint8Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint8(uint8(v))
 }
 
-func (v Uint8Value) GetHashInput(scratch []byte) ([]byte, error) {
+func (v Uint8Value) getHashInput(scratch []byte) ([]byte, error) {
 
 	const cborTypePositiveInt = 0x00
 
@@ -91,7 +90,6 @@ type Uint16Value uint16
 
 var _ Value = Uint16Value(0)
 var _ Storable = Uint16Value(0)
-var _ HashableValue = Uint16Value(0)
 
 func (v Uint16Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -112,7 +110,7 @@ func (v Uint16Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint16(uint16(v))
 }
 
-func (v Uint16Value) GetHashInput(scratch []byte) ([]byte, error) {
+func (v Uint16Value) getHashInput(scratch []byte) ([]byte, error) {
 	const cborTypePositiveInt = 0x00
 
 	buf := scratch
@@ -156,7 +154,6 @@ type Uint32Value uint32
 
 var _ Value = Uint32Value(0)
 var _ Storable = Uint32Value(0)
-var _ HashableValue = Uint32Value(0)
 
 func (v Uint32Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
@@ -186,7 +183,7 @@ func (v Uint32Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint32(uint32(v))
 }
 
-func (v Uint32Value) GetHashInput(scratch []byte) ([]byte, error) {
+func (v Uint32Value) getHashInput(scratch []byte) ([]byte, error) {
 
 	const cborTypePositiveInt = 0x00
 
@@ -237,7 +234,6 @@ type Uint64Value uint64
 
 var _ Value = Uint64Value(0)
 var _ Storable = Uint64Value(0)
-var _ HashableValue = Uint64Value(0)
 
 func (v Uint64Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -263,7 +259,7 @@ func (v Uint64Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint64(uint64(v))
 }
 
-func (v Uint64Value) GetHashInput(scratch []byte) ([]byte, error) {
+func (v Uint64Value) getHashInput(scratch []byte) ([]byte, error) {
 	const cborTypePositiveInt = 0x00
 
 	buf := scratch
@@ -322,7 +318,6 @@ type StringValue struct {
 
 var _ Value = &StringValue{}
 var _ Storable = &StringValue{}
-var _ HashableValue = &StringValue{}
 
 func NewStringValue(s string) StringValue {
 	size := GetUintCBORSize(uint64(len(s))) + uint32(len(s))
@@ -364,7 +359,7 @@ func (v StringValue) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeString(v.str)
 }
 
-func (v StringValue) GetHashInput(scratch []byte) ([]byte, error) {
+func (v StringValue) getHashInput(scratch []byte) ([]byte, error) {
 
 	const cborTypeTextString = 0x60
 
@@ -542,4 +537,26 @@ func compare(storage SlabStorage, value Value, storable Storable) (bool, error) 
 	}
 
 	return false, fmt.Errorf("value %T not supported for comparison", value)
+}
+
+func hashInputProvider(value Value, buffer []byte) ([]byte, error) {
+	switch v := value.(type) {
+
+	case Uint8Value:
+		return v.getHashInput(buffer)
+
+	case Uint16Value:
+		return v.getHashInput(buffer)
+
+	case Uint32Value:
+		return v.getHashInput(buffer)
+
+	case Uint64Value:
+		return v.getHashInput(buffer)
+
+	case StringValue:
+		return v.getHashInput(buffer)
+	}
+
+	return nil, fmt.Errorf("value %T not supported for hash input", value)
 }

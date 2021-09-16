@@ -9,15 +9,13 @@ import (
 	"github.com/zeebo/blake3"
 )
 
-type Hashable interface {
-	GetHashInput([]byte) ([]byte, error)
-}
+type HashInputProvider func(value Value, buffer []byte) ([]byte, error)
 
 type Digest uint64
 
 type DigesterBuilder interface {
 	SetSeed(k0 uint64, k1 uint64)
-	Digest(Hashable) (Digester, error)
+	Digest(HashInputProvider, Value) (Digester, error)
 }
 
 type Digester interface {
@@ -87,14 +85,14 @@ func (bdb *basicDigesterBuilder) SetSeed(k0 uint64, k1 uint64) {
 	bdb.k1 = k1
 }
 
-func (bdb *basicDigesterBuilder) Digest(hashable Hashable) (Digester, error) {
+func (bdb *basicDigesterBuilder) Digest(hip HashInputProvider, value Value) (Digester, error) {
 	if bdb.k0 == 0 {
 		return nil, NewHashError(errors.New("k0 is uninitialized"))
 	}
 
 	digester := getBasicDigester()
 
-	msg, err := hashable.GetHashInput(digester.scratch[:])
+	msg, err := hip(value, digester.scratch[:])
 	if err != nil {
 		putDigester(digester)
 		return nil, err

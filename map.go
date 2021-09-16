@@ -63,14 +63,14 @@ type MapValue Storable
 type element interface {
 	fmt.Stringer
 
-	Get(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapValue, error)
+	Get(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapValue, error)
 
 	// Set returns updated element, which may be a different type of element because of hash collision.
-	Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, hkey Digest, key ComparableValue, value MapValue) (newElem element, existingValue MapValue, err error)
+	Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue, value Value) (newElem element, existingValue MapValue, err error)
 
 	// Remove returns matched key, value, and updated element.
 	// Updated element may be nil, modified, or a different type of element.
-	Remove(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapKey, MapValue, element, error)
+	Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapKey, MapValue, element, error)
 
 	Encode(*Encoder) error
 
@@ -93,9 +93,9 @@ type elementGroup interface {
 type elements interface {
 	fmt.Stringer
 
-	Get(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapValue, error)
-	Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, hkey Digest, key ComparableValue, value MapValue) (existingValue MapValue, err error)
-	Remove(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapKey, MapValue, error)
+	Get(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapValue, error)
+	Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue, value Value) (existingValue MapValue, err error)
+	Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapKey, MapValue, error)
 
 	Merge(elements) error
 	Split() (elements, elements, error)
@@ -209,9 +209,9 @@ type MapSlab interface {
 	Slab
 	fmt.Stringer
 
-	Get(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapValue, error)
-	Set(storage SlabStorage, b DigesterBuilder, digester Digester, level int, hkey Digest, key ComparableValue, value MapValue) (existingValue MapValue, err error)
-	Remove(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapKey, MapValue, error)
+	Get(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapValue, error)
+	Set(storage SlabStorage, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue, value Value) (existingValue MapValue, err error)
+	Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapKey, MapValue, error)
 
 	IsData() bool
 
@@ -230,7 +230,7 @@ type MapSlab interface {
 }
 
 type OrderedMap struct {
-	storage         SlabStorage
+	Storage         SlabStorage
 	root            MapSlab
 	digesterBuilder DigesterBuilder
 }
@@ -333,25 +333,35 @@ func newElementFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDeco
 	}
 }
 
-func newSingleElement(key MapKey, value MapValue) *singleElement {
+func newSingleElement(storage SlabStorage, address Address, key HashableValue, value Value) (*singleElement, error) {
+
+	ks, err := key.Storable(storage, address, maxInlineMapElementSize)
+	if err != nil {
+		return nil, err
+	}
+
+	vs, err := value.Storable(storage, address, maxInlineMapElementSize)
+	if err != nil {
+		return nil, err
+	}
 
 	var keyPointer bool
-	if _, ok := key.(StorageIDStorable); ok {
+	if _, ok := ks.(StorageIDStorable); ok {
 		keyPointer = true
 	}
 
 	var valuePointer bool
-	if _, ok := value.(StorageIDStorable); ok {
+	if _, ok := vs.(StorageIDStorable); ok {
 		valuePointer = true
 	}
 
 	return &singleElement{
-		key:          key,
-		value:        value,
-		size:         singleElementPrefixSize + key.ByteSize() + value.ByteSize(),
+		key:          ks,
+		value:        vs,
+		size:         singleElementPrefixSize + ks.ByteSize() + vs.ByteSize(),
 		keyPointer:   keyPointer,
 		valuePointer: valuePointer,
-	}
+	}, nil
 }
 
 func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (*singleElement, error) {
@@ -376,7 +386,23 @@ func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable Storab
 		return nil, err
 	}
 
-	return newSingleElement(key, value), nil
+	var keyPointer bool
+	if _, ok := key.(StorageIDStorable); ok {
+		keyPointer = true
+	}
+
+	var valuePointer bool
+	if _, ok := value.(StorageIDStorable); ok {
+		valuePointer = true
+	}
+
+	return &singleElement{
+		key:          key,
+		value:        value,
+		size:         singleElementPrefixSize + key.ByteSize() + value.ByteSize(),
+		keyPointer:   keyPointer,
+		valuePointer: valuePointer,
+	}, nil
 }
 
 // Encode encodes singleElement to the given encoder.
@@ -411,13 +437,13 @@ func (e *singleElement) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (e *singleElement) Get(storage SlabStorage, _ Digester, _ int, _ Digest, key ComparableValue) (MapValue, error) {
-	kv, err := e.key.StoredValue(storage)
+func (e *singleElement) Get(storage SlabStorage, _ Digester, _ int, _ Digest, comparator Comparator, key HashableValue) (MapValue, error) {
+	equal, err := comparator(storage, key, e.key)
 	if err != nil {
 		return nil, err
 	}
 
-	if key.Equal(kv) {
+	if equal {
 		return e.value, nil
 	}
 	return nil, NewKeyNotFoundError(key)
@@ -427,28 +453,28 @@ func (e *singleElement) Get(storage SlabStorage, _ Digester, _ int, _ Digest, ke
 // NOTE: Existing key needs to be rehashed because we store minimum digest for non-collision element.
 //       Rehashing only happens when we create new inlineCollisionGroup.
 //       Adding new element to existing inlineCollisionGroup doesn't require rehashing.
-func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, hkey Digest, key ComparableValue, value MapValue) (element, MapValue, error) {
+func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue, value Value) (element, MapValue, error) {
 
-	v, err := e.key.StoredValue(storage)
+	equal, err := comparator(storage, key, e.key)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	kv, ok := v.(ComparableValue)
-	if !ok {
-		return nil, nil, NewInterfaceNotImplementedError("ComparableValue")
-	}
-
 	// Key matches, overwrite existing value
-	if key.Equal(kv) {
+	if equal {
 		existingValue := e.value
 
+		valueStorable, err := value.Storable(storage, address, maxInlineMapElementSize)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		valuePointer := false
-		if _, ok := value.(StorageIDStorable); ok {
+		if _, ok := valueStorable.(StorageIDStorable); ok {
 			valuePointer = true
 		}
 
-		e.value = value
+		e.value = valueStorable
 		e.size = singleElementPrefixSize + e.key.ByteSize() + e.value.ByteSize()
 		e.valuePointer = valuePointer
 		return e, existingValue, nil
@@ -456,52 +482,59 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 
 	// Hash collision detected
 
+	// Create collision group with existing and new elements
+
+	if level+1 == digester.Levels() {
+
+		// Create singleElements group
+		group := &inlineCollisionGroup{
+			elements: newSingleElementsWithElement(level+1, e),
+		}
+
+		// Add new key and value to collision group
+		return group.Set(storage, address, b, digester, level, hkey, comparator, key, value)
+
+	}
+
 	// Generate digest for existing key (see function comment)
-	existingKeyDigest, err := b.Digest(kv)
+	v, err := e.key.StoredValue(storage)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer putBasicDigester(existingKeyDigest)
 
-	// Create collision group with existing and new elements
-	var elements elements
-	if level+1 == digester.Levels() {
-		elements = newSingleElements(level + 1)
-	} else {
-		elements = newHkeyElements(level + 1)
+	kv, ok := v.(HashableValue)
+	if !ok {
+		return nil, nil, NewInterfaceNotImplementedError("HashableValue")
 	}
 
-	var newElem element
-
-	newElem = &inlineCollisionGroup{elements: elements}
-
-	newElem, _, err = newElem.Set(storage, address, b, existingKeyDigest, level, hkey, kv, e.value)
+	existingKeyDigest, err := b.Digest(kv)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	newElem, _, err = newElem.Set(storage, address, b, digester, level, hkey, key, value)
+	d, err := existingKeyDigest.Digest(level + 1)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return newElem, nil, nil
+	group := &inlineCollisionGroup{
+		elements: newHkeyElementsWithElement(level+1, d, e),
+	}
+
+	// Add new key and value to collision group
+	return group.Set(storage, address, b, digester, level, hkey, comparator, key, value)
 }
 
 // Remove returns key, value, and nil element if key matches, otherwise returns error.
-func (e *singleElement) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapKey, MapValue, element, error) {
+func (e *singleElement) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapKey, MapValue, element, error) {
 
-	v, err := e.key.StoredValue(storage)
+	equal, err := comparator(storage, key, e.key)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	kv, ok := v.(ComparableValue)
-	if !ok {
-		return nil, nil, nil, NewInterfaceNotImplementedError("ComparableValue")
-	}
-
-	if key.Equal(kv) {
+	if equal {
 		return e.key, e.value, nil, nil
 	}
 
@@ -552,7 +585,7 @@ func (e *inlineCollisionGroup) Encode(enc *Encoder) error {
 	return enc.CBOR.Flush()
 }
 
-func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapValue, error) {
+func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level int, _ Digest, comparator Comparator, key HashableValue) (MapValue, error) {
 
 	// Adjust level and hkey for collision group
 	level++
@@ -562,10 +595,10 @@ func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level
 	hkey, _ := digester.Digest(level)
 
 	// Search key in collision group with adjusted hkeyPrefix and hkey
-	return e.elements.Get(storage, digester, level, hkey, key)
+	return e.elements.Get(storage, digester, level, hkey, comparator, key)
 }
 
-func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, key ComparableValue, value MapValue) (element, MapValue, error) {
+func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, comparator Comparator, key HashableValue, value Value) (element, MapValue, error) {
 
 	// Adjust level and hkey for collision group
 	level++
@@ -574,7 +607,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 	}
 	hkey, _ := digester.Digest(level)
 
-	existingValue, err := e.elements.Set(storage, address, b, digester, level, hkey, key, value)
+	existingValue, err := e.elements.Set(storage, address, b, digester, level, hkey, comparator, key, value)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -620,7 +653,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 
 // Remove returns key, value, and updated element if key is found.
 // Updated element can be modified inlineCollisionGroup, or singleElement.
-func (e *inlineCollisionGroup) Remove(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapKey, MapValue, element, error) {
+func (e *inlineCollisionGroup) Remove(storage SlabStorage, digester Digester, level int, _ Digest, comparator Comparator, key HashableValue) (MapKey, MapValue, element, error) {
 
 	// Adjust level and hkey for collision group
 	level++
@@ -629,7 +662,7 @@ func (e *inlineCollisionGroup) Remove(storage SlabStorage, digester Digester, le
 	}
 	hkey, _ := digester.Digest(level)
 
-	k, v, err := e.elements.Remove(storage, digester, level, hkey, key)
+	k, v, err := e.elements.Remove(storage, digester, level, hkey, comparator, key)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -708,7 +741,7 @@ func (e *externalCollisionGroup) Encode(enc *Encoder) error {
 	return enc.CBOR.Flush()
 }
 
-func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapValue, error) {
+func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, level int, _ Digest, comparator Comparator, key HashableValue) (MapValue, error) {
 	slab, err := getMapSlab(storage, e.id)
 	if err != nil {
 		return nil, err
@@ -722,10 +755,10 @@ func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, lev
 	hkey, _ := digester.Digest(level)
 
 	// Search key in collision group with adjusted hkeyPrefix and hkey
-	return slab.Get(storage, digester, level, hkey, key)
+	return slab.Get(storage, digester, level, hkey, comparator, key)
 }
 
-func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, key ComparableValue, value MapValue) (element, MapValue, error) {
+func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, comparator Comparator, key HashableValue, value Value) (element, MapValue, error) {
 	slab, err := getMapSlab(storage, e.id)
 	if err != nil {
 		return nil, nil, err
@@ -738,7 +771,7 @@ func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b Dig
 	}
 	hkey, _ := digester.Digest(level)
 
-	existingValue, err := slab.Set(storage, b, digester, level, hkey, key, value)
+	existingValue, err := slab.Set(storage, b, digester, level, hkey, comparator, key, value)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -748,7 +781,7 @@ func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b Dig
 // Remove returns key, value, and updated element if key is found.
 // Updated element can be modified externalCollisionGroup, or singleElement.
 // TODO: updated element can be inlineCollisionGroup if size < MaxInlineElementSize.
-func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapKey, MapValue, element, error) {
+func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, level int, _ Digest, comparator Comparator, key HashableValue) (MapKey, MapValue, element, error) {
 
 	slab, _, err := storage.Retrieve(e.id)
 	if err != nil {
@@ -767,7 +800,7 @@ func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, 
 	}
 	hkey, _ := digester.Digest(level)
 
-	k, v, err := dataSlab.Remove(storage, digester, level, hkey, key)
+	k, v, err := dataSlab.Remove(storage, digester, level, hkey, comparator, key)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -925,6 +958,15 @@ func newHkeyElements(level int) *hkeyElements {
 	}
 }
 
+func newHkeyElementsWithElement(level int, hkey Digest, elem element) *hkeyElements {
+	return &hkeyElements{
+		hkeys: []Digest{hkey},
+		elems: []element{elem},
+		size:  hkeyElementsPrefixSize + digestSize + elem.Size(),
+		level: level,
+	}
+}
+
 // Encode encodes hkeyElements to the given encoder.
 //
 //   CBOR encoded array [
@@ -990,7 +1032,7 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 	return enc.CBOR.Flush()
 }
 
-func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapValue, error) {
+func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapValue, error) {
 
 	if level >= digester.Levels() {
 		return nil, NewHashLevelErrorf("hkey elements level %d, expect < %d", level, digester.Levels())
@@ -1020,25 +1062,23 @@ func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level int, hk
 
 	elem := e.elems[equalIndex]
 
-	return elem.Get(storage, digester, level, hkey, key)
+	return elem.Get(storage, digester, level, hkey, comparator, key)
 }
 
-func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, hkey Digest, key ComparableValue, value MapValue) (MapValue, error) {
+func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue, value Value) (MapValue, error) {
 
 	// Check hkeys are not empty
 	if level >= digester.Levels() {
 		return nil, NewHashLevelErrorf("hkey elements level %d, expect < %d", level, digester.Levels())
 	}
 
-	ks, err := key.Storable(storage, address, maxInlineMapElementSize)
-	if err != nil {
-		return nil, err
-	}
-
-	newElem := newSingleElement(ks, value)
-
 	if len(e.hkeys) == 0 {
-		// only element
+		// first element
+
+		newElem, err := newSingleElement(storage, address, key, value)
+		if err != nil {
+			return nil, err
+		}
 
 		e.hkeys = []Digest{hkey}
 
@@ -1051,6 +1091,11 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 
 	if hkey < e.hkeys[0] {
 		// prepend key and value
+
+		newElem, err := newSingleElement(storage, address, key, value)
+		if err != nil {
+			return nil, err
+		}
 
 		e.hkeys = append(e.hkeys, Digest(0))
 		copy(e.hkeys[1:], e.hkeys)
@@ -1067,6 +1112,11 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 
 	if hkey > e.hkeys[len(e.hkeys)-1] {
 		// append key and value
+
+		newElem, err := newSingleElement(storage, address, key, value)
+		if err != nil {
+			return nil, err
+		}
 
 		e.hkeys = append(e.hkeys, hkey)
 
@@ -1100,7 +1150,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 
 		oldElemSize := elem.Size()
 
-		elem, existingValue, err := elem.Set(storage, address, b, digester, level, hkey, key, value)
+		elem, existingValue, err := elem.Set(storage, address, b, digester, level, hkey, comparator, key, value)
 		if err != nil {
 			return nil, err
 		}
@@ -1113,6 +1163,11 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 	}
 
 	// No matching hkey
+
+	newElem, err := newSingleElement(storage, address, key, value)
+	if err != nil {
+		return nil, err
+	}
 
 	// insert into sorted hkeys
 	e.hkeys = append(e.hkeys, Digest(0))
@@ -1129,7 +1184,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 	return nil, nil
 }
 
-func (e *hkeyElements) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapKey, MapValue, error) {
+func (e *hkeyElements) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapKey, MapValue, error) {
 
 	// Check digest level
 	if level >= digester.Levels() {
@@ -1166,7 +1221,7 @@ func (e *hkeyElements) Remove(storage SlabStorage, digester Digester, level int,
 
 	oldElemSize := elem.Size()
 
-	k, v, elem, err := elem.Remove(storage, digester, level, hkey, key)
+	k, v, elem, err := elem.Remove(storage, digester, level, hkey, comparator, key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1487,10 +1542,11 @@ func (e *hkeyElements) String() string {
 	return strings.Join(s, " ")
 }
 
-func newSingleElements(level int) *singleElements {
+func newSingleElementsWithElement(level int, elem *singleElement) *singleElements {
 	return &singleElements{
 		level: level,
-		size:  singleElementsPrefixSize,
+		size:  singleElementsPrefixSize + elem.size,
+		elems: []*singleElement{elem},
 	}
 }
 
@@ -1542,7 +1598,7 @@ func (e *singleElements) Encode(enc *Encoder) error {
 	return enc.CBOR.Flush()
 }
 
-func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, _ Digest, key ComparableValue) (MapValue, error) {
+func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, _ Digest, comparator Comparator, key HashableValue) (MapValue, error) {
 
 	if level != digester.Levels() {
 		return nil, NewHashLevelErrorf("single elements level %d, expect %d", level, digester.Levels())
@@ -1550,11 +1606,12 @@ func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, 
 
 	// linear search by key
 	for _, elem := range e.elems {
-		ek, err := elem.key.StoredValue(storage)
+		equal, err := comparator(storage, key, elem.key)
 		if err != nil {
 			return nil, err
 		}
-		if key.Equal(ek) {
+
+		if equal {
 			return elem.value, nil
 		}
 	}
@@ -1562,7 +1619,7 @@ func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, 
 	return nil, NewKeyNotFoundError(key)
 }
 
-func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, key ComparableValue, value MapValue) (MapValue, error) {
+func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, comparator Comparator, key HashableValue, value Value) (MapValue, error) {
 
 	if level != digester.Levels() {
 		return nil, NewHashLevelErrorf("single elements level %d, expect %d", level, digester.Levels())
@@ -1571,16 +1628,23 @@ func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBui
 	// linear search key and update value
 	for i := 0; i < len(e.elems); i++ {
 		elem := e.elems[i]
-		ek, err := elem.key.StoredValue(storage)
+
+		equal, err := comparator(storage, key, elem.key)
 		if err != nil {
 			return nil, err
 		}
-		if key.Equal(ek) {
+
+		if equal {
 			existingValue := elem.value
 
 			oldSize := elem.Size()
 
-			elem.value = value
+			vs, err := value.Storable(storage, address, maxInlineMapElementSize)
+			if err != nil {
+				return nil, err
+			}
+
+			elem.value = vs
 			elem.size = singleElementPrefixSize + elem.key.ByteSize() + elem.value.ByteSize()
 
 			e.size += elem.Size() - oldSize
@@ -1589,20 +1653,18 @@ func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBui
 		}
 	}
 
-	ks, err := key.Storable(storage, address, maxInlineMapElementSize)
+	// no matching key, append new element to the end.
+	newElem, err := newSingleElement(storage, address, key, value)
 	if err != nil {
 		return nil, err
 	}
-
-	// no matching key, append new element to the end.
-	newElem := newSingleElement(ks, value)
 	e.elems = append(e.elems, newElem)
 	e.size += newElem.size
 
 	return nil, nil
 }
 
-func (e *singleElements) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapKey, MapValue, error) {
+func (e *singleElements) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapKey, MapValue, error) {
 
 	if level != digester.Levels() {
 		return nil, nil, NewHashLevelErrorf("single elements level %d, expect %d", level, digester.Levels())
@@ -1610,11 +1672,13 @@ func (e *singleElements) Remove(storage SlabStorage, digester Digester, level in
 
 	// linear search by key
 	for i, elem := range e.elems {
-		ek, err := elem.key.StoredValue(storage)
+
+		equal, err := comparator(storage, key, elem.key)
 		if err != nil {
 			return nil, nil, err
 		}
-		if key.Equal(ek) {
+
+		if equal {
 			// Remove this element
 			copy(e.elems[i:], e.elems[i+1:])
 			// Zero out last element to prevent memory leak
@@ -1939,20 +2003,20 @@ func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		return nil, NewNotValueError()
 	}
 
-	digestBuilder := newDefaultDigesterBuilder()
+	digestBuilder := NewDefaultDigesterBuilder()
 
 	digestBuilder.SetSeed(m.extraData.Seed, typicalRandomConstant)
 
 	return &OrderedMap{
-		storage:         storage,
+		Storage:         storage,
 		root:            m,
 		digesterBuilder: digestBuilder,
 	}, nil
 }
 
-func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Digester, level int, hkey Digest, key ComparableValue, value MapValue) (MapValue, error) {
+func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue, value Value) (MapValue, error) {
 
-	existingValue, err := m.elements.Set(storage, m.ID().Address, b, digester, level, hkey, key, value)
+	existingValue, err := m.elements.Set(storage, m.ID().Address, b, digester, level, hkey, comparator, key, value)
 	if err != nil {
 		return nil, err
 	}
@@ -1972,9 +2036,9 @@ func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Diges
 	return existingValue, nil
 }
 
-func (m *MapDataSlab) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapKey, MapValue, error) {
+func (m *MapDataSlab) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapKey, MapValue, error) {
 
-	k, v, err := m.elements.Remove(storage, digester, level, hkey, key)
+	k, v, err := m.elements.Remove(storage, digester, level, hkey, comparator, key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2340,18 +2404,18 @@ func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		return nil, NewNotValueError()
 	}
 
-	digestBuilder := newDefaultDigesterBuilder()
+	digestBuilder := NewDefaultDigesterBuilder()
 
 	digestBuilder.SetSeed(m.extraData.Seed, typicalRandomConstant)
 
 	return &OrderedMap{
-		storage:         storage,
+		Storage:         storage,
 		root:            m,
 		digesterBuilder: digestBuilder,
 	}, nil
 }
 
-func (m *MapMetaDataSlab) Get(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapValue, error) {
+func (m *MapMetaDataSlab) Get(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapValue, error) {
 
 	ans := -1
 	i, j := 0, len(m.childrenHeaders)
@@ -2378,10 +2442,10 @@ func (m *MapMetaDataSlab) Get(storage SlabStorage, digester Digester, level int,
 		return nil, err
 	}
 
-	return child.Get(storage, digester, level, hkey, key)
+	return child.Get(storage, digester, level, hkey, comparator, key)
 }
 
-func (m *MapMetaDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Digester, level int, hkey Digest, key ComparableValue, value MapValue) (MapValue, error) {
+func (m *MapMetaDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue, value Value) (MapValue, error) {
 
 	ans := 0
 	i, j := 0, len(m.childrenHeaders)
@@ -2404,7 +2468,7 @@ func (m *MapMetaDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester D
 		return nil, err
 	}
 
-	existingValue, err := child.Set(storage, b, digester, level, hkey, key, value)
+	existingValue, err := child.Set(storage, b, digester, level, hkey, comparator, key, value)
 	if err != nil {
 		return nil, err
 	}
@@ -2439,7 +2503,7 @@ func (m *MapMetaDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester D
 	return existingValue, nil
 }
 
-func (m *MapMetaDataSlab) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, key ComparableValue) (MapKey, MapValue, error) {
+func (m *MapMetaDataSlab) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator Comparator, key HashableValue) (MapKey, MapValue, error) {
 
 	ans := -1
 	i, j := 0, len(m.childrenHeaders)
@@ -2466,7 +2530,7 @@ func (m *MapMetaDataSlab) Remove(storage SlabStorage, digester Digester, level i
 		return nil, nil, err
 	}
 
-	k, v, err := child.Remove(storage, digester, level, hkey, key)
+	k, v, err := child.Remove(storage, digester, level, hkey, comparator, key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -3022,7 +3086,7 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 	}
 
 	return &OrderedMap{
-		storage:         storage,
+		Storage:         storage,
 		root:            root,
 		digesterBuilder: digestBuilder,
 	}, nil
@@ -3042,21 +3106,21 @@ func NewMapWithRootID(storage SlabStorage, rootID StorageID, digestBuilder Diges
 	digestBuilder.SetSeed(extraData.Seed, typicalRandomConstant)
 
 	return &OrderedMap{
-		storage:         storage,
+		Storage:         storage,
 		root:            root,
 		digesterBuilder: digestBuilder,
 	}, nil
 }
 
-func (m *OrderedMap) Has(key ComparableValue) (bool, error) {
-	_, err := m.Get(key)
+func (m *OrderedMap) Has(comparator Comparator, key HashableValue) (bool, error) {
+	_, err := m.Get(comparator, key)
 	if err != nil {
 		return false, nil
 	}
 	return true, nil
 }
 
-func (m *OrderedMap) Get(key ComparableValue) (Storable, error) {
+func (m *OrderedMap) Get(comparator Comparator, key HashableValue) (Storable, error) {
 
 	keyDigest, err := m.digesterBuilder.Digest(key)
 	if err != nil {
@@ -3071,10 +3135,10 @@ func (m *OrderedMap) Get(key ComparableValue) (Storable, error) {
 		return nil, err
 	}
 
-	return m.root.Get(m.storage, keyDigest, level, hkey, key)
+	return m.root.Get(m.Storage, keyDigest, level, hkey, comparator, key)
 }
 
-func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
+func (m *OrderedMap) Set(comparator Comparator, key HashableValue, value Value) (Storable, error) {
 
 	keyDigest, err := m.digesterBuilder.Digest(key)
 	if err != nil {
@@ -3089,12 +3153,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 		return nil, err
 	}
 
-	valueStorable, err := value.Storable(m.storage, m.Address(), maxInlineMapElementSize)
-	if err != nil {
-		return nil, err
-	}
-
-	existingValue, err := m.root.Set(m.storage, m.digesterBuilder, keyDigest, level, hkey, key, valueStorable)
+	existingValue, err := m.root.Set(m.Storage, m.digesterBuilder, keyDigest, level, hkey, comparator, key, value)
 	if err != nil {
 		return nil, err
 	}
@@ -3114,7 +3173,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 
 			childID := root.childrenHeaders[0].id
 
-			child, err := getMapSlab(m.storage, childID)
+			child, err := getMapSlab(m.Storage, childID)
 			if err != nil {
 				return nil, err
 			}
@@ -3125,12 +3184,12 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 
 			m.root.SetExtraData(extraData)
 
-			err = m.storage.Store(rootID, m.root)
+			err = m.Storage.Store(rootID, m.root)
 			if err != nil {
 				return nil, err
 			}
 
-			err = m.storage.Remove(childID)
+			err = m.Storage.Remove(childID)
 			if err != nil {
 				return nil, err
 			}
@@ -3146,7 +3205,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 		rootID := m.root.ID()
 
 		// Assign a new storage id to old root before splitting it.
-		sID, err := m.storage.GenerateStorageID(m.Address())
+		sID, err := m.Storage.GenerateStorageID(m.Address())
 		if err != nil {
 			return nil, NewStorageError(err)
 		}
@@ -3155,7 +3214,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 		oldRoot.SetID(sID)
 
 		// Split old root
-		leftSlab, rightSlab, err := oldRoot.Split(m.storage)
+		leftSlab, rightSlab, err := oldRoot.Split(m.Storage)
 		if err != nil {
 			return nil, err
 		}
@@ -3176,15 +3235,15 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 
 		m.root = newRoot
 
-		err = m.storage.Store(left.ID(), left)
+		err = m.Storage.Store(left.ID(), left)
 		if err != nil {
 			return nil, err
 		}
-		err = m.storage.Store(right.ID(), right)
+		err = m.Storage.Store(right.ID(), right)
 		if err != nil {
 			return nil, err
 		}
-		err = m.storage.Store(m.root.ID(), m.root)
+		err = m.Storage.Store(m.root.ID(), m.root)
 		if err != nil {
 			return nil, err
 		}
@@ -3193,7 +3252,7 @@ func (m *OrderedMap) Set(key ComparableValue, value Value) (Storable, error) {
 	return existingValue, nil
 }
 
-func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
+func (m *OrderedMap) Remove(comparator Comparator, key HashableValue) (Storable, Storable, error) {
 
 	keyDigest, err := m.digesterBuilder.Digest(key)
 	if err != nil {
@@ -3208,7 +3267,7 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 		return nil, nil, err
 	}
 
-	k, v, err := m.root.Remove(m.storage, keyDigest, level, hkey, key)
+	k, v, err := m.root.Remove(m.Storage, keyDigest, level, hkey, comparator, key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -3226,7 +3285,7 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 
 			childID := root.childrenHeaders[0].id
 
-			child, err := getMapSlab(m.storage, childID)
+			child, err := getMapSlab(m.Storage, childID)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -3237,12 +3296,12 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 
 			m.root.SetExtraData(extraData)
 
-			err = m.storage.Store(rootID, m.root)
+			err = m.Storage.Store(rootID, m.root)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			err = m.storage.Remove(childID)
+			err = m.Storage.Remove(childID)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -3258,7 +3317,7 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 		rootID := m.root.ID()
 
 		// Assign a new storage id to old root before splitting it.
-		id, err := m.storage.GenerateStorageID(m.Address())
+		id, err := m.Storage.GenerateStorageID(m.Address())
 
 		if err != nil {
 			return nil, nil, NewStorageError(err)
@@ -3267,7 +3326,7 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 		oldRoot.SetID(id)
 
 		// Split old root
-		leftSlab, rightSlab, err := oldRoot.Split(m.storage)
+		leftSlab, rightSlab, err := oldRoot.Split(m.Storage)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -3288,15 +3347,15 @@ func (m *OrderedMap) Remove(key ComparableValue) (Storable, Storable, error) {
 
 		m.root = newRoot
 
-		err = m.storage.Store(left.ID(), left)
+		err = m.Storage.Store(left.ID(), left)
 		if err != nil {
 			return nil, nil, err
 		}
-		err = m.storage.Store(right.ID(), right)
+		err = m.Storage.Store(right.ID(), right)
 		if err != nil {
 			return nil, nil, err
 		}
-		err = m.storage.Store(m.root.ID(), m.root)
+		err = m.Storage.Store(m.root.ID(), m.root)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -3344,7 +3403,7 @@ func (m *OrderedMap) string(meta *MapMetaDataSlab) string {
 	var elemsStr []string
 
 	for _, h := range meta.childrenHeaders {
-		child, err := getMapSlab(m.storage, h.id)
+		child, err := getMapSlab(m.Storage, h.id)
 		if err != nil {
 			return err.Error()
 		}
@@ -3399,7 +3458,7 @@ type MapElementIterator struct {
 
 var errEOE = errors.New("end of elements")
 
-func (i *MapElementIterator) Next() (key Value, value Value, err error) {
+func (i *MapElementIterator) Next() (key MapKey, value MapValue, err error) {
 
 	if i.nestedIterator != nil {
 		key, value, err = i.nestedIterator.Next()
@@ -3440,22 +3499,13 @@ func (i *MapElementIterator) Next() (key Value, value Value, err error) {
 		return nil, nil, NewTypeAssertionError("*singleElement", fmt.Sprintf("%T", e))
 	}
 
-	k, err := se.key.StoredValue(i.storage)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	v, err := se.value.StoredValue(i.storage)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	i.index++
 
-	return k, v, nil
+	return se.key, se.value, nil
 }
 
-type MapIterationFunc func(Value, Value) (resume bool, err error)
+type MapEntryIterationFunc func(Value, Value) (resume bool, err error)
+type MapElementIterationFunc func(Value) (resume bool, err error)
 
 type MapIterator struct {
 	storage      SlabStorage
@@ -3469,27 +3519,29 @@ func (i *MapIterator) Next() (key Value, value Value, err error) {
 			return nil, nil, nil
 		}
 
-		slab, found, err := i.storage.Retrieve(i.id)
+		err = i.advance()
 		if err != nil {
 			return nil, nil, err
 		}
-		if !found {
-			return nil, nil, NewSlabNotFoundErrorf(i.id, "next slab not found inside MapIterator")
-		}
-
-		dataSlab := slab.(*MapDataSlab)
-
-		i.id = dataSlab.next
-
-		i.elemIterator = &MapElementIterator{
-			storage:  i.storage,
-			elements: dataSlab.elements,
-		}
 	}
 
-	key, value, err = i.elemIterator.Next()
+	var ks, vs Storable
+	ks, vs, err = i.elemIterator.Next()
+	if err == nil {
+		key, err = ks.StoredValue(i.storage)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		value, err = vs.StoredValue(i.storage)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return key, value, nil
+	}
 	if err != errEOE {
-		return key, value, err
+		return nil, nil, err
 	}
 
 	i.elemIterator = nil
@@ -3497,27 +3549,111 @@ func (i *MapIterator) Next() (key Value, value Value, err error) {
 	return i.Next()
 }
 
+func (i *MapIterator) NextKey() (key Value, err error) {
+	if i.elemIterator == nil {
+		if i.id == StorageIDUndefined {
+			return nil, nil
+		}
+
+		err = i.advance()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var ks Storable
+	ks, _, err = i.elemIterator.Next()
+	if err == nil {
+		key, err = ks.StoredValue(i.storage)
+		if err != nil {
+			return nil, err
+		}
+
+		return key, nil
+	}
+	if err != errEOE {
+		return nil, err
+	}
+
+	i.elemIterator = nil
+
+	return i.NextKey()
+}
+
+func (i *MapIterator) NextValue() (value Value, err error) {
+	if i.elemIterator == nil {
+		if i.id == StorageIDUndefined {
+			return nil, nil
+		}
+
+		err = i.advance()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var vs Storable
+	_, vs, err = i.elemIterator.Next()
+	if err == nil {
+		value, err = vs.StoredValue(i.storage)
+		if err != nil {
+			return nil, err
+		}
+
+		return value, nil
+	}
+	if err != errEOE {
+		return nil, err
+	}
+
+	i.elemIterator = nil
+
+	return i.NextValue()
+}
+
+func (i *MapIterator) advance() error {
+	slab, found, err := i.storage.Retrieve(i.id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return NewSlabNotFoundErrorf(i.id, "next slab not found inside MapIterator")
+	}
+
+	dataSlab := slab.(*MapDataSlab)
+
+	i.id = dataSlab.next
+
+	i.elemIterator = &MapElementIterator{
+		storage:  i.storage,
+		elements: dataSlab.elements,
+	}
+
+	return nil
+}
+
 func (m *OrderedMap) Iterator() (*MapIterator, error) {
-	slab, err := firstMapDataSlab(m.storage, m.root)
+	slab, err := firstMapDataSlab(m.Storage, m.root)
 	if err != nil {
 		return nil, err
 	}
 
 	return &MapIterator{
-		storage: m.storage,
+		storage: m.Storage,
 		id:      slab.ID(),
 	}, nil
 }
 
-func (m *OrderedMap) Iterate(fn MapIterationFunc) error {
+func (m *OrderedMap) Iterate(fn MapEntryIterationFunc) error {
 
 	iterator, err := m.Iterator()
 	if err != nil {
 		return err
 	}
 
+	var key, value Value
 	for {
-		key, value, err := iterator.Next()
+		key, value, err = iterator.Next()
 		if err != nil {
 			return err
 		}
@@ -3525,6 +3661,58 @@ func (m *OrderedMap) Iterate(fn MapIterationFunc) error {
 			return nil
 		}
 		resume, err := fn(key, value)
+		if err != nil {
+			return err
+		}
+		if !resume {
+			return nil
+		}
+	}
+}
+
+func (m *OrderedMap) IterateKeys(fn MapElementIterationFunc) error {
+
+	iterator, err := m.Iterator()
+	if err != nil {
+		return err
+	}
+
+	var key Value
+	for {
+		key, err = iterator.NextKey()
+		if err != nil {
+			return err
+		}
+		if key == nil {
+			return nil
+		}
+		resume, err := fn(key)
+		if err != nil {
+			return err
+		}
+		if !resume {
+			return nil
+		}
+	}
+}
+
+func (m *OrderedMap) IterateValues(fn MapElementIterationFunc) error {
+
+	iterator, err := m.Iterator()
+	if err != nil {
+		return err
+	}
+
+	var value Value
+	for {
+		value, err = iterator.NextValue()
+		if err != nil {
+			return err
+		}
+		if value == nil {
+			return nil
+		}
+		resume, err := fn(value)
 		if err != nil {
 			return err
 		}

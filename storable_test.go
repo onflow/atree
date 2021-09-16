@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -25,7 +26,7 @@ type Uint8Value uint8
 
 var _ Value = Uint8Value(0)
 var _ Storable = Uint8Value(0)
-var _ ComparableValue = Uint8Value(0)
+var _ HashableValue = Uint8Value(0)
 
 func (v Uint8Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -72,14 +73,6 @@ func (v Uint8Value) GetHashInput(scratch []byte) ([]byte, error) {
 	return buf[:4], nil
 }
 
-func (v Uint8Value) Equal(other Value) bool {
-	otherUint8, ok := other.(Uint8Value)
-	if !ok {
-		return false
-	}
-	return uint8(otherUint8) == uint8(v)
-}
-
 // TODO: cache size
 func (v Uint8Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
@@ -90,11 +83,15 @@ func (v Uint8Value) String() string {
 	return fmt.Sprintf("%d", uint8(v))
 }
 
+func (v Uint8Value) KeyString() string {
+	return strconv.FormatInt(int64(v), 10)
+}
+
 type Uint16Value uint16
 
 var _ Value = Uint16Value(0)
 var _ Storable = Uint16Value(0)
-var _ ComparableValue = Uint16Value(0)
+var _ HashableValue = Uint16Value(0)
 
 func (v Uint16Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -141,14 +138,6 @@ func (v Uint16Value) GetHashInput(scratch []byte) ([]byte, error) {
 	return buf[:5], nil
 }
 
-func (v Uint16Value) Equal(other Value) bool {
-	otherUint16, ok := other.(Uint16Value)
-	if !ok {
-		return false
-	}
-	return uint16(otherUint16) == uint16(v)
-}
-
 // TODO: cache size
 func (v Uint16Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
@@ -159,11 +148,15 @@ func (v Uint16Value) String() string {
 	return fmt.Sprintf("%d", uint16(v))
 }
 
+func (v Uint16Value) KeyString() string {
+	return strconv.FormatInt(int64(v), 10)
+}
+
 type Uint32Value uint32
 
 var _ Value = Uint32Value(0)
 var _ Storable = Uint32Value(0)
-var _ ComparableValue = Uint32Value(0)
+var _ HashableValue = Uint32Value(0)
 
 func (v Uint32Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
@@ -226,14 +219,6 @@ func (v Uint32Value) GetHashInput(scratch []byte) ([]byte, error) {
 	return buf[:7], nil
 }
 
-func (v Uint32Value) Equal(other Value) bool {
-	otherUint32, ok := other.(Uint32Value)
-	if !ok {
-		return false
-	}
-	return uint32(otherUint32) == uint32(v)
-}
-
 // TODO: cache size
 func (v Uint32Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
@@ -244,11 +229,15 @@ func (v Uint32Value) String() string {
 	return fmt.Sprintf("%d", uint32(v))
 }
 
+func (v Uint32Value) KeyString() string {
+	return strconv.FormatInt(int64(v), 10)
+}
+
 type Uint64Value uint64
 
 var _ Value = Uint64Value(0)
 var _ Storable = Uint64Value(0)
-var _ ComparableValue = Uint64Value(0)
+var _ HashableValue = Uint64Value(0)
 
 func (v Uint64Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -312,14 +301,6 @@ func (v Uint64Value) GetHashInput(scratch []byte) ([]byte, error) {
 	return buf[:11], nil
 }
 
-func (v Uint64Value) Equal(other Value) bool {
-	otherUint64, ok := other.(Uint64Value)
-	if !ok {
-		return false
-	}
-	return uint64(otherUint64) == uint64(v)
-}
-
 // TODO: cache size
 func (v Uint64Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
@@ -330,6 +311,10 @@ func (v Uint64Value) String() string {
 	return fmt.Sprintf("%d", uint64(v))
 }
 
+func (v Uint64Value) KeyString() string {
+	return strconv.FormatInt(int64(v), 10)
+}
+
 type StringValue struct {
 	str  string
 	size uint32
@@ -337,7 +322,7 @@ type StringValue struct {
 
 var _ Value = &StringValue{}
 var _ Storable = &StringValue{}
-var _ ComparableValue = &StringValue{}
+var _ HashableValue = &StringValue{}
 
 func NewStringValue(s string) StringValue {
 	size := GetUintCBORSize(uint64(len(s))) + uint32(len(s))
@@ -425,19 +410,15 @@ func (v StringValue) GetHashInput(scratch []byte) ([]byte, error) {
 	return buf, nil
 }
 
-func (v StringValue) Equal(other Value) bool {
-	otherString, ok := other.(StringValue)
-	if !ok {
-		return false
-	}
-	return otherString.str == v.str
-}
-
 func (v StringValue) ByteSize() uint32 {
 	return v.size
 }
 
 func (v StringValue) String() string {
+	return v.str
+}
+
+func (v StringValue) KeyString() string {
 	return v.str
 }
 
@@ -508,4 +489,57 @@ func decodeStorable(dec *cbor.StreamDecoder, _ StorageID) (Storable, error) {
 	default:
 		return nil, fmt.Errorf("invalid cbor type %s for storable", t)
 	}
+}
+
+func compare(storage SlabStorage, value Value, storable Storable) (bool, error) {
+	switch v := value.(type) {
+
+	case Uint8Value:
+		other, ok := storable.(Uint8Value)
+		if !ok {
+			return false, nil
+		}
+		return uint8(other) == uint8(v), nil
+
+	case Uint16Value:
+		other, ok := storable.(Uint16Value)
+		if !ok {
+			return false, nil
+		}
+		return uint16(other) == uint16(v), nil
+
+	case Uint32Value:
+		other, ok := storable.(Uint32Value)
+		if !ok {
+			return false, nil
+		}
+		return uint32(other) == uint32(v), nil
+
+	case Uint64Value:
+		other, ok := storable.(Uint64Value)
+		if !ok {
+			return false, nil
+		}
+		return uint64(other) == uint64(v), nil
+
+	case StringValue:
+		other, ok := storable.(StringValue)
+		if ok {
+			return other.str == v.str, nil
+		}
+
+		// Retrieve value from storage
+		otherValue, err := storable.StoredValue(storage)
+		if err != nil {
+			return false, err
+		}
+		other, ok = otherValue.(StringValue)
+		if ok {
+			return other.str == v.str, nil
+		}
+
+		return false, nil
+	}
+
+	return false, fmt.Errorf("value %T not supported for comparison", value)
 }

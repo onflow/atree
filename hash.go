@@ -74,7 +74,7 @@ var (
 	emptyBlake3Hash [4]uint64
 )
 
-func newDefaultDigesterBuilder() DigesterBuilder {
+func NewDefaultDigesterBuilder() DigesterBuilder {
 	return newBasicDigesterBuilder()
 }
 

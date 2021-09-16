@@ -45,7 +45,7 @@ func (m *OrderedMap) Stats() (MapStats, error) {
 		for e := ids.Front(); e != nil; e = e.Next() {
 			id := e.Value.(StorageID)
 
-			slab, err := getMapSlab(m.storage, id)
+			slab, err := getMapSlab(m.Storage, id)
 			if err != nil {
 				return MapStats{}, err
 			}
@@ -113,7 +113,7 @@ func (m *OrderedMap) Print() {
 		for e := ids.Front(); e != nil; e = e.Next() {
 			id := e.Value.(StorageID)
 
-			slab, err := getMapSlab(m.storage, id)
+			slab, err := getMapSlab(m.Storage, id)
 			if err != nil {
 				fmt.Println(err)
 				return
@@ -155,7 +155,7 @@ func (m *OrderedMap) Print() {
 		for e := collisionSlabIDs.Front(); e != nil; e = e.Next() {
 			id := e.Value.(StorageID)
 
-			slab, err := getMapSlab(m.storage, id)
+			slab, err := getMapSlab(m.Storage, id)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
@@ -209,7 +209,7 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, elemen
 		size += digestSize
 
 		if group, ok := e.(elementGroup); ok {
-			ge, err := group.Elements(m.storage)
+			ge, err := group.Elements(m.Storage)
 			if err != nil {
 				return 0, err
 			}
@@ -232,14 +232,14 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, elemen
 				return 0, fmt.Errorf("got element %T, expect *singleElement", e)
 			}
 
-			ks, err := se.key.StoredValue(m.storage)
+			ks, err := se.key.StoredValue(m.Storage)
 			if err != nil {
 				return 0, err
 			}
 
-			ck, ok := ks.(ComparableValue)
+			ck, ok := ks.(HashableValue)
 			if !ok {
-				return 0, fmt.Errorf("key %s doesn't implement ComparableValue", ks)
+				return 0, fmt.Errorf("key %s doesn't implement HashableValue", ks)
 			}
 
 			// Verify single element size
@@ -295,14 +295,14 @@ func (m *OrderedMap) _validSingleElements(id StorageID, db DigesterBuilder, elem
 
 	for _, e := range elements.elems {
 
-		ks, err := e.key.StoredValue(m.storage)
+		ks, err := e.key.StoredValue(m.Storage)
 		if err != nil {
 			return 0, err
 		}
 
-		ck, ok := ks.(ComparableValue)
+		ck, ok := ks.(HashableValue)
 		if !ok {
-			return 0, fmt.Errorf("key %s doesn't implement ComparableValue", ks)
+			return 0, fmt.Errorf("key %s doesn't implement HashableValue", ks)
 		}
 
 		// Verify single element size
@@ -343,7 +343,7 @@ func (m *OrderedMap) _validSingleElements(id StorageID, db DigesterBuilder, elem
 }
 
 func (m *OrderedMap) _valid(id StorageID, level int) (bool, error) {
-	slab, err := getMapSlab(m.storage, id)
+	slab, err := getMapSlab(m.Storage, id)
 	if err != nil {
 		return false, err
 	}

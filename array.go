@@ -119,7 +119,7 @@ type ArraySlab interface {
 	RemoveExtraData() *ArrayExtraData
 	SetExtraData(*ArrayExtraData)
 
-	PopIterate(SlabStorage, ArrayPopIterationFunc) (bool, error)
+	PopIterate(SlabStorage, ArrayPopIterationFunc) error
 }
 
 // Array is tree
@@ -725,32 +725,23 @@ func (a *ArrayDataSlab) SetExtraData(extraData *ArrayExtraData) {
 	a.extraData = extraData
 }
 
-func (a *ArrayDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc) (resume bool, err error) {
+func (a *ArrayDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc) error {
 
-	// Remove elements backwards
+	// Iterate and reset elements backwards
 	for i := len(a.elements) - 1; i >= 0; i-- {
 
-		elem := a.elements[i]
+		fn(a.elements[i])
 
-		resume, err := fn(elem)
-
-		// Update ArrayDataSlab
+		// NOTE: prevent memory leak
 		a.elements[i] = nil
-
-		a.header.count--
-		a.header.size -= elem.ByteSize()
-
-		if err != nil || !resume {
-			// Reslice elements
-			a.elements = a.elements[:i]
-
-			return resume, err
-		}
 	}
 
-	a.elements = a.elements[:0]
+	// Reset data slab
+	a.elements = nil
+	a.header.count = 0
+	a.header.size = arrayDataSlabPrefixSize
 
-	return true, nil
+	return nil
 }
 
 func (a *ArrayDataSlab) String() string {
@@ -1694,133 +1685,39 @@ func (a *ArrayMetaDataSlab) SetExtraData(extraData *ArrayExtraData) {
 	a.extraData = extraData
 }
 
-func (a *ArrayMetaDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc) (resume bool, err error) {
+func (a *ArrayMetaDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc) error {
 
+	// Iterate child slabs backwards
 	for i := len(a.childrenHeaders) - 1; i >= 0; i-- {
 
 		childID := a.childrenHeaders[i].id
-		childElemCount := a.childrenHeaders[i].count
 
 		child, err := getArraySlab(storage, childID)
 		if err != nil {
-			return false, err
+			return err
 		}
 
-		resume, popErr := child.PopIterate(storage, fn)
-
-		newChildElemCount := child.Header().count
-
-		if newChildElemCount == 0 {
-
-			// Elements in child slab are removed completed.
-			a.childrenCountSum = a.childrenCountSum[:i]
-			a.childrenHeaders = a.childrenHeaders[:i]
-
-			a.header.count -= childElemCount
-			a.header.size -= arraySlabHeaderSize
-
-			// Remove child slab
-			err := storage.Remove(childID)
-			if err != nil {
-				if popErr != nil {
-					return false, popErr
-				}
-				return false, err
-			}
-
-		} else {
-
-			// Elements in child slab are removed partially.
-			// This happens when user aborts or on error.
-
-			numOfElementsRemoved := childElemCount - child.Header().count
-
-			a.header.count -= numOfElementsRemoved
-			a.childrenHeaders[i] = child.Header()
-			a.childrenCountSum[i] -= numOfElementsRemoved
-
-			// Store modified child slab
-			err = storage.Store(childID, child)
-			if err != nil {
-				if popErr != nil {
-					return false, popErr
-				}
-				return false, err
-			}
-
+		err = child.PopIterate(storage, fn)
+		if err != nil {
+			return err
 		}
 
-		if popErr != nil || !resume {
-
-			// User aborts or returns error.
-			// Rebalance tree.
-
-			if newChildElemCount == 0 {
-
-				// Update previous data slab's next storage id
-
-				if len(a.childrenHeaders) > 1 && child.IsData() {
-					prevID := a.childrenHeaders[i-1].id
-					slab, err := getArraySlab(storage, prevID)
-					if err != nil {
-						if popErr != nil {
-							return false, popErr
-						}
-						return false, err
-					}
-
-					prev := slab.(*ArrayDataSlab)
-					prev.next = StorageIDUndefined
-
-					// Save previous data slab
-					err = storage.Store(prevID, prev)
-					if err != nil {
-						if popErr != nil {
-							return false, popErr
-						}
-						return false, err
-					}
-				}
-
-			} else {
-
-				// Rebalance modified child slab
-				if len(a.childrenHeaders) > 1 {
-					underflowSize, isUnderflow := child.IsUnderflow()
-					if isUnderflow {
-						err = a.MergeOrRebalanceChildSlab(storage, child, i, underflowSize)
-						if err != nil {
-							if popErr != nil {
-								return false, popErr
-							}
-							return false, err
-						}
-					}
-				}
-			}
-
-			// Save this slab
-			err = storage.Store(a.header.id, a)
-			if err != nil {
-				if popErr != nil {
-					return false, popErr
-				}
-				return false, err
-			}
-
-			return resume, popErr
+		// Remove child slab
+		err = storage.Remove(childID)
+		if err != nil {
+			return err
 		}
 	}
 
 	// All child slabs are removed.
 
-	// Save this slab
-	err = storage.Store(a.header.id, a)
-	if err != nil {
-		return false, err
-	}
+	// Reset meta data slab
+	a.childrenCountSum = nil
+	a.childrenHeaders = nil
+	a.header.count = 0
+	a.header.size = arrayMetaDataSlabPrefixSize
 
-	return true, nil
+	return nil
 }
 
 func (a *ArrayMetaDataSlab) String() string {
@@ -2144,71 +2041,30 @@ func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) 
 	return firstArrayDataSlab(storage, firstChild)
 }
 
-type ArrayPopIterationFunc func(Storable) (resume bool, err error)
+type ArrayPopIterationFunc func(Storable)
 
+// PopIterate iterates and removes elements backward.
+// Each element is passed to ArrayPopIterationFunc callback before removal.
 func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
 
-	_, popErr := a.root.PopIterate(a.Storage, fn)
-
-	rootID := a.root.ID()
+	err := a.root.PopIterate(a.Storage, fn)
+	if err != nil {
+		return err
+	}
 
 	for !a.root.IsData() {
 
-		root := a.root.(*ArrayMetaDataSlab)
-
-		if len(root.childrenHeaders) > 1 {
-			break
+		// Set root to empty data slab
+		a.root = &ArrayDataSlab{
+			header: ArraySlabHeader{
+				id:   a.root.ID(),
+				size: arrayDataSlabPrefixSize,
+			},
+			extraData: a.root.ExtraData(),
 		}
 
-		if len(root.childrenHeaders) == 0 {
-			// Set root to empty data slab if root doesn't have any child slab.
-
-			a.root = &ArrayDataSlab{
-				header: ArraySlabHeader{
-					id:   rootID,
-					size: arrayDataSlabPrefixSize,
-				},
-				extraData: a.root.ExtraData(),
-			}
-
-			break
-		}
-
-		// Set root to its child slab if root has one child slab.
-
-		extraData := root.RemoveExtraData()
-
-		childID := root.childrenHeaders[0].id
-
-		child, err := getArraySlab(a.Storage, childID)
-		if err != nil {
-			if popErr != nil {
-				return popErr
-			}
-			return err
-		}
-
-		a.root = child
-
-		a.root.SetID(rootID)
-
-		a.root.SetExtraData(extraData)
-
-		err = a.Storage.Remove(childID)
-		if err != nil {
-			if popErr != nil {
-				return popErr
-			}
-			return err
-		}
 	}
 
 	// Save root slab
-	err := a.Storage.Store(a.root.ID(), a.root)
-
-	if popErr != nil {
-		return popErr
-	}
-
-	return err
+	return a.Storage.Store(a.root.ID(), a.root)
 }

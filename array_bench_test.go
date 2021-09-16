@@ -256,9 +256,8 @@ func benchmarkPopRemove(b *testing.B, initialArraySize int) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := array.PopIterate(func(s Storable) (bool, error) {
+		err := array.PopIterate(func(s Storable) {
 			storable = s
-			return true, nil
 		})
 		if err != nil {
 			b.Errorf(err.Error())

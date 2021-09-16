@@ -237,11 +237,6 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, hip Ha
 				return 0, err
 			}
 
-			ck, ok := ks.(Value)
-			if !ok {
-				return 0, fmt.Errorf("key %s doesn't implement Value", ks)
-			}
-
 			// Verify single element size
 			computedSize := singleElementPrefixSize + se.key.ByteSize() + se.value.ByteSize()
 			if computedSize != e.Size() {
@@ -250,7 +245,7 @@ func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, hip Ha
 			}
 
 			// Verify single element hashed value
-			d, err := db.Digest(hip, ck)
+			d, err := db.Digest(hip, ks)
 			if err != nil {
 				return 0, err
 			}
@@ -300,11 +295,6 @@ func (m *OrderedMap) _validSingleElements(id StorageID, db DigesterBuilder, hip 
 			return 0, err
 		}
 
-		ck, ok := ks.(Value)
-		if !ok {
-			return 0, fmt.Errorf("key %s doesn't implement Value", ks)
-		}
-
 		// Verify single element size
 		computedSize := singleElementPrefixSize + e.key.ByteSize() + e.value.ByteSize()
 		if computedSize != e.Size() {
@@ -313,7 +303,7 @@ func (m *OrderedMap) _validSingleElements(id StorageID, db DigesterBuilder, hip 
 		}
 
 		// Verify single element hashed value
-		digest, err := db.Digest(hip, ck)
+		digest, err := db.Digest(hip, ks)
 		if err != nil {
 			return 0, err
 		}

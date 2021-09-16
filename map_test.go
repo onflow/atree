@@ -733,10 +733,7 @@ func TestMapIterate(t *testing.T) {
 		i := uint64(0)
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
 			require.Equal(t, sortedKeys[i], k)
-
-			mk, ok := k.(Value)
-			require.True(t, ok)
-			require.Equal(t, uniqueKeyValues[mk], v)
+			require.Equal(t, uniqueKeyValues[k], v)
 
 			i++
 

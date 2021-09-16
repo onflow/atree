@@ -497,14 +497,9 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 	}
 
 	// Generate digest for existing key (see function comment)
-	v, err := e.key.StoredValue(storage)
+	kv, err := e.key.StoredValue(storage)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	kv, ok := v.(Value)
-	if !ok {
-		return nil, nil, NewInterfaceNotImplementedError("Value")
 	}
 
 	existingKeyDigest, err := b.Digest(hip, kv)

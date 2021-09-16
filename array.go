@@ -737,7 +737,7 @@ func (a *ArrayDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc
 		// Update ArrayDataSlab
 		a.elements[i] = nil
 
-		a.header.count -= 1
+		a.header.count--
 		a.header.size -= elem.ByteSize()
 
 		if err != nil || !resume {

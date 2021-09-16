@@ -2374,7 +2374,7 @@ func TestArrayStoredValue(t *testing.T) {
 	}
 }
 
-func TestRemoveIterate(t *testing.T) {
+func TestPopIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)

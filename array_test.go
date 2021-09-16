@@ -2373,3 +2373,202 @@ func TestArrayStoredValue(t *testing.T) {
 		require.Error(t, err)
 	}
 }
+
+func TestRemoveIterate(t *testing.T) {
+
+	t.Run("empty", func(t *testing.T) {
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		storage := newTestBasicStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+		require.Equal(t, 1, storage.Count())
+
+		i := uint64(0)
+		err = array.PopIterate(func(v Storable) (bool, error) {
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), i)
+
+		require.Equal(t, uint64(0), array.Count())
+		require.Equal(t, 1, storage.Count())
+	})
+
+	t.Run("root-dataslab", func(t *testing.T) {
+		SetThreshold(1024)
+
+		const arraySize = 10
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		storage := newTestBasicStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+		require.Equal(t, 1, storage.Count())
+
+		i := uint64(0)
+		err = array.PopIterate(func(v Storable) (bool, error) {
+			e, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, arraySize-i-1, uint64(e))
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, i, uint64(arraySize))
+
+		require.Equal(t, uint64(0), array.Count())
+		require.Equal(t, 1, storage.Count())
+	})
+
+	t.Run("root-metaslab", func(t *testing.T) {
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		const arraySize = 256 * 256
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		storage := newTestBasicStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+		require.True(t, storage.Count() > 1)
+
+		i := uint64(0)
+		err = array.PopIterate(func(v Storable) (bool, error) {
+			e, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, uint64(arraySize)-i-1, uint64(e))
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, uint64(arraySize), i)
+
+		require.Equal(t, uint64(0), array.Count())
+		require.Equal(t, 1, storage.Count())
+	})
+
+	t.Run("stop", func(t *testing.T) {
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		//const arraySize = 256 * 256
+		const arraySize = 1024 * 2
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		storage := newTestBasicStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+
+		// Remove one element at a time and verify array tree after each removal
+		for i := 0; i < arraySize; i++ {
+
+			// Remove last element
+			err = array.PopIterate(func(v Storable) (bool, error) {
+				e, ok := v.(Uint64Value)
+				require.True(t, ok)
+				require.Equal(t, uint64(arraySize-i)-1, uint64(e))
+				return false, nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, uint64(arraySize-i-1), array.Count())
+
+			// Retrieve elements
+			for j := uint64(0); j < array.Count(); j++ {
+				v, err := array.Get(j)
+				require.NoError(t, err)
+
+				e, ok := v.(Uint64Value)
+				require.True(t, ok)
+				require.Equal(t, j, uint64(e))
+			}
+
+			// Verify tree
+			verified, err := array.valid(typeInfo)
+			require.NoError(t, err)
+			require.True(t, verified)
+		}
+
+		require.Equal(t, uint64(0), array.Count())
+		require.Equal(t, 1, storage.Count())
+	})
+
+	t.Run("error", func(t *testing.T) {
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		storage := newTestBasicStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		const count = 10
+
+		for i := uint64(0); i < count; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(count), array.Count())
+
+		testErr := errors.New("test")
+
+		i := 0
+		err = array.PopIterate(func(_ Storable) (bool, error) {
+			if i == count/2 {
+				return false, testErr
+			}
+
+			i++
+
+			return true, nil
+		})
+		require.Error(t, err)
+		require.ErrorIs(t, testErr, err)
+
+		require.Equal(t, count/2, i)
+	})
+}

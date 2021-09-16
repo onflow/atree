@@ -77,6 +77,42 @@ func BenchmarkRemoveXXLArray(b *testing.B) {
 	benchmarkRemove(b, 10_000_000, 100)
 }
 
+func BenchmarkBatchRemoveArray100Elems(b *testing.B) {
+	b.Run("loop", func(b *testing.B) {
+		benchmarkLoopRemove(b, 100)
+	})
+	b.Run("pop", func(b *testing.B) {
+		benchmarkPopRemove(b, 100)
+	})
+}
+
+func BenchmarkBatchRemoveArray1000Elems(b *testing.B) {
+	b.Run("loop", func(b *testing.B) {
+		benchmarkLoopRemove(b, 1000)
+	})
+	b.Run("pop", func(b *testing.B) {
+		benchmarkPopRemove(b, 1000)
+	})
+}
+
+func BenchmarkBatchRemoveArray10000Elems(b *testing.B) {
+	b.Run("loop", func(b *testing.B) {
+		benchmarkLoopRemove(b, 10_000)
+	})
+	b.Run("pop", func(b *testing.B) {
+		benchmarkPopRemove(b, 10_000)
+	})
+}
+
+func BenchmarkBatchRemoveArray100000Elems(b *testing.B) {
+	b.Run("loop", func(b *testing.B) {
+		benchmarkLoopRemove(b, 100_000)
+	})
+	b.Run("pop", func(b *testing.B) {
+		benchmarkPopRemove(b, 100_000)
+	})
+}
+
 // XXXLArray takes too long to run.
 // func BenchmarkLookupXXXLArray(b *testing.B) { benchmarkLookup(b, 100_000_000, 100) }
 
@@ -182,4 +218,49 @@ func benchmarkRemove(b *testing.B, initialArraySize, numberOfElements int) {
 			_, _ = array.Remove(uint64(index))
 		}
 	}
+}
+
+func benchmarkLoopRemove(b *testing.B, initialArraySize int) {
+
+	b.StopTimer()
+
+	storage := newTestPersistentStorage(b)
+
+	array, err := setupArray(storage, initialArraySize)
+	require.NoError(b, err)
+
+	var storable Storable
+
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		for i := initialArraySize - 1; i >= 0; i-- {
+			storable, _ = array.Remove(uint64(i))
+		}
+	}
+
+	noop = storable
+}
+
+func benchmarkPopRemove(b *testing.B, initialArraySize int) {
+
+	b.StopTimer()
+
+	storage := newTestPersistentStorage(b)
+
+	array, err := setupArray(storage, initialArraySize)
+	require.NoError(b, err)
+
+	var storable Storable
+
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		array.PopIterate(func(s Storable) (bool, error) {
+			storable = s
+			return true, nil
+		})
+	}
+
+	noop = storable
 }

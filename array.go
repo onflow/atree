@@ -729,11 +729,7 @@ func (a *ArrayDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc
 
 	// Iterate and reset elements backwards
 	for i := len(a.elements) - 1; i >= 0; i-- {
-
 		fn(a.elements[i])
-
-		// NOTE: prevent memory leak
-		a.elements[i] = nil
 	}
 
 	// Reset data slab

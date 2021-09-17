@@ -2373,3 +2373,118 @@ func TestArrayStoredValue(t *testing.T) {
 		require.Error(t, err)
 	}
 }
+
+func TestPopIterate(t *testing.T) {
+
+	t.Run("empty", func(t *testing.T) {
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		storage := newTestBasicStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+		require.Equal(t, 1, storage.Count())
+
+		i := uint64(0)
+		err = array.PopIterate(func(v Storable) {
+			i++
+		})
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), i)
+
+		verified, err := array.valid(typeInfo)
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		require.Equal(t, uint64(0), array.Count())
+		require.Equal(t, 1, storage.Count())
+	})
+
+	t.Run("root-dataslab", func(t *testing.T) {
+		SetThreshold(1024)
+
+		const arraySize = 10
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		storage := newTestBasicStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+		require.Equal(t, 1, storage.Count())
+
+		i := uint64(0)
+		err = array.PopIterate(func(v Storable) {
+			e, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, arraySize-i-1, uint64(e))
+			i++
+		})
+		require.NoError(t, err)
+		require.Equal(t, i, uint64(arraySize))
+
+		verified, err := array.valid(typeInfo)
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		require.Equal(t, uint64(0), array.Count())
+		require.Equal(t, typeInfo, array.Type())
+		require.Equal(t, 1, storage.Count())
+	})
+
+	t.Run("root-metaslab", func(t *testing.T) {
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		const arraySize = 256 * 256
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		storage := newTestBasicStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+		require.True(t, storage.Count() > 1)
+
+		i := uint64(0)
+		err = array.PopIterate(func(v Storable) {
+			e, ok := v.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, uint64(arraySize)-i-1, uint64(e))
+			i++
+		})
+		require.NoError(t, err)
+		require.Equal(t, uint64(arraySize), i)
+
+		verified, err := array.valid(typeInfo)
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		require.Equal(t, uint64(0), array.Count())
+		require.Equal(t, typeInfo, array.Type())
+
+		require.Equal(t, 1, storage.Count())
+	})
+}

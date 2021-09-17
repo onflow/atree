@@ -118,6 +118,8 @@ type ArraySlab interface {
 	ExtraData() *ArrayExtraData
 	RemoveExtraData() *ArrayExtraData
 	SetExtraData(*ArrayExtraData)
+
+	PopIterate(SlabStorage, ArrayPopIterationFunc) error
 }
 
 // Array is tree
@@ -721,6 +723,21 @@ func (a *ArrayDataSlab) RemoveExtraData() *ArrayExtraData {
 
 func (a *ArrayDataSlab) SetExtraData(extraData *ArrayExtraData) {
 	a.extraData = extraData
+}
+
+func (a *ArrayDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc) error {
+
+	// Iterate and reset elements backwards
+	for i := len(a.elements) - 1; i >= 0; i-- {
+		fn(a.elements[i])
+	}
+
+	// Reset data slab
+	a.elements = nil
+	a.header.count = 0
+	a.header.size = arrayDataSlabPrefixSize
+
+	return nil
 }
 
 func (a *ArrayDataSlab) String() string {
@@ -1664,6 +1681,41 @@ func (a *ArrayMetaDataSlab) SetExtraData(extraData *ArrayExtraData) {
 	a.extraData = extraData
 }
 
+func (a *ArrayMetaDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc) error {
+
+	// Iterate child slabs backwards
+	for i := len(a.childrenHeaders) - 1; i >= 0; i-- {
+
+		childID := a.childrenHeaders[i].id
+
+		child, err := getArraySlab(storage, childID)
+		if err != nil {
+			return err
+		}
+
+		err = child.PopIterate(storage, fn)
+		if err != nil {
+			return err
+		}
+
+		// Remove child slab
+		err = storage.Remove(childID)
+		if err != nil {
+			return err
+		}
+	}
+
+	// All child slabs are removed.
+
+	// Reset meta data slab
+	a.childrenCountSum = nil
+	a.childrenHeaders = nil
+	a.header.count = 0
+	a.header.size = arrayMetaDataSlabPrefixSize
+
+	return nil
+}
+
 func (a *ArrayMetaDataSlab) String() string {
 	var elemsStr []string
 	for _, h := range a.childrenHeaders {
@@ -1983,4 +2035,32 @@ func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) 
 		return nil, err
 	}
 	return firstArrayDataSlab(storage, firstChild)
+}
+
+type ArrayPopIterationFunc func(Storable)
+
+// PopIterate iterates and removes elements backward.
+// Each element is passed to ArrayPopIterationFunc callback before removal.
+func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
+
+	err := a.root.PopIterate(a.Storage, fn)
+	if err != nil {
+		return err
+	}
+
+	for !a.root.IsData() {
+
+		// Set root to empty data slab
+		a.root = &ArrayDataSlab{
+			header: ArraySlabHeader{
+				id:   a.root.ID(),
+				size: arrayDataSlabPrefixSize,
+			},
+			extraData: a.root.ExtraData(),
+		}
+
+	}
+
+	// Save root slab
+	return a.Storage.Store(a.root.ID(), a.root)
 }

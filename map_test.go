@@ -665,6 +665,7 @@ func TestMapIterate(t *testing.T) {
 
 		sortedKeys := make([]Value, mapSize)
 
+		// keys is needed to insert elements with collision in deterministic order.
 		keys := make([]Value, mapSize)
 
 		for i := uint64(0); i < mapSize; i++ {
@@ -2960,4 +2961,267 @@ func TestMapStoredValue(t *testing.T) {
 		_, err = firstDataSlab.StoredValue(storage)
 		require.Error(t, err)
 	}
+}
+
+func TestMapPopIterate(t *testing.T) {
+
+	t.Run("empty", func(t *testing.T) {
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		storage := newTestInMemoryStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		digesterBuilder := newBasicDigesterBuilder()
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+		require.Equal(t, 1, storage.Count())
+
+		i := uint64(0)
+		err = m.PopIterate(func(k Storable, v Storable) {
+			i++
+		})
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), i)
+
+		verified, err := m.valid(hashInputProvider)
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		require.Equal(t, uint64(0), m.Count())
+		require.Equal(t, 1, storage.Count())
+	})
+
+	t.Run("root-dataslab", func(t *testing.T) {
+		SetThreshold(1024)
+
+		const mapSize = 10
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		storage := newTestBasicStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		digesterBuilder := newBasicDigesterBuilder()
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		uniqueKeyValues := make(map[Value]Value, mapSize)
+
+		sortedKeys := make([]Value, mapSize)
+
+		for i := uint64(0); i < mapSize; i++ {
+			key, value := Uint64Value(i), Uint64Value(i*10)
+
+			sortedKeys[i] = key
+
+			uniqueKeyValues[key] = value
+
+			_, err := m.Set(compare, hashInputProvider, key, value)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, 1, storage.Count())
+
+		sortedKeys = sortSliceByDigest(t, sortedKeys, digesterBuilder, hashInputProvider)
+
+		i := mapSize
+		err = m.PopIterate(func(k, v Storable) {
+			i--
+
+			kv, err := k.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, sortedKeys[i], kv)
+
+			vv, err := v.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, uniqueKeyValues[sortedKeys[i]], vv)
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 0, i)
+
+		verified, err := m.valid(hashInputProvider)
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		require.Equal(t, uint64(0), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+		require.Equal(t, 1, storage.Count())
+	})
+
+	t.Run("root-metaslab", func(t *testing.T) {
+		const mapSize = 64 * 1024
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		storage := newTestInMemoryStorage(t)
+
+		digesterBuilder := newBasicDigesterBuilder()
+
+		uniqueKeyValues := make(map[Value]Value, mapSize)
+
+		sortedKeys := make([]Value, mapSize)
+
+		for i := uint64(0); i < mapSize; i++ {
+			for {
+				k := NewStringValue(randStr(16))
+				if _, exist := uniqueKeyValues[k]; !exist {
+					sortedKeys[i] = k
+					uniqueKeyValues[k] = NewStringValue(randStr(16))
+					break
+				}
+			}
+		}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range uniqueKeyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		sortedKeys = sortSliceByDigest(t, sortedKeys, digesterBuilder, hashInputProvider)
+
+		// Iterate key value pairs
+		i := len(uniqueKeyValues)
+		err = m.PopIterate(func(k Storable, v Storable) {
+			i--
+
+			kv, err := k.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, sortedKeys[i], kv)
+
+			vv, err := v.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, uniqueKeyValues[sortedKeys[i]], vv)
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 0, i)
+
+		verified, err := m.valid(hashInputProvider)
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		require.Equal(t, uint64(0), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+		require.Equal(t, 1, storage.Count())
+	})
+
+	t.Run("collision", func(t *testing.T) {
+		//MetaDataSlabCount:1 DataSlabCount:13 CollisionDataSlabCount:100
+
+		const mapSize = 1024
+
+		SetThreshold(512)
+		defer SetThreshold(1024)
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		digesterBuilder := &mockDigesterBuilder{}
+
+		storage := newTestInMemoryStorage(t)
+
+		uniqueKeyValues := make(map[Value]Value, mapSize)
+
+		sortedKeys := make([]Value, mapSize)
+
+		// keys is needed to insert elements with collision in deterministic order.
+		keys := make([]Value, mapSize)
+
+		for i := uint64(0); i < mapSize; i++ {
+			for {
+				k := NewStringValue(randStr(16))
+
+				if _, ok := uniqueKeyValues[k]; !ok {
+
+					sortedKeys[i] = k
+					keys[i] = k
+					uniqueKeyValues[k] = NewStringValue(randStr(16))
+
+					digests := []Digest{
+						Digest(i % 100),
+						Digest(1 % 5),
+					}
+
+					digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+					break
+				}
+			}
+		}
+
+		sortedKeys = sortSliceByDigest(t, sortedKeys, digesterBuilder, hashInputProvider)
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// Populate map
+		for _, k := range keys {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, uniqueKeyValues[k])
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Iterate key value pairs
+		i := mapSize
+		err = m.PopIterate(func(k Storable, v Storable) {
+			i--
+
+			kv, err := k.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, sortedKeys[i], kv)
+
+			vv, err := v.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, uniqueKeyValues[sortedKeys[i]], vv)
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 0, i)
+
+		verified, err := m.valid(hashInputProvider)
+		require.NoError(t, err)
+		require.True(t, verified)
+
+		require.Equal(t, uint64(0), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+		require.Equal(t, 1, storage.Count())
+	})
+}
+
+func sortSliceByDigest(t *testing.T, x []Value, digesterBuilder DigesterBuilder, hip HashInputProvider) []Value {
+
+	sort.SliceStable(x, func(i, j int) bool {
+		d1, err := digesterBuilder.Digest(hip, x[i])
+		require.NoError(t, err)
+
+		digest1, err := d1.DigestPrefix(d1.Levels())
+		require.NoError(t, err)
+
+		d2, err := digesterBuilder.Digest(hip, x[j])
+		require.NoError(t, err)
+
+		digest2, err := d2.DigestPrefix(d2.Levels())
+		require.NoError(t, err)
+
+		for z := 0; z < len(digest1); z++ {
+			if digest1[z] != digest2[z] {
+				return digest1[z] < digest2[z] // sort by hkey
+			}
+		}
+		return i < j // sort by insertion order with hash collision
+	})
+
+	return x
 }

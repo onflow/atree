@@ -77,6 +77,8 @@ type element interface {
 	HasPointer() bool
 
 	Size() uint32
+
+	PopIterate(SlabStorage, MapPopIterationFunc) error
 }
 
 // elementGroup is a group of elements that must stay together during splitting or rebalancing.
@@ -117,6 +119,8 @@ type elements interface {
 	Count() uint32
 
 	Size() uint32
+
+	PopIterate(SlabStorage, MapPopIterationFunc) error
 }
 
 type singleElement struct {
@@ -227,6 +231,8 @@ type MapSlab interface {
 	ExtraData() *MapExtraData
 	RemoveExtraData() *MapExtraData
 	SetExtraData(*MapExtraData)
+
+	PopIterate(SlabStorage, MapPopIterationFunc) error
 }
 
 type OrderedMap struct {
@@ -544,6 +550,11 @@ func (e *singleElement) Size() uint32 {
 	return e.size
 }
 
+func (e *singleElement) PopIterate(_ SlabStorage, fn MapPopIterationFunc) error {
+	fn(e.key, e.value)
+	return nil
+}
+
 func (e *singleElement) String() string {
 	return fmt.Sprintf("%s:%s", e.key, e.value)
 }
@@ -690,6 +701,10 @@ func (e *inlineCollisionGroup) Inline() bool {
 
 func (e *inlineCollisionGroup) Elements(_ SlabStorage) (elements, error) {
 	return e.elements, nil
+}
+
+func (e *inlineCollisionGroup) PopIterate(storage SlabStorage, fn MapPopIterationFunc) error {
+	return e.elements.PopIterate(storage, fn)
 }
 
 func (e *inlineCollisionGroup) String() string {
@@ -842,6 +857,20 @@ func (e *externalCollisionGroup) Elements(storage SlabStorage) (elements, error)
 		return nil, NewTypeAssertionError("*MapDataSlab", fmt.Sprintf("%T", slab))
 	}
 	return dataSlab.elements, nil
+}
+
+func (e *externalCollisionGroup) PopIterate(storage SlabStorage, fn MapPopIterationFunc) error {
+	elements, err := e.Elements(storage)
+	if err != nil {
+		return err
+	}
+
+	err = elements.PopIterate(storage, fn)
+	if err != nil {
+		return err
+	}
+
+	return storage.Remove(e.id)
 }
 
 func (e *externalCollisionGroup) String() string {
@@ -1512,6 +1541,26 @@ func (e *hkeyElements) firstKey() Digest {
 	return 0
 }
 
+func (e *hkeyElements) PopIterate(storage SlabStorage, fn MapPopIterationFunc) error {
+
+	// Iterate and reset elements backwards
+	for i := len(e.elems) - 1; i >= 0; i-- {
+		elem := e.elems[i]
+
+		err := elem.PopIterate(storage, fn)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Reset data slab
+	e.hkeys = nil
+	e.elems = nil
+	e.size = hkeyElementsPrefixSize
+
+	return nil
+}
+
 func (e *hkeyElements) String() string {
 	var s []string
 	s = append(s, fmt.Sprintf("(level %v)", e.level))
@@ -1799,6 +1848,25 @@ func (e *singleElements) firstKey() Digest {
 
 func (e *singleElements) Size() uint32 {
 	return e.size
+}
+
+func (e *singleElements) PopIterate(storage SlabStorage, fn MapPopIterationFunc) error {
+
+	// Iterate and reset elements backwards
+	for i := len(e.elems) - 1; i >= 0; i-- {
+		elem := e.elems[i]
+
+		err := elem.PopIterate(storage, fn)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Reset data slab
+	e.elems = nil
+	e.size = singleElementsPrefixSize
+
+	return nil
 }
 
 func (e *singleElements) String() string {
@@ -2225,6 +2293,18 @@ func (m *MapDataSlab) RemoveExtraData() *MapExtraData {
 
 func (m *MapDataSlab) SetExtraData(extraData *MapExtraData) {
 	m.extraData = extraData
+}
+
+func (m *MapDataSlab) PopIterate(storage SlabStorage, fn MapPopIterationFunc) error {
+	err := m.elements.PopIterate(storage, fn)
+	if err != nil {
+		return err
+	}
+
+	// Reset data slab
+	m.header.size = mapDataSlabPrefixSize + hkeyElementsPrefixSize
+	m.header.firstKey = 0
+	return nil
 }
 
 func (m *MapDataSlab) String() string {
@@ -3027,6 +3107,40 @@ func (m *MapMetaDataSlab) SetExtraData(extraData *MapExtraData) {
 	m.extraData = extraData
 }
 
+func (m *MapMetaDataSlab) PopIterate(storage SlabStorage, fn MapPopIterationFunc) error {
+
+	// Iterate child slabs backwards
+	for i := len(m.childrenHeaders) - 1; i >= 0; i-- {
+
+		childID := m.childrenHeaders[i].id
+
+		child, err := getMapSlab(storage, childID)
+		if err != nil {
+			return err
+		}
+
+		err = child.PopIterate(storage, fn)
+		if err != nil {
+			return err
+		}
+
+		// Remove child slab
+		err = storage.Remove(childID)
+		if err != nil {
+			return err
+		}
+	}
+
+	// All child slabs are removed.
+
+	// Reset meta data slab
+	m.childrenHeaders = nil
+	m.header.firstKey = 0
+	m.header.size = mapMetaDataSlabPrefixSize
+
+	return nil
+}
+
 func (m *MapMetaDataSlab) String() string {
 	var hStr []string
 	for _, h := range m.childrenHeaders {
@@ -3715,4 +3829,38 @@ func (m *OrderedMap) IterateValues(fn MapElementIterationFunc) error {
 			return nil
 		}
 	}
+}
+
+type MapPopIterationFunc func(Storable, Storable)
+
+// PopIterate iterates and removes elements backward.
+// Each element is passed to MapPopIterationFunc callback before removal.
+func (m *OrderedMap) PopIterate(fn MapPopIterationFunc) error {
+
+	err := m.root.PopIterate(m.Storage, fn)
+	if err != nil {
+		return err
+	}
+
+	// Set map count to 0 in extraData
+	extraData := m.root.ExtraData()
+	extraData.Count = 0
+
+	m.root.SetExtraData(extraData)
+
+	for !m.root.IsData() {
+
+		// Set root to empty data slab
+		m.root = &MapDataSlab{
+			header: MapSlabHeader{
+				id:   m.root.ID(),
+				size: mapDataSlabPrefixSize + hkeyElementsPrefixSize,
+			},
+			elements:  newHkeyElements(0),
+			extraData: m.root.ExtraData(),
+		}
+	}
+
+	// Save root slab
+	return m.Storage.Store(m.root.ID(), m.root)
 }

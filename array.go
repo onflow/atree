@@ -2064,3 +2064,199 @@ func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
 	// Save root slab
 	return a.Storage.Store(a.root.ID(), a.root)
 }
+
+type ArrayElementProvider func() (Value, error)
+
+func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo cbor.RawMessage, fn ArrayElementProvider) (*Array, error) {
+
+	var slabs []ArraySlab
+
+	id, err := storage.GenerateStorageID(address)
+	if err != nil {
+		return nil, NewStorageError(err)
+	}
+
+	dataSlab := &ArrayDataSlab{
+		header: ArraySlabHeader{
+			id:   id,
+			size: arrayDataSlabPrefixSize,
+		},
+	}
+
+	// Batch append data by creating a list of ArrayDataSlab
+	for {
+		value, err := fn()
+		if err != nil {
+			return nil, err
+		}
+		if value == nil {
+			break
+		}
+
+		// Finalize current data slab without appending new element
+		if dataSlab.header.size >= uint32(targetThreshold) {
+
+			prevID := dataSlab.header.id
+
+			// Generate storge id for next data slab
+			nextID, err := storage.GenerateStorageID(address)
+			if err != nil {
+				return nil, NewStorageError(err)
+			}
+
+			// Save next slab's storage id in data slab
+			dataSlab.next = nextID
+
+			// Append data slab to dataSlabs
+			slabs = append(slabs, dataSlab)
+
+			// Create next data slab with previous slab's storage id
+			dataSlab = &ArrayDataSlab{
+				header: ArraySlabHeader{
+					id:   nextID,
+					size: arrayDataSlabPrefixSize,
+				},
+				prev: prevID,
+			}
+
+		}
+
+		storable, err := value.Storable(storage, address, MaxInlineElementSize)
+		if err != nil {
+			return nil, err
+		}
+
+		// Append new element
+		dataSlab.elements = append(dataSlab.elements, storable)
+		dataSlab.header.count++
+		dataSlab.header.size += storable.ByteSize()
+	}
+
+	// Append last data slab to slabs
+	slabs = append(slabs, dataSlab)
+
+	for len(slabs) > 1 {
+
+		lastSlab := slabs[len(slabs)-1]
+
+		// Rebalance last slab if needed
+		if underflowSize, underflow := lastSlab.IsUnderflow(); underflow {
+
+			leftSib := slabs[len(slabs)-2]
+
+			if leftSib.CanLendToRight(underflowSize) {
+
+				// Rebalance with left
+				err := leftSib.LendToRight(lastSlab)
+				if err != nil {
+					return nil, err
+				}
+
+			} else {
+
+				// Merge with left
+				err := leftSib.Merge(lastSlab)
+				if err != nil {
+					return nil, err
+				}
+
+				// Remove last slab from slabs
+				slabs[len(slabs)-1] = nil
+				slabs = slabs[:len(slabs)-1]
+			}
+		}
+
+		// All slabs are within target size range.
+
+		// Store all slabs
+		for _, slab := range slabs {
+			err = storage.Store(slab.ID(), slab)
+			if err != nil {
+				return nil, NewStorageError(err)
+			}
+		}
+
+		// Get next level meta slabs
+		slabs, err = nextLevelArraySlabs(storage, address, slabs)
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	// found root slab
+	root := slabs[0]
+
+	extraData := &ArrayExtraData{TypeInfo: typeInfo}
+
+	// Set extra data in root
+	root.SetExtraData(extraData)
+
+	// Store root
+	err = storage.Store(root.ID(), root)
+	if err != nil {
+		return nil, NewStorageError(err)
+	}
+
+	return &Array{
+		Storage: storage,
+		root:    root,
+	}, nil
+}
+
+// nextLevelArraySlabs returns next level meta data slabs from slabs.
+// slabs must have at least 2 elements.  It is reused and returned as next level slabs.
+// Caller is responsible for rebalance last slab and storing returned slabs in storage.
+func nextLevelArraySlabs(storage SlabStorage, address Address, slabs []ArraySlab) ([]ArraySlab, error) {
+
+	maxNumberOfHeadersInMetaSlab := (maxThreshold - arrayMetaDataSlabPrefixSize) / arraySlabHeaderSize
+
+	nextLevelSlabsIndex := 0
+
+	// Generate storge id
+	id, err := storage.GenerateStorageID(address)
+	if err != nil {
+		return nil, NewStorageError(err)
+	}
+
+	metaSlab := &ArrayMetaDataSlab{
+		header: ArraySlabHeader{
+			id:   id,
+			size: arrayMetaDataSlabPrefixSize,
+		},
+	}
+
+	for _, slab := range slabs {
+
+		if len(metaSlab.childrenHeaders) == int(maxNumberOfHeadersInMetaSlab) {
+
+			slabs[nextLevelSlabsIndex] = metaSlab
+			nextLevelSlabsIndex++
+
+			// Generate storge id for next meta data slab
+			id, err = storage.GenerateStorageID(address)
+			if err != nil {
+				return nil, NewStorageError(err)
+			}
+
+			metaSlab = &ArrayMetaDataSlab{
+				header: ArraySlabHeader{
+					id:   id,
+					size: arrayMetaDataSlabPrefixSize,
+				},
+			}
+		}
+
+		metaSlab.header.size += arraySlabHeaderSize
+		metaSlab.header.count += slab.Header().count
+
+		metaSlab.childrenHeaders = append(metaSlab.childrenHeaders, slab.Header())
+		metaSlab.childrenCountSum = append(metaSlab.childrenCountSum, metaSlab.header.count)
+	}
+
+	// Append last meta slab to slabs
+	slabs[nextLevelSlabsIndex] = metaSlab
+	nextLevelSlabsIndex++
+
+	return slabs[:nextLevelSlabsIndex], nil
+}

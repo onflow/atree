@@ -317,7 +317,7 @@ func benchmarkLoopAppend(b *testing.B, initialArraySize int) {
 	for i := 0; i < b.N; i++ {
 		copied, _ := NewArray(storage, array.Address(), array.Type())
 
-		array.Iterate(func(value Value) (bool, error) {
+		_ = array.Iterate(func(value Value) (bool, error) {
 			err = copied.Append(value)
 			return true, nil
 		})

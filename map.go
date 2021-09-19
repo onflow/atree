@@ -923,7 +923,7 @@ func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDec
 		)
 	}
 
-	if len(hkeys) == 0 {
+	if digestCount == 0 && elemCount > 0 {
 		// elements are singleElements
 
 		// Decode elements

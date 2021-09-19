@@ -1230,6 +1230,84 @@ func TestMapEncodeDecode(t *testing.T) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
+	t.Run("empty", func(t *testing.T) {
+
+		storage := NewBasicSlabStorage(encMode, decMode)
+		storage.DecodeStorable = decodeStorable
+
+		// Create map
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), m.Count())
+
+		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+
+		expected := map[StorageID][]byte{
+			id1: {
+				// extra data
+				// version
+				0x00,
+				// flag: root + map data
+				0x88,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
+				// type info
+				0x18, 0x2a,
+				// count: 0
+				0x00,
+				// seed
+				0x1b, 0xa7, 0xce, 0x44, 0xac, 0x4b, 0x41, 0x6d, 0x5e,
+
+				// version
+				0x00,
+				// flag: root + map data
+				0x88,
+				// prev storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// next storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 1)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// elements (array of 0 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			},
+		}
+
+		// Verify encoded data
+		stored, err := storage.Encode()
+		require.NoError(t, err)
+		require.Equal(t, expected[id1], stored[id1])
+
+		// Decode data to new storage
+		storage2 := NewBasicSlabStorage(encMode, decMode)
+		storage2.DecodeStorable = decodeStorable
+
+		err = storage2.Load(stored)
+		require.NoError(t, err)
+
+		// Test new map from storage2
+		decodedMap, err := NewMapWithRootID(storage2, id1, NewDefaultDigesterBuilder())
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(0), decodedMap.Count())
+		require.Equal(t, typeInfo, decodedMap.Type())
+
+		storable, err := decodedMap.Get(compare, hashInputProvider, Uint64Value(0))
+		require.Error(t, err, KeyNotFoundError{})
+		require.Nil(t, storable)
+	})
+
 	t.Run("no pointer no collision", func(t *testing.T) {
 
 		SetThreshold(100)
@@ -3224,4 +3302,68 @@ func sortSliceByDigest(t *testing.T, x []Value, digesterBuilder DigesterBuilder,
 	})
 
 	return x
+}
+
+func TestEmptyMap(t *testing.T) {
+
+	t.Parallel()
+
+	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+	storage := newTestPersistentStorage(t)
+	storage.DecodeStorable = decodeStorable
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	rootID := m.root.Header().id
+
+	err = storage.Commit()
+	require.NoError(t, err)
+
+	storage.DropCache()
+	storage.DropDeltas()
+
+	t.Run("get", func(t *testing.T) {
+		s, err := m.Get(compare, hashInputProvider, Uint64Value(0))
+		require.Error(t, err, KeyNotFoundError{})
+		require.Nil(t, s)
+	})
+
+	t.Run("remove", func(t *testing.T) {
+		existingKey, existingValue, err := m.Remove(compare, hashInputProvider, Uint64Value(0))
+		require.Error(t, err, KeyNotFoundError{})
+		require.Nil(t, existingKey)
+		require.Nil(t, existingValue)
+	})
+
+	t.Run("iterate", func(t *testing.T) {
+		i := uint64(0)
+		err := m.Iterate(func(k Value, v Value) (bool, error) {
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), i)
+	})
+
+	t.Run("count", func(t *testing.T) {
+		count := m.Count()
+		require.Equal(t, uint64(0), count)
+	})
+
+	t.Run("type", func(t *testing.T) {
+		require.Equal(t, typeInfo, m.Type())
+	})
+
+	t.Run("decode", func(t *testing.T) {
+		m2, err := NewMapWithRootID(storage, rootID, newBasicDigesterBuilder())
+		require.NoError(t, err)
+		require.True(t, m2.root.IsData())
+		require.Equal(t, uint64(0), m2.Count())
+		require.Equal(t, typeInfo, m2.Type())
+		require.Equal(t, uint32(mapDataSlabPrefixSize+hkeyElementsPrefixSize), m2.root.Header().size)
+	})
 }

@@ -113,6 +113,42 @@ func BenchmarkBatchRemoveArray100000Elems(b *testing.B) {
 	})
 }
 
+func BenchmarkBatchAppendArray100Elems(b *testing.B) {
+	b.Run("loop", func(b *testing.B) {
+		benchmarkLoopAppend(b, 100)
+	})
+	b.Run("batch", func(b *testing.B) {
+		benchmarkBatchAppend(b, 100)
+	})
+}
+
+func BenchmarkBatchAppendArray1000Elems(b *testing.B) {
+	b.Run("loop", func(b *testing.B) {
+		benchmarkLoopAppend(b, 1000)
+	})
+	b.Run("batch", func(b *testing.B) {
+		benchmarkBatchAppend(b, 1000)
+	})
+}
+
+func BenchmarkBatchAppendArray10000Elems(b *testing.B) {
+	b.Run("loop", func(b *testing.B) {
+		benchmarkLoopAppend(b, 10_000)
+	})
+	b.Run("batch", func(b *testing.B) {
+		benchmarkBatchAppend(b, 10_000)
+	})
+}
+
+func BenchmarkBatchAppendArray100000Elems(b *testing.B) {
+	b.Run("loop", func(b *testing.B) {
+		benchmarkLoopAppend(b, 100_000)
+	})
+	b.Run("batch", func(b *testing.B) {
+		benchmarkBatchAppend(b, 100_000)
+	})
+}
+
 // XXXLArray takes too long to run.
 // func BenchmarkLookupXXXLArray(b *testing.B) { benchmarkLookup(b, 100_000_000, 100) }
 
@@ -265,4 +301,54 @@ func benchmarkPopRemove(b *testing.B, initialArraySize int) {
 	}
 
 	noop = storable
+}
+
+func benchmarkLoopAppend(b *testing.B, initialArraySize int) {
+
+	b.StopTimer()
+
+	storage := newTestPersistentStorage(b)
+
+	array, err := setupArray(storage, initialArraySize)
+	require.NoError(b, err)
+
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		copied, _ := NewArray(storage, array.Address(), array.Type())
+
+		_ = array.Iterate(func(value Value) (bool, error) {
+			err = copied.Append(value)
+			return true, nil
+		})
+
+		if copied.Count() != array.Count() {
+			b.Errorf("Copied array has %d elements, want %d", copied.Count(), array.Count())
+		}
+	}
+}
+
+func benchmarkBatchAppend(b *testing.B, initialArraySize int) {
+
+	b.StopTimer()
+
+	storage := newTestPersistentStorage(b)
+
+	array, err := setupArray(storage, initialArraySize)
+	require.NoError(b, err)
+
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		iter, err := array.Iterator()
+		require.NoError(b, err)
+
+		copied, _ := NewArrayFromBatchData(storage, array.Address(), array.Type(), func() (Value, error) {
+			return iter.Next()
+		})
+
+		if copied.Count() != array.Count() {
+			b.Errorf("Copied array has %d elements, want %d", copied.Count(), array.Count())
+		}
+	}
 }

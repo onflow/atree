@@ -2488,3 +2488,244 @@ func TestPopIterate(t *testing.T) {
 		require.Equal(t, 1, storage.Count())
 	})
 }
+
+func TestArrayBatchAppend(t *testing.T) {
+
+	t.Run("empty", func(t *testing.T) {
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		array, err := NewArray(
+			newTestBasicStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			typeInfo)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), array.Count())
+		require.Equal(t, typeInfo, array.Type())
+
+		iter, err := array.Iterator()
+		require.NoError(t, err)
+
+		// Create a new array with new storage, new address, and original array's elements.
+		copied, err := NewArrayFromBatchData(
+			newTestBasicStorage(t),
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			array.Type(),
+			func() (Value, error) {
+				return iter.Next()
+			})
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), copied.Count())
+		require.Equal(t, array.Type(), copied.Type())
+		require.NotEqual(t, copied.StorageID(), array.StorageID())
+
+		// Iterate through copied array to test data slab's prev/next
+		i := 0
+		err = copied.Iterate(func(v Value) (bool, error) {
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, 0, i)
+
+		verified, err := copied.valid(typeInfo)
+		require.NoError(t, err)
+		require.True(t, verified)
+	})
+
+	t.Run("root-dataslab", func(t *testing.T) {
+		SetThreshold(1024)
+
+		const arraySize = 10
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		array, err := NewArray(
+			newTestBasicStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+		require.Equal(t, typeInfo, array.Type())
+
+		iter, err := array.Iterator()
+		require.NoError(t, err)
+
+		// Create a new array with new storage, new address, and original array's elements.
+		copied, err := NewArrayFromBatchData(
+			newTestBasicStorage(t),
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			array.Type(),
+			func() (Value, error) {
+				return iter.Next()
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(arraySize), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.NotEqual(t, copied.StorageID(), array.StorageID())
+
+		// Get copied array's element to test tree traversal.
+		for i := uint64(0); i < arraySize; i++ {
+			storable, err := copied.Get(i)
+			require.NoError(t, err)
+			require.Equal(t, Uint64Value(i), storable)
+		}
+
+		// Iterate through copied array to test data slab's prev/next
+		i := 0
+		err = copied.Iterate(func(v Value) (bool, error) {
+			require.Equal(t, Uint64Value(i), v)
+
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, arraySize, i)
+
+		verified, err := copied.valid(typeInfo)
+		require.NoError(t, err)
+		require.True(t, verified)
+	})
+
+	t.Run("root-metaslab", func(t *testing.T) {
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		const arraySize = 1024 * 64
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		array, err := NewArray(
+			newTestBasicStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+		require.Equal(t, typeInfo, array.Type())
+
+		iter, err := array.Iterator()
+		require.NoError(t, err)
+
+		copied, err := NewArrayFromBatchData(
+			newTestBasicStorage(t),
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			array.Type(),
+			func() (Value, error) {
+				return iter.Next()
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(arraySize), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.NotEqual(t, array.StorageID(), copied.StorageID())
+
+		// Get copied array's element to test tree traversal.
+		for i := uint64(0); i < arraySize; i++ {
+			storable, err := copied.Get(i)
+			require.NoError(t, err)
+			require.Equal(t, Uint64Value(i), storable)
+		}
+
+		// Iterate through copied array to test data slab's prev/next
+		i := 0
+		err = copied.Iterate(func(v Value) (bool, error) {
+			require.Equal(t, Uint64Value(i), v)
+
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, arraySize, i)
+
+		verified, err := copied.valid(typeInfo)
+		require.NoError(t, err)
+		require.True(t, verified)
+	})
+
+	t.Run("random", func(t *testing.T) {
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		const arraySize = 1024 * 64
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		array, err := NewArray(
+			newTestBasicStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			typeInfo)
+		require.NoError(t, err)
+
+		values := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			v := RandomValue()
+			values[i] = v
+
+			err := array.Append(v)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+		require.Equal(t, typeInfo, array.Type())
+
+		iter, err := array.Iterator()
+		require.NoError(t, err)
+
+		storage := newTestBasicStorage(t)
+
+		copied, err := NewArrayFromBatchData(
+			storage,
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			array.Type(),
+			func() (Value, error) {
+				return iter.Next()
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(arraySize), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.NotEqual(t, array.StorageID(), copied.StorageID())
+
+		// Get copied array's element to test tree traversal.
+		for i := uint64(0); i < arraySize; i++ {
+			storable, err := copied.Get(i)
+			require.NoError(t, err)
+
+			v, err := storable.StoredValue(storage)
+			require.NoError(t, err)
+
+			require.Equal(t, values[i], v)
+		}
+
+		// Iterate through copied array to test data slab's prev/next
+		i := 0
+		err = copied.Iterate(func(v Value) (bool, error) {
+			require.Equal(t, values[i], v)
+
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, arraySize, i)
+
+		verified, err := copied.valid(typeInfo)
+		require.NoError(t, err)
+		require.True(t, verified)
+	})
+}

@@ -131,7 +131,7 @@ func main() {
 		}
 	}
 
-	stats, err := atree.ArrayStats(array)
+	stats, err := atree.GetArrayStats(array)
 	if err != nil {
 		fmt.Println(err)
 		return

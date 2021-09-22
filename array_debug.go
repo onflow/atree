@@ -14,15 +14,15 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-type Stats struct {
+type ArrayStats struct {
 	Levels            uint64
 	ElementCount      uint64
 	MetaDataSlabCount uint64
 	DataSlabCount     uint64
 }
 
-// ArrayStats returns stats about array slabs.
-func ArrayStats(a *Array) (Stats, error) {
+// GetArrayStats returns stats about array slabs.
+func GetArrayStats(a *Array) (ArrayStats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
 	metaDataSlabSize := uint64(0)
@@ -43,7 +43,7 @@ func ArrayStats(a *Array) (Stats, error) {
 
 			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
-				return Stats{}, err
+				return ArrayStats{}, err
 			}
 
 			if slab.IsData() {
@@ -64,7 +64,7 @@ func ArrayStats(a *Array) (Stats, error) {
 		level++
 	}
 
-	return Stats{
+	return ArrayStats{
 		Levels:            level,
 		ElementCount:      a.Count(),
 		MetaDataSlabCount: metaDataSlabCount,

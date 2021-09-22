@@ -88,7 +88,7 @@ func TestAppendAndGet(t *testing.T) {
 	err = storage.Commit()
 	require.NoError(t, err)
 
-	stats, _ := ArrayStats(array)
+	stats, _ := GetArrayStats(array)
 	require.Equal(t,
 		stats.DataSlabCount+stats.MetaDataSlabCount,
 		uint64(array.Storage.Count()),
@@ -139,7 +139,7 @@ func TestSetAndGet(t *testing.T) {
 	err = storage.Commit()
 	require.NoError(t, err)
 
-	stats, _ := ArrayStats(array)
+	stats, _ := GetArrayStats(array)
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 }
 
@@ -184,7 +184,7 @@ func TestInsertAndGet(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 	})
 
@@ -223,7 +223,7 @@ func TestInsertAndGet(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 	})
 
@@ -267,7 +267,7 @@ func TestInsertAndGet(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 	})
 }
@@ -322,7 +322,7 @@ func TestRemove(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 	})
 
@@ -371,7 +371,7 @@ func TestRemove(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 	})
 
@@ -427,7 +427,7 @@ func TestRemove(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 	})
 }
@@ -458,7 +458,7 @@ func TestSplit(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 	})
 
@@ -503,7 +503,7 @@ func TestSplit(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 	})
 }
@@ -866,7 +866,7 @@ func TestSetRandomValue(t *testing.T) {
 	err = storage.Commit()
 	require.NoError(t, err)
 
-	stats, _ := ArrayStats(array)
+	stats, _ := GetArrayStats(array)
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 }
 
@@ -917,7 +917,7 @@ func TestInsertRandomValue(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 	})
 
@@ -961,7 +961,7 @@ func TestInsertRandomValue(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 	})
 
@@ -1008,7 +1008,7 @@ func TestInsertRandomValue(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 	})
 }
@@ -1071,7 +1071,7 @@ func TestRemoveRandomElement(t *testing.T) {
 	err = storage.Commit()
 	require.NoError(t, err)
 
-	stats, _ := ArrayStats(array)
+	stats, _ := GetArrayStats(array)
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 }
 
@@ -1196,7 +1196,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	err = storage.Commit()
 	require.NoError(t, err)
 
-	stats, _ := ArrayStats(array)
+	stats, _ := GetArrayStats(array)
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 }
 
@@ -1321,7 +1321,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	err = storage.Commit()
 	require.NoError(t, err)
 
-	stats, _ := ArrayStats(array)
+	stats, _ := GetArrayStats(array)
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 }
 
@@ -1463,7 +1463,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	err = storage.Commit()
 	require.NoError(t, err)
 
-	stats, _ := ArrayStats(array)
+	stats, _ := GetArrayStats(array)
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
 }
 
@@ -2249,7 +2249,7 @@ func TestStringElement(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t,
 			stats.DataSlabCount+stats.MetaDataSlabCount,
 			uint64(array.Storage.Count()),
@@ -2302,7 +2302,7 @@ func TestStringElement(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		stats, _ := ArrayStats(array)
+		stats, _ := GetArrayStats(array)
 		require.Equal(t,
 			stats.DataSlabCount+stats.MetaDataSlabCount+arraySize,
 			uint64(array.Storage.Count()),

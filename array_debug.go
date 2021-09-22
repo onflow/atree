@@ -21,7 +21,7 @@ type Stats struct {
 	DataSlabCount     uint64
 }
 
-// ArrayStats returns stats about the array slabs.
+// ArrayStats returns stats about array slabs.
 func ArrayStats(a *Array) (Stats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
@@ -72,7 +72,8 @@ func ArrayStats(a *Array) (Stats, error) {
 	}, nil
 }
 
-func (a *Array) Print() {
+// PrintArray prints array slab data to stdout.
+func PrintArray(a *Array) {
 	nextLevelIDs := list.New()
 	nextLevelIDs.PushBack(a.root.Header().id)
 

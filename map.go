@@ -3864,3 +3864,313 @@ func (m *OrderedMap) PopIterate(fn MapPopIterationFunc) error {
 	// Save root slab
 	return m.Storage.Store(m.root.ID(), m.root)
 }
+
+func (m *OrderedMap) Seed() uint64 {
+	return m.root.ExtraData().Seed
+}
+
+type MapElementProvider func() (Value, Value, error)
+
+// NewMapFromBatchData returns a new map with elements provided by fn callback.
+// Provided seed must be the same seed used to create the original map.
+// And callback function must return elements in the same order as the original map.
+// New map uses and stores the same seed as the original map.
+// This function should only be used for copying a map.
+func NewMapFromBatchData(
+	storage SlabStorage,
+	address Address,
+	digesterBuilder DigesterBuilder,
+	typeInfo cbor.RawMessage,
+	comparator Comparator,
+	hip HashInputProvider,
+	seed uint64,
+	fn MapElementProvider) (*OrderedMap, error) {
+
+	const defaultElementCountInSlab = 32
+
+	if seed == 0 {
+		return nil, NewFatalError(fmt.Errorf("seed is required for map batch inserts"))
+	}
+
+	// Seed digester
+	digesterBuilder.SetSeed(seed, typicalRandomConstant)
+
+	var slabs []MapSlab
+
+	var prevID StorageID
+
+	id, err := storage.GenerateStorageID(address)
+	if err != nil {
+		return nil, NewStorageError(err)
+	}
+
+	elements := &hkeyElements{
+		level: 0,
+		size:  hkeyElementsPrefixSize,
+		hkeys: make([]Digest, 0, defaultElementCountInSlab),
+		elems: make([]element, 0, defaultElementCountInSlab),
+	}
+
+	count := uint64(0)
+
+	var prevHkey Digest
+
+	// Appends all elements
+	for {
+		key, value, err := fn()
+		if err != nil {
+			return nil, err
+		}
+		if key == nil {
+			break
+		}
+
+		digester, err := digesterBuilder.Digest(hip, key)
+		if err != nil {
+			return nil, err
+		}
+
+		hkey, err := digester.Digest(0)
+		if err != nil {
+			return nil, err
+		}
+
+		if hkey < prevHkey {
+			// a valid map will always have sorted digests
+			return nil, NewFatalError(errors.New("digest is out of order for map batch inserts"))
+		}
+
+		if hkey == prevHkey && count > 0 {
+			// found collision
+
+			lastElementIndex := len(elements.elems) - 1
+
+			prevElem := elements.elems[lastElementIndex]
+			prevElemSize := prevElem.Size()
+
+			elem, existingValue, err := prevElem.Set(storage, address, digesterBuilder, digester, 0, hkey, comparator, hip, key, value)
+			if err != nil {
+				return nil, err
+			}
+			if existingValue != nil {
+				return nil, NewFatalError(fmt.Errorf("duplicate key %s is not allowed for map batch inserts", key))
+			}
+
+			elements.elems[lastElementIndex] = elem
+			elements.size += elem.Size() - prevElemSize
+
+			putDigester(digester)
+
+			count++
+
+			continue
+		}
+
+		// no collision
+
+		putDigester(digester)
+
+		// Finalize data slab
+		if mapDataSlabPrefixSize+elements.Size() >= uint32(targetThreshold) {
+
+			// Generate storge id for next data slab
+			nextID, err := storage.GenerateStorageID(address)
+			if err != nil {
+				return nil, NewStorageError(err)
+			}
+
+			// Create data slab
+			dataSlab := &MapDataSlab{
+				header: MapSlabHeader{
+					id:       id,
+					size:     mapDataSlabPrefixSize + elements.Size(),
+					firstKey: elements.firstKey(),
+				},
+				elements: elements,
+				prev:     prevID,
+				next:     nextID,
+			}
+
+			// Append data slab to dataSlabs
+			slabs = append(slabs, dataSlab)
+
+			// Save ids
+			prevID = id
+			id = nextID
+
+			// Create new elements for next data slab
+			elements = &hkeyElements{
+				level: 0,
+				size:  hkeyElementsPrefixSize,
+				hkeys: make([]Digest, 0, defaultElementCountInSlab),
+				elems: make([]element, 0, defaultElementCountInSlab),
+			}
+		}
+
+		elem, err := newSingleElement(storage, address, key, value)
+		if err != nil {
+			return nil, err
+		}
+
+		elements.hkeys = append(elements.hkeys, hkey)
+		elements.elems = append(elements.elems, elem)
+		elements.size += digestSize + elem.Size()
+
+		prevHkey = hkey
+
+		count++
+	}
+
+	// Create last data slab
+	dataSlab := &MapDataSlab{
+		header: MapSlabHeader{
+			id:       id,
+			size:     mapDataSlabPrefixSize + elements.Size(),
+			firstKey: elements.firstKey(),
+		},
+		elements: elements,
+		prev:     prevID,
+	}
+
+	// Append last data slab to slabs
+	slabs = append(slabs, dataSlab)
+
+	for len(slabs) > 1 {
+
+		lastSlab := slabs[len(slabs)-1]
+
+		// Rebalance last slab if needed
+		if underflowSize, underflow := lastSlab.IsUnderflow(); underflow {
+
+			leftSib := slabs[len(slabs)-2]
+
+			if leftSib.CanLendToRight(underflowSize) {
+
+				// Rebalance with left
+				err := leftSib.LendToRight(lastSlab)
+				if err != nil {
+					return nil, err
+				}
+
+			} else {
+
+				// Merge with left
+				err := leftSib.Merge(lastSlab)
+				if err != nil {
+					return nil, err
+				}
+
+				// Remove last slab from slabs
+				slabs[len(slabs)-1] = nil
+				slabs = slabs[:len(slabs)-1]
+			}
+		}
+
+		// All slabs are within target size range.
+
+		// Store all slabs
+		for _, slab := range slabs {
+			err = storage.Store(slab.ID(), slab)
+			if err != nil {
+				return nil, NewStorageError(err)
+			}
+		}
+
+		// Get next level meta slabs
+		slabs, err = nextLevelMapSlabs(storage, address, slabs)
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	// found root slab
+	root := slabs[0]
+
+	extraData := &MapExtraData{TypeInfo: typeInfo, Count: count, Seed: seed}
+
+	// Set extra data in root
+	root.SetExtraData(extraData)
+
+	// Store root
+	err = storage.Store(root.ID(), root)
+	if err != nil {
+		return nil, NewStorageError(err)
+	}
+
+	return &OrderedMap{
+		Storage:         storage,
+		root:            root,
+		digesterBuilder: digesterBuilder,
+	}, nil
+}
+
+// nextLevelMapSlabs returns next level meta data slabs from slabs.
+// slabs must have at least 2 elements.  It is reused and returned as next level slabs.
+// Caller is responsible for rebalance last slab and storing returned slabs in storage.
+func nextLevelMapSlabs(storage SlabStorage, address Address, slabs []MapSlab) ([]MapSlab, error) {
+
+	maxNumberOfHeadersInMetaSlab := (maxThreshold - mapMetaDataSlabPrefixSize) / mapSlabHeaderSize
+
+	nextLevelSlabsIndex := 0
+
+	// Generate storge id
+	id, err := storage.GenerateStorageID(address)
+	if err != nil {
+		return nil, NewStorageError(err)
+	}
+
+	childrenCount := maxNumberOfHeadersInMetaSlab
+	if uint64(len(slabs)) < maxNumberOfHeadersInMetaSlab {
+		childrenCount = uint64(len(slabs))
+	}
+
+	metaSlab := &MapMetaDataSlab{
+		header: MapSlabHeader{
+			id:       id,
+			size:     mapMetaDataSlabPrefixSize,
+			firstKey: slabs[0].Header().firstKey,
+		},
+		childrenHeaders: make([]MapSlabHeader, 0, childrenCount),
+	}
+
+	for i, slab := range slabs {
+
+		if len(metaSlab.childrenHeaders) == int(maxNumberOfHeadersInMetaSlab) {
+
+			slabs[nextLevelSlabsIndex] = metaSlab
+			nextLevelSlabsIndex++
+
+			// compute number of children for next meta data slab
+			childrenCount = maxNumberOfHeadersInMetaSlab
+			if uint64(len(slabs)-i) < maxNumberOfHeadersInMetaSlab {
+				childrenCount = uint64(len(slabs) - i)
+			}
+
+			// Generate storge id for next meta data slab
+			id, err = storage.GenerateStorageID(address)
+			if err != nil {
+				return nil, NewStorageError(err)
+			}
+
+			metaSlab = &MapMetaDataSlab{
+				header: MapSlabHeader{
+					id:       id,
+					size:     mapMetaDataSlabPrefixSize,
+					firstKey: slab.Header().firstKey,
+				},
+				childrenHeaders: make([]MapSlabHeader, 0, childrenCount),
+			}
+		}
+
+		metaSlab.header.size += mapSlabHeaderSize
+
+		metaSlab.childrenHeaders = append(metaSlab.childrenHeaders, slab.Header())
+	}
+
+	// Append last meta slab to slabs
+	slabs[nextLevelSlabsIndex] = metaSlab
+	nextLevelSlabsIndex++
+
+	return slabs[:nextLevelSlabsIndex], nil
+}

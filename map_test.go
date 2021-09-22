@@ -3230,7 +3230,7 @@ func TestMapPopIterate(t *testing.T) {
 
 					digests := []Digest{
 						Digest(i % 100),
-						Digest(1 % 5),
+						Digest(i % 5),
 					}
 
 					digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -3366,4 +3366,392 @@ func TestEmptyMap(t *testing.T) {
 		require.Equal(t, typeInfo, m2.Type())
 		require.Equal(t, uint32(mapDataSlabPrefixSize+hkeyElementsPrefixSize), m2.root.Header().size)
 	})
+}
+
+func TestMapBatchSet(t *testing.T) {
+
+	t.Run("empty", func(t *testing.T) {
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		m, err := NewMap(
+			newTestBasicStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			NewDefaultDigesterBuilder(),
+			typeInfo)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+
+		iter, err := m.Iterator()
+		require.NoError(t, err)
+
+		storage1 := newTestBasicStorage(t)
+
+		// Create a new map with new storage, new address, and original map's elements.
+		copied, err := NewMapFromBatchData(
+			storage1,
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			NewDefaultDigesterBuilder(),
+			m.Type(),
+			compare,
+			hashInputProvider,
+			m.Seed(),
+			func() (Value, Value, error) {
+				return iter.Next()
+			})
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), copied.Count())
+		require.Equal(t, m.Type(), copied.Type())
+		require.NotEqual(t, copied.StorageID(), m.StorageID())
+
+		// Encode copied map
+		encoded, err := storage1.Encode()
+		require.NoError(t, err)
+
+		// Load encoded slabs into a new storage
+		storage2 := newTestBasicStorage(t)
+		err = storage2.Load(encoded)
+		require.NoError(t, err)
+
+		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), NewDefaultDigesterBuilder(), compare, hashInputProvider, nil, nil)
+	})
+
+	t.Run("root-dataslab", func(t *testing.T) {
+		SetThreshold(1024)
+
+		const mapSize = 10
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		m, err := NewMap(
+			newTestBasicStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			NewDefaultDigesterBuilder(),
+			typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+			storable, err := m.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*10))
+			require.NoError(t, err)
+			require.Nil(t, storable)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+
+		iter, err := m.Iterator()
+		require.NoError(t, err)
+
+		var sortedKeys []Value
+		keyValues := make(map[Value]Value)
+
+		storage1 := newTestBasicStorage(t)
+
+		digesterBuilder := NewDefaultDigesterBuilder()
+
+		// Create a new map with new storage, new address, and original map's elements.
+		copied, err := NewMapFromBatchData(
+			storage1,
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			digesterBuilder,
+			m.Type(),
+			compare,
+			hashInputProvider,
+			m.Seed(),
+			func() (Value, Value, error) {
+
+				k, v, err := iter.Next()
+
+				// Save key value pair
+				if k != nil {
+					sortedKeys = append(sortedKeys, k)
+					keyValues[k] = v
+				}
+
+				return k, v, err
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(mapSize), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.NotEqual(t, copied.StorageID(), m.StorageID())
+
+		// Encode copied map
+		encoded, err := storage1.Encode()
+		require.NoError(t, err)
+
+		// Load encoded slabs into a new storage
+		storage2 := newTestBasicStorage(t)
+		err = storage2.Load(encoded)
+		require.NoError(t, err)
+
+		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+	})
+
+	t.Run("root-metaslab", func(t *testing.T) {
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		const mapSize = 1024 * 64
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		m, err := NewMap(
+			newTestBasicStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			NewDefaultDigesterBuilder(),
+			typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+			storable, err := m.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*10))
+			require.NoError(t, err)
+			require.Nil(t, storable)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+
+		iter, err := m.Iterator()
+		require.NoError(t, err)
+
+		var sortedKeys []Value
+		keyValues := make(map[Value]Value)
+
+		storage1 := newTestBasicStorage(t)
+
+		digesterBuilder := NewDefaultDigesterBuilder()
+
+		copied, err := NewMapFromBatchData(
+			storage1,
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			digesterBuilder,
+			m.Type(),
+			compare,
+			hashInputProvider,
+			m.Seed(),
+			func() (Value, Value, error) {
+				k, v, err := iter.Next()
+
+				if k != nil {
+					sortedKeys = append(sortedKeys, k)
+					keyValues[k] = v
+				}
+
+				return k, v, err
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(mapSize), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.NotEqual(t, m.StorageID(), copied.StorageID())
+
+		// Encode copied map
+		encoded, err := storage1.Encode()
+		require.NoError(t, err)
+
+		// Load encoded slabs into a new storage
+		storage2 := newTestBasicStorage(t)
+		err = storage2.Load(encoded)
+		require.NoError(t, err)
+
+		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+	})
+
+	t.Run("random", func(t *testing.T) {
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		const mapSize = 1024 * 64
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		m, err := NewMap(
+			newTestBasicStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			NewDefaultDigesterBuilder(),
+			typeInfo)
+		require.NoError(t, err)
+
+		for m.Count() < mapSize {
+			k := RandomValue()
+			v := RandomValue()
+
+			_, err = m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+
+		iter, err := m.Iterator()
+		require.NoError(t, err)
+
+		storage1 := newTestBasicStorage(t)
+
+		digesterBuilder := NewDefaultDigesterBuilder()
+
+		var sortedKeys []Value
+		keyValues := make(map[Value]Value, mapSize)
+
+		copied, err := NewMapFromBatchData(
+			storage1,
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			digesterBuilder,
+			m.Type(),
+			compare,
+			hashInputProvider,
+			m.Seed(),
+			func() (Value, Value, error) {
+				k, v, err := iter.Next()
+
+				if k != nil {
+					sortedKeys = append(sortedKeys, k)
+					keyValues[k] = v
+				}
+
+				return k, v, err
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(mapSize), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.NotEqual(t, m.StorageID(), copied.StorageID())
+
+		// Encode copied map
+		encoded, err := storage1.Encode()
+		require.NoError(t, err)
+
+		// Load encoded slabs into a new storage
+		storage2 := newTestBasicStorage(t)
+		err = storage2.Load(encoded)
+		require.NoError(t, err)
+
+		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+	})
+
+	t.Run("collision", func(t *testing.T) {
+
+		SetThreshold(512)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		const mapSize = 1024
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		digesterBuilder := &mockDigesterBuilder{}
+
+		m, err := NewMap(
+			newTestBasicStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			digesterBuilder,
+			typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+
+			k, v := Uint64Value(i), Uint64Value(i*10)
+
+			digests := make([]Digest, 2)
+			if i%2 == 0 {
+				digests[0] = 0
+			} else {
+				digests[0] = Digest(i % (mapSize / 2))
+			}
+			digests[1] = Digest(i)
+
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+			storable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, storable)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+
+		iter, err := m.Iterator()
+		require.NoError(t, err)
+
+		var sortedKeys []Value
+		keyValues := make(map[Value]Value)
+
+		storage1 := newTestBasicStorage(t)
+
+		i := 0
+		copied, err := NewMapFromBatchData(
+			storage1,
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			digesterBuilder,
+			m.Type(),
+			compare,
+			hashInputProvider,
+			m.Seed(),
+			func() (Value, Value, error) {
+				k, v, err := iter.Next()
+
+				if k != nil {
+					sortedKeys = append(sortedKeys, k)
+					keyValues[k] = v
+				}
+
+				i++
+				return k, v, err
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(mapSize), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.NotEqual(t, m.StorageID(), copied.StorageID())
+
+		// Encode copied map
+		encoded, err := storage1.Encode()
+		require.NoError(t, err)
+
+		// Load encoded slabs into a new storage
+		storage2 := newTestBasicStorage(t)
+		err = storage2.Load(encoded)
+		require.NoError(t, err)
+
+		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), digesterBuilder, compare, hashInputProvider, sortedKeys, keyValues)
+	})
+
+}
+
+func testPopulatedMapFromStorage(t *testing.T, storage SlabStorage, rootID StorageID, digesterBuilder DigesterBuilder, comparator Comparator, hip HashInputProvider, sortedKeys []Value, keyValues map[Value]Value) {
+
+	m, err := NewMapWithRootID(storage, rootID, digesterBuilder)
+	require.NoError(t, err)
+
+	// Get map's elements to test tree traversal.
+	for k, v := range keyValues {
+		storable, err := m.Get(comparator, hip, k)
+		require.NoError(t, err)
+		require.Equal(t, v, storable)
+	}
+
+	// Iterate through map to test data slab's prev/next
+	i := 0
+	err = m.Iterate(func(k, v Value) (bool, error) {
+		expectedKey := sortedKeys[i]
+		expectedValue := keyValues[expectedKey]
+
+		require.Equal(t, expectedKey, k)
+		require.Equal(t, expectedValue, v)
+
+		i++
+		return true, nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, len(keyValues), i)
+
+	verified, err := m.valid(hashInputProvider)
+	require.NoError(t, err)
+	require.True(t, verified)
 }

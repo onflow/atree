@@ -104,10 +104,6 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		verified, err := m.valid(hashInputProvider)
-		if !verified {
-			m.Print()
-			fmt.Printf("err: %s\n", err)
-		}
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -165,10 +161,6 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		verified, err := m.valid(hashInputProvider)
-		if !verified {
-			m.Print()
-			fmt.Printf("err: %s\n", err)
-		}
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -245,10 +237,6 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		verified, err := m.valid(hashInputProvider)
-		if !verified {
-			m.Print()
-			fmt.Printf("err: %s\n", err)
-		}
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -312,10 +300,6 @@ func TestMapHas(t *testing.T) {
 	}
 
 	verified, err := m.valid(hashInputProvider)
-	if !verified {
-		m.Print()
-		fmt.Printf("err: %s\n", err)
-	}
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -382,10 +366,6 @@ func TestMapRemove(t *testing.T) {
 		}
 
 		verified, err := m.valid(hashInputProvider)
-		if !verified {
-			m.Print()
-			fmt.Printf("err: %s\n", err)
-		}
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -479,10 +459,6 @@ func TestMapRemove(t *testing.T) {
 		}
 
 		verified, err := m.valid(hashInputProvider)
-		if !verified {
-			m.Print()
-			fmt.Printf("err: %s\n", err)
-		}
 		require.NoError(t, err)
 		require.True(t, verified)
 
@@ -828,10 +804,6 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	}
 
 	verified, err := m.valid(hashInputProvider)
-	if !verified {
-		m.Print()
-		fmt.Printf("err: %s\n", err)
-	}
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -927,10 +899,6 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 	}
 
 	verified, err := m.valid(hashInputProvider)
-	if !verified {
-		m.Print()
-		fmt.Printf("err: %s\n", err)
-	}
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -1053,10 +1021,6 @@ func TestMapLargeElement(t *testing.T) {
 	require.Equal(t, uint64(mapSize), m.Count())
 
 	verified, err := m.valid(hashInputProvider)
-	if !verified {
-		m.Print()
-		fmt.Printf("err: %s\n", err)
-	}
 	require.NoError(t, err)
 	require.True(t, verified)
 
@@ -1210,10 +1174,6 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 	}
 
 	verified, err := m.valid(hashInputProvider)
-	if !verified {
-		m.Print()
-		fmt.Printf("err: %s\n", err)
-	}
 	require.NoError(t, err)
 	require.True(t, verified)
 }

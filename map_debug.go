@@ -97,7 +97,7 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 	}, nil
 }
 
-func (m *OrderedMap) Print() {
+func PrintMap(m *OrderedMap) {
 	nextLevelIDs := list.New()
 	nextLevelIDs.PushBack(m.root.Header().id)
 

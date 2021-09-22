@@ -21,8 +21,8 @@ type Stats struct {
 	DataSlabCount     uint64
 }
 
-// Stats returns stats about the array slabs.
-func (a *Array) Stats() (Stats, error) {
+// ArrayStats returns stats about the array slabs.
+func ArrayStats(a *Array) (Stats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
 	metaDataSlabSize := uint64(0)

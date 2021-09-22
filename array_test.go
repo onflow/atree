@@ -82,9 +82,8 @@ func TestAppendAndGet(t *testing.T) {
 
 	require.Equal(t, typeInfo, array.Type())
 
-	verified, err := array.valid(typeInfo)
+	err = validArray(array, typeInfo)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	err = storage.Commit()
 	require.NoError(t, err)
@@ -134,9 +133,8 @@ func TestSetAndGet(t *testing.T) {
 
 	require.Equal(t, typeInfo, array.Type())
 
-	verified, err := array.valid(typeInfo)
+	err = validArray(array, typeInfo)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	err = storage.Commit()
 	require.NoError(t, err)
@@ -180,9 +178,8 @@ func TestInsertAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		err = storage.Commit()
 		require.NoError(t, err)
@@ -220,9 +217,8 @@ func TestInsertAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		err = storage.Commit()
 		require.NoError(t, err)
@@ -265,9 +261,8 @@ func TestInsertAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		err = storage.Commit()
 		require.NoError(t, err)
@@ -317,9 +312,8 @@ func TestRemove(t *testing.T) {
 			require.Equal(t, typeInfo, array.Type())
 
 			if i%256 == 0 {
-				verified, err := array.valid(typeInfo)
+				err = validArray(array, typeInfo)
 				require.NoError(t, err)
-				require.True(t, verified)
 			}
 		}
 
@@ -367,9 +361,8 @@ func TestRemove(t *testing.T) {
 			require.Equal(t, typeInfo, array.Type())
 
 			if i%256 == 0 {
-				verified, err := array.valid(typeInfo)
+				err = validArray(array, typeInfo)
 				require.NoError(t, err)
-				require.True(t, verified)
 			}
 		}
 
@@ -417,9 +410,8 @@ func TestRemove(t *testing.T) {
 			require.Equal(t, typeInfo, array.Type())
 
 			if i%256 == 0 {
-				verified, err := array.valid(typeInfo)
+				err = validArray(array, typeInfo)
 				require.NoError(t, err)
-				require.True(t, verified)
 			}
 		}
 
@@ -868,9 +860,8 @@ func TestSetRandomValue(t *testing.T) {
 
 	require.Equal(t, typeInfo, array.Type())
 
-	verified, err := array.valid(typeInfo)
+	err = validArray(array, typeInfo)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	err = storage.Commit()
 	require.NoError(t, err)
@@ -920,9 +911,8 @@ func TestInsertRandomValue(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		err = storage.Commit()
 		require.NoError(t, err)
@@ -965,9 +955,8 @@ func TestInsertRandomValue(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		err = storage.Commit()
 		require.NoError(t, err)
@@ -1013,9 +1002,8 @@ func TestInsertRandomValue(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		err = storage.Commit()
 		require.NoError(t, err)
@@ -1077,9 +1065,8 @@ func TestRemoveRandomElement(t *testing.T) {
 	require.Equal(t, uint64(0), uint64(len(values)))
 	require.Equal(t, typeInfo, array.Type())
 
-	verified, err := array.valid(typeInfo)
+	err = validArray(array, typeInfo)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	err = storage.Commit()
 	require.NoError(t, err)
@@ -1203,9 +1190,8 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	verified, err := array.valid(typeInfo)
+	err = validArray(array, typeInfo)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	err = storage.Commit()
 	require.NoError(t, err)
@@ -1329,9 +1315,8 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	verified, err := array.valid(typeInfo)
+	err = validArray(array, typeInfo)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	err = storage.Commit()
 	require.NoError(t, err)
@@ -1450,9 +1435,8 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 		require.Equal(t, array.Count(), uint64(len(values)))
 		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 	}
 
 	for k, v := range values {
@@ -1473,9 +1457,8 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	verified, err := array.valid(typeInfo)
+	err = validArray(array, typeInfo)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	err = storage.Commit()
 	require.NoError(t, err)
@@ -1537,9 +1520,8 @@ func TestNestedArray(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 	})
 
 	t.Run("big", func(t *testing.T) {
@@ -1586,9 +1568,8 @@ func TestNestedArray(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 	})
 }
 
@@ -2076,9 +2057,8 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 
 	require.Equal(t, typeInfo, array.Type())
 
-	verified, err := array.valid(typeInfo)
+	err = validArray(array, typeInfo)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	rootID := array.root.Header().id
 
@@ -2263,9 +2243,8 @@ func TestStringElement(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		err = storage.Commit()
 		require.NoError(t, err)
@@ -2317,9 +2296,8 @@ func TestStringElement(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		err = storage.Commit()
 		require.NoError(t, err)
@@ -2394,9 +2372,8 @@ func TestPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), i)
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		require.Equal(t, uint64(0), array.Count())
 		require.Equal(t, 1, storage.Count())
@@ -2434,9 +2411,8 @@ func TestPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, i, uint64(arraySize))
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		require.Equal(t, uint64(0), array.Count())
 		require.Equal(t, typeInfo, array.Type())
@@ -2478,9 +2454,8 @@ func TestPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(arraySize), i)
 
-		verified, err := array.valid(typeInfo)
+		err = validArray(array, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		require.Equal(t, uint64(0), array.Count())
 		require.Equal(t, typeInfo, array.Type())
@@ -2527,9 +2502,8 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		verified, err := copied.valid(typeInfo)
+		err = validArray(copied, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
@@ -2588,9 +2562,8 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
 
-		verified, err := copied.valid(typeInfo)
+		err = validArray(copied, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
@@ -2651,9 +2624,8 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
 
-		verified, err := copied.valid(typeInfo)
+		err = validArray(copied, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 	})
 
 	t.Run("random", func(t *testing.T) {
@@ -2724,8 +2696,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
 
-		verified, err := copied.valid(typeInfo)
+		err = validArray(copied, typeInfo)
 		require.NoError(t, err)
-		require.True(t, verified)
 	})
 }

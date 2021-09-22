@@ -23,8 +23,8 @@ type MapStats struct {
 	StorableSlabCount      uint64
 }
 
-// Stats returns stats about the map slabs.
-func (m *OrderedMap) Stats() (MapStats, error) {
+// GetMapStats returns stats about the map slabs.
+func GetMapStats(m *OrderedMap) (MapStats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
 	metaDataSlabSize := uint64(0)

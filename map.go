@@ -3747,9 +3747,15 @@ func (m *OrderedMap) Iterator() (*MapIterator, error) {
 		return nil, err
 	}
 
+	dataSlab := slab.(*MapDataSlab)
+
 	return &MapIterator{
 		storage: m.Storage,
-		id:      slab.ID(),
+		id:      dataSlab.next,
+		elemIterator: &MapElementIterator{
+			storage:  m.Storage,
+			elements: dataSlab.elements,
+		},
 	}, nil
 }
 

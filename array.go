@@ -1940,8 +1940,9 @@ func (a *Array) Iterator() (*ArrayIterator, error) {
 	}
 
 	return &ArrayIterator{
-		storage: a.Storage,
-		id:      slab.ID(),
+		storage:  a.Storage,
+		id:       slab.ID(),
+		dataSlab: slab.(*ArrayDataSlab),
 	}, nil
 }
 

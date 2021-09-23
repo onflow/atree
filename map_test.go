@@ -103,9 +103,8 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		verified, err := m.valid(hashInputProvider)
+		err = validMap(m, typeInfo, hashInputProvider)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		for k, v := range uniqueKeyValues {
 			strv := k.(StringValue)
@@ -160,9 +159,8 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		verified, err := m.valid(hashInputProvider)
+		err = validMap(m, typeInfo, hashInputProvider)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		// Overwrite previously inserted values
 		for k := range uniqueKeyValues {
@@ -236,9 +234,8 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		verified, err := m.valid(hashInputProvider)
+		err = validMap(m, typeInfo, hashInputProvider)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		for k, v := range uniqueKeyValues {
 			strv := k.(StringValue)
@@ -299,9 +296,8 @@ func TestMapHas(t *testing.T) {
 		require.Nil(t, existingStorable)
 	}
 
-	verified, err := m.valid(hashInputProvider)
+	err = validMap(m, typeInfo, hashInputProvider)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	for _, k := range keysToInsert {
 		exist, err := m.Has(compare, hashInputProvider, NewStringValue(k))
@@ -365,9 +361,8 @@ func TestMapRemove(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		verified, err := m.valid(hashInputProvider)
+		err = validMap(m, typeInfo, hashInputProvider)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		// Get elements
 		for k, v := range uniqueKeyValues {
@@ -458,9 +453,8 @@ func TestMapRemove(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		verified, err := m.valid(hashInputProvider)
+		err = validMap(m, typeInfo, hashInputProvider)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		// Get elements
 		for k, v := range uniqueKeyValues {
@@ -803,9 +797,8 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		require.Nil(t, existingStorable)
 	}
 
-	verified, err := m.valid(hashInputProvider)
+	err = validMap(m, typeInfo, hashInputProvider)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	for k, v := range uniqueKeyValues {
 		strv := k.(StringValue)
@@ -898,9 +891,8 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		require.Nil(t, existingStorable)
 	}
 
-	verified, err := m.valid(hashInputProvider)
+	err = validMap(m, typeInfo, hashInputProvider)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	for k, v := range uniqueKeyValues {
 		strv := k.(StringValue)
@@ -1020,9 +1012,8 @@ func TestMapLargeElement(t *testing.T) {
 	require.Equal(t, typeInfo, m.Type())
 	require.Equal(t, uint64(mapSize), m.Count())
 
-	verified, err := m.valid(hashInputProvider)
+	err = validMap(m, typeInfo, hashInputProvider)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	stats, _ := GetMapStats(m)
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+mapSize*2, uint64(m.Storage.Count()))
@@ -1173,9 +1164,8 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 		require.Equal(t, v, e)
 	}
 
-	verified, err := m.valid(hashInputProvider)
+	err = validMap(m, typeInfo, hashInputProvider)
 	require.NoError(t, err)
-	require.True(t, verified)
 }
 
 func TestMapEncodeDecode(t *testing.T) {
@@ -2901,9 +2891,8 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 		require.Equal(t, typeInfo, m.Type())
 	}
 
-	verified, err := m.valid(hashInputProvider)
+	err = validMap(m, typeInfo, hashInputProvider)
 	require.NoError(t, err)
-	require.True(t, verified)
 
 	rootID := m.StorageID()
 
@@ -3023,9 +3012,8 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), i)
 
-		verified, err := m.valid(hashInputProvider)
+		err = validMap(m, typeInfo, hashInputProvider)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		require.Equal(t, uint64(0), m.Count())
 		require.Equal(t, 1, storage.Count())
@@ -3083,9 +3071,8 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		verified, err := m.valid(hashInputProvider)
+		err = validMap(m, typeInfo, hashInputProvider)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		require.Equal(t, uint64(0), m.Count())
 		require.Equal(t, typeInfo, m.Type())
@@ -3146,9 +3133,8 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		verified, err := m.valid(hashInputProvider)
+		err = validMap(m, typeInfo, hashInputProvider)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		require.Equal(t, uint64(0), m.Count())
 		require.Equal(t, typeInfo, m.Type())
@@ -3228,9 +3214,8 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		verified, err := m.valid(hashInputProvider)
+		err = validMap(m, typeInfo, hashInputProvider)
 		require.NoError(t, err)
-		require.True(t, verified)
 
 		require.Equal(t, uint64(0), m.Count())
 		require.Equal(t, typeInfo, m.Type())
@@ -3373,7 +3358,7 @@ func TestMapBatchSet(t *testing.T) {
 		err = storage2.Load(encoded)
 		require.NoError(t, err)
 
-		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), NewDefaultDigesterBuilder(), compare, hashInputProvider, nil, nil)
+		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, nil, nil)
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
@@ -3445,7 +3430,7 @@ func TestMapBatchSet(t *testing.T) {
 		err = storage2.Load(encoded)
 		require.NoError(t, err)
 
-		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
@@ -3517,7 +3502,7 @@ func TestMapBatchSet(t *testing.T) {
 		err = storage2.Load(encoded)
 		require.NoError(t, err)
 
-		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
 	})
 
 	t.Run("random", func(t *testing.T) {
@@ -3591,7 +3576,7 @@ func TestMapBatchSet(t *testing.T) {
 		err = storage2.Load(encoded)
 		require.NoError(t, err)
 
-		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
 	})
 
 	t.Run("collision", func(t *testing.T) {
@@ -3679,12 +3664,12 @@ func TestMapBatchSet(t *testing.T) {
 		err = storage2.Load(encoded)
 		require.NoError(t, err)
 
-		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), digesterBuilder, compare, hashInputProvider, sortedKeys, keyValues)
+		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), typeInfo, digesterBuilder, compare, hashInputProvider, sortedKeys, keyValues)
 	})
 
 }
 
-func testPopulatedMapFromStorage(t *testing.T, storage SlabStorage, rootID StorageID, digesterBuilder DigesterBuilder, comparator Comparator, hip HashInputProvider, sortedKeys []Value, keyValues map[Value]Value) {
+func testPopulatedMapFromStorage(t *testing.T, storage SlabStorage, rootID StorageID, typeInfo cbor.RawMessage, digesterBuilder DigesterBuilder, comparator Comparator, hip HashInputProvider, sortedKeys []Value, keyValues map[Value]Value) {
 
 	m, err := NewMapWithRootID(storage, rootID, digesterBuilder)
 	require.NoError(t, err)
@@ -3711,7 +3696,6 @@ func testPopulatedMapFromStorage(t *testing.T, storage SlabStorage, rootID Stora
 	require.NoError(t, err)
 	require.Equal(t, len(keyValues), i)
 
-	verified, err := m.valid(hashInputProvider)
+	err = validMap(m, typeInfo, hashInputProvider)
 	require.NoError(t, err)
-	require.True(t, verified)
 }

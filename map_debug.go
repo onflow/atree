@@ -165,245 +165,375 @@ func PrintMap(m *OrderedMap) {
 	}
 }
 
-func (m *OrderedMap) valid(hip HashInputProvider) (bool, error) {
-	return m._valid(hip, m.root.Header().id, 0)
-}
+func validMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) error {
 
-func (m *OrderedMap) _validElements(id StorageID, db DigesterBuilder, hip HashInputProvider, elements elements, level int, hkeyPrefixes []Digest) (uint32, error) {
-
-	if elems, ok := elements.(*hkeyElements); ok {
-		return m._validHkeyElements(id, db, hip, elems, level, hkeyPrefixes)
+	extraData := m.root.ExtraData()
+	if extraData == nil {
+		return fmt.Errorf("root slab %d doesn't have extra data", m.root.ID())
 	}
 
-	if elems, ok := elements.(*singleElements); ok {
-		return m._validSingleElements(id, db, hip, elems, level, hkeyPrefixes)
+	// Verify that extra data has correct type information
+	if !bytes.Equal(extraData.TypeInfo, typeInfo) {
+		return fmt.Errorf(
+			"root slab %d type information %v, want %v",
+			m.root.ID(),
+			extraData.TypeInfo,
+			typeInfo,
+		)
 	}
 
-	return 0, fmt.Errorf("slab %d, element level %d, elements is wrong type %T, expect *hkeyElements, or *singleElements",
-		id, level, elements)
+	// Verify that extra data has seed
+	if extraData.Seed == 0 {
+		return fmt.Errorf("root slab %d seed is uninitialized", m.root.ID())
+	}
+
+	computedCount, err := validMapSlab(m.Storage, m.digesterBuilder, hip, m.root.ID(), 0, nil)
+	if err != nil {
+		return err
+	}
+
+	// Verify that extra data has correct count
+	if computedCount != extraData.Count {
+		return fmt.Errorf("root slab %d count %d is wrong, want %d",
+			m.root.ID(), extraData.Count, computedCount)
+	}
+
+	return nil
 }
 
-func (m *OrderedMap) _validHkeyElements(id StorageID, db DigesterBuilder, hip HashInputProvider, elements *hkeyElements, level int, hkeyPrefixes []Digest) (uint32, error) {
+func validMapSlab(storage SlabStorage, digesterBuilder DigesterBuilder, hip HashInputProvider, id StorageID, level int, header *MapSlabHeader) (uint64, error) {
 
+	slab, err := getMapSlab(storage, id)
+	if err != nil {
+		return 0, err
+	}
+
+	if level > 0 {
+		// Verify that non-root slab doesn't have extra data.
+		if slab.ExtraData() != nil {
+			return 0, fmt.Errorf("non-root slab %d has extra data", id)
+		}
+
+		// Verify that non-root slab doesn't underflow
+		if underflowSize, underflow := slab.IsUnderflow(); underflow {
+			return 0, fmt.Errorf("slab %d underflows by %d bytes", id, underflowSize)
+		}
+
+	}
+
+	// Verify that slab doesn't overflow
+	if slab.IsFull() {
+		return 0, fmt.Errorf("slab %d overflows", id)
+	}
+
+	// Verify that header is in sync with header from parent slab
+	if header != nil {
+		if reflect.DeepEqual(header, slab.Header()) {
+			return 0, fmt.Errorf("slab %d header %+v is different from header %+v from parent slab",
+				id, slab.Header(), header)
+		}
+	}
+
+	if slab.IsData() {
+
+		dataSlab, ok := slab.(*MapDataSlab)
+		if !ok {
+			return 0, fmt.Errorf("slab %d is not MapDataSlab", id)
+		}
+
+		// Verify data slab's elements
+		elementCount, elementSize, err := validMapElements(storage, digesterBuilder, hip, id, dataSlab.elements, 0, nil)
+		if err != nil {
+			return 0, err
+		}
+
+		// Verify slab's first key
+		if dataSlab.elements.firstKey() != dataSlab.header.firstKey {
+			return 0, fmt.Errorf("data slab %d header first key %d is wrong, want %d",
+				id, dataSlab.header.firstKey, dataSlab.elements.firstKey())
+		}
+
+		// Verify that aggregated element size + slab prefix is the same as header.size
+		computedSize := uint32(mapDataSlabPrefixSize) + elementSize
+		if computedSize != dataSlab.header.size {
+			return 0, fmt.Errorf("data slab %d header size %d is wrong, want %d",
+				id, dataSlab.header.size, computedSize)
+		}
+
+		return uint64(elementCount), nil
+	}
+
+	meta, ok := slab.(*MapMetaDataSlab)
+	if !ok {
+		return 0, fmt.Errorf("slab %d is not MapMetaDataSlab", id)
+	}
+
+	elementCount := uint64(0)
+	for _, h := range meta.childrenHeaders {
+		// Verify child slabs
+		count, err := validMapSlab(storage, digesterBuilder, hip, h.id, level+1, &h)
+		if err != nil {
+			return 0, err
+		}
+
+		elementCount += count
+	}
+
+	// Verify slab header first key
+	if meta.childrenHeaders[0].firstKey != meta.header.firstKey {
+		return 0, fmt.Errorf("metadata slab %d header first key %d is wrong, want %d",
+			id, meta.header.firstKey, meta.childrenHeaders[0].firstKey)
+	}
+
+	// Verify that child slab's first keys are sorted.
+	sortedHKey := sort.SliceIsSorted(meta.childrenHeaders, func(i, j int) bool {
+		return meta.childrenHeaders[i].firstKey < meta.childrenHeaders[j].firstKey
+	})
+	if !sortedHKey {
+		return 0, fmt.Errorf("metadata slab %d child slab's first key isn't sorted %+v", id, meta.childrenHeaders)
+	}
+
+	// Verify that child slab's first keys are unique.
+	if len(meta.childrenHeaders) > 1 {
+		prev := meta.childrenHeaders[0].firstKey
+		for _, h := range meta.childrenHeaders[1:] {
+			if prev == h.firstKey {
+				return 0, fmt.Errorf("meta data slab %d child header first key isn't unique %v",
+					id, meta.childrenHeaders)
+			}
+			prev = h.firstKey
+		}
+	}
+
+	// Verify slab header's size
+	computedSize := uint32(len(meta.childrenHeaders)*mapSlabHeaderSize) + mapMetaDataSlabPrefixSize
+	if computedSize != meta.header.size {
+		return 0, fmt.Errorf("metadata slab %d header size %d is wrong, want %d",
+			id, meta.header.size, computedSize)
+	}
+
+	return elementCount, nil
+}
+
+func validMapElements(
+	storage SlabStorage,
+	db DigesterBuilder,
+	hip HashInputProvider,
+	id StorageID,
+	elements elements,
+	level int,
+	hkeyPrefixes []Digest) (
+	elementCount uint32, elementSize uint32, err error) {
+
+	switch elems := elements.(type) {
+	case *hkeyElements:
+		return validMapHkeyElements(storage, db, hip, id, elems, level, hkeyPrefixes)
+	case *singleElements:
+		return validMapSingleElements(storage, db, hip, id, elems, level, hkeyPrefixes)
+	default:
+		return 0, 0, fmt.Errorf("slab %d has unknown elements type %T at level %d", id, elements, level)
+	}
+}
+
+func validMapHkeyElements(
+	storage SlabStorage,
+	db DigesterBuilder,
+	hip HashInputProvider,
+	id StorageID,
+	elements *hkeyElements,
+	level int,
+	hkeyPrefixes []Digest) (
+	elementCount uint32, elementSize uint32, err error) {
+
+	// Verify element's level
 	if level != elements.level {
-		return 0, fmt.Errorf("slab %d, level %d, expect %d",
+		return 0, 0, fmt.Errorf("data slab %d elements level %d is wrong, want %d",
 			id, elements.level, level)
 	}
 
+	// Verify number of hkeys is the same as number of elements
 	if len(elements.hkeys) != len(elements.elems) {
-		return 0, fmt.Errorf("slab %d, element level %d, hkeys is wrong length %d, expect %d",
-			id, level, len(elements.hkeys), len(elements.elems))
+		return 0, 0, fmt.Errorf("data slab %d hkeys count %d is wrong, want %d",
+			id, len(elements.hkeys), len(elements.elems))
 	}
 
+	// Verify hkeys are sorted
 	if !sort.SliceIsSorted(elements.hkeys, func(i, j int) bool {
 		return elements.hkeys[i] < elements.hkeys[j]
 	}) {
-		return 0, fmt.Errorf("slab %d, element level %d, hkeys is not sorted %v",
-			id, level, elements.hkeys)
+		return 0, 0, fmt.Errorf("data slab %d hkeys is not sorted %v", id, elements.hkeys)
 	}
 
-	size := uint32(hkeyElementsPrefixSize)
+	// Verify hkeys are unique
+	if len(elements.hkeys) > 1 {
+		prev := elements.hkeys[0]
+		for _, d := range elements.hkeys[1:] {
+			if prev == d {
+				return 0, 0, fmt.Errorf("data slab %d hkeys is not unique %v", id, elements.hkeys)
+			}
+			prev = d
+		}
+	}
+
+	elementSize = uint32(hkeyElementsPrefixSize)
+
 	for i := 0; i < len(elements.elems); i++ {
 		e := elements.elems[i]
 
-		size += digestSize
+		elementSize += digestSize
+
+		// Verify element size is <= inline size
+		if level == 0 {
+			if e.Size() > uint32(MaxInlineElementSize) {
+				return 0, 0, fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
+					id, e, e.Size(), MaxInlineElementSize)
+			}
+		}
 
 		if group, ok := e.(elementGroup); ok {
-			ge, err := group.Elements(m.Storage)
+
+			ge, err := group.Elements(storage)
 			if err != nil {
-				return 0, err
+				return 0, 0, err
 			}
 
-			var prefixes []Digest
-			prefixes = append(prefixes, hkeyPrefixes...)
-			prefixes = append(prefixes, elements.hkeys[i])
+			hkeys := make([]Digest, len(hkeyPrefixes)+1)
+			copy(hkeys, hkeyPrefixes)
+			hkeys[len(hkeys)-1] = elements.hkeys[i]
 
-			_, err = m._validElements(id, db, hip, ge, level+1, prefixes)
+			count, size, err := validMapElements(storage, db, hip, id, ge, level+1, hkeys)
 			if err != nil {
-				return 0, err
+				return 0, 0, err
 			}
 
-			size += e.Size()
+			if _, ok := e.(*inlineCollisionGroup); ok {
+				size += inlineCollisionGroupPrefixSize
+			} else {
+				size = externalCollisionGroupPrefixSize + 2 + 1 + 16
+			}
+
+			// Verify element group size
+			if size != e.Size() {
+				return 0, 0, fmt.Errorf("data slab %d element %s size %d is wrong, want %d", id, e, e.Size(), size)
+			}
+
+			elementSize += e.Size()
+
+			elementCount += count
 
 		} else {
 
 			se, ok := e.(*singleElement)
 			if !ok {
-				return 0, fmt.Errorf("got element %T, expect *singleElement", e)
-			}
-
-			ks, err := se.key.StoredValue(m.Storage)
-			if err != nil {
-				return 0, err
+				return 0, 0, fmt.Errorf("data slab %d element type %T is wrong, want *singleElement", id, e)
 			}
 
 			// Verify single element size
 			computedSize := singleElementPrefixSize + se.key.ByteSize() + se.value.ByteSize()
 			if computedSize != e.Size() {
-				return 0, fmt.Errorf("slab %d, element level %d, element %s, size %d, computed size %d",
-					id, level, elements.String(), e.Size(), computedSize)
+				return 0, 0, fmt.Errorf("data slab %d element %v size %d is wrong, want %d",
+					id, elements.String(), e.Size(), computedSize)
 			}
 
-			// Verify single element hashed value
+			ks, err := se.key.StoredValue(storage)
+			if err != nil {
+				return 0, 0, err
+			}
+
+			// Verify single element digest
 			d, err := db.Digest(hip, ks)
 			if err != nil {
-				return 0, err
+				return 0, 0, err
 			}
 			computedHkey, err := d.DigestPrefix(d.Levels())
 			if err != nil {
-				return 0, err
+				return 0, 0, err
 			}
 
-			var hkeys []Digest
-			hkeys = append(hkeys, hkeyPrefixes...)
-			hkeys = append(hkeys, elements.hkeys[i])
+			hkeys := make([]Digest, len(hkeyPrefixes)+1)
+			copy(hkeys, hkeyPrefixes)
+			hkeys[len(hkeys)-1] = elements.hkeys[i]
 
 			if !reflect.DeepEqual(hkeys, computedHkey[:len(hkeys)]) {
-				return 0, fmt.Errorf("slab %d, element level %d, element %s, hkey %v, computed hkeys %d",
-					id, level, elements.String(), hkeys, computedHkey)
+				return 0, 0, fmt.Errorf("data slab %d element %s digest %v is wrong, want %v",
+					id, elements, hkeys, computedHkey)
 			}
 
-			size += computedSize
+			elementSize += computedSize
+
+			elementCount++
 		}
 	}
 
-	if size != elements.Size() {
-		var buf bytes.Buffer
-		mode, _ := cbor.EncOptions{}.EncMode()
-		enc := NewEncoder(&buf, mode)
-		_ = elements.Encode(enc)
-		return 0, fmt.Errorf("slab %d, element level %d, elements size %d, computed size %d, encoded 0x%x",
-			id, level, elements.Size(), size, buf.Bytes())
+	// Verify elements size
+	if elementSize != elements.Size() {
+		return 0, 0, fmt.Errorf("data slab %d elements size %d is wrong, want %d", id, elements.Size(), elementSize)
 	}
 
-	return size, nil
+	return elementCount, elementSize, nil
 }
 
-func (m *OrderedMap) _validSingleElements(id StorageID, db DigesterBuilder, hip HashInputProvider, elements *singleElements, level int, hkeyPrefixes []Digest) (uint32, error) {
+func validMapSingleElements(
+	storage SlabStorage,
+	db DigesterBuilder,
+	hip HashInputProvider,
+	id StorageID,
+	elements *singleElements,
+	level int,
+	hkeyPrefixes []Digest) (
+	elementCount uint32, elementSize uint32, err error) {
 
+	// Verify elements' level
 	if level != elements.level {
-		return 0, fmt.Errorf("slab %d, level %d, expect %d",
+		return 0, 0, fmt.Errorf("data slab %d elements level %d is wrong, want %d",
 			id, elements.level, level)
 	}
 
-	size := uint32(singleElementsPrefixSize)
+	elementSize = singleElementsPrefixSize
 
 	for _, e := range elements.elems {
 
-		ks, err := e.key.StoredValue(m.Storage)
-		if err != nil {
-			return 0, err
+		// Verify element size is <= inline size
+		if e.Size() > uint32(MaxInlineElementSize) {
+			return 0, 0, fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
+				id, e, e.Size(), MaxInlineElementSize)
 		}
 
 		// Verify single element size
 		computedSize := singleElementPrefixSize + e.key.ByteSize() + e.value.ByteSize()
 		if computedSize != e.Size() {
-			return 0, fmt.Errorf("slab %d, element level %d, element %s, size %d, computed size %d",
-				id, level, elements.String(), e.Size(), computedSize)
+			return 0, 0, fmt.Errorf("data slab %d element %s size %d is wrong, want %d",
+				id, elements, e.Size(), computedSize)
 		}
 
-		// Verify single element hashed value
+		ks, err := e.key.StoredValue(storage)
+		if err != nil {
+			return 0, 0, err
+		}
+
+		// Verify single element digest
 		digest, err := db.Digest(hip, ks)
 		if err != nil {
-			return 0, err
+			return 0, 0, err
 		}
+
 		computedHkey, err := digest.DigestPrefix(digest.Levels())
 		if err != nil {
-			return 0, err
+			return 0, 0, err
 		}
 
-		if !reflect.DeepEqual(hkeyPrefixes, computedHkey) {
-			return 0, fmt.Errorf("slab %d, element level %d, element %s, hkey %v, computed hkeys %d",
-				id, level, elements.String(), hkeyPrefixes, computedHkey)
+		if !reflect.DeepEqual(hkeyPrefixes, computedHkey[:len(hkeyPrefixes)]) {
+			return 0, 0, fmt.Errorf("data slab %d element %s digest %v is wrong, want %v",
+				id, elements.String(), hkeyPrefixes, computedHkey)
 		}
 
-		size += computedSize
+		elementSize += computedSize
 	}
 
-	if size != elements.Size() {
-		var buf bytes.Buffer
-		mode, _ := cbor.EncOptions{}.EncMode()
-		enc := NewEncoder(&buf, mode)
-		_ = elements.Encode(enc)
-		return 0, fmt.Errorf("slab %d, element level %d, elements size %d, computed size %d, encoded 0x%x",
-			id, level, elements.Size(), size, buf.Bytes())
+	// Verify elements size
+	if elementSize != elements.Size() {
+		return 0, 0, fmt.Errorf("slab %d elements size %d is wrong, want %d", id, elements.Size(), elementSize)
 	}
 
-	return size, nil
-}
-
-func (m *OrderedMap) _valid(hip HashInputProvider, id StorageID, level int) (bool, error) {
-	slab, err := getMapSlab(m.Storage, id)
-	if err != nil {
-		return false, err
-	}
-
-	if slab.IsData() {
-		dataSlab, ok := slab.(*MapDataSlab)
-		if !ok {
-			return false, fmt.Errorf("slab %d is not MapDataSlab", id)
-		}
-
-		elementSize, err := m._validElements(id, m.digesterBuilder, hip, dataSlab.elements, 0, nil)
-		if err != nil {
-			return false, err
-		}
-
-		_, underflow := dataSlab.IsUnderflow()
-		validFill := (level == 0) || (!dataSlab.IsFull() && !underflow)
-		if !validFill {
-			return false, fmt.Errorf("slab %d doesn't have valid fill, full %t, underflow %t", id, dataSlab.IsFull(), underflow)
-		}
-
-		validFirstKey := dataSlab.elements.firstKey() == dataSlab.header.firstKey
-		if !validFirstKey {
-			return false, fmt.Errorf("slab %d doesn't have valid first key, %d vs %d", id, dataSlab.elements.firstKey(), dataSlab.header.firstKey)
-		}
-
-		computedSize := uint32(mapDataSlabPrefixSize) + elementSize
-		validSize := computedSize == dataSlab.header.size
-		if !validSize {
-			return false, fmt.Errorf("slab %d doesn't have valid size, %d vs %d", id, computedSize, dataSlab.header.size)
-		}
-
-		return true, nil
-	}
-
-	meta, ok := slab.(*MapMetaDataSlab)
-	if !ok {
-		return false, fmt.Errorf("slab %d is not MapMetaDataSlab", id)
-	}
-
-	for _, h := range meta.childrenHeaders {
-		verified, err := m._valid(hip, h.id, level+1)
-		if !verified || err != nil {
-			return false, err
-		}
-	}
-
-	_, underflow := meta.IsUnderflow()
-	validFill := (level == 0) || (!meta.IsFull() && !underflow)
-	if !validFill {
-		return false, fmt.Errorf("slab %d doesn't have valid fill, full %t, underflow %t", id, meta.IsFull(), underflow)
-	}
-
-	validFirstKey := meta.childrenHeaders[0].firstKey == meta.header.firstKey
-	if !validFirstKey {
-		return false, fmt.Errorf("slab %d doesn't have valid first key, %d vs %d", id, meta.childrenHeaders[0].firstKey, meta.header.firstKey)
-	}
-
-	sortedHKey := sort.SliceIsSorted(meta.childrenHeaders, func(i, j int) bool {
-		return meta.childrenHeaders[i].firstKey < meta.childrenHeaders[j].firstKey
-	})
-	if !sortedHKey {
-		return false, fmt.Errorf("slab %d first key isn't sorted %+v", id, meta.childrenHeaders)
-	}
-
-	computedSize := uint32(len(meta.childrenHeaders)*mapSlabHeaderSize) + mapMetaDataSlabPrefixSize
-	validSize := computedSize == meta.header.size
-	if !validSize {
-		return false, fmt.Errorf("slab %d size is invalid, %d vs %d", id, computedSize, meta.header.size)
-	}
-
-	return true, nil
+	return uint32(len(elements.elems)), elementSize, nil
 }

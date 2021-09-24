@@ -168,13 +168,16 @@ func validArray(a *Array, typeInfo cbor.RawMessage) error {
 	}
 
 	computedCount, err := validArraySlab(a.Storage, a.root.Header().id, 0, nil)
+	if err != nil {
+		return err
+	}
 
 	// Verify array count
 	if computedCount != uint32(a.Count()) {
 		return fmt.Errorf("root slab %d count %d is wrong, want %d", a.root.ID(), a.Count(), computedCount)
 	}
 
-	return err
+	return nil
 }
 
 func validArraySlab(storage SlabStorage, id StorageID, level int, header *ArraySlabHeader) (elementCount uint32, err error) {

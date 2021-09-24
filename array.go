@@ -1773,7 +1773,30 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 		return nil, err
 	}
 
-	return a.root.Set(a.Storage, index, storable)
+	existingStorable, err := a.root.Set(a.Storage, index, storable)
+	if err != nil {
+		return nil, err
+	}
+
+	if a.root.IsFull() {
+		err = a.splitRoot()
+		if err != nil {
+			return nil, err
+		}
+		return existingStorable, nil
+	}
+
+	if !a.root.IsData() {
+		root := a.root.(*ArrayMetaDataSlab)
+		if len(root.childrenHeaders) == 1 {
+			err = a.promoteChildAsNewRoot(root.childrenHeaders[0].id)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return existingStorable, nil
 }
 
 func (a *Array) Append(value Value) error {
@@ -1792,56 +1815,7 @@ func (a *Array) Insert(index uint64, value Value) error {
 	}
 
 	if a.root.IsFull() {
-
-		// Get old root's extra data and reset it to nil in old root
-		extraData := a.root.RemoveExtraData()
-
-		// Save root node id
-		rootID := a.root.ID()
-
-		// Assign a new storage id to old root before splitting it.
-		sID, err := a.Storage.GenerateStorageID(a.Address())
-		if err != nil {
-			return NewStorageError(err)
-		}
-		oldRoot := a.root
-		oldRoot.SetID(sID)
-
-		// Split old root
-		leftSlab, rightSlab, err := oldRoot.Split(a.Storage)
-		if err != nil {
-			return err
-		}
-
-		left := leftSlab.(ArraySlab)
-		right := rightSlab.(ArraySlab)
-
-		// Create new ArrayMetaDataSlab with the old root's storage ID
-		newRoot := &ArrayMetaDataSlab{
-			header: ArraySlabHeader{
-				id:    rootID,
-				count: left.Header().count + right.Header().count,
-				size:  arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*2,
-			},
-			childrenHeaders:  []ArraySlabHeader{left.Header(), right.Header()},
-			childrenCountSum: []uint32{left.Header().count, left.Header().count + right.Header().count},
-			extraData:        extraData,
-		}
-
-		a.root = newRoot
-
-		err = a.Storage.Store(left.ID(), left)
-		if err != nil {
-			return err
-		}
-		err = a.Storage.Store(right.ID(), right)
-		if err != nil {
-			return err
-		}
-		err = a.Storage.Store(a.root.ID(), a.root)
-		if err != nil {
-			return err
-		}
+		return a.splitRoot()
 	}
 
 	return nil
@@ -1857,29 +1831,7 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 		// Set root to its child slab if root has one child slab.
 		root := a.root.(*ArrayMetaDataSlab)
 		if len(root.childrenHeaders) == 1 {
-
-			extraData := root.RemoveExtraData()
-
-			rootID := root.header.id
-
-			childID := root.childrenHeaders[0].id
-
-			child, err := getArraySlab(a.Storage, childID)
-			if err != nil {
-				return nil, err
-			}
-
-			a.root = child
-
-			a.root.SetID(rootID)
-
-			a.root.SetExtraData(extraData)
-
-			err = a.Storage.Store(rootID, a.root)
-			if err != nil {
-				return nil, err
-			}
-			err = a.Storage.Remove(childID)
+			err = a.promoteChildAsNewRoot(root.childrenHeaders[0].id)
 			if err != nil {
 				return nil, err
 			}
@@ -1887,6 +1839,91 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 	}
 
 	return storable, nil
+}
+
+func (a *Array) splitRoot() error {
+
+	// Get old root's extra data and reset it to nil in old root
+	extraData := a.root.RemoveExtraData()
+
+	// Save root node id
+	rootID := a.root.ID()
+
+	// Assign a new storage id to old root before splitting it.
+	sID, err := a.Storage.GenerateStorageID(a.Address())
+	if err != nil {
+		return NewStorageError(err)
+	}
+
+	oldRoot := a.root
+	oldRoot.SetID(sID)
+
+	// Split old root
+	leftSlab, rightSlab, err := oldRoot.Split(a.Storage)
+	if err != nil {
+		return err
+	}
+
+	left := leftSlab.(ArraySlab)
+	right := rightSlab.(ArraySlab)
+
+	// Create new ArrayMetaDataSlab with the old root's storage ID
+	newRoot := &ArrayMetaDataSlab{
+		header: ArraySlabHeader{
+			id:    rootID,
+			count: left.Header().count + right.Header().count,
+			size:  arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*2,
+		},
+		childrenHeaders:  []ArraySlabHeader{left.Header(), right.Header()},
+		childrenCountSum: []uint32{left.Header().count, left.Header().count + right.Header().count},
+		extraData:        extraData,
+	}
+
+	a.root = newRoot
+
+	err = a.Storage.Store(left.ID(), left)
+	if err != nil {
+		return err
+	}
+	err = a.Storage.Store(right.ID(), right)
+	if err != nil {
+		return err
+	}
+	err = a.Storage.Store(a.root.ID(), a.root)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *Array) promoteChildAsNewRoot(childID StorageID) error {
+
+	child, err := getArraySlab(a.Storage, childID)
+	if err != nil {
+		return err
+	}
+
+	extraData := a.root.RemoveExtraData()
+
+	rootID := a.root.ID()
+
+	a.root = child
+
+	a.root.SetID(rootID)
+
+	a.root.SetExtraData(extraData)
+
+	err = a.Storage.Store(rootID, a.root)
+	if err != nil {
+		return err
+	}
+	err = a.Storage.Remove(childID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type ArrayIterator struct {

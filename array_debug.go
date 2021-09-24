@@ -259,8 +259,14 @@ func validArraySlab(storage SlabStorage, id StorageID, level int, header *ArrayS
 		}
 	}
 
+	// Verify childrenCountSum
+	if len(meta.childrenCountSum) != len(meta.childrenHeaders) {
+		return 0, fmt.Errorf("metadata slab %d has %d childrenCountSum, want %d",
+			id, len(meta.childrenCountSum), len(meta.childrenHeaders))
+	}
+
 	computedCount := uint32(0)
-	for _, h := range meta.childrenHeaders {
+	for i, h := range meta.childrenHeaders {
 		// Verify child slabs
 		count, err := validArraySlab(storage, h.id, level+1, &h)
 		if err != nil {
@@ -268,6 +274,12 @@ func validArraySlab(storage SlabStorage, id StorageID, level int, header *ArrayS
 		}
 
 		computedCount += count
+
+		// Verify childrenCountSum
+		if meta.childrenCountSum[i] != computedCount {
+			return 0, fmt.Errorf("metadata slab %d childrenCountSum[%d] is %d, want %d",
+				id, i, meta.childrenCountSum[i], computedCount)
+		}
 	}
 
 	// Verify that aggregated element count is the same as header.count

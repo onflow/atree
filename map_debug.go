@@ -228,7 +228,7 @@ func validMapSlab(storage SlabStorage, digesterBuilder DigesterBuilder, hip Hash
 
 	// Verify that header is in sync with header from parent slab
 	if header != nil {
-		if reflect.DeepEqual(header, slab.Header()) {
+		if !reflect.DeepEqual(*header, slab.Header()) {
 			return 0, fmt.Errorf("slab %d header %+v is different from header %+v from parent slab",
 				id, slab.Header(), header)
 		}

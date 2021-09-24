@@ -100,53 +100,167 @@ func TestAppendAndGet(t *testing.T) {
 
 func TestSetAndGet(t *testing.T) {
 
-	const arraySize = 256 * 256
+	t.Run("set", func(t *testing.T) {
+		const arraySize = 256 * 256
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
-	storage := newTestPersistentStorage(t)
+		storage := newTestPersistentStorage(t)
 
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	array, err := NewArray(storage, address, typeInfo)
-	require.NoError(t, err)
-
-	for i := uint64(0); i < arraySize; i++ {
-		err := array.Append(Uint64Value(i))
-		require.NoError(t, err)
-	}
-
-	for i := uint64(0); i < arraySize; i++ {
-		existingStorable, err := array.Set(i, Uint64Value(i*10))
+		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		existingElem, err := existingStorable.StoredValue(storage)
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			existingStorable, err := array.Set(i, Uint64Value(i*10))
+			require.NoError(t, err)
+
+			existingElem, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, Uint64Value(i), existingElem)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+
+			v, ok := e.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, i*10, uint64(v))
+		}
+
+		require.Equal(t, typeInfo, array.Type())
+
+		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
-		require.Equal(t, Uint64Value(i), existingElem)
-	}
 
-	for i := uint64(0); i < arraySize; i++ {
-		e, err := array.Get(i)
+		err = storage.Commit()
 		require.NoError(t, err)
 
-		v, ok := e.(Uint64Value)
-		require.True(t, ok)
-		require.Equal(t, i*10, uint64(v))
-	}
+		stats, _ := GetArrayStats(array)
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
+	})
 
-	require.Equal(t, typeInfo, array.Type())
+	t.Run("root-split", func(t *testing.T) {
+		const arraySize = 60
 
-	err = validArray(array, typeInfo)
-	if err != nil {
-		PrintArray(array)
-	}
-	require.NoError(t, err)
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
 
-	err = storage.Commit()
-	require.NoError(t, err)
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
 
-	stats, _ := GetArrayStats(array)
-	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			// Overwrite elements with larger values that require more bytes to make slab split
+			existingStorable, err := array.Set(i, Uint64Value(math.MaxUint64-i))
+			require.NoError(t, err)
+
+			existingElem, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, Uint64Value(i), existingElem)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+
+			v, ok := e.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, math.MaxUint64-i, uint64(v))
+		}
+
+		require.Equal(t, typeInfo, array.Type())
+
+		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		stats, _ := GetArrayStats(array)
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
+	})
+
+	t.Run("child-as-new-root", func(t *testing.T) {
+		const arraySize = 20
+
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(NewStringValue(randStr(40)))
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			// Overwrite elements with smaller values that require less bytes to make slab merge
+			existingStorable, err := array.Set(i, Uint64Value(i))
+			require.NoError(t, err)
+
+			existingElem, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.NotNil(t, existingElem)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			e, err := array.Get(i)
+			require.NoError(t, err)
+
+			v, ok := e.(Uint64Value)
+			require.True(t, ok)
+			require.Equal(t, i, uint64(v))
+		}
+
+		require.Equal(t, typeInfo, array.Type())
+
+		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		stats, _ := GetArrayStats(array)
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount, uint64(array.Storage.Count()))
+	})
 }
 
 func TestInsertAndGet(t *testing.T) {
@@ -1479,12 +1593,6 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 		require.Equal(t, array.Count(), uint64(len(values)))
 		require.Equal(t, typeInfo, array.Type())
-
-		err = validArray(array, typeInfo)
-		if err != nil {
-			PrintArray(array)
-		}
-		require.NoError(t, err)
 	}
 
 	for k, v := range values {

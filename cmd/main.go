@@ -131,7 +131,7 @@ func main() {
 		}
 	}
 
-	stats, err := array.Stats()
+	stats, err := atree.GetArrayStats(array)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -141,6 +141,6 @@ func main() {
 
 	if verbose {
 		fmt.Printf("\n\n=========== array layout ===========\n")
-		array.Print()
+		atree.PrintArray(array)
 	}
 }

@@ -7,22 +7,22 @@ package atree
 import (
 	"bytes"
 	"container/list"
-	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/fxamacker/cbor/v2"
 )
 
-type Stats struct {
+type ArrayStats struct {
 	Levels            uint64
 	ElementCount      uint64
 	MetaDataSlabCount uint64
 	DataSlabCount     uint64
 }
 
-// Stats returns stats about the array slabs.
-func (a *Array) Stats() (Stats, error) {
+// GetArrayStats returns stats about array slabs.
+func GetArrayStats(a *Array) (ArrayStats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
 	metaDataSlabSize := uint64(0)
@@ -43,7 +43,7 @@ func (a *Array) Stats() (Stats, error) {
 
 			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
-				return Stats{}, err
+				return ArrayStats{}, err
 			}
 
 			if slab.IsData() {
@@ -64,7 +64,7 @@ func (a *Array) Stats() (Stats, error) {
 		level++
 	}
 
-	return Stats{
+	return ArrayStats{
 		Levels:            level,
 		ElementCount:      a.Count(),
 		MetaDataSlabCount: metaDataSlabCount,
@@ -72,7 +72,8 @@ func (a *Array) Stats() (Stats, error) {
 	}, nil
 }
 
-func (a *Array) Print() {
+// PrintArray prints array slab data to stdout.
+func PrintArray(a *Array) {
 	nextLevelIDs := list.New()
 	nextLevelIDs.PushBack(a.root.Header().id)
 
@@ -149,81 +150,138 @@ func (a *Array) Print() {
 	}
 }
 
-func (a *Array) valid(typeInfo cbor.RawMessage) (bool, error) {
+func validArray(a *Array, typeInfo cbor.RawMessage) error {
 
-	// Verify that root has type information
 	extraData := a.root.ExtraData()
 	if extraData == nil {
-		return false, errors.New("root slab doesn't have extra data")
+		return fmt.Errorf("root slab %d doesn't have extra data", a.root.ID())
 	}
+
+	// Verify that extra data has correct type information
 	if !bytes.Equal(extraData.TypeInfo, typeInfo) {
-		return false, fmt.Errorf(
-			"type information is %v, want %v",
+		return fmt.Errorf(
+			"root slab %d type information %v is wrong, want %v",
+			a.root.ID(),
 			extraData.TypeInfo,
 			typeInfo,
 		)
 	}
 
-	verified, _, err := a._valid(a.root.Header().id, 0)
-	return verified, err
+	computedCount, err := validArraySlab(a.Storage, a.root.Header().id, 0, nil)
+	if err != nil {
+		return err
+	}
+
+	// Verify array count
+	if computedCount != uint32(a.Count()) {
+		return fmt.Errorf("root slab %d count %d is wrong, want %d", a.root.ID(), a.Count(), computedCount)
+	}
+
+	return nil
 }
 
-func (a *Array) _valid(id StorageID, level int) (bool, uint32, error) {
+func validArraySlab(storage SlabStorage, id StorageID, level int, header *ArraySlabHeader) (elementCount uint32, err error) {
 
-	slab, err := getArraySlab(a.Storage, id)
+	slab, err := getArraySlab(storage, id)
 	if err != nil {
-		return false, 0, err
+		return 0, err
 	}
 
 	if level > 0 {
+		// Verify that non-root slab doesn't have extra data
 		if slab.ExtraData() != nil {
-			return false, 0, errors.New("non-root slab has extra data")
+			return 0, fmt.Errorf("non-root slab %d has extra data", id)
+		}
+
+		// Verify that non-root slab doesn't underflow
+		if underflowSize, underflow := slab.IsUnderflow(); underflow {
+			return 0, fmt.Errorf("slab %d underflows by %d bytes", id, underflowSize)
+		}
+
+	}
+
+	// Verify that slab doesn't overflow
+	if slab.IsFull() {
+		return 0, fmt.Errorf("slab %d overflows", id)
+	}
+
+	// Verify that header is in sync with header from parent slab
+	if header != nil {
+		if !reflect.DeepEqual(*header, slab.Header()) {
+			return 0, fmt.Errorf("slab %d header %+v is different from header %+v from parent slab",
+				id, slab.Header(), header)
 		}
 	}
 
 	if slab.IsData() {
 		dataSlab, ok := slab.(*ArrayDataSlab)
 		if !ok {
-			return false, 0, fmt.Errorf("slab %d is not ArrayDataSlab", id)
+			return 0, fmt.Errorf("slab %d is not ArrayDataSlab", id)
 		}
 
-		count := uint32(len(dataSlab.elements))
+		// Verify that element count is the same as header.count
+		if uint32(len(dataSlab.elements)) != dataSlab.header.count {
+			return 0, fmt.Errorf("data slab %d header count %d is wrong, want %d",
+				id, dataSlab.header.count, len(dataSlab.elements))
+		}
 
-		computedSize := uint32(0)
+		// Verify that aggregated element size + slab prefix is the same as header.size
+		computedSize := uint32(arrayDataSlabPrefixSize)
 		for _, e := range dataSlab.elements {
+
+			// Verify element size is <= inline size
+			if e.ByteSize() > uint32(MaxInlineElementSize) {
+				return 0, fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
+					id, e, e.ByteSize(), MaxInlineElementSize)
+			}
+
 			computedSize += e.ByteSize()
 		}
 
-		_, underflow := dataSlab.IsUnderflow()
-		validFill := (level == 0) || (!dataSlab.IsFull() && !underflow)
+		if computedSize != dataSlab.header.size {
+			return 0, fmt.Errorf("data slab %d header size %d is wrong, want %d",
+				id, dataSlab.header.size, computedSize)
+		}
 
-		validCount := count == dataSlab.header.count
-
-		validSize := (arrayDataSlabPrefixSize + computedSize) == dataSlab.header.size
-
-		return validFill && validCount && validSize, count, nil
+		return dataSlab.header.count, nil
 	}
 
 	meta, ok := slab.(*ArrayMetaDataSlab)
 	if !ok {
-		return false, 0, fmt.Errorf("slab %d is not ArrayMetaDataSlab", id)
+		return 0, fmt.Errorf("slab %d is not ArrayMetaDataSlab", id)
 	}
-	sum := uint32(0)
-	for _, h := range meta.childrenHeaders {
-		verified, count, err := a._valid(h.id, level+1)
-		if !verified || err != nil {
-			return false, 0, err
+
+	if level == 0 {
+		// Verify that root slab has more than one child slabs
+		if len(meta.childrenHeaders) < 2 {
+			return 0, fmt.Errorf("root metadata slab %d has %d children, want at least 2 children ",
+				id, len(meta.childrenHeaders))
 		}
-		sum += count
 	}
 
-	_, underflow := meta.IsUnderflow()
-	validFill := (level == 0) || (!meta.IsFull() && !underflow)
+	computedCount := uint32(0)
+	for _, h := range meta.childrenHeaders {
+		// Verify child slabs
+		count, err := validArraySlab(storage, h.id, level+1, &h)
+		if err != nil {
+			return 0, err
+		}
 
-	validCount := sum == meta.header.count
+		computedCount += count
+	}
 
+	// Verify that aggregated element count is the same as header.count
+	if computedCount != meta.header.count {
+		return 0, fmt.Errorf("metadata slab %d header count %d is wrong, want %d",
+			id, meta.header.count, computedCount)
+	}
+
+	// Verify that aggregated header size + slab prefix is the same as header.size
 	computedSize := uint32(len(meta.childrenHeaders)*arraySlabHeaderSize) + arrayMetaDataSlabPrefixSize
-	validSize := computedSize == meta.header.size
+	if computedSize != meta.header.size {
+		return 0, fmt.Errorf("metadata slab %d header size %d is wrong, want %d",
+			id, meta.header.size, computedSize)
+	}
 
-	return validFill && validCount && validSize, sum, nil
+	return meta.header.count, nil
 }

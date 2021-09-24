@@ -83,6 +83,9 @@ func TestAppendAndGet(t *testing.T) {
 	require.Equal(t, typeInfo, array.Type())
 
 	err = validArray(array, typeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
 	require.NoError(t, err)
 
 	err = storage.Commit()
@@ -134,6 +137,9 @@ func TestSetAndGet(t *testing.T) {
 	require.Equal(t, typeInfo, array.Type())
 
 	err = validArray(array, typeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
 	require.NoError(t, err)
 
 	err = storage.Commit()
@@ -179,6 +185,9 @@ func TestInsertAndGet(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 
 		err = storage.Commit()
@@ -218,6 +227,9 @@ func TestInsertAndGet(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 
 		err = storage.Commit()
@@ -262,6 +274,9 @@ func TestInsertAndGet(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 
 		err = storage.Commit()
@@ -313,6 +328,9 @@ func TestRemove(t *testing.T) {
 
 			if i%256 == 0 {
 				err = validArray(array, typeInfo)
+				if err != nil {
+					PrintArray(array)
+				}
 				require.NoError(t, err)
 			}
 		}
@@ -362,6 +380,9 @@ func TestRemove(t *testing.T) {
 
 			if i%256 == 0 {
 				err = validArray(array, typeInfo)
+				if err != nil {
+					PrintArray(array)
+				}
 				require.NoError(t, err)
 			}
 		}
@@ -411,6 +432,9 @@ func TestRemove(t *testing.T) {
 
 			if i%256 == 0 {
 				err = validArray(array, typeInfo)
+				if err != nil {
+					PrintArray(array)
+				}
 				require.NoError(t, err)
 			}
 		}
@@ -861,6 +885,9 @@ func TestSetRandomValue(t *testing.T) {
 	require.Equal(t, typeInfo, array.Type())
 
 	err = validArray(array, typeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
 	require.NoError(t, err)
 
 	err = storage.Commit()
@@ -912,6 +939,9 @@ func TestInsertRandomValue(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 
 		err = storage.Commit()
@@ -956,6 +986,9 @@ func TestInsertRandomValue(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 
 		err = storage.Commit()
@@ -1003,6 +1036,9 @@ func TestInsertRandomValue(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 
 		err = storage.Commit()
@@ -1066,6 +1102,9 @@ func TestRemoveRandomElement(t *testing.T) {
 	require.Equal(t, typeInfo, array.Type())
 
 	err = validArray(array, typeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
 	require.NoError(t, err)
 
 	err = storage.Commit()
@@ -1191,6 +1230,9 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	require.Equal(t, len(values), i)
 
 	err = validArray(array, typeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
 	require.NoError(t, err)
 
 	err = storage.Commit()
@@ -1316,6 +1358,9 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	require.Equal(t, len(values), i)
 
 	err = validArray(array, typeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
 	require.NoError(t, err)
 
 	err = storage.Commit()
@@ -1436,6 +1481,9 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 	}
 
@@ -1458,6 +1506,9 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	require.Equal(t, len(values), i)
 
 	err = validArray(array, typeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
 	require.NoError(t, err)
 
 	err = storage.Commit()
@@ -1521,6 +1572,9 @@ func TestNestedArray(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 	})
 
@@ -1569,6 +1623,9 @@ func TestNestedArray(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 	})
 }
@@ -2058,6 +2115,9 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	require.Equal(t, typeInfo, array.Type())
 
 	err = validArray(array, typeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
 	require.NoError(t, err)
 
 	rootID := array.root.Header().id
@@ -2244,6 +2304,9 @@ func TestStringElement(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 
 		err = storage.Commit()
@@ -2297,6 +2360,9 @@ func TestStringElement(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 
 		err = storage.Commit()
@@ -2373,6 +2439,9 @@ func TestPopIterate(t *testing.T) {
 		require.Equal(t, uint64(0), i)
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 
 		require.Equal(t, uint64(0), array.Count())
@@ -2412,6 +2481,9 @@ func TestPopIterate(t *testing.T) {
 		require.Equal(t, i, uint64(arraySize))
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 
 		require.Equal(t, uint64(0), array.Count())
@@ -2455,6 +2527,9 @@ func TestPopIterate(t *testing.T) {
 		require.Equal(t, uint64(arraySize), i)
 
 		err = validArray(array, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 
 		require.Equal(t, uint64(0), array.Count())
@@ -2503,6 +2578,9 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.Equal(t, 0, i)
 
 		err = validArray(copied, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 	})
 
@@ -2563,6 +2641,9 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.Equal(t, arraySize, i)
 
 		err = validArray(copied, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 	})
 
@@ -2625,6 +2706,9 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.Equal(t, arraySize, i)
 
 		err = validArray(copied, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 	})
 
@@ -2697,6 +2781,9 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.Equal(t, arraySize, i)
 
 		err = validArray(copied, typeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
 		require.NoError(t, err)
 	})
 }

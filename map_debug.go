@@ -268,6 +268,14 @@ func validMapSlab(storage SlabStorage, digesterBuilder DigesterBuilder, hip Hash
 		return 0, fmt.Errorf("slab %d is not MapMetaDataSlab", id)
 	}
 
+	if level == 0 {
+		// Verify that root slab has more than one child slabs
+		if len(meta.childrenHeaders) < 2 {
+			return 0, fmt.Errorf("root metadata slab %d has %d children, want at least 2 children ",
+				id, len(meta.childrenHeaders))
+		}
+	}
+
 	elementCount := uint64(0)
 	for _, h := range meta.childrenHeaders {
 		// Verify child slabs

@@ -1721,8 +1721,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x00,
 				// flag: root + array data
 				0x80,
-				// prev storage id
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				// next storage id
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				// CBOR encoded array head (fixed size 3 byte)
@@ -1735,6 +1733,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		stored, err := storage.Encode()
 		require.NoError(t, err)
 
+		require.Equal(t, 5, len(stored))
 		require.Equal(t, expected[id1], stored[id1])
 		require.Equal(t, expected[id2], stored[id2])
 		require.Equal(t, expected[id3], stored[id3])

@@ -26,9 +26,9 @@ const (
 	// meta data slab prefix size: version (1 byte) + flag (1 byte) + child header count (2 bytes)
 	arrayMetaDataSlabPrefixSize = versionAndFlagSize + 2
 
-	// version (1 byte) + flag (1 byte) + prev id (16 bytes) + next id (16 bytes) + CBOR array size (3 bytes)
+	// version (1 byte) + flag (1 byte) + next id (16 bytes) + CBOR array size (3 bytes)
 	// (3 bytes of array size support up to 65535 array elements)
-	arrayDataSlabPrefixSize = versionAndFlagSize + storageIDSize + storageIDSize + 3
+	arrayDataSlabPrefixSize = versionAndFlagSize + storageIDSize + 3
 
 	// 32 is faster than 24 and 40.
 	linearScanThreshold = 32
@@ -47,7 +47,6 @@ type ArrayExtraData struct {
 
 // ArrayDataSlab is leaf node, implementing ArraySlab.
 type ArrayDataSlab struct {
-	prev     StorageID
 	next     StorageID
 	header   ArraySlabHeader
 	elements []Storable
@@ -248,15 +247,8 @@ func newArrayDataSlabFromData(
 		)
 	}
 
-	// Decode prev storage ID
-	const prevStorageIDOffset = versionAndFlagSize
-	prev, err := NewStorageIDFromRawBytes(data[prevStorageIDOffset:])
-	if err != nil {
-		return nil, err
-	}
-
 	// Decode next storage ID
-	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
+	const nextStorageIDOffset = versionAndFlagSize
 	next, err := NewStorageIDFromRawBytes(data[nextStorageIDOffset:])
 	if err != nil {
 		return nil, err
@@ -287,7 +279,6 @@ func newArrayDataSlabFromData(
 	}
 
 	return &ArrayDataSlab{
-		prev:      prev,
 		next:      next,
 		header:    header,
 		elements:  elements,
@@ -299,9 +290,9 @@ func newArrayDataSlabFromData(
 //
 // Header (18 bytes):
 //
-//   +-------------------------------+--------------------------------+--------------------------------+
-//   | slab version + flag (2 bytes) | prev sib storage ID (16 bytes) | next sib storage ID (16 bytes) |
-//   +-------------------------------+--------------------------------+--------------------------------+
+//   +-------------------------------+--------------------------------+
+//   | slab version + flag (2 bytes) | next sib storage ID (16 bytes) |
+//   +-------------------------------+--------------------------------+
 //
 // Content (for now):
 //
@@ -334,16 +325,9 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	// Encode flag
 	enc.Scratch[1] = flag
 
-	// Encode prev storage ID to scratch
-	const prevStorageIDOffset = versionAndFlagSize
-	_, err := a.prev.ToRawBytes(enc.Scratch[prevStorageIDOffset:])
-	if err != nil {
-		return err
-	}
-
 	// Encode next storage ID to scratch
-	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
-	_, err = a.next.ToRawBytes(enc.Scratch[nextStorageIDOffset:])
+	const nextStorageIDOffset = versionAndFlagSize
+	_, err := a.next.ToRawBytes(enc.Scratch[nextStorageIDOffset:])
 	if err != nil {
 		return err
 	}
@@ -500,7 +484,6 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 			size:  arrayDataSlabPrefixSize + dataSize - leftSize,
 			count: uint32(rightSlabCount),
 		},
-		prev: a.header.id,
 		next: a.next,
 	}
 
@@ -2134,8 +2117,6 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo cbor.R
 		// Finalize current data slab without appending new element
 		if dataSlab.header.size >= uint32(targetThreshold) {
 
-			prevID := dataSlab.header.id
-
 			// Generate storge id for next data slab
 			nextID, err := storage.GenerateStorageID(address)
 			if err != nil {
@@ -2148,13 +2129,12 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo cbor.R
 			// Append data slab to dataSlabs
 			slabs = append(slabs, dataSlab)
 
-			// Create next data slab with previous slab's storage id
+			// Create next data slab
 			dataSlab = &ArrayDataSlab{
 				header: ArraySlabHeader{
 					id:   nextID,
 					size: arrayDataSlabPrefixSize,
 				},
-				prev: prevID,
 			}
 
 		}

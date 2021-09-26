@@ -173,7 +173,7 @@ func validMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) er
 	}
 
 	// Verify that extra data has correct type information
-	if !bytes.Equal(extraData.TypeInfo, typeInfo) {
+	if typeInfo != nil && !bytes.Equal(extraData.TypeInfo, typeInfo) {
 		return fmt.Errorf(
 			"root slab %d type information %v, want %v",
 			m.root.ID(),
@@ -498,10 +498,34 @@ func validMapHkeyElements(
 					id, e, se.keyPointer, keyPointer)
 			}
 
+			// Verify key
+			kv, err := se.key.StoredValue(storage)
+			if err != nil {
+				return 0, 0, fmt.Errorf("data slab %d element %s key can't be converted to value, %s",
+					id, e, err)
+			}
+			err = validValue(kv, nil)
+			if err != nil {
+				return 0, 0, fmt.Errorf("data slab %d element %s key isn't valid, %s",
+					id, e, err)
+			}
+
 			// Verify value pointer
 			if _, valuePointer := se.value.(StorageIDStorable); se.valuePointer != valuePointer {
 				return 0, 0, fmt.Errorf("data slab %d element %s valuePointer %t is wrong, want %t",
 					id, e, se.valuePointer, valuePointer)
+			}
+
+			// Verify value
+			vv, err := se.value.StoredValue(storage)
+			if err != nil {
+				return 0, 0, fmt.Errorf("data slab %d element %s value can't be converted to value, %s",
+					id, e, err)
+			}
+			err = validValue(vv, nil)
+			if err != nil {
+				return 0, 0, fmt.Errorf("data slab %d element %s value isn't valid, %s",
+					id, e, err)
 			}
 
 			// Verify single element size
@@ -582,10 +606,34 @@ func validMapSingleElements(
 				id, e, e.keyPointer, keyPointer)
 		}
 
+		// Verify key
+		kv, err := e.key.StoredValue(storage)
+		if err != nil {
+			return 0, 0, fmt.Errorf("data slab %d element %s key can't be converted to value, %s",
+				id, e, err)
+		}
+		err = validValue(kv, nil)
+		if err != nil {
+			return 0, 0, fmt.Errorf("data slab %d element %s key isn't valid, %s",
+				id, e, err)
+		}
+
 		// Verify value pointer
 		if _, valuePointer := e.value.(StorageIDStorable); e.valuePointer != valuePointer {
 			return 0, 0, fmt.Errorf("data slab %d element %s valuePointer %t is wrong, want %t",
 				id, e, e.valuePointer, valuePointer)
+		}
+
+		// Verify value
+		vv, err := e.value.StoredValue(storage)
+		if err != nil {
+			return 0, 0, fmt.Errorf("data slab %d element %s value can't be converted to value, %s",
+				id, e, err)
+		}
+		err = validValue(vv, nil)
+		if err != nil {
+			return 0, 0, fmt.Errorf("data slab %d element %s value isn't valid, %s",
+				id, e, err)
 		}
 
 		// Verify element size is <= inline size
@@ -637,4 +685,14 @@ func validMapSingleElements(
 	}
 
 	return uint32(len(elements.elems)), elementSize, nil
+}
+
+func validValue(value Value, typeInfo cbor.RawMessage) error {
+	switch v := value.(type) {
+	case *Array:
+		return validArray(v, typeInfo)
+	case *OrderedMap:
+		return validMap(v, typeInfo, hashInputProvider)
+	}
+	return nil
 }

@@ -158,7 +158,7 @@ func validArray(a *Array, typeInfo cbor.RawMessage) error {
 	}
 
 	// Verify that extra data has correct type information
-	if !bytes.Equal(extraData.TypeInfo, typeInfo) {
+	if typeInfo != nil && !bytes.Equal(extraData.TypeInfo, typeInfo) {
 		return fmt.Errorf(
 			"root slab %d type information %v is wrong, want %v",
 			a.root.ID(),
@@ -260,6 +260,20 @@ func validArraySlab(
 
 		if dataSlab.next != StorageIDUndefined {
 			nextDataSlabIDs = append(nextDataSlabIDs, dataSlab.next)
+		}
+
+		// Verify element
+		for _, e := range dataSlab.elements {
+			v, err := e.StoredValue(storage)
+			if err != nil {
+				return 0, nil, nil, fmt.Errorf("data slab %d element %s can't be converted to value, %s",
+					id, e, err)
+			}
+			err = validValue(v, nil)
+			if err != nil {
+				return 0, nil, nil, fmt.Errorf("data slab %d element %s isn't valid, %s",
+					id, e, err)
+			}
 		}
 
 		return dataSlab.header.count, dataSlabIDs, nextDataSlabIDs, nil

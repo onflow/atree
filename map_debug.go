@@ -213,7 +213,7 @@ func validMapSlab(
 	hip HashInputProvider,
 	id StorageID,
 	level int,
-	header *MapSlabHeader,
+	headerFromParentSlab *MapSlabHeader,
 	dataSlabIDs []StorageID,
 	nextDataSlabIDs []StorageID) (
 	uint64, []StorageID, []StorageID, error) {
@@ -242,10 +242,10 @@ func validMapSlab(
 	}
 
 	// Verify that header is in sync with header from parent slab
-	if header != nil {
-		if !reflect.DeepEqual(*header, slab.Header()) {
+	if headerFromParentSlab != nil {
+		if !reflect.DeepEqual(*headerFromParentSlab, slab.Header()) {
 			return 0, nil, nil, fmt.Errorf("slab %d header %+v is different from header %+v from parent slab",
-				id, slab.Header(), header)
+				id, slab.Header(), headerFromParentSlab)
 		}
 	}
 
@@ -273,6 +273,18 @@ func validMapSlab(
 		if computedSize != dataSlab.header.size {
 			return 0, nil, nil, fmt.Errorf("data slab %d header size %d is wrong, want %d",
 				id, dataSlab.header.size, computedSize)
+		}
+
+		// Verify any size flag
+		if dataSlab.anySize {
+			return 0, nil, nil, fmt.Errorf("data slab %d anySize %t is wrong, want false",
+				id, dataSlab.anySize)
+		}
+
+		// Verify collision group flag
+		if dataSlab.collisionGroup {
+			return 0, nil, nil, fmt.Errorf("data slab %d collisionGroup %t is wrong, want false",
+				id, dataSlab.collisionGroup)
 		}
 
 		dataSlabIDs = append(dataSlabIDs, id)
@@ -328,7 +340,7 @@ func validMapSlab(
 		prev := meta.childrenHeaders[0].firstKey
 		for _, h := range meta.childrenHeaders[1:] {
 			if prev == h.firstKey {
-				return 0, nil, nil, fmt.Errorf("meta data slab %d child header first key isn't unique %v",
+				return 0, nil, nil, fmt.Errorf("metadata slab %d child header first key isn't unique %v",
 					id, meta.childrenHeaders)
 			}
 			prev = h.firstKey

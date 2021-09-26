@@ -190,7 +190,7 @@ func validArraySlab(
 	storage SlabStorage,
 	id StorageID,
 	level int,
-	header *ArraySlabHeader,
+	headerFromParentSlab *ArraySlabHeader,
 	dataSlabIDs []StorageID,
 	nextDataSlabIDs []StorageID) (
 	elementCount uint32, _ []StorageID, _ []StorageID, err error) {
@@ -219,10 +219,10 @@ func validArraySlab(
 	}
 
 	// Verify that header is in sync with header from parent slab
-	if header != nil {
-		if !reflect.DeepEqual(*header, slab.Header()) {
+	if headerFromParentSlab != nil {
+		if !reflect.DeepEqual(*headerFromParentSlab, slab.Header()) {
 			return 0, nil, nil, fmt.Errorf("slab %d header %+v is different from header %+v from parent slab",
-				id, slab.Header(), header)
+				id, slab.Header(), headerFromParentSlab)
 		}
 	}
 

@@ -470,6 +470,18 @@ func validMapHkeyElements(
 				return 0, 0, fmt.Errorf("data slab %d element type %T is wrong, want *singleElement", id, e)
 			}
 
+			// Verify key pointer
+			if _, keyPointer := se.key.(StorageIDStorable); se.keyPointer != keyPointer {
+				return 0, 0, fmt.Errorf("data slab %d element %s keyPointer %t is wrong, want %t",
+					id, e, se.keyPointer, keyPointer)
+			}
+
+			// Verify value pointer
+			if _, valuePointer := se.value.(StorageIDStorable); se.valuePointer != valuePointer {
+				return 0, 0, fmt.Errorf("data slab %d element %s valuePointer %t is wrong, want %t",
+					id, e, se.valuePointer, valuePointer)
+			}
+
 			// Verify single element size
 			computedSize := singleElementPrefixSize + se.key.ByteSize() + se.value.ByteSize()
 			if computedSize != e.Size() {
@@ -541,6 +553,18 @@ func validMapSingleElements(
 	elementSize = singleElementsPrefixSize
 
 	for _, e := range elements.elems {
+
+		// Verify key pointer
+		if _, keyPointer := e.key.(StorageIDStorable); e.keyPointer != keyPointer {
+			return 0, 0, fmt.Errorf("data slab %d element %s keyPointer %t is wrong, want %t",
+				id, e, e.keyPointer, keyPointer)
+		}
+
+		// Verify value pointer
+		if _, valuePointer := e.value.(StorageIDStorable); e.valuePointer != valuePointer {
+			return 0, 0, fmt.Errorf("data slab %d element %s valuePointer %t is wrong, want %t",
+				id, e, e.valuePointer, valuePointer)
+		}
 
 		// Verify element size is <= inline size
 		if e.Size() > uint32(MaxInlineElementSize) {

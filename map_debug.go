@@ -363,17 +363,17 @@ func validMapElements(
 	hip HashInputProvider,
 	id StorageID,
 	elements elements,
-	level int,
+	digestLevel int,
 	hkeyPrefixes []Digest) (
 	elementCount uint32, elementSize uint32, err error) {
 
 	switch elems := elements.(type) {
 	case *hkeyElements:
-		return validMapHkeyElements(storage, db, hip, id, elems, level, hkeyPrefixes)
+		return validMapHkeyElements(storage, db, hip, id, elems, digestLevel, hkeyPrefixes)
 	case *singleElements:
-		return validMapSingleElements(storage, db, hip, id, elems, level, hkeyPrefixes)
+		return validMapSingleElements(storage, db, hip, id, elems, digestLevel, hkeyPrefixes)
 	default:
-		return 0, 0, fmt.Errorf("slab %d has unknown elements type %T at level %d", id, elements, level)
+		return 0, 0, fmt.Errorf("slab %d has unknown elements type %T at digest level %d", id, elements, digestLevel)
 	}
 }
 
@@ -383,14 +383,14 @@ func validMapHkeyElements(
 	hip HashInputProvider,
 	id StorageID,
 	elements *hkeyElements,
-	level int,
+	digestLevel int,
 	hkeyPrefixes []Digest) (
 	elementCount uint32, elementSize uint32, err error) {
 
 	// Verify element's level
-	if level != elements.level {
-		return 0, 0, fmt.Errorf("data slab %d elements level %d is wrong, want %d",
-			id, elements.level, level)
+	if digestLevel != elements.level {
+		return 0, 0, fmt.Errorf("data slab %d elements digest level %d is wrong, want %d",
+			id, elements.level, digestLevel)
 	}
 
 	// Verify number of hkeys is the same as number of elements
@@ -425,7 +425,7 @@ func validMapHkeyElements(
 		elementSize += digestSize
 
 		// Verify element size is <= inline size
-		if level == 0 {
+		if digestLevel == 0 {
 			if e.Size() > uint32(MaxInlineElementSize) {
 				return 0, 0, fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
 					id, e, e.Size(), MaxInlineElementSize)
@@ -443,7 +443,7 @@ func validMapHkeyElements(
 			copy(hkeys, hkeyPrefixes)
 			hkeys[len(hkeys)-1] = elements.hkeys[i]
 
-			count, size, err := validMapElements(storage, db, hip, id, ge, level+1, hkeys)
+			count, size, err := validMapElements(storage, db, hip, id, ge, digestLevel+1, hkeys)
 			if err != nil {
 				return 0, 0, err
 			}
@@ -487,6 +487,13 @@ func validMapHkeyElements(
 			if err != nil {
 				return 0, 0, err
 			}
+
+			// Verify digest level
+			if len(hkeyPrefixes)+1 > d.Levels() {
+				return 0, 0, fmt.Errorf("data slab %d hkey elements %s digest level %d is wrong, want < %d",
+					id, elements, len(hkeyPrefixes)+1, d.Levels())
+			}
+
 			computedHkey, err := d.DigestPrefix(d.Levels())
 			if err != nil {
 				return 0, 0, err
@@ -521,14 +528,14 @@ func validMapSingleElements(
 	hip HashInputProvider,
 	id StorageID,
 	elements *singleElements,
-	level int,
+	digestLevel int,
 	hkeyPrefixes []Digest) (
 	elementCount uint32, elementSize uint32, err error) {
 
 	// Verify elements' level
-	if level != elements.level {
+	if digestLevel != elements.level {
 		return 0, 0, fmt.Errorf("data slab %d elements level %d is wrong, want %d",
-			id, elements.level, level)
+			id, elements.level, digestLevel)
 	}
 
 	elementSize = singleElementsPrefixSize
@@ -557,6 +564,12 @@ func validMapSingleElements(
 		digest, err := db.Digest(hip, ks)
 		if err != nil {
 			return 0, 0, err
+		}
+
+		// Verify digest level
+		if len(hkeyPrefixes) != digest.Levels() {
+			return 0, 0, fmt.Errorf("data slab %d single elements %s digest level %d is wrong, want %d",
+				id, elements, digestLevel, digest.Levels())
 		}
 
 		computedHkey, err := digest.DigestPrefix(digest.Levels())

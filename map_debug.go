@@ -187,7 +187,7 @@ func validMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) er
 		return fmt.Errorf("root slab %d seed is uninitialized", m.root.ID())
 	}
 
-	computedCount, err := validMapSlab(m.Storage, m.digesterBuilder, hip, m.root.ID(), 0, nil)
+	computedCount, dataSlabIDs, nextDataSlabIDs, err := validMapSlab(m.Storage, m.digesterBuilder, hip, m.root.ID(), 0, nil, []StorageID{}, []StorageID{})
 	if err != nil {
 		return err
 	}
@@ -198,38 +198,53 @@ func validMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) er
 			m.root.ID(), extraData.Count, computedCount)
 	}
 
+	// Verify next data slab ids
+	if !reflect.DeepEqual(dataSlabIDs[1:], nextDataSlabIDs) {
+		return fmt.Errorf("chained next data slab ids %v are wrong, want %v",
+			nextDataSlabIDs, dataSlabIDs[1:])
+	}
+
 	return nil
 }
 
-func validMapSlab(storage SlabStorage, digesterBuilder DigesterBuilder, hip HashInputProvider, id StorageID, level int, header *MapSlabHeader) (uint64, error) {
+func validMapSlab(
+	storage SlabStorage,
+	digesterBuilder DigesterBuilder,
+	hip HashInputProvider,
+	id StorageID,
+	level int,
+	header *MapSlabHeader,
+	dataSlabIDs []StorageID,
+	nextDataSlabIDs []StorageID) (
+	uint64, []StorageID, []StorageID, error) {
 
 	slab, err := getMapSlab(storage, id)
 	if err != nil {
-		return 0, err
+		return 0, nil, nil, err
 	}
 
 	if level > 0 {
 		// Verify that non-root slab doesn't have extra data.
 		if slab.ExtraData() != nil {
-			return 0, fmt.Errorf("non-root slab %d has extra data", id)
+			return 0, nil, nil, fmt.Errorf("non-root slab %d has extra data", id)
 		}
 
 		// Verify that non-root slab doesn't underflow
 		if underflowSize, underflow := slab.IsUnderflow(); underflow {
-			return 0, fmt.Errorf("slab %d underflows by %d bytes", id, underflowSize)
+			return 0, nil, nil, fmt.Errorf("slab %d underflows by %d bytes", id, underflowSize)
 		}
 
 	}
 
 	// Verify that slab doesn't overflow
 	if slab.IsFull() {
-		return 0, fmt.Errorf("slab %d overflows", id)
+		return 0, nil, nil, fmt.Errorf("slab %d overflows", id)
 	}
 
 	// Verify that header is in sync with header from parent slab
 	if header != nil {
 		if !reflect.DeepEqual(*header, slab.Header()) {
-			return 0, fmt.Errorf("slab %d header %+v is different from header %+v from parent slab",
+			return 0, nil, nil, fmt.Errorf("slab %d header %+v is different from header %+v from parent slab",
 				id, slab.Header(), header)
 		}
 	}
@@ -238,40 +253,46 @@ func validMapSlab(storage SlabStorage, digesterBuilder DigesterBuilder, hip Hash
 
 		dataSlab, ok := slab.(*MapDataSlab)
 		if !ok {
-			return 0, fmt.Errorf("slab %d is not MapDataSlab", id)
+			return 0, nil, nil, fmt.Errorf("slab %d is not MapDataSlab", id)
 		}
 
 		// Verify data slab's elements
 		elementCount, elementSize, err := validMapElements(storage, digesterBuilder, hip, id, dataSlab.elements, 0, nil)
 		if err != nil {
-			return 0, err
+			return 0, nil, nil, err
 		}
 
 		// Verify slab's first key
 		if dataSlab.elements.firstKey() != dataSlab.header.firstKey {
-			return 0, fmt.Errorf("data slab %d header first key %d is wrong, want %d",
+			return 0, nil, nil, fmt.Errorf("data slab %d header first key %d is wrong, want %d",
 				id, dataSlab.header.firstKey, dataSlab.elements.firstKey())
 		}
 
 		// Verify that aggregated element size + slab prefix is the same as header.size
 		computedSize := uint32(mapDataSlabPrefixSize) + elementSize
 		if computedSize != dataSlab.header.size {
-			return 0, fmt.Errorf("data slab %d header size %d is wrong, want %d",
+			return 0, nil, nil, fmt.Errorf("data slab %d header size %d is wrong, want %d",
 				id, dataSlab.header.size, computedSize)
 		}
 
-		return uint64(elementCount), nil
+		dataSlabIDs = append(dataSlabIDs, id)
+
+		if dataSlab.next != StorageIDUndefined {
+			nextDataSlabIDs = append(nextDataSlabIDs, dataSlab.next)
+		}
+
+		return uint64(elementCount), dataSlabIDs, nextDataSlabIDs, nil
 	}
 
 	meta, ok := slab.(*MapMetaDataSlab)
 	if !ok {
-		return 0, fmt.Errorf("slab %d is not MapMetaDataSlab", id)
+		return 0, nil, nil, fmt.Errorf("slab %d is not MapMetaDataSlab", id)
 	}
 
 	if level == 0 {
 		// Verify that root slab has more than one child slabs
 		if len(meta.childrenHeaders) < 2 {
-			return 0, fmt.Errorf("root metadata slab %d has %d children, want at least 2 children ",
+			return 0, nil, nil, fmt.Errorf("root metadata slab %d has %d children, want at least 2 children ",
 				id, len(meta.childrenHeaders))
 		}
 	}
@@ -279,9 +300,10 @@ func validMapSlab(storage SlabStorage, digesterBuilder DigesterBuilder, hip Hash
 	elementCount := uint64(0)
 	for _, h := range meta.childrenHeaders {
 		// Verify child slabs
-		count, err := validMapSlab(storage, digesterBuilder, hip, h.id, level+1, &h)
+		count := uint64(0)
+		count, dataSlabIDs, nextDataSlabIDs, err = validMapSlab(storage, digesterBuilder, hip, h.id, level+1, &h, dataSlabIDs, nextDataSlabIDs)
 		if err != nil {
-			return 0, err
+			return 0, nil, nil, err
 		}
 
 		elementCount += count
@@ -289,7 +311,7 @@ func validMapSlab(storage SlabStorage, digesterBuilder DigesterBuilder, hip Hash
 
 	// Verify slab header first key
 	if meta.childrenHeaders[0].firstKey != meta.header.firstKey {
-		return 0, fmt.Errorf("metadata slab %d header first key %d is wrong, want %d",
+		return 0, nil, nil, fmt.Errorf("metadata slab %d header first key %d is wrong, want %d",
 			id, meta.header.firstKey, meta.childrenHeaders[0].firstKey)
 	}
 
@@ -298,7 +320,7 @@ func validMapSlab(storage SlabStorage, digesterBuilder DigesterBuilder, hip Hash
 		return meta.childrenHeaders[i].firstKey < meta.childrenHeaders[j].firstKey
 	})
 	if !sortedHKey {
-		return 0, fmt.Errorf("metadata slab %d child slab's first key isn't sorted %+v", id, meta.childrenHeaders)
+		return 0, nil, nil, fmt.Errorf("metadata slab %d child slab's first key isn't sorted %+v", id, meta.childrenHeaders)
 	}
 
 	// Verify that child slab's first keys are unique.
@@ -306,7 +328,7 @@ func validMapSlab(storage SlabStorage, digesterBuilder DigesterBuilder, hip Hash
 		prev := meta.childrenHeaders[0].firstKey
 		for _, h := range meta.childrenHeaders[1:] {
 			if prev == h.firstKey {
-				return 0, fmt.Errorf("meta data slab %d child header first key isn't unique %v",
+				return 0, nil, nil, fmt.Errorf("meta data slab %d child header first key isn't unique %v",
 					id, meta.childrenHeaders)
 			}
 			prev = h.firstKey
@@ -316,11 +338,11 @@ func validMapSlab(storage SlabStorage, digesterBuilder DigesterBuilder, hip Hash
 	// Verify slab header's size
 	computedSize := uint32(len(meta.childrenHeaders)*mapSlabHeaderSize) + mapMetaDataSlabPrefixSize
 	if computedSize != meta.header.size {
-		return 0, fmt.Errorf("metadata slab %d header size %d is wrong, want %d",
+		return 0, nil, nil, fmt.Errorf("metadata slab %d header size %d is wrong, want %d",
 			id, meta.header.size, computedSize)
 	}
 
-	return elementCount, nil
+	return elementCount, dataSlabIDs, nextDataSlabIDs, nil
 }
 
 func validMapElements(

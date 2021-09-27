@@ -103,7 +103,7 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = validMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -162,7 +162,7 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = validMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -240,7 +240,7 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = validMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -305,7 +305,7 @@ func TestMapHas(t *testing.T) {
 		require.Nil(t, existingStorable)
 	}
 
-	err = validMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -373,7 +373,7 @@ func TestMapRemove(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = validMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -468,7 +468,7 @@ func TestMapRemove(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = validMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -815,7 +815,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		require.Nil(t, existingStorable)
 	}
 
-	err = validMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -912,7 +912,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		require.Nil(t, existingStorable)
 	}
 
-	err = validMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -1036,7 +1036,7 @@ func TestMapLargeElement(t *testing.T) {
 	require.Equal(t, typeInfo, m.Type())
 	require.Equal(t, uint64(mapSize), m.Count())
 
-	err = validMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -1191,7 +1191,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 		require.Equal(t, v, e)
 	}
 
-	err = validMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -2859,7 +2859,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 		require.Equal(t, typeInfo, m.Type())
 	}
 
-	err = validMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -2983,7 +2983,7 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), i)
 
-		err = validMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3045,7 +3045,7 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		err = validMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3110,7 +3110,7 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		err = validMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3194,7 +3194,7 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		err = validMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3679,7 +3679,7 @@ func testPopulatedMapFromStorage(t *testing.T, storage SlabStorage, rootID Stora
 	require.NoError(t, err)
 	require.Equal(t, len(keyValues), i)
 
-	err = validMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}

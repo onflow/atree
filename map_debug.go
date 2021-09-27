@@ -165,7 +165,7 @@ func PrintMap(m *OrderedMap) {
 	}
 }
 
-func validMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) error {
+func ValidMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) error {
 
 	extraData := m.root.ExtraData()
 	if extraData == nil {
@@ -612,7 +612,7 @@ func validSingleElement(
 		return 0, 0, fmt.Errorf("element %s key can't be converted to value, %s", e, err)
 	}
 
-	err = validValue(kv, nil, hip)
+	err = ValidValue(kv, nil, hip)
 	if err != nil {
 		return 0, 0, fmt.Errorf("element %s key isn't valid, %s", e, err)
 	}
@@ -628,7 +628,7 @@ func validSingleElement(
 		return 0, 0, fmt.Errorf("element %s value can't be converted to value, %s", e, err)
 	}
 
-	err = validValue(vv, nil, hip)
+	err = ValidValue(vv, nil, hip)
 	if err != nil {
 		return 0, 0, fmt.Errorf("element %s value isn't valid, %s", e, err)
 	}
@@ -657,12 +657,12 @@ func validSingleElement(
 	return computedSize, digest.Levels(), nil
 }
 
-func validValue(value Value, typeInfo cbor.RawMessage, hip HashInputProvider) error {
+func ValidValue(value Value, typeInfo cbor.RawMessage, hip HashInputProvider) error {
 	switch v := value.(type) {
 	case *Array:
-		return validArray(v, typeInfo, hip)
+		return ValidArray(v, typeInfo, hip)
 	case *OrderedMap:
-		return validMap(v, typeInfo, hip)
+		return ValidMap(v, typeInfo, hip)
 	}
 	return nil
 }

@@ -150,7 +150,7 @@ func PrintArray(a *Array) {
 	}
 }
 
-func validArray(a *Array, typeInfo cbor.RawMessage, hip HashInputProvider) error {
+func ValidArray(a *Array, typeInfo cbor.RawMessage, hip HashInputProvider) error {
 
 	extraData := a.root.ExtraData()
 	if extraData == nil {
@@ -275,7 +275,7 @@ func validArraySlab(
 				return 0, nil, nil, fmt.Errorf("data slab %d element %s can't be converted to value, %s",
 					id, e, err)
 			}
-			err = validValue(v, nil, hip)
+			err = ValidValue(v, nil, hip)
 			if err != nil {
 				return 0, nil, nil, fmt.Errorf("data slab %d element %s isn't valid, %s",
 					id, e, err)

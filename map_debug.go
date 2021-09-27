@@ -492,78 +492,20 @@ func validMapHkeyElements(
 				return 0, 0, fmt.Errorf("data slab %d element type %T is wrong, want *singleElement", id, e)
 			}
 
-			// Verify key pointer
-			if _, keyPointer := se.key.(StorageIDStorable); se.keyPointer != keyPointer {
-				return 0, 0, fmt.Errorf("data slab %d element %s keyPointer %t is wrong, want %t",
-					id, e, se.keyPointer, keyPointer)
-			}
-
-			// Verify key
-			kv, err := se.key.StoredValue(storage)
-			if err != nil {
-				return 0, 0, fmt.Errorf("data slab %d element %s key can't be converted to value, %s",
-					id, e, err)
-			}
-			err = validValue(kv, nil)
-			if err != nil {
-				return 0, 0, fmt.Errorf("data slab %d element %s key isn't valid, %s",
-					id, e, err)
-			}
-
-			// Verify value pointer
-			if _, valuePointer := se.value.(StorageIDStorable); se.valuePointer != valuePointer {
-				return 0, 0, fmt.Errorf("data slab %d element %s valuePointer %t is wrong, want %t",
-					id, e, se.valuePointer, valuePointer)
-			}
-
-			// Verify value
-			vv, err := se.value.StoredValue(storage)
-			if err != nil {
-				return 0, 0, fmt.Errorf("data slab %d element %s value can't be converted to value, %s",
-					id, e, err)
-			}
-			err = validValue(vv, nil)
-			if err != nil {
-				return 0, 0, fmt.Errorf("data slab %d element %s value isn't valid, %s",
-					id, e, err)
-			}
-
-			// Verify single element size
-			computedSize := singleElementPrefixSize + se.key.ByteSize() + se.value.ByteSize()
-			if computedSize != e.Size() {
-				return 0, 0, fmt.Errorf("data slab %d element %v size %d is wrong, want %d",
-					id, elements.String(), e.Size(), computedSize)
-			}
-
-			ks, err := se.key.StoredValue(storage)
-			if err != nil {
-				return 0, 0, err
-			}
-
-			// Verify single element digest
-			d, err := db.Digest(hip, ks)
-			if err != nil {
-				return 0, 0, err
-			}
-
-			// Verify digest level
-			if len(hkeyPrefixes)+1 > d.Levels() {
-				return 0, 0, fmt.Errorf("data slab %d hkey elements %s digest level %d is wrong, want < %d",
-					id, elements, len(hkeyPrefixes)+1, d.Levels())
-			}
-
-			computedHkey, err := d.DigestPrefix(d.Levels())
-			if err != nil {
-				return 0, 0, err
-			}
-
 			hkeys := make([]Digest, len(hkeyPrefixes)+1)
 			copy(hkeys, hkeyPrefixes)
 			hkeys[len(hkeys)-1] = elements.hkeys[i]
 
-			if !reflect.DeepEqual(hkeys, computedHkey[:len(hkeys)]) {
-				return 0, 0, fmt.Errorf("data slab %d element %s digest %v is wrong, want %v",
-					id, elements, hkeys, computedHkey)
+			// Verify element
+			computedSize, maxDigestLevel, err := validSingleElement(storage, db, hip, se, hkeys)
+			if err != nil {
+				return 0, 0, fmt.Errorf("data slab %d %s", id, err)
+			}
+
+			// Verify digest level
+			if digestLevel >= maxDigestLevel {
+				return 0, 0, fmt.Errorf("data slab %d hkey elements %s digest level %d is wrong, want < %d",
+					id, elements, digestLevel, maxDigestLevel)
 			}
 
 			elementSize += computedSize
@@ -600,40 +542,10 @@ func validMapSingleElements(
 
 	for _, e := range elements.elems {
 
-		// Verify key pointer
-		if _, keyPointer := e.key.(StorageIDStorable); e.keyPointer != keyPointer {
-			return 0, 0, fmt.Errorf("data slab %d element %s keyPointer %t is wrong, want %t",
-				id, e, e.keyPointer, keyPointer)
-		}
-
-		// Verify key
-		kv, err := e.key.StoredValue(storage)
+		// Verify element
+		computedSize, maxDigestLevel, err := validSingleElement(storage, db, hip, e, hkeyPrefixes)
 		if err != nil {
-			return 0, 0, fmt.Errorf("data slab %d element %s key can't be converted to value, %s",
-				id, e, err)
-		}
-		err = validValue(kv, nil)
-		if err != nil {
-			return 0, 0, fmt.Errorf("data slab %d element %s key isn't valid, %s",
-				id, e, err)
-		}
-
-		// Verify value pointer
-		if _, valuePointer := e.value.(StorageIDStorable); e.valuePointer != valuePointer {
-			return 0, 0, fmt.Errorf("data slab %d element %s valuePointer %t is wrong, want %t",
-				id, e, e.valuePointer, valuePointer)
-		}
-
-		// Verify value
-		vv, err := e.value.StoredValue(storage)
-		if err != nil {
-			return 0, 0, fmt.Errorf("data slab %d element %s value can't be converted to value, %s",
-				id, e, err)
-		}
-		err = validValue(vv, nil)
-		if err != nil {
-			return 0, 0, fmt.Errorf("data slab %d element %s value isn't valid, %s",
-				id, e, err)
+			return 0, 0, fmt.Errorf("data slab %d %s", id, err)
 		}
 
 		// Verify element size is <= inline size
@@ -642,38 +554,10 @@ func validMapSingleElements(
 				id, e, e.Size(), MaxInlineElementSize)
 		}
 
-		// Verify single element size
-		computedSize := singleElementPrefixSize + e.key.ByteSize() + e.value.ByteSize()
-		if computedSize != e.Size() {
-			return 0, 0, fmt.Errorf("data slab %d element %s size %d is wrong, want %d",
-				id, elements, e.Size(), computedSize)
-		}
-
-		ks, err := e.key.StoredValue(storage)
-		if err != nil {
-			return 0, 0, err
-		}
-
-		// Verify single element digest
-		digest, err := db.Digest(hip, ks)
-		if err != nil {
-			return 0, 0, err
-		}
-
 		// Verify digest level
-		if len(hkeyPrefixes) != digest.Levels() {
+		if digestLevel != maxDigestLevel {
 			return 0, 0, fmt.Errorf("data slab %d single elements %s digest level %d is wrong, want %d",
-				id, elements, digestLevel, digest.Levels())
-		}
-
-		computedHkey, err := digest.DigestPrefix(digest.Levels())
-		if err != nil {
-			return 0, 0, err
-		}
-
-		if !reflect.DeepEqual(hkeyPrefixes, computedHkey[:len(hkeyPrefixes)]) {
-			return 0, 0, fmt.Errorf("data slab %d element %s digest %v is wrong, want %v",
-				id, elements.String(), hkeyPrefixes, computedHkey)
+				id, elements, digestLevel, maxDigestLevel)
 		}
 
 		elementSize += computedSize
@@ -685,6 +569,65 @@ func validMapSingleElements(
 	}
 
 	return uint32(len(elements.elems)), elementSize, nil
+}
+
+func validSingleElement(storage SlabStorage, db DigesterBuilder, hip HashInputProvider, e *singleElement, digests []Digest) (
+	size uint32, digestMaxLevel int, err error) {
+
+	// Verify key pointer
+	if _, keyPointer := e.key.(StorageIDStorable); e.keyPointer != keyPointer {
+		return 0, 0, fmt.Errorf("element %s keyPointer %t is wrong, want %t", e, e.keyPointer, keyPointer)
+	}
+
+	// Verify key
+	kv, err := e.key.StoredValue(storage)
+	if err != nil {
+		return 0, 0, fmt.Errorf("element %s key can't be converted to value, %s", e, err)
+	}
+
+	err = validValue(kv, nil)
+	if err != nil {
+		return 0, 0, fmt.Errorf("element %s key isn't valid, %s", e, err)
+	}
+
+	// Verify value pointer
+	if _, valuePointer := e.value.(StorageIDStorable); e.valuePointer != valuePointer {
+		return 0, 0, fmt.Errorf("element %s valuePointer %t is wrong, want %t", e, e.valuePointer, valuePointer)
+	}
+
+	// Verify value
+	vv, err := e.value.StoredValue(storage)
+	if err != nil {
+		return 0, 0, fmt.Errorf("element %s value can't be converted to value, %s", e, err)
+	}
+
+	err = validValue(vv, nil)
+	if err != nil {
+		return 0, 0, fmt.Errorf("element %s value isn't valid, %s", e, err)
+	}
+
+	// Verify size
+	computedSize := singleElementPrefixSize + e.key.ByteSize() + e.value.ByteSize()
+	if computedSize != e.Size() {
+		return 0, 0, fmt.Errorf("element %s size %d is wrong, want %d", e, e.Size(), computedSize)
+	}
+
+	// Verify digest
+	digest, err := db.Digest(hip, kv)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	computedDigests, err := digest.DigestPrefix(digest.Levels())
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if !reflect.DeepEqual(digests, computedDigests[:len(digests)]) {
+		return 0, 0, fmt.Errorf("element %s digest %v is wrong, want %v", e, digests, computedDigests)
+	}
+
+	return computedSize, digest.Levels(), nil
 }
 
 func validValue(value Value, typeInfo cbor.RawMessage) error {

@@ -73,7 +73,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		const mapSize = 64 * 1024
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -132,7 +132,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		const mapSize = 64 * 1024
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -208,7 +208,7 @@ func TestMapSetAndGet(t *testing.T) {
 		const mapSize = 64 * 1024
 		const maxKeyLength = 224
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -270,7 +270,7 @@ func TestMapHas(t *testing.T) {
 
 	const mapSize = 64 * 1024
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -342,7 +342,7 @@ func TestMapRemove(t *testing.T) {
 
 		const valueStringMaxSize = 16
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -437,7 +437,7 @@ func TestMapRemove(t *testing.T) {
 
 		const valueStringMaxSize = 512
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -528,7 +528,7 @@ func TestMapIterate(t *testing.T) {
 	t.Run("no collision", func(t *testing.T) {
 		const mapSize = 64 * 1024
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -639,7 +639,7 @@ func TestMapIterate(t *testing.T) {
 	t.Run("collision", func(t *testing.T) {
 		const mapSize = 1024
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -763,7 +763,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	// Each set has maxDigestLevel of digest.
 	const mockDigestCount = 8
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -871,7 +871,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 	const mapSize = 2 * 1024
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -994,7 +994,7 @@ func TestMapLargeElement(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	const mapSize = 2 * 1024
 
@@ -1076,7 +1076,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 
 	const stringMaxSize = 512
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	storage := newTestInMemoryStorage(t)
 
@@ -1206,7 +1206,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1515,7 +1515,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 			if i == mapSize-1 {
 				// Create nested array
-				typeInfo2 := cbor.RawMessage{0x18, 0x2B} // unsigned(43)
+				typeInfo2 := testTypeInfo{43}
 
 				array, err := NewArray(storage, address, typeInfo2)
 				require.NoError(t, err)
@@ -2758,7 +2758,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 
 	const stringMaxSize = 512
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
@@ -2901,7 +2901,7 @@ func TestMapStoredValue(t *testing.T) {
 
 	const mapSize = 64 * 1024
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2964,7 +2964,7 @@ func TestMapStoredValue(t *testing.T) {
 func TestMapPopIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestInMemoryStorage(t)
 
@@ -2998,7 +2998,7 @@ func TestMapPopIterate(t *testing.T) {
 
 		const mapSize = 10
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestBasicStorage(t)
 
@@ -3059,7 +3059,7 @@ func TestMapPopIterate(t *testing.T) {
 	t.Run("root-metaslab", func(t *testing.T) {
 		const mapSize = 64 * 1024
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3129,7 +3129,7 @@ func TestMapPopIterate(t *testing.T) {
 		SetThreshold(512)
 		defer SetThreshold(1024)
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3236,7 +3236,7 @@ func TestEmptyMap(t *testing.T) {
 
 	t.Parallel()
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	storage := newTestPersistentStorage(t)
 	storage.DecodeStorable = decodeStorable

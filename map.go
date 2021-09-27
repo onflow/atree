@@ -5,7 +5,6 @@
 package atree
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -172,8 +171,7 @@ type MapSlabHeader struct {
 }
 
 type MapExtraData struct {
-	_        struct{} `cbor:",toarray"`
-	TypeInfo cbor.RawMessage
+	TypeInfo TypeInfo
 	Count    uint64
 	Seed     uint64
 }
@@ -242,7 +240,17 @@ type OrderedMap struct {
 
 var _ Value = &OrderedMap{}
 
-func newMapExtraDataFromData(data []byte, decMode cbor.DecMode) (*MapExtraData, []byte, error) {
+const mapExtraDataLength = 3
+
+func newMapExtraDataFromData(
+	data []byte,
+	decMode cbor.DecMode,
+	decodeTypeInfo TypeInfoDecoder,
+) (
+	*MapExtraData,
+	[]byte,
+	error,
+) {
 	// Check data length
 	if len(data) < versionAndFlagSize {
 		return nil, data, NewDecodingErrorf("data is too short for map extra data")
@@ -256,11 +264,32 @@ func newMapExtraDataFromData(data []byte, decMode cbor.DecMode) (*MapExtraData, 
 
 	// Decode extra data
 
-	var extraData MapExtraData
+	dec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
 
-	r := bytes.NewReader(data[versionAndFlagSize:])
-	dec := decMode.NewDecoder(r)
-	err := dec.Decode(&extraData)
+	length, err := dec.DecodeArrayHead()
+	if err != nil {
+		return nil, data, err
+	}
+
+	if length != mapExtraDataLength {
+		return nil, data, NewDecodingErrorf(
+			"data has invalid length %d, want %d",
+			length,
+			mapExtraDataLength,
+		)
+	}
+
+	count, err := dec.DecodeUint64()
+	if err != nil {
+		return nil, data, err
+	}
+
+	seed, err := dec.DecodeUint64()
+	if err != nil {
+		return nil, data, err
+	}
+
+	typeInfo, err := decodeTypeInfo(dec)
 	if err != nil {
 		return nil, data, err
 	}
@@ -269,7 +298,11 @@ func newMapExtraDataFromData(data []byte, decMode cbor.DecMode) (*MapExtraData, 
 	n := dec.NumBytesRead()
 	data = data[versionAndFlagSize+n:]
 
-	return &extraData, data, nil
+	return &MapExtraData{
+		TypeInfo: typeInfo,
+		Count:    count,
+		Seed:     seed,
+	}, data, nil
 }
 
 // Encode encodes extra data to the given encoder.
@@ -286,7 +319,7 @@ func newMapExtraDataFromData(data []byte, decMode cbor.DecMode) (*MapExtraData, 
 //
 // Extra data flag is the same as the slab flag it prepends.
 //
-func (a *MapExtraData) Encode(enc *Encoder, version byte, flag byte) error {
+func (m *MapExtraData) Encode(enc *Encoder, version byte, flag byte) error {
 
 	// Encode version
 	enc.Scratch[0] = version
@@ -301,7 +334,17 @@ func (a *MapExtraData) Encode(enc *Encoder, version byte, flag byte) error {
 	}
 
 	// Encode extra data
-	err = enc.CBOR.Encode(a)
+	err = enc.CBOR.EncodeArrayHead(mapExtraDataLength)
+	if err != nil {
+		return err
+	}
+
+	err = enc.CBOR.EncodeUint64(m.Count)
+	if err != nil {
+		return err
+	}
+
+	err = enc.CBOR.EncodeUint64(m.Seed)
 	if err != nil {
 		return err
 	}
@@ -1898,6 +1941,7 @@ func newMapDataSlabFromData(
 	data []byte,
 	decMode cbor.DecMode,
 	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
 ) (
 	*MapDataSlab,
 	error,
@@ -1913,7 +1957,7 @@ func newMapDataSlabFromData(
 	if isRoot(data[1]) {
 		// Decode extra data
 		var err error
-		extraData, data, err = newMapExtraDataFromData(data, decMode)
+		extraData, data, err = newMapExtraDataFromData(data, decMode, decodeTypeInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -2294,7 +2338,12 @@ func (m *MapDataSlab) String() string {
 	return fmt.Sprintf("{%s}", m.elements.String())
 }
 
-func newMapMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMode) (*MapMetaDataSlab, error) {
+func newMapMetaDataSlabFromData(
+	id StorageID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeTypeInfo TypeInfoDecoder,
+) (*MapMetaDataSlab, error) {
 	// Check minimum data length
 	if len(data) < versionAndFlagSize {
 		return nil, NewDecodingErrorf("data is too short for map metadata slab")
@@ -2306,7 +2355,7 @@ func newMapMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMode)
 	if isRoot(data[1]) {
 		// Decode extra data
 		var err error
-		extraData, data, err = newMapExtraDataFromData(data, decMode)
+		extraData, data, err = newMapExtraDataFromData(data, decMode, decodeTypeInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -3132,7 +3181,7 @@ func (m *MapMetaDataSlab) String() string {
 	return strings.Join(hStr, " ")
 }
 
-func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder, typeInfo cbor.RawMessage) (*OrderedMap, error) {
+func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder, typeInfo TypeInfo) (*OrderedMap, error) {
 
 	// Create root storage id
 	sID, err := storage.GenerateStorageID(address)
@@ -3476,7 +3525,7 @@ func (m *OrderedMap) Address() Address {
 	return m.root.ID().Address
 }
 
-func (m *OrderedMap) Type() cbor.RawMessage {
+func (m *OrderedMap) Type() TypeInfo {
 	if extraData := m.root.ExtraData(); extraData != nil {
 		return extraData.TypeInfo
 	}
@@ -3533,12 +3582,12 @@ func firstMapDataSlab(storage SlabStorage, slab MapSlab) (MapSlab, error) {
 	return firstMapDataSlab(storage, firstChild)
 }
 
-func (a *MapExtraData) incrementCount() {
-	a.Count++
+func (m *MapExtraData) incrementCount() {
+	m.Count++
 }
 
-func (a *MapExtraData) decrementCount() {
-	a.Count--
+func (m *MapExtraData) decrementCount() {
+	m.Count--
 }
 
 type MapElementIterator struct {

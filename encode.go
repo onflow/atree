@@ -36,7 +36,16 @@ type StorableDecoder func(
 	error,
 )
 
-func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable StorableDecoder) (Slab, error) {
+func decodeSlab(
+	id StorageID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) (
+	Slab,
+	error,
+) {
 	if len(data) < 2 {
 		return nil, errors.New("data is too short")
 	}
@@ -50,9 +59,9 @@ func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable 
 
 		switch arrayDataType := getSlabArrayType(flag); arrayDataType {
 		case slabArrayData:
-			return newArrayDataSlabFromData(id, data, decMode, decodeStorable)
+			return newArrayDataSlabFromData(id, data, decMode, decodeStorable, decodeTypeInfo)
 		case slabArrayMeta:
-			return newArrayMetaDataSlabFromData(id, data, decMode)
+			return newArrayMetaDataSlabFromData(id, data, decMode, decodeTypeInfo)
 		case slabBasicArray:
 			return newBasicArrayDataSlabFromData(id, data, decMode, decodeStorable)
 		default:
@@ -63,11 +72,11 @@ func decodeSlab(id StorageID, data []byte, decMode cbor.DecMode, decodeStorable 
 
 		switch mapDataType := getSlabMapType(flag); mapDataType {
 		case slabMapData:
-			return newMapDataSlabFromData(id, data, decMode, decodeStorable)
+			return newMapDataSlabFromData(id, data, decMode, decodeStorable, decodeTypeInfo)
 		case slabMapMeta:
-			return newMapMetaDataSlabFromData(id, data, decMode)
+			return newMapMetaDataSlabFromData(id, data, decMode, decodeTypeInfo)
 		case slabMapCollisionGroup:
-			return newMapDataSlabFromData(id, data, decMode, decodeStorable)
+			return newMapDataSlabFromData(id, data, decMode, decodeStorable, decodeTypeInfo)
 		default:
 			return nil, fmt.Errorf("data has invalid flag %x", flag)
 		}

@@ -5,7 +5,6 @@
 package atree
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -41,8 +40,7 @@ type ArraySlabHeader struct {
 }
 
 type ArrayExtraData struct {
-	_        struct{}        `cbor:",toarray"`
-	TypeInfo cbor.RawMessage // array type
+	TypeInfo TypeInfo // array type
 }
 
 // ArrayDataSlab is leaf node, implementing ArraySlab.
@@ -141,7 +139,17 @@ func (a *Array) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
 	return StorageIDStorable(a.StorageID()), nil
 }
 
-func newArrayExtraDataFromData(data []byte, decMode cbor.DecMode) (*ArrayExtraData, []byte, error) {
+const arrayExtraDataLength = 1
+
+func newArrayExtraDataFromData(
+	data []byte,
+	decMode cbor.DecMode,
+	decodeTypeInfo TypeInfoDecoder,
+) (
+	*ArrayExtraData,
+	[]byte,
+	error,
+) {
 	// Check data length
 	if len(data) < versionAndFlagSize {
 		return nil, data, NewDecodingErrorf("data is too short for array extra data")
@@ -156,11 +164,22 @@ func newArrayExtraDataFromData(data []byte, decMode cbor.DecMode) (*ArrayExtraDa
 
 	// Decode extra data
 
-	var extraData ArrayExtraData
+	dec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
 
-	r := bytes.NewReader(data[versionAndFlagSize:])
-	dec := decMode.NewDecoder(r)
-	err := dec.Decode(&extraData)
+	length, err := dec.DecodeArrayHead()
+	if err != nil {
+		return nil, data, err
+	}
+
+	if length != arrayExtraDataLength {
+		return nil, data, NewDecodingErrorf(
+			"data has invalid length %d, want %d",
+			length,
+			arrayExtraDataLength,
+		)
+	}
+
+	typeInfo, err := decodeTypeInfo(dec)
 	if err != nil {
 		return nil, data, err
 	}
@@ -169,7 +188,9 @@ func newArrayExtraDataFromData(data []byte, decMode cbor.DecMode) (*ArrayExtraDa
 	n := dec.NumBytesRead()
 	data = data[versionAndFlagSize+n:]
 
-	return &extraData, data, nil
+	return &ArrayExtraData{
+		TypeInfo: typeInfo,
+	}, data, nil
 }
 
 // Encode encodes extra data to the given encoder.
@@ -199,10 +220,18 @@ func (a *ArrayExtraData) Encode(enc *Encoder, flag byte) error {
 		return err
 	}
 
-	// TODO: use encoding options
 	// Encode extra data
-	cborEnc := cbor.NewEncoder(enc.Writer)
-	return cborEnc.Encode(a)
+	err = enc.CBOR.EncodeArrayHead(arrayExtraDataLength)
+	if err != nil {
+		return err
+	}
+
+	err = a.TypeInfo.Encode(enc)
+	if err != nil {
+		return err
+	}
+
+	return enc.CBOR.Flush()
 }
 
 func newArrayDataSlabFromData(
@@ -210,6 +239,7 @@ func newArrayDataSlabFromData(
 	data []byte,
 	decMode cbor.DecMode,
 	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
 ) (
 	*ArrayDataSlab,
 	error,
@@ -225,7 +255,7 @@ func newArrayDataSlabFromData(
 	if isRoot(data[1]) {
 		// Decode extra data
 		var err error
-		extraData, data, err = newArrayExtraDataFromData(data, decMode)
+		extraData, data, err = newArrayExtraDataFromData(data, decMode, decodeTypeInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -745,7 +775,15 @@ func (a *ArrayDataSlab) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
-func newArrayMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMode) (*ArrayMetaDataSlab, error) {
+func newArrayMetaDataSlabFromData(
+	id StorageID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeTypeInfo TypeInfoDecoder,
+) (
+	*ArrayMetaDataSlab,
+	error,
+) {
 	// Check minimum data length
 	if len(data) < versionAndFlagSize {
 		return nil, NewDecodingErrorf("data is too short for array metadata slab")
@@ -757,7 +795,7 @@ func newArrayMetaDataSlabFromData(id StorageID, data []byte, decMode cbor.DecMod
 	if isRoot(data[1]) {
 		// Decode extra data
 		var err error
-		extraData, data, err = newArrayExtraDataFromData(data, decMode)
+		extraData, data, err = newArrayExtraDataFromData(data, decMode, decodeTypeInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -1707,7 +1745,7 @@ func (a *ArrayMetaDataSlab) String() string {
 	return strings.Join(elemsStr, " ")
 }
 
-func NewArray(storage SlabStorage, address Address, typeInfo cbor.RawMessage) (*Array, error) {
+func NewArray(storage SlabStorage, address Address, typeInfo TypeInfo) (*Array, error) {
 
 	extraData := &ArrayExtraData{TypeInfo: typeInfo}
 
@@ -2001,7 +2039,7 @@ func (a *Array) StorageID() StorageID {
 	return a.root.ID()
 }
 
-func (a *Array) Type() cbor.RawMessage {
+func (a *Array) Type() TypeInfo {
 	if extraData := a.root.ExtraData(); extraData != nil {
 		return extraData.TypeInfo
 	}
@@ -2088,7 +2126,7 @@ func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
 
 type ArrayElementProvider func() (Value, error)
 
-func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo cbor.RawMessage, fn ArrayElementProvider) (*Array, error) {
+func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeInfo, fn ArrayElementProvider) (*Array, error) {
 
 	var slabs []ArraySlab
 

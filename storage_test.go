@@ -23,7 +23,7 @@ func TestPersistentStorage(t *testing.T) {
 	t.Run("TestTempAllocation", func(t *testing.T) {
 
 		baseStorage := NewInMemBaseStorage()
-		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode)
+		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 		tempStorageID, err := NewStorageIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
 		require.NoError(t, err)
@@ -58,9 +58,9 @@ func TestPersistentStorage(t *testing.T) {
 		numberOfSlabsPerAccount := 10
 
 		baseStorage := newAccessOrderTrackerBaseStorage()
-		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode)
+		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 		baseStorage2 := newAccessOrderTrackerBaseStorage()
-		storageWithFastCommit := NewPersistentSlabStorage(baseStorage2, encMode, decMode)
+		storageWithFastCommit := NewPersistentSlabStorage(baseStorage2, encMode, decMode, nil, nil)
 
 		simpleMap := make(map[StorageID][]byte)
 		// test random updates apply commit and check the order of commited values

@@ -42,8 +42,8 @@ const (
 	// meta data slab prefix size: version (1 byte) + flag (1 byte) + child header count (2 bytes)
 	mapMetaDataSlabPrefixSize = 1 + 1 + 2
 
-	// version (1 byte) + flag (1 byte) + prev id (16 bytes) + next id (16 bytes)
-	mapDataSlabPrefixSize = 2 + storageIDSize + storageIDSize
+	// version (1 byte) + flag (1 byte) + next id (16 bytes)
+	mapDataSlabPrefixSize = 2 + storageIDSize
 
 	// maxDigestLevel is max levels of 64-bit digests allowed
 	maxDigestLevel = 8
@@ -181,7 +181,6 @@ type MapExtraData struct {
 // MapDataSlab is leaf node, implementing MapSlab.
 // anySize is true for data slab that isn't restricted by size requirement.
 type MapDataSlab struct {
-	prev   StorageID
 	next   StorageID
 	header MapSlabHeader
 
@@ -1939,15 +1938,8 @@ func newMapDataSlabFromData(
 		)
 	}
 
-	// Decode prev storage ID
-	const prevStorageIDOffset = versionAndFlagSize
-	prev, err := NewStorageIDFromRawBytes(data[prevStorageIDOffset:])
-	if err != nil {
-		return nil, err
-	}
-
 	// Decode next storage ID
-	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
+	const nextStorageIDOffset = versionAndFlagSize
 	next, err := NewStorageIDFromRawBytes(data[nextStorageIDOffset:])
 	if err != nil {
 		return nil, err
@@ -1968,7 +1960,6 @@ func newMapDataSlabFromData(
 	}
 
 	return &MapDataSlab{
-		prev:           prev,
 		next:           next,
 		header:         header,
 		elements:       elements,
@@ -1980,11 +1971,11 @@ func newMapDataSlabFromData(
 
 // Encode encodes this map data slab to the given encoder.
 //
-// Header (34 bytes):
+// Header (18 bytes):
 //
-//   +-------------------------------+--------------------------------+--------------------------------+
-//   | slab version + flag (2 bytes) | prev sib storage ID (16 bytes) | next sib storage ID (16 bytes) |
-//   +-------------------------------+--------------------------------+--------------------------------+
+//   +-------------------------------+--------------------------------+
+//   | slab version + flag (2 bytes) | next sib storage ID (16 bytes) |
+//   +-------------------------------+--------------------------------+
 //
 // Content (for now):
 //
@@ -2027,16 +2018,9 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	// Encode flag
 	enc.Scratch[1] = flag
 
-	// Encode prev storage ID to scratch
-	const prevStorageIDOffset = versionAndFlagSize
-	_, err := m.prev.ToRawBytes(enc.Scratch[prevStorageIDOffset:])
-	if err != nil {
-		return err
-	}
-
 	// Encode next storage ID to scratch
-	const nextStorageIDOffset = prevStorageIDOffset + storageIDSize
-	_, err = m.next.ToRawBytes(enc.Scratch[nextStorageIDOffset:])
+	const nextStorageIDOffset = versionAndFlagSize
+	_, err := m.next.ToRawBytes(enc.Scratch[nextStorageIDOffset:])
 	if err != nil {
 		return err
 	}
@@ -2139,7 +2123,6 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 			size:     mapDataSlabPrefixSize + rightElements.Size(),
 			firstKey: rightElements.firstKey(),
 		},
-		prev:     m.header.id,
 		next:     m.next,
 		elements: rightElements,
 		anySize:  m.anySize,
@@ -3903,8 +3886,6 @@ func NewMapFromBatchData(
 
 	var slabs []MapSlab
 
-	var prevID StorageID
-
 	id, err := storage.GenerateStorageID(address)
 	if err != nil {
 		return nil, NewStorageError(err)
@@ -3993,15 +3974,13 @@ func NewMapFromBatchData(
 					firstKey: elements.firstKey(),
 				},
 				elements: elements,
-				prev:     prevID,
 				next:     nextID,
 			}
 
 			// Append data slab to dataSlabs
 			slabs = append(slabs, dataSlab)
 
-			// Save ids
-			prevID = id
+			// Save id
 			id = nextID
 
 			// Create new elements for next data slab
@@ -4035,7 +4014,6 @@ func NewMapFromBatchData(
 			firstKey: elements.firstKey(),
 		},
 		elements: elements,
-		prev:     prevID,
 	}
 
 	// Append last data slab to slabs

@@ -150,7 +150,7 @@ func PrintArray(a *Array) {
 	}
 }
 
-func validArray(a *Array, typeInfo cbor.RawMessage) error {
+func validArray(a *Array, typeInfo cbor.RawMessage, hip HashInputProvider) error {
 
 	extraData := a.root.ExtraData()
 	if extraData == nil {
@@ -167,7 +167,7 @@ func validArray(a *Array, typeInfo cbor.RawMessage) error {
 		)
 	}
 
-	computedCount, dataSlabIDs, nextDataSlabIDs, err := validArraySlab(a.Storage, a.root.Header().id, 0, nil, []StorageID{}, []StorageID{})
+	computedCount, dataSlabIDs, nextDataSlabIDs, err := validArraySlab(hip, a.Storage, a.root.Header().id, 0, nil, []StorageID{}, []StorageID{})
 	if err != nil {
 		return err
 	}
@@ -187,6 +187,7 @@ func validArray(a *Array, typeInfo cbor.RawMessage) error {
 }
 
 func validArraySlab(
+	hip HashInputProvider,
 	storage SlabStorage,
 	id StorageID,
 	level int,
@@ -269,7 +270,7 @@ func validArraySlab(
 				return 0, nil, nil, fmt.Errorf("data slab %d element %s can't be converted to value, %s",
 					id, e, err)
 			}
-			err = validValue(v, nil)
+			err = validValue(v, nil, hip)
 			if err != nil {
 				return 0, nil, nil, fmt.Errorf("data slab %d element %s isn't valid, %s",
 					id, e, err)
@@ -302,7 +303,7 @@ func validArraySlab(
 	for i, h := range meta.childrenHeaders {
 		// Verify child slabs
 		var count uint32
-		count, dataSlabIDs, nextDataSlabIDs, err = validArraySlab(storage, h.id, level+1, &h, dataSlabIDs, nextDataSlabIDs)
+		count, dataSlabIDs, nextDataSlabIDs, err = validArraySlab(hip, storage, h.id, level+1, &h, dataSlabIDs, nextDataSlabIDs)
 		if err != nil {
 			return 0, nil, nil, err
 		}

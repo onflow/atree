@@ -585,7 +585,7 @@ func validSingleElement(storage SlabStorage, db DigesterBuilder, hip HashInputPr
 		return 0, 0, fmt.Errorf("element %s key can't be converted to value, %s", e, err)
 	}
 
-	err = validValue(kv, nil)
+	err = validValue(kv, nil, hip)
 	if err != nil {
 		return 0, 0, fmt.Errorf("element %s key isn't valid, %s", e, err)
 	}
@@ -601,7 +601,7 @@ func validSingleElement(storage SlabStorage, db DigesterBuilder, hip HashInputPr
 		return 0, 0, fmt.Errorf("element %s value can't be converted to value, %s", e, err)
 	}
 
-	err = validValue(vv, nil)
+	err = validValue(vv, nil, hip)
 	if err != nil {
 		return 0, 0, fmt.Errorf("element %s value isn't valid, %s", e, err)
 	}
@@ -630,12 +630,12 @@ func validSingleElement(storage SlabStorage, db DigesterBuilder, hip HashInputPr
 	return computedSize, digest.Levels(), nil
 }
 
-func validValue(value Value, typeInfo cbor.RawMessage) error {
+func validValue(value Value, typeInfo cbor.RawMessage, hip HashInputProvider) error {
 	switch v := value.(type) {
 	case *Array:
-		return validArray(v, typeInfo)
+		return validArray(v, typeInfo, hip)
 	case *OrderedMap:
-		return validMap(v, typeInfo, hashInputProvider)
+		return validMap(v, typeInfo, hip)
 	}
 	return nil
 }

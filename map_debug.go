@@ -235,8 +235,14 @@ func validMapSlab(
 	headerFromParentSlab *MapSlabHeader,
 	dataSlabIDs []StorageID,
 	nextDataSlabIDs []StorageID,
-	firstKeys []Digest) (
-	uint64, []StorageID, []StorageID, []Digest, error) {
+	firstKeys []Digest,
+) (
+	elementCount uint64,
+	_dataSlabIDs []StorageID,
+	_nextDataSlabIDs []StorageID,
+	_firstKeys []Digest,
+	err error,
+) {
 
 	slab, err := getMapSlab(storage, id)
 	if err != nil {
@@ -315,7 +321,7 @@ func validMapSlab(
 
 		firstKeys = append(firstKeys, dataSlab.header.firstKey)
 
-		return uint64(elementCount), dataSlabIDs, nextDataSlabIDs, firstKeys, nil
+		return elementCount, dataSlabIDs, nextDataSlabIDs, firstKeys, nil
 	}
 
 	meta, ok := slab.(*MapMetaDataSlab)
@@ -331,7 +337,7 @@ func validMapSlab(
 		}
 	}
 
-	elementCount := uint64(0)
+	elementCount = 0
 	for _, h := range meta.childrenHeaders {
 		// Verify child slabs
 		count := uint64(0)
@@ -386,8 +392,12 @@ func validMapElements(
 	id StorageID,
 	elements elements,
 	digestLevel int,
-	hkeyPrefixes []Digest) (
-	elementCount uint32, elementSize uint32, err error) {
+	hkeyPrefixes []Digest,
+) (
+	elementCount uint64,
+	elementSize uint32,
+	err error,
+) {
 
 	switch elems := elements.(type) {
 	case *hkeyElements:
@@ -406,8 +416,12 @@ func validMapHkeyElements(
 	id StorageID,
 	elements *hkeyElements,
 	digestLevel int,
-	hkeyPrefixes []Digest) (
-	elementCount uint32, elementSize uint32, err error) {
+	hkeyPrefixes []Digest,
+) (
+	elementCount uint64,
+	elementSize uint32,
+	err error,
+) {
 
 	// Verify element's level
 	if digestLevel != elements.level {
@@ -483,7 +497,7 @@ func validMapHkeyElements(
 
 			elementSize += e.Size()
 
-			elementCount += count
+			elementCount += uint64(count)
 
 		} else {
 
@@ -529,8 +543,12 @@ func validMapSingleElements(
 	id StorageID,
 	elements *singleElements,
 	digestLevel int,
-	hkeyPrefixes []Digest) (
-	elementCount uint32, elementSize uint32, err error) {
+	hkeyPrefixes []Digest,
+) (
+	elementCount uint64,
+	elementSize uint32,
+	err error,
+) {
 
 	// Verify elements' level
 	if digestLevel != elements.level {
@@ -568,11 +586,20 @@ func validMapSingleElements(
 		return 0, 0, fmt.Errorf("slab %d elements size %d is wrong, want %d", id, elements.Size(), elementSize)
 	}
 
-	return uint32(len(elements.elems)), elementSize, nil
+	return uint64(len(elements.elems)), elementSize, nil
 }
 
-func validSingleElement(storage SlabStorage, db DigesterBuilder, hip HashInputProvider, e *singleElement, digests []Digest) (
-	size uint32, digestMaxLevel int, err error) {
+func validSingleElement(
+	storage SlabStorage,
+	db DigesterBuilder,
+	hip HashInputProvider,
+	e *singleElement,
+	digests []Digest,
+) (
+	size uint32,
+	digestMaxLevel int,
+	err error,
+) {
 
 	// Verify key pointer
 	if _, keyPointer := e.key.(StorageIDStorable); e.keyPointer != keyPointer {

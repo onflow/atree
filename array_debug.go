@@ -193,8 +193,13 @@ func validArraySlab(
 	level int,
 	headerFromParentSlab *ArraySlabHeader,
 	dataSlabIDs []StorageID,
-	nextDataSlabIDs []StorageID) (
-	elementCount uint32, _ []StorageID, _ []StorageID, err error) {
+	nextDataSlabIDs []StorageID,
+) (
+	elementCount uint32,
+	_dataSlabIDs []StorageID,
+	_nextDataSlabIDs []StorageID,
+	err error,
+) {
 
 	slab, err := getArraySlab(storage, id)
 	if err != nil {

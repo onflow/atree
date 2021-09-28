@@ -293,7 +293,12 @@ func validMapSlab(
 		}
 
 		// Verify that aggregated element size + slab prefix is the same as header.size
-		computedSize := uint32(mapDataSlabPrefixSize) + elementSize
+		computedSize := uint32(mapDataSlabPrefixSize)
+		if level == 0 {
+			computedSize = uint32(mapRootDataSlabPrefixSize)
+		}
+		computedSize += elementSize
+
 		if computedSize != dataSlab.header.size {
 			return 0, nil, nil, nil, fmt.Errorf("data slab %d header size %d is wrong, want %d",
 				id, dataSlab.header.size, computedSize)

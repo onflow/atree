@@ -44,6 +44,9 @@ const (
 	// version (1 byte) + flag (1 byte) + next id (16 bytes)
 	mapDataSlabPrefixSize = 2 + storageIDSize
 
+	// version (1 byte) + flag (1 byte)
+	mapRootDataSlabPrefixSize = 2
+
 	// maxDigestLevel is max levels of 64-bit digests allowed
 	maxDigestLevel = 8
 
@@ -1956,10 +1959,12 @@ func newMapDataSlabFromData(
 		return nil, NewDecodingErrorf("data is too short for map data slab")
 	}
 
+	isRootSlab := isRoot(data[1])
+
 	var extraData *MapExtraData
 
 	// Check flag for extra data
-	if isRoot(data[1]) {
+	if isRootSlab {
 		// Decode extra data
 		var err error
 		extraData, data, err = newMapExtraDataFromData(data, decMode, decodeTypeInfo)
@@ -1968,8 +1973,13 @@ func newMapDataSlabFromData(
 		}
 	}
 
+	minDataLength := mapDataSlabPrefixSize
+	if isRootSlab {
+		minDataLength = mapRootDataSlabPrefixSize
+	}
+
 	// Check data length (after decoding extra data if present)
-	if len(data) < mapDataSlabPrefixSize {
+	if len(data) < minDataLength {
 		return nil, NewDecodingErrorf("data is too short for map data slab")
 	}
 
@@ -1987,15 +1997,27 @@ func newMapDataSlabFromData(
 		)
 	}
 
-	// Decode next storage ID
-	const nextStorageIDOffset = versionAndFlagSize
-	next, err := NewStorageIDFromRawBytes(data[nextStorageIDOffset:])
-	if err != nil {
-		return nil, err
+	var next StorageID
+
+	var contentOffset int
+
+	if !isRootSlab {
+
+		// Decode next storage ID
+		const nextStorageIDOffset = versionAndFlagSize
+		var err error
+		next, err = NewStorageIDFromRawBytes(data[nextStorageIDOffset:])
+		if err != nil {
+			return nil, err
+		}
+
+		contentOffset = nextStorageIDOffset + storageIDSize
+
+	} else {
+		contentOffset = versionAndFlagSize
 	}
 
 	// Decode elements
-	const contentOffset = nextStorageIDOffset + storageIDSize
 	cborDec := decMode.NewByteStreamDecoder(data[contentOffset:])
 	elements, err := newElementsFromData(cborDec, decodeStorable)
 	if err != nil {
@@ -2067,16 +2089,26 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	// Encode flag
 	enc.Scratch[1] = flag
 
-	// Encode next storage ID to scratch
-	const nextStorageIDOffset = versionAndFlagSize
-	_, err := m.next.ToRawBytes(enc.Scratch[nextStorageIDOffset:])
-	if err != nil {
-		return err
+	var totalSize int
+
+	if m.extraData == nil {
+
+		// Encode next storage ID to scratch
+		const nextStorageIDOffset = versionAndFlagSize
+		_, err := m.next.ToRawBytes(enc.Scratch[nextStorageIDOffset:])
+		if err != nil {
+			return err
+		}
+
+		totalSize = nextStorageIDOffset + storageIDSize
+
+	} else {
+
+		totalSize = versionAndFlagSize
 	}
 
 	// Write scratch content to encoder
-	const totalSize = nextStorageIDOffset + storageIDSize
-	_, err = enc.Write(enc.Scratch[:totalSize])
+	_, err := enc.Write(enc.Scratch[:totalSize])
 	if err != nil {
 		return err
 	}
@@ -2121,7 +2153,11 @@ func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Diges
 	m.header.firstKey = m.elements.firstKey()
 
 	// Adjust header's slab size
-	m.header.size = mapDataSlabPrefixSize + m.elements.Size()
+	if m.extraData == nil {
+		m.header.size = mapDataSlabPrefixSize + m.elements.Size()
+	} else {
+		m.header.size = mapRootDataSlabPrefixSize + m.elements.Size()
+	}
 
 	// Store modified slab
 	err = storage.Store(m.header.id, m)
@@ -2143,7 +2179,11 @@ func (m *MapDataSlab) Remove(storage SlabStorage, digester Digester, level int, 
 	m.header.firstKey = m.elements.firstKey()
 
 	// Adjust header's slab size
-	m.header.size = mapDataSlabPrefixSize + m.elements.Size()
+	if m.extraData == nil {
+		m.header.size = mapDataSlabPrefixSize + m.elements.Size()
+	} else {
+		m.header.size = mapRootDataSlabPrefixSize + m.elements.Size()
+	}
 
 	// Store modified slab
 	err = storage.Store(m.header.id, m)
@@ -3220,7 +3260,7 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 	root := &MapDataSlab{
 		header: MapSlabHeader{
 			id:   sID,
-			size: mapDataSlabPrefixSize + hkeyElementsPrefixSize,
+			size: mapRootDataSlabPrefixSize + hkeyElementsPrefixSize,
 		},
 		elements:  newHkeyElements(0),
 		extraData: extraData,
@@ -3312,84 +3352,16 @@ func (m *OrderedMap) Set(comparator Comparator, hip HashInputProvider, key Value
 		// Set root to its child slab if root has one child slab.
 		root := m.root.(*MapMetaDataSlab)
 		if len(root.childrenHeaders) == 1 {
-
-			extraData := root.RemoveExtraData()
-
-			rootID := root.header.id
-
-			childID := root.childrenHeaders[0].id
-
-			child, err := getMapSlab(m.Storage, childID)
+			err := m.promoteChildAsNewRoot(root.childrenHeaders[0].id)
 			if err != nil {
 				return nil, err
 			}
-
-			m.root = child
-
-			m.root.SetID(rootID)
-
-			m.root.SetExtraData(extraData)
-
-			err = m.Storage.Store(rootID, m.root)
-			if err != nil {
-				return nil, err
-			}
-
-			err = m.Storage.Remove(childID)
-			if err != nil {
-				return nil, err
-			}
+			return existingValue, nil
 		}
 	}
 
 	if m.root.IsFull() {
-
-		// Get old root's extra data and reset it to nil in old root
-		extraData := m.root.RemoveExtraData()
-
-		// Save root node id
-		rootID := m.root.ID()
-
-		// Assign a new storage id to old root before splitting it.
-		sID, err := m.Storage.GenerateStorageID(m.Address())
-		if err != nil {
-			return nil, NewStorageError(err)
-		}
-
-		oldRoot := m.root
-		oldRoot.SetID(sID)
-
-		// Split old root
-		leftSlab, rightSlab, err := oldRoot.Split(m.Storage)
-		if err != nil {
-			return nil, err
-		}
-
-		left := leftSlab.(MapSlab)
-		right := rightSlab.(MapSlab)
-
-		// Create new MapMetaDataSlab with the old root's storage ID
-		newRoot := &MapMetaDataSlab{
-			header: MapSlabHeader{
-				id:       rootID,
-				size:     mapMetaDataSlabPrefixSize + mapSlabHeaderSize*2,
-				firstKey: left.Header().firstKey,
-			},
-			childrenHeaders: []MapSlabHeader{left.Header(), right.Header()},
-			extraData:       extraData,
-		}
-
-		m.root = newRoot
-
-		err = m.Storage.Store(left.ID(), left)
-		if err != nil {
-			return nil, err
-		}
-		err = m.Storage.Store(right.ID(), right)
-		if err != nil {
-			return nil, err
-		}
-		err = m.Storage.Store(m.root.ID(), m.root)
+		err := m.splitRoot()
 		if err != nil {
 			return nil, err
 		}
@@ -3424,90 +3396,119 @@ func (m *OrderedMap) Remove(comparator Comparator, hip HashInputProvider, key Va
 		// Set root to its child slab if root has one child slab.
 		root := m.root.(*MapMetaDataSlab)
 		if len(root.childrenHeaders) == 1 {
-
-			extraData := root.RemoveExtraData()
-
-			rootID := root.header.id
-
-			childID := root.childrenHeaders[0].id
-
-			child, err := getMapSlab(m.Storage, childID)
+			err := m.promoteChildAsNewRoot(root.childrenHeaders[0].id)
 			if err != nil {
 				return nil, nil, err
 			}
-
-			m.root = child
-
-			m.root.SetID(rootID)
-
-			m.root.SetExtraData(extraData)
-
-			err = m.Storage.Store(rootID, m.root)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			err = m.Storage.Remove(childID)
-			if err != nil {
-				return nil, nil, err
-			}
+			return k, v, nil
 		}
 	}
 
 	if m.root.IsFull() {
-
-		// Get old root's extra data and reset it to nil in old root
-		extraData := m.root.RemoveExtraData()
-
-		// Save root node id
-		rootID := m.root.ID()
-
-		// Assign a new storage id to old root before splitting it.
-		id, err := m.Storage.GenerateStorageID(m.Address())
-
-		if err != nil {
-			return nil, nil, NewStorageError(err)
-		}
-		oldRoot := m.root
-		oldRoot.SetID(id)
-
-		// Split old root
-		leftSlab, rightSlab, err := oldRoot.Split(m.Storage)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		left := leftSlab.(MapSlab)
-		right := rightSlab.(MapSlab)
-
-		// Create new MapMetaDataSlab with the old root's storage ID
-		newRoot := &MapMetaDataSlab{
-			header: MapSlabHeader{
-				id:       rootID,
-				size:     mapMetaDataSlabPrefixSize + mapSlabHeaderSize*2,
-				firstKey: left.Header().firstKey,
-			},
-			childrenHeaders: []MapSlabHeader{left.Header(), right.Header()},
-			extraData:       extraData,
-		}
-
-		m.root = newRoot
-
-		err = m.Storage.Store(left.ID(), left)
-		if err != nil {
-			return nil, nil, err
-		}
-		err = m.Storage.Store(right.ID(), right)
-		if err != nil {
-			return nil, nil, err
-		}
-		err = m.Storage.Store(m.root.ID(), m.root)
+		err := m.splitRoot()
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
 	return k, v, nil
+}
+
+func (m *OrderedMap) splitRoot() error {
+
+	if m.root.IsData() {
+		// Adjust root data slab size before splitting
+		dataSlab := m.root.(*MapDataSlab)
+		dataSlab.header.size = dataSlab.header.size - mapRootDataSlabPrefixSize + mapDataSlabPrefixSize
+	}
+
+	// Get old root's extra data and reset it to nil in old root
+	extraData := m.root.RemoveExtraData()
+
+	// Save root node id
+	rootID := m.root.ID()
+
+	// Assign a new storage id to old root before splitting it.
+	sID, err := m.Storage.GenerateStorageID(m.Address())
+	if err != nil {
+		return NewStorageError(err)
+	}
+
+	oldRoot := m.root
+	oldRoot.SetID(sID)
+
+	// Split old root
+	leftSlab, rightSlab, err := oldRoot.Split(m.Storage)
+	if err != nil {
+		return err
+	}
+
+	left := leftSlab.(MapSlab)
+	right := rightSlab.(MapSlab)
+
+	// Create new MapMetaDataSlab with the old root's storage ID
+	newRoot := &MapMetaDataSlab{
+		header: MapSlabHeader{
+			id:       rootID,
+			size:     mapMetaDataSlabPrefixSize + mapSlabHeaderSize*2,
+			firstKey: left.Header().firstKey,
+		},
+		childrenHeaders: []MapSlabHeader{left.Header(), right.Header()},
+		extraData:       extraData,
+	}
+
+	m.root = newRoot
+
+	err = m.Storage.Store(left.ID(), left)
+	if err != nil {
+		return err
+	}
+	err = m.Storage.Store(right.ID(), right)
+	if err != nil {
+		return err
+	}
+	err = m.Storage.Store(m.root.ID(), m.root)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *OrderedMap) promoteChildAsNewRoot(childID StorageID) error {
+
+	child, err := getMapSlab(m.Storage, childID)
+	if err != nil {
+		return err
+	}
+
+	if child.IsData() {
+		// Adjust data slab size before promoting non-root data slab to root
+		dataSlab := child.(*MapDataSlab)
+		dataSlab.header.size = dataSlab.header.size - mapDataSlabPrefixSize + mapRootDataSlabPrefixSize
+	}
+
+	extraData := m.root.RemoveExtraData()
+
+	rootID := m.root.ID()
+
+	m.root = child
+
+	m.root.SetID(rootID)
+
+	m.root.SetExtraData(extraData)
+
+	err = m.Storage.Store(rootID, m.root)
+	if err != nil {
+		return err
+	}
+
+	err = m.Storage.Remove(childID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (m *OrderedMap) StorageID() StorageID {
@@ -3885,23 +3886,20 @@ func (m *OrderedMap) PopIterate(fn MapPopIterationFunc) error {
 		return err
 	}
 
+	rootID := m.root.ID()
+
 	// Set map count to 0 in extraData
 	extraData := m.root.ExtraData()
 	extraData.Count = 0
 
-	m.root.SetExtraData(extraData)
-
-	for !m.root.IsData() {
-
-		// Set root to empty data slab
-		m.root = &MapDataSlab{
-			header: MapSlabHeader{
-				id:   m.root.ID(),
-				size: mapDataSlabPrefixSize + hkeyElementsPrefixSize,
-			},
-			elements:  newHkeyElements(0),
-			extraData: m.root.ExtraData(),
-		}
+	// Set root to empty data slab
+	m.root = &MapDataSlab{
+		header: MapSlabHeader{
+			id:   rootID,
+			size: mapRootDataSlabPrefixSize + hkeyElementsPrefixSize,
+		},
+		elements:  newHkeyElements(0),
+		extraData: extraData,
 	}
 
 	// Save root slab
@@ -4076,6 +4074,11 @@ func NewMapFromBatchData(
 
 	// Append last data slab to slabs
 	slabs = append(slabs, dataSlab)
+
+	if len(slabs) == 1 {
+		// root is data slab, adjust its size
+		dataSlab.header.size = dataSlab.header.size - mapDataSlabPrefixSize + mapRootDataSlabPrefixSize
+	}
 
 	for len(slabs) > 1 {
 

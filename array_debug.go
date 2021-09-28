@@ -247,6 +247,9 @@ func validArraySlab(
 
 		// Verify that aggregated element size + slab prefix is the same as header.size
 		computedSize := uint32(arrayDataSlabPrefixSize)
+		if level == 0 {
+			computedSize = uint32(arrayRootDataSlabPrefixSize)
+		}
 		for _, e := range dataSlab.elements {
 
 			// Verify element size is <= inline size

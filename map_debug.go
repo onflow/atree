@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
 type MapStats struct {
@@ -656,7 +654,7 @@ func validSingleElement(
 	return computedSize, digest.Levels(), nil
 }
 
-func ValidValue(value Value, typeInfo cbor.RawMessage, hip HashInputProvider) error {
+func ValidValue(value Value, typeInfo TypeInfo, hip HashInputProvider) error {
 	switch v := value.(type) {
 	case *Array:
 		return ValidArray(v, typeInfo, hip)

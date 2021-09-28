@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -157,8 +158,8 @@ type testTypeInfo struct {
 
 var _ TypeInfo = testTypeInfo{}
 
-func (i testTypeInfo) Encode(enc *Encoder) error {
-	return enc.CBOR.EncodeUint64(i.value)
+func (i testTypeInfo) Encode(enc *cbor.StreamEncoder) error {
+	return enc.EncodeUint64(i.value)
 }
 
 func (i testTypeInfo) Equal(other TypeInfo) bool {

@@ -9,7 +9,7 @@ import (
 )
 
 type TypeInfo interface {
-	Encode(*Encoder) error
+	Encode(*cbor.StreamEncoder) error
 	Equal(TypeInfo) bool
 }
 

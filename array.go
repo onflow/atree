@@ -226,7 +226,7 @@ func (a *ArrayExtraData) Encode(enc *Encoder, flag byte) error {
 		return err
 	}
 
-	err = a.TypeInfo.Encode(enc)
+	err = a.TypeInfo.Encode(enc.CBOR)
 	if err != nil {
 		return err
 	}

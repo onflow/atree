@@ -57,8 +57,8 @@ type testTypeInfo struct{}
 
 var _ atree.TypeInfo = testTypeInfo{}
 
-func (testTypeInfo) Encode(e *atree.Encoder) error {
-	return e.CBOR.EncodeUint8(42)
+func (testTypeInfo) Encode(e *cbor.StreamEncoder) error {
+	return e.EncodeUint8(42)
 }
 
 func (i testTypeInfo) Equal(other atree.TypeInfo) bool {

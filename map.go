@@ -339,7 +339,7 @@ func (m *MapExtraData) Encode(enc *Encoder, version byte, flag byte) error {
 		return err
 	}
 
-	err = m.TypeInfo.Encode(enc)
+	err = m.TypeInfo.Encode(enc.CBOR)
 	if err != nil {
 		return err
 	}

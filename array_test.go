@@ -2360,7 +2360,7 @@ func TestEmptyArray(t *testing.T) {
 		require.True(t, array2.root.IsData())
 		require.Equal(t, uint32(0), array2.root.Header().count)
 		require.Equal(t, typeInfo, array2.Type())
-		require.Equal(t, uint32(arrayDataSlabPrefixSize), array2.root.Header().size)
+		require.Equal(t, uint32(arrayRootDataSlabPrefixSize), array2.root.Header().size)
 	})
 }
 

@@ -167,6 +167,15 @@ func (i testTypeInfo) Equal(other TypeInfo) bool {
 	return ok && i.value == otherTestTypeInfo.value
 }
 
+func typeInfoComparator(a, b TypeInfo) bool {
+	x, ok := a.(testTypeInfo)
+	if !ok {
+		return false
+	}
+	y, ok := b.(testTypeInfo)
+	return ok && x.value == y.value
+}
+
 func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, error) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}

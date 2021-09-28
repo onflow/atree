@@ -86,7 +86,7 @@ func TestAppendAndGet(t *testing.T) {
 
 	require.Equal(t, typeInfo, array.Type())
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -141,7 +141,7 @@ func TestSetAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -197,7 +197,7 @@ func TestSetAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -253,7 +253,7 @@ func TestSetAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -302,7 +302,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -344,7 +344,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -391,7 +391,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -445,7 +445,7 @@ func TestRemove(t *testing.T) {
 			require.Equal(t, typeInfo, array.Type())
 
 			if i%256 == 0 {
-				err = ValidArray(array, typeInfo, hashInputProvider)
+				err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 				if err != nil {
 					PrintArray(array)
 				}
@@ -497,7 +497,7 @@ func TestRemove(t *testing.T) {
 			require.Equal(t, typeInfo, array.Type())
 
 			if i%256 == 0 {
-				err = ValidArray(array, typeInfo, hashInputProvider)
+				err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 				if err != nil {
 					PrintArray(array)
 				}
@@ -549,7 +549,7 @@ func TestRemove(t *testing.T) {
 			require.Equal(t, typeInfo, array.Type())
 
 			if i%256 == 0 {
-				err = ValidArray(array, typeInfo, hashInputProvider)
+				err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 				if err != nil {
 					PrintArray(array)
 				}
@@ -1002,7 +1002,7 @@ func TestSetRandomValue(t *testing.T) {
 
 	require.Equal(t, typeInfo, array.Type())
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1056,7 +1056,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -1103,7 +1103,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -1153,7 +1153,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -1219,7 +1219,7 @@ func TestRemoveRandomElement(t *testing.T) {
 	require.Equal(t, uint64(0), uint64(len(values)))
 	require.Equal(t, typeInfo, array.Type())
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1347,7 +1347,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1475,7 +1475,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1617,7 +1617,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1683,7 +1683,7 @@ func TestNestedArray(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -1734,7 +1734,7 @@ func TestNestedArray(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2219,7 +2219,7 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 
 	require.Equal(t, typeInfo, array.Type())
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -2403,7 +2403,7 @@ func TestStringElement(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2459,7 +2459,7 @@ func TestStringElement(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2538,7 +2538,7 @@ func TestPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), i)
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2580,7 +2580,7 @@ func TestPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, i, uint64(arraySize))
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2626,7 +2626,7 @@ func TestPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(arraySize), i)
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2677,7 +2677,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		err = ValidArray(copied, typeInfo, hashInputProvider)
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2740,7 +2740,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
 
-		err = ValidArray(copied, typeInfo, hashInputProvider)
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2805,7 +2805,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
 
-		err = ValidArray(copied, typeInfo, hashInputProvider)
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2880,7 +2880,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
 
-		err = ValidArray(copied, typeInfo, hashInputProvider)
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}

@@ -10,7 +10,6 @@ import (
 
 type TypeInfo interface {
 	Encode(*cbor.StreamEncoder) error
-	Equal(TypeInfo) bool
 }
 
 type TypeInfoDecoder func(

@@ -185,7 +185,7 @@ func newArrayExtraDataFromData(
 	}
 
 	// Reslice for remaining data
-	n := dec.NumBytesRead()
+	n := dec.NumBytesDecoded()
 	data = data[versionAndFlagSize+n:]
 
 	return &ArrayExtraData{

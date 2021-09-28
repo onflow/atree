@@ -5,7 +5,6 @@
 package atree
 
 import (
-	"bytes"
 	"container/list"
 	"fmt"
 	"reflect"
@@ -165,7 +164,7 @@ func PrintMap(m *OrderedMap) {
 	}
 }
 
-func ValidMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) error {
+func ValidMap(m *OrderedMap, typeInfo TypeInfo, hip HashInputProvider) error {
 
 	extraData := m.root.ExtraData()
 	if extraData == nil {
@@ -173,7 +172,7 @@ func ValidMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) er
 	}
 
 	// Verify that extra data has correct type information
-	if typeInfo != nil && !bytes.Equal(extraData.TypeInfo, typeInfo) {
+	if typeInfo != nil && !extraData.TypeInfo.Equal(typeInfo) {
 		return fmt.Errorf(
 			"root slab %d type information %v, want %v",
 			m.root.ID(),

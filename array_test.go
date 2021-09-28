@@ -1759,8 +1759,7 @@ func TestEncode(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 
 		// Create and populate array in memory
-		storage := NewBasicSlabStorage(encMode, decMode)
-		storage.DecodeStorable = decodeStorable
+		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1873,8 +1872,7 @@ func TestEncode(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 
 		// Create and populate array in memory
-		storage := NewBasicSlabStorage(encMode, decMode)
-		storage.DecodeStorable = decodeStorable
+		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2120,8 +2118,7 @@ func TestDecodeEncode(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	storage := NewBasicSlabStorage(encMode, decMode)
-	storage.DecodeStorable = decodeStorable
+	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	err = storage.Load(data)
 	require.NoError(t, err)
@@ -2188,8 +2185,7 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 
 	typeInfo := testTypeInfo{42}
 
-	storage := NewBasicSlabStorage(encMode, decMode)
-	storage.DecodeStorable = decodeStorable
+	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2236,8 +2232,7 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decode data to new storage
-	storage2 := NewBasicSlabStorage(encMode, decMode)
-	storage2.DecodeStorable = decodeStorable
+	storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	err = storage2.Load(m1)
 	require.NoError(t, err)
@@ -2271,8 +2266,7 @@ func TestEmptyArray(t *testing.T) {
 
 	typeInfo := testTypeInfo{42}
 
-	storage := NewBasicSlabStorage(encMode, decMode)
-	storage.DecodeStorable = decodeStorable
+	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 

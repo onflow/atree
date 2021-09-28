@@ -279,6 +279,11 @@ func newMapExtraDataFromData(
 		)
 	}
 
+	typeInfo, err := decodeTypeInfo(dec)
+	if err != nil {
+		return nil, data, err
+	}
+
 	count, err := dec.DecodeUint64()
 	if err != nil {
 		return nil, data, err
@@ -289,13 +294,8 @@ func newMapExtraDataFromData(
 		return nil, data, err
 	}
 
-	typeInfo, err := decodeTypeInfo(dec)
-	if err != nil {
-		return nil, data, err
-	}
-
 	// Reslice for remaining data
-	n := dec.NumBytesRead()
+	n := dec.NumBytesDecoded()
 	data = data[versionAndFlagSize+n:]
 
 	return &MapExtraData{
@@ -335,6 +335,11 @@ func (m *MapExtraData) Encode(enc *Encoder, version byte, flag byte) error {
 
 	// Encode extra data
 	err = enc.CBOR.EncodeArrayHead(mapExtraDataLength)
+	if err != nil {
+		return err
+	}
+
+	err = m.TypeInfo.Encode(enc)
 	if err != nil {
 		return err
 	}
@@ -3918,11 +3923,15 @@ func NewMapFromBatchData(
 	storage SlabStorage,
 	address Address,
 	digesterBuilder DigesterBuilder,
-	typeInfo cbor.RawMessage,
+	typeInfo TypeInfo,
 	comparator Comparator,
 	hip HashInputProvider,
 	seed uint64,
-	fn MapElementProvider) (*OrderedMap, error) {
+	fn MapElementProvider,
+) (
+	*OrderedMap,
+	error,
+) {
 
 	const defaultElementCountInSlab = 32
 

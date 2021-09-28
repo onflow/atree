@@ -315,12 +315,19 @@ type BasicSlabStorage struct {
 
 var _ SlabStorage = &BasicSlabStorage{}
 
-func NewBasicSlabStorage(cborEncMode cbor.EncMode, cborDecMode cbor.DecMode) *BasicSlabStorage {
+func NewBasicSlabStorage(
+	cborEncMode cbor.EncMode,
+	cborDecMode cbor.DecMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) *BasicSlabStorage {
 	return &BasicSlabStorage{
-		Slabs:        make(map[StorageID]Slab),
-		storageIndex: make(map[Address]StorageIndex),
-		cborEncMode:  cborEncMode,
-		cborDecMode:  cborDecMode,
+		Slabs:          make(map[StorageID]Slab),
+		storageIndex:   make(map[Address]StorageIndex),
+		cborEncMode:    cborEncMode,
+		cborDecMode:    cborDecMode,
+		DecodeStorable: decodeStorable,
+		DecodeTypeInfo: decodeTypeInfo,
 	}
 }
 

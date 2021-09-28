@@ -215,8 +215,13 @@ func (s *InMemBaseStorage) ResetReporter() {
 }
 
 type Ledger interface {
+	// GetValue gets a value for the given key in the storage, owned by the given account.
 	GetValue(owner, key []byte) (value []byte, err error)
+	// SetValue sets a value for the given key in the storage, owned by the given account.
 	SetValue(owner, key, value []byte) (err error)
+	// ValueExists returns true if the given key exists in the storage, owned by the given account.
+	ValueExists(owner, key []byte) (exists bool, err error)
+	// AllocateStorageIndex allocates a new storage index under the given account.
 	AllocateStorageIndex(owner []byte) (StorageIndex, error)
 }
 

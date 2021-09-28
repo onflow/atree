@@ -27,11 +27,11 @@ const (
 	arrayMetaDataSlabPrefixSize = versionAndFlagSize + 2
 
 	// version (1 byte) + flag (1 byte) + next id (16 bytes) + CBOR array size (3 bytes)
-	// (3 bytes of array size support up to 65535 array elements)
+	// up to 65535 array elements are supported
 	arrayDataSlabPrefixSize = versionAndFlagSize + storageIDSize + 3
 
 	// version (1 byte) + flag (1 byte) + CBOR array size (3 bytes)
-	// (3 bytes of array size support up to 65535 array elements)
+	// up to 65535 array elements are supported
 	arrayRootDataSlabPrefixSize = versionAndFlagSize + 3
 
 	// 32 is faster than 24 and 40.

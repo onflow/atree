@@ -30,6 +30,10 @@ const (
 	// (3 bytes of array size support up to 65535 array elements)
 	arrayDataSlabPrefixSize = versionAndFlagSize + storageIDSize + 3
 
+	// version (1 byte) + flag (1 byte) + CBOR array size (3 bytes)
+	// (3 bytes of array size support up to 65535 array elements)
+	arrayRootDataSlabPrefixSize = versionAndFlagSize + 3
+
 	// 32 is faster than 24 and 40.
 	linearScanThreshold = 32
 )
@@ -219,10 +223,12 @@ func newArrayDataSlabFromData(
 		return nil, NewDecodingErrorf("data is too short for array data slab")
 	}
 
+	isRootSlab := isRoot(data[1])
+
 	var extraData *ArrayExtraData
 
 	// Check flag for extra data
-	if isRoot(data[1]) {
+	if isRootSlab {
 		// Decode extra data
 		var err error
 		extraData, data, err = newArrayExtraDataFromData(data, decMode)
@@ -231,8 +237,13 @@ func newArrayDataSlabFromData(
 		}
 	}
 
+	minDataLength := arrayDataSlabPrefixSize
+	if isRootSlab {
+		minDataLength = arrayRootDataSlabPrefixSize
+	}
+
 	// Check data length (after decoding extra data if present)
-	if len(data) < arrayDataSlabPrefixSize {
+	if len(data) < minDataLength {
 		return nil, NewDecodingErrorf("data is too short for array data slab")
 	}
 
@@ -247,15 +258,27 @@ func newArrayDataSlabFromData(
 		)
 	}
 
-	// Decode next storage ID
-	const nextStorageIDOffset = versionAndFlagSize
-	next, err := NewStorageIDFromRawBytes(data[nextStorageIDOffset:])
-	if err != nil {
-		return nil, err
+	var next StorageID
+
+	var contentOffset int
+
+	if !isRootSlab {
+
+		// Decode next storage ID
+		const nextStorageIDOffset = versionAndFlagSize
+		var err error
+		next, err = NewStorageIDFromRawBytes(data[nextStorageIDOffset:])
+		if err != nil {
+			return nil, err
+		}
+
+		contentOffset = nextStorageIDOffset + storageIDSize
+
+	} else {
+		contentOffset = versionAndFlagSize
 	}
 
 	// Decode content (CBOR array)
-	const contentOffset = nextStorageIDOffset + storageIDSize
 	cborDec := decMode.NewByteStreamDecoder(data[contentOffset:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
@@ -325,19 +348,28 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	// Encode flag
 	enc.Scratch[1] = flag
 
-	// Encode next storage ID to scratch
-	const nextStorageIDOffset = versionAndFlagSize
-	_, err := a.next.ToRawBytes(enc.Scratch[nextStorageIDOffset:])
-	if err != nil {
-		return err
+	var contentOffset int
+
+	// Encode next storage ID for non-root data slabs
+	if a.extraData == nil {
+
+		// Encode next storage ID to scratch
+		const nextStorageIDOffset = versionAndFlagSize
+		_, err := a.next.ToRawBytes(enc.Scratch[nextStorageIDOffset:])
+		if err != nil {
+			return err
+		}
+
+		contentOffset = nextStorageIDOffset + storageIDSize
+	} else {
+		contentOffset = versionAndFlagSize
 	}
 
 	// Encode CBOR array size manually for fix-sized encoding
-	const contentOffset = nextStorageIDOffset + storageIDSize
 
 	enc.Scratch[contentOffset] = 0x80 | 25
 
-	const countOffset = contentOffset + 1
+	countOffset := contentOffset + 1
 	const countSize = 2
 	binary.BigEndian.PutUint16(
 		enc.Scratch[countOffset:],
@@ -345,8 +377,8 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	)
 
 	// Write scratch content to encoder
-	const totalSize = countOffset + countSize
-	_, err = enc.Write(enc.Scratch[:totalSize])
+	totalSize := countOffset + countSize
+	_, err := enc.Write(enc.Scratch[:totalSize])
 	if err != nil {
 		return err
 	}
@@ -1719,7 +1751,7 @@ func NewArray(storage SlabStorage, address Address, typeInfo cbor.RawMessage) (*
 	root := &ArrayDataSlab{
 		header: ArraySlabHeader{
 			id:   sID,
-			size: arrayDataSlabPrefixSize,
+			size: arrayRootDataSlabPrefixSize,
 		},
 		extraData: extraData,
 	}
@@ -1826,6 +1858,12 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 
 func (a *Array) splitRoot() error {
 
+	if a.root.IsData() {
+		// Adjust root data slab size before splitting
+		dataSlab := a.root.(*ArrayDataSlab)
+		dataSlab.header.size = dataSlab.header.size - arrayRootDataSlabPrefixSize + arrayDataSlabPrefixSize
+	}
+
 	// Get old root's extra data and reset it to nil in old root
 	extraData := a.root.RemoveExtraData()
 
@@ -1885,6 +1923,12 @@ func (a *Array) promoteChildAsNewRoot(childID StorageID) error {
 	child, err := getArraySlab(a.Storage, childID)
 	if err != nil {
 		return err
+	}
+
+	if child.IsData() {
+		// Adjust data slab size before promoting non-root data slab to root
+		dataSlab := child.(*ArrayDataSlab)
+		dataSlab.header.size = dataSlab.header.size - arrayDataSlabPrefixSize + arrayRootDataSlabPrefixSize
 	}
 
 	extraData := a.root.RemoveExtraData()
@@ -2069,17 +2113,17 @@ func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
 		return err
 	}
 
-	for !a.root.IsData() {
+	rootID := a.root.ID()
 
-		// Set root to empty data slab
-		a.root = &ArrayDataSlab{
-			header: ArraySlabHeader{
-				id:   a.root.ID(),
-				size: arrayDataSlabPrefixSize,
-			},
-			extraData: a.root.ExtraData(),
-		}
+	extraData := a.root.ExtraData()
 
+	// Set root to empty data slab
+	a.root = &ArrayDataSlab{
+		header: ArraySlabHeader{
+			id:   rootID,
+			size: arrayRootDataSlabPrefixSize,
+		},
+		extraData: extraData,
 	}
 
 	// Save root slab
@@ -2152,6 +2196,11 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo cbor.R
 
 	// Append last data slab to slabs
 	slabs = append(slabs, dataSlab)
+
+	if len(slabs) == 1 {
+		// root is data slab, adjust its size
+		dataSlab.header.size = dataSlab.header.size - arrayDataSlabPrefixSize + arrayRootDataSlabPrefixSize
+	}
 
 	for len(slabs) > 1 {
 

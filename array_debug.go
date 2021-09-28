@@ -5,13 +5,10 @@
 package atree
 
 import (
-	"bytes"
 	"container/list"
 	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
 type ArrayStats struct {
@@ -150,7 +147,9 @@ func PrintArray(a *Array) {
 	}
 }
 
-func ValidArray(a *Array, typeInfo cbor.RawMessage, hip HashInputProvider) error {
+type TypeInfoComparator func(TypeInfo, TypeInfo) bool
+
+func ValidArray(a *Array, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
 
 	extraData := a.root.ExtraData()
 	if extraData == nil {
@@ -158,7 +157,7 @@ func ValidArray(a *Array, typeInfo cbor.RawMessage, hip HashInputProvider) error
 	}
 
 	// Verify that extra data has correct type information
-	if typeInfo != nil && !bytes.Equal(extraData.TypeInfo, typeInfo) {
+	if typeInfo != nil && !tic(extraData.TypeInfo, typeInfo) {
 		return fmt.Errorf(
 			"root slab %d type information %v is wrong, want %v",
 			a.root.ID(),
@@ -167,7 +166,8 @@ func ValidArray(a *Array, typeInfo cbor.RawMessage, hip HashInputProvider) error
 		)
 	}
 
-	computedCount, dataSlabIDs, nextDataSlabIDs, err := validArraySlab(hip, a.Storage, a.root.Header().id, 0, nil, []StorageID{}, []StorageID{})
+	computedCount, dataSlabIDs, nextDataSlabIDs, err :=
+		validArraySlab(tic, hip, a.Storage, a.root.Header().id, 0, nil, []StorageID{}, []StorageID{})
 	if err != nil {
 		return err
 	}
@@ -187,6 +187,7 @@ func ValidArray(a *Array, typeInfo cbor.RawMessage, hip HashInputProvider) error
 }
 
 func validArraySlab(
+	tic TypeInfoComparator,
 	hip HashInputProvider,
 	storage SlabStorage,
 	id StorageID,
@@ -275,7 +276,7 @@ func validArraySlab(
 				return 0, nil, nil, fmt.Errorf("data slab %d element %s can't be converted to value, %s",
 					id, e, err)
 			}
-			err = ValidValue(v, nil, hip)
+			err = ValidValue(v, nil, tic, hip)
 			if err != nil {
 				return 0, nil, nil, fmt.Errorf("data slab %d element %s isn't valid, %s",
 					id, e, err)
@@ -308,7 +309,8 @@ func validArraySlab(
 	for i, h := range meta.childrenHeaders {
 		// Verify child slabs
 		var count uint32
-		count, dataSlabIDs, nextDataSlabIDs, err = validArraySlab(hip, storage, h.id, level+1, &h, dataSlabIDs, nextDataSlabIDs)
+		count, dataSlabIDs, nextDataSlabIDs, err =
+			validArraySlab(tic, hip, storage, h.id, level+1, &h, dataSlabIDs, nextDataSlabIDs)
 		if err != nil {
 			return 0, nil, nil, err
 		}

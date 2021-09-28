@@ -53,6 +53,19 @@ func (v Uint64Value) String() string {
 	return fmt.Sprintf("%d", uint64(v))
 }
 
+type testTypeInfo struct{}
+
+var _ atree.TypeInfo = testTypeInfo{}
+
+func (testTypeInfo) Encode(e *cbor.StreamEncoder) error {
+	return e.EncodeUint8(42)
+}
+
+func (i testTypeInfo) Equal(other atree.TypeInfo) bool {
+	_, ok := other.(testTypeInfo)
+	return ok
+}
+
 func decodeStorable(dec *cbor.StreamDecoder, _ atree.StorageID) (atree.Storable, error) {
 	tagNumber, err := dec.DecodeTagNumber()
 	if err != nil {
@@ -109,10 +122,9 @@ func main() {
 		return
 	}
 
-	storage := atree.NewBasicSlabStorage(encMode, decMode)
-	storage.DecodeStorable = decodeStorable
+	storage := atree.NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{}
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -143,4 +155,8 @@ func main() {
 		fmt.Printf("\n\n=========== array layout ===========\n")
 		atree.PrintArray(array)
 	}
+}
+
+func decodeTypeInfo(_ *cbor.StreamDecoder) (atree.TypeInfo, error) {
+	return testTypeInfo{}, nil
 }

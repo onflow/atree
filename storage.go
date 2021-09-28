@@ -308,18 +308,26 @@ type BasicSlabStorage struct {
 	Slabs          map[StorageID]Slab
 	storageIndex   map[Address]StorageIndex
 	DecodeStorable StorableDecoder
+	DecodeTypeInfo TypeInfoDecoder
 	cborEncMode    cbor.EncMode
 	cborDecMode    cbor.DecMode
 }
 
 var _ SlabStorage = &BasicSlabStorage{}
 
-func NewBasicSlabStorage(cborEncMode cbor.EncMode, cborDecMode cbor.DecMode) *BasicSlabStorage {
+func NewBasicSlabStorage(
+	cborEncMode cbor.EncMode,
+	cborDecMode cbor.DecMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) *BasicSlabStorage {
 	return &BasicSlabStorage{
-		Slabs:        make(map[StorageID]Slab),
-		storageIndex: make(map[Address]StorageIndex),
-		cborEncMode:  cborEncMode,
-		cborDecMode:  cborDecMode,
+		Slabs:          make(map[StorageID]Slab),
+		storageIndex:   make(map[Address]StorageIndex),
+		cborEncMode:    cborEncMode,
+		cborDecMode:    cborDecMode,
+		DecodeStorable: decodeStorable,
+		DecodeTypeInfo: decodeTypeInfo,
 	}
 }
 
@@ -376,7 +384,7 @@ func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
 // This is currently used for testing.
 func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 	for id, data := range m {
-		slab, err := decodeSlab(id, data, s.cborDecMode, s.DecodeStorable)
+		slab, err := decodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
 		if err != nil {
 			return err
 		}
@@ -391,6 +399,7 @@ type PersistentSlabStorage struct {
 	deltas           map[StorageID]Slab
 	tempStorageIndex uint64
 	DecodeStorable   StorableDecoder
+	DecodeTypeInfo   TypeInfoDecoder
 	cborEncMode      cbor.EncMode
 	cborDecMode      cbor.DecMode
 	autoCommit       bool // flag to call commit after each operation
@@ -404,14 +413,18 @@ func NewPersistentSlabStorage(
 	base BaseStorage,
 	cborEncMode cbor.EncMode,
 	cborDecMode cbor.DecMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
 	opts ...StorageOption,
 ) *PersistentSlabStorage {
 	storage := &PersistentSlabStorage{baseStorage: base,
-		cache:       make(map[StorageID]Slab),
-		deltas:      make(map[StorageID]Slab),
-		cborEncMode: cborEncMode,
-		cborDecMode: cborDecMode,
-		autoCommit:  false,
+		cache:          make(map[StorageID]Slab),
+		deltas:         make(map[StorageID]Slab),
+		cborEncMode:    cborEncMode,
+		cborDecMode:    cborDecMode,
+		DecodeStorable: decodeStorable,
+		DecodeTypeInfo: decodeTypeInfo,
+		autoCommit:     false,
 	}
 
 	for _, applyOption := range opts {
@@ -617,7 +630,7 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	slab, err = decodeSlab(id, data, s.cborDecMode, s.DecodeStorable)
+	slab, err = decodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
 	if err == nil {
 		// save decoded slab to cache
 		s.cache[id] = slab

@@ -24,8 +24,7 @@ func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
 
 	//storage := NewPersistentSlabStorage(baseStorage)
 
-	storage := NewBasicSlabStorage(encMode, decMode)
-	storage.DecodeStorable = decodeStorable
+	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 	return storage
 }
 
@@ -385,8 +384,7 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	storage := NewBasicSlabStorage(encMode, decMode)
-	storage.DecodeStorable = decodeStorable
+	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -425,8 +423,7 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 
 	// Decode data to new storage
 
-	storage2 := NewBasicSlabStorage(encMode, decMode)
-	storage2.DecodeStorable = decodeStorable
+	storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	err = storage2.Load(m1)
 	require.NoError(t, err)

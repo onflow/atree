@@ -5,13 +5,10 @@
 package atree
 
 import (
-	"bytes"
 	"container/list"
 	"fmt"
 	"reflect"
 	"sort"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
 type MapStats struct {
@@ -165,7 +162,7 @@ func PrintMap(m *OrderedMap) {
 	}
 }
 
-func ValidMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) error {
+func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
 
 	extraData := m.root.ExtraData()
 	if extraData == nil {
@@ -173,7 +170,7 @@ func ValidMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) er
 	}
 
 	// Verify that extra data has correct type information
-	if typeInfo != nil && !bytes.Equal(extraData.TypeInfo, typeInfo) {
+	if typeInfo != nil && !tic(extraData.TypeInfo, typeInfo) {
 		return fmt.Errorf(
 			"root slab %d type information %v, want %v",
 			m.root.ID(),
@@ -188,7 +185,7 @@ func ValidMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) er
 	}
 
 	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := validMapSlab(
-		m.Storage, m.digesterBuilder, hip, m.root.ID(), 0, nil, []StorageID{}, []StorageID{}, []Digest{})
+		m.Storage, m.digesterBuilder, tic, hip, m.root.ID(), 0, nil, []StorageID{}, []StorageID{}, []Digest{})
 	if err != nil {
 		return err
 	}
@@ -229,6 +226,7 @@ func ValidMap(m *OrderedMap, typeInfo cbor.RawMessage, hip HashInputProvider) er
 func validMapSlab(
 	storage SlabStorage,
 	digesterBuilder DigesterBuilder,
+	tic TypeInfoComparator,
 	hip HashInputProvider,
 	id StorageID,
 	level int,
@@ -283,7 +281,7 @@ func validMapSlab(
 		}
 
 		// Verify data slab's elements
-		elementCount, elementSize, err := validMapElements(storage, digesterBuilder, hip, id, dataSlab.elements, 0, nil)
+		elementCount, elementSize, err := validMapElements(storage, digesterBuilder, tic, hip, id, dataSlab.elements, 0, nil)
 		if err != nil {
 			return 0, nil, nil, nil, err
 		}
@@ -341,7 +339,8 @@ func validMapSlab(
 	for _, h := range meta.childrenHeaders {
 		// Verify child slabs
 		count := uint64(0)
-		count, dataSlabIDs, nextDataSlabIDs, firstKeys, err = validMapSlab(storage, digesterBuilder, hip, h.id, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
+		count, dataSlabIDs, nextDataSlabIDs, firstKeys, err =
+			validMapSlab(storage, digesterBuilder, tic, hip, h.id, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
 		if err != nil {
 			return 0, nil, nil, nil, err
 		}
@@ -388,6 +387,7 @@ func validMapSlab(
 func validMapElements(
 	storage SlabStorage,
 	db DigesterBuilder,
+	tic TypeInfoComparator,
 	hip HashInputProvider,
 	id StorageID,
 	elements elements,
@@ -401,9 +401,9 @@ func validMapElements(
 
 	switch elems := elements.(type) {
 	case *hkeyElements:
-		return validMapHkeyElements(storage, db, hip, id, elems, digestLevel, hkeyPrefixes)
+		return validMapHkeyElements(storage, db, tic, hip, id, elems, digestLevel, hkeyPrefixes)
 	case *singleElements:
-		return validMapSingleElements(storage, db, hip, id, elems, digestLevel, hkeyPrefixes)
+		return validMapSingleElements(storage, db, tic, hip, id, elems, digestLevel, hkeyPrefixes)
 	default:
 		return 0, 0, fmt.Errorf("slab %d has unknown elements type %T at digest level %d", id, elements, digestLevel)
 	}
@@ -412,6 +412,7 @@ func validMapElements(
 func validMapHkeyElements(
 	storage SlabStorage,
 	db DigesterBuilder,
+	tic TypeInfoComparator,
 	hip HashInputProvider,
 	id StorageID,
 	elements *hkeyElements,
@@ -479,7 +480,7 @@ func validMapHkeyElements(
 			copy(hkeys, hkeyPrefixes)
 			hkeys[len(hkeys)-1] = elements.hkeys[i]
 
-			count, size, err := validMapElements(storage, db, hip, id, ge, digestLevel+1, hkeys)
+			count, size, err := validMapElements(storage, db, tic, hip, id, ge, digestLevel+1, hkeys)
 			if err != nil {
 				return 0, 0, err
 			}
@@ -511,7 +512,7 @@ func validMapHkeyElements(
 			hkeys[len(hkeys)-1] = elements.hkeys[i]
 
 			// Verify element
-			computedSize, maxDigestLevel, err := validSingleElement(storage, db, hip, se, hkeys)
+			computedSize, maxDigestLevel, err := validSingleElement(storage, db, tic, hip, se, hkeys)
 			if err != nil {
 				return 0, 0, fmt.Errorf("data slab %d %s", id, err)
 			}
@@ -539,6 +540,7 @@ func validMapHkeyElements(
 func validMapSingleElements(
 	storage SlabStorage,
 	db DigesterBuilder,
+	tic TypeInfoComparator,
 	hip HashInputProvider,
 	id StorageID,
 	elements *singleElements,
@@ -561,7 +563,7 @@ func validMapSingleElements(
 	for _, e := range elements.elems {
 
 		// Verify element
-		computedSize, maxDigestLevel, err := validSingleElement(storage, db, hip, e, hkeyPrefixes)
+		computedSize, maxDigestLevel, err := validSingleElement(storage, db, tic, hip, e, hkeyPrefixes)
 		if err != nil {
 			return 0, 0, fmt.Errorf("data slab %d %s", id, err)
 		}
@@ -592,6 +594,7 @@ func validMapSingleElements(
 func validSingleElement(
 	storage SlabStorage,
 	db DigesterBuilder,
+	tic TypeInfoComparator,
 	hip HashInputProvider,
 	e *singleElement,
 	digests []Digest,
@@ -612,7 +615,7 @@ func validSingleElement(
 		return 0, 0, fmt.Errorf("element %s key can't be converted to value, %s", e, err)
 	}
 
-	err = ValidValue(kv, nil, hip)
+	err = ValidValue(kv, nil, tic, hip)
 	if err != nil {
 		return 0, 0, fmt.Errorf("element %s key isn't valid, %s", e, err)
 	}
@@ -628,7 +631,7 @@ func validSingleElement(
 		return 0, 0, fmt.Errorf("element %s value can't be converted to value, %s", e, err)
 	}
 
-	err = ValidValue(vv, nil, hip)
+	err = ValidValue(vv, nil, tic, hip)
 	if err != nil {
 		return 0, 0, fmt.Errorf("element %s value isn't valid, %s", e, err)
 	}
@@ -657,12 +660,12 @@ func validSingleElement(
 	return computedSize, digest.Levels(), nil
 }
 
-func ValidValue(value Value, typeInfo cbor.RawMessage, hip HashInputProvider) error {
+func ValidValue(value Value, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
 	switch v := value.(type) {
 	case *Array:
-		return ValidArray(v, typeInfo, hip)
+		return ValidArray(v, typeInfo, tic, hip)
 	case *OrderedMap:
-		return ValidMap(v, typeInfo, hip)
+		return ValidMap(v, typeInfo, tic, hip)
 	}
 	return nil
 }

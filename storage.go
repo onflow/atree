@@ -13,7 +13,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-const LedgerBaseStorageSlabPrefix = "/slab/"
+const LedgerBaseStorageSlabPrefix = "$"
 
 type (
 	Address      [8]byte

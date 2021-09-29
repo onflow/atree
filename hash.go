@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/dchest/siphash"
+	"github.com/fxamacker/circlehash"
 	"github.com/zeebo/blake3"
 )
 
@@ -40,12 +40,10 @@ type basicDigesterBuilder struct {
 var _ DigesterBuilder = &basicDigesterBuilder{}
 
 type basicDigester struct {
-	k0         uint64
-	k1         uint64
-	sipHash    [2]uint64
-	blake3Hash [4]uint64
-	scratch    [32]byte
-	msg        []byte
+	circleHash64 uint64
+	blake3Hash   [4]uint64
+	scratch      [32]byte
+	msg          []byte
 }
 
 // basicDigesterPool caches unused basicDigester objects for later reuse.
@@ -68,7 +66,6 @@ func putDigester(e Digester) {
 }
 
 var (
-	emptySipHash    [2]uint64
 	emptyBlake3Hash [4]uint64
 )
 
@@ -98,16 +95,14 @@ func (bdb *basicDigesterBuilder) Digest(hip HashInputProvider, value Value) (Dig
 		return nil, err
 	}
 
-	digester.k0 = bdb.k0
-	digester.k1 = bdb.k1
 	digester.msg = msg
+	digester.circleHash64 = circlehash.Hash64(msg, bdb.k0)
+
 	return digester, nil
 }
 
 func (bd *basicDigester) Reset() {
-	bd.k0 = 0
-	bd.k1 = 0
-	bd.sipHash = emptySipHash
+	bd.circleHash64 = 0
 	bd.blake3Hash = emptyBlake3Hash
 	bd.msg = nil
 }
@@ -133,24 +128,19 @@ func (bd *basicDigester) Digest(level int) (Digest, error) {
 	}
 
 	switch level {
-	case 0, 1:
-		{
-			if bd.sipHash == emptySipHash {
-				bd.sipHash[0], bd.sipHash[1] = siphash.Hash128(bd.k0, bd.k1, bd.msg)
-			}
-			return Digest(bd.sipHash[level]), nil
+	case 0:
+		return Digest(bd.circleHash64), nil
+
+	case 1, 2, 3:
+		if bd.blake3Hash == emptyBlake3Hash {
+			sum := blake3.Sum256(bd.msg)
+			bd.blake3Hash[0] = binary.BigEndian.Uint64(sum[:])
+			bd.blake3Hash[1] = binary.BigEndian.Uint64(sum[8:])
+			bd.blake3Hash[2] = binary.BigEndian.Uint64(sum[16:])
+			bd.blake3Hash[3] = binary.BigEndian.Uint64(sum[24:])
 		}
-	case 2, 3:
-		{
-			if bd.blake3Hash == emptyBlake3Hash {
-				sum := blake3.Sum256(bd.msg)
-				bd.blake3Hash[0] = binary.BigEndian.Uint64(sum[:])
-				bd.blake3Hash[1] = binary.BigEndian.Uint64(sum[8:])
-				bd.blake3Hash[2] = binary.BigEndian.Uint64(sum[16:])
-				bd.blake3Hash[3] = binary.BigEndian.Uint64(sum[24:])
-			}
-			return Digest(bd.blake3Hash[level-2]), nil
-		}
+		return Digest(bd.blake3Hash[level-1]), nil
+
 	default: // list mode
 		return 0, nil
 	}

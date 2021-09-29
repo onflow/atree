@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/zeebo/xxh3"
+	"github.com/fxamacker/circlehash"
 )
 
 const (
@@ -3186,14 +3186,16 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 		return nil, NewStorageError(err)
 	}
 
-	// Create seed for non-crypto hash algos (XXH128, SipHash) to use.
-	// Ideally, seed should be a nondeterministic 128-bit secret key because
-	// SipHash relies on its key being secret for its security.  Since
+	// Create seed for non-crypto hash algos (CircleHash64, SipHash) to use.
+	// Ideally, seed should be a nondeterministic 128-bit secret because
+	// these hashes rely on its key being secret for its security.  Since
 	// we handle collisions and based on other factors such as storage space,
 	// the team decided we can use a 64-bit non-secret key instead of
 	// a 128-bit secret key. And for performance reasons, we first use
 	// noncrypto hash algos and fall back to crypto algo after collisions.
-	k0 := xxh3.Hash128(sIDBytes).Lo
+	// This is for creating the seed, so the seed used here is OK to be 0.
+	k0 := circlehash.Hash64(sIDBytes, uint64(0))
+
 	// To save storage space, only store 64-bits of the seed.
 	// Use a 64-bit const for the unstored half to create 128-bit seed.
 	k1 := typicalRandomConstant

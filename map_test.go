@@ -60,8 +60,7 @@ func newTestInMemoryStorage(t testing.TB) SlabStorage {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	storage := NewBasicSlabStorage(encMode, decMode)
-	storage.DecodeStorable = decodeStorable
+	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	return storage
 }
@@ -73,7 +72,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		const mapSize = 64 * 1024
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -103,7 +102,7 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = ValidMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -132,7 +131,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 		const mapSize = 64 * 1024
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -162,7 +161,7 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = ValidMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -208,7 +207,7 @@ func TestMapSetAndGet(t *testing.T) {
 		const mapSize = 64 * 1024
 		const maxKeyLength = 224
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -240,7 +239,7 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = ValidMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -266,11 +265,11 @@ func TestMapSetAndGet(t *testing.T) {
 	})
 }
 
-func TestMapHas(t *testing.T) {
+func TestMapHash(t *testing.T) {
 
 	const mapSize = 64 * 1024
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -305,7 +304,7 @@ func TestMapHas(t *testing.T) {
 		require.Nil(t, existingStorable)
 	}
 
-	err = ValidMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -342,7 +341,7 @@ func TestMapRemove(t *testing.T) {
 
 		const valueStringMaxSize = 16
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -373,7 +372,7 @@ func TestMapRemove(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = ValidMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -437,7 +436,7 @@ func TestMapRemove(t *testing.T) {
 
 		const valueStringMaxSize = 512
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -468,7 +467,7 @@ func TestMapRemove(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = ValidMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -528,7 +527,7 @@ func TestMapIterate(t *testing.T) {
 	t.Run("no collision", func(t *testing.T) {
 		const mapSize = 64 * 1024
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -639,7 +638,7 @@ func TestMapIterate(t *testing.T) {
 	t.Run("collision", func(t *testing.T) {
 		const mapSize = 1024
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -763,7 +762,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	// Each set has maxDigestLevel of digest.
 	const mockDigestCount = 8
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -815,7 +814,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		require.Nil(t, existingStorable)
 	}
 
-	err = ValidMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -871,7 +870,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 	const mapSize = 2 * 1024
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -912,7 +911,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		require.Nil(t, existingStorable)
 	}
 
-	err = ValidMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -994,7 +993,7 @@ func TestMapLargeElement(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	const mapSize = 2 * 1024
 
@@ -1036,7 +1035,7 @@ func TestMapLargeElement(t *testing.T) {
 	require.Equal(t, typeInfo, m.Type())
 	require.Equal(t, uint64(mapSize), m.Count())
 
-	err = ValidMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -1076,7 +1075,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 
 	const stringMaxSize = 512
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	storage := newTestInMemoryStorage(t)
 
@@ -1191,7 +1190,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 		require.Equal(t, v, e)
 	}
 
-	err = ValidMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -1206,14 +1205,13 @@ func TestMapEncodeDecode(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
 
-		storage := NewBasicSlabStorage(encMode, decMode)
-		storage.DecodeStorable = decodeStorable
+		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		// Create map
 		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
@@ -1266,8 +1264,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, expected[id1], stored[id1])
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode)
-		storage2.DecodeStorable = decodeStorable
+		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		err = storage2.Load(stored)
 		require.NoError(t, err)
@@ -1292,8 +1289,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}()
 
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode)
-		storage.DecodeStorable = decodeStorable
+		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -1463,8 +1459,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode)
-		storage2.DecodeStorable = decodeStorable
+		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		err = storage2.Load(stored)
 		require.NoError(t, err)
@@ -1494,8 +1489,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}()
 
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode)
-		storage.DecodeStorable = decodeStorable
+		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -1513,7 +1507,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 			if i == mapSize-1 {
 				// Create nested array
-				typeInfo2 := cbor.RawMessage{0x18, 0x2B} // unsigned(43)
+				typeInfo2 := testTypeInfo{43}
 
 				array, err := NewArray(storage, address, typeInfo2)
 				require.NoError(t, err)
@@ -1702,8 +1696,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode)
-		storage2.DecodeStorable = decodeStorable
+		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		err = storage2.Load(stored)
 		require.NoError(t, err)
@@ -1754,8 +1747,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}()
 
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode)
-		storage.DecodeStorable = decodeStorable
+		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -1993,8 +1985,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode)
-		storage2.DecodeStorable = decodeStorable
+		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		err = storage2.Load(stored)
 		require.NoError(t, err)
@@ -2024,7 +2015,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}()
 
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode)
+		storage := NewBasicSlabStorage(encMode, decMode, nil, nil)
 		storage.DecodeStorable = decodeStorable
 
 		digesterBuilder := &mockDigesterBuilder{}
@@ -2310,8 +2301,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode)
-		storage2.DecodeStorable = decodeStorable
+		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		err = storage2.Load(stored)
 		require.NoError(t, err)
@@ -2341,8 +2331,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}()
 
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode)
-		storage.DecodeStorable = decodeStorable
+		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -2565,8 +2554,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, expected[id3], stored[id3])
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode)
-		storage2.DecodeStorable = decodeStorable
+		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		err = storage2.Load(stored)
 		require.NoError(t, err)
@@ -2590,8 +2578,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 	t.Run("pointer", func(t *testing.T) {
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode)
-		storage.DecodeStorable = decodeStorable
+		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -2747,7 +2734,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 
 	const stringMaxSize = 512
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
@@ -2755,8 +2742,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	storage := NewBasicSlabStorage(encMode, decMode)
-	storage.DecodeStorable = decodeStorable
+	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2848,7 +2834,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 		require.Equal(t, typeInfo, m.Type())
 	}
 
-	err = ValidMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -2861,8 +2847,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decode data to new storage
-	storage2 := NewBasicSlabStorage(encMode, decMode)
-	storage2.DecodeStorable = decodeStorable
+	storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	err = storage2.Load(encodedData)
 	require.NoError(t, err)
@@ -2890,7 +2875,7 @@ func TestMapStoredValue(t *testing.T) {
 
 	const mapSize = 64 * 1024
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2953,7 +2938,7 @@ func TestMapStoredValue(t *testing.T) {
 func TestMapPopIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestInMemoryStorage(t)
 
@@ -2972,7 +2957,7 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), i)
 
-		err = ValidMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -2987,7 +2972,7 @@ func TestMapPopIterate(t *testing.T) {
 
 		const mapSize = 10
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestBasicStorage(t)
 
@@ -3034,7 +3019,7 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		err = ValidMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3048,7 +3033,7 @@ func TestMapPopIterate(t *testing.T) {
 	t.Run("root-metaslab", func(t *testing.T) {
 		const mapSize = 64 * 1024
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3099,7 +3084,7 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		err = ValidMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3118,7 +3103,7 @@ func TestMapPopIterate(t *testing.T) {
 		SetThreshold(512)
 		defer SetThreshold(1024)
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3183,7 +3168,7 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		err = ValidMap(m, typeInfo, hashInputProvider)
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3225,10 +3210,9 @@ func TestEmptyMap(t *testing.T) {
 
 	t.Parallel()
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	storage := newTestPersistentStorage(t)
-	storage.DecodeStorable = decodeStorable
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3288,13 +3272,14 @@ func TestEmptyMap(t *testing.T) {
 func TestMapBatchSet(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		m, err := NewMap(
 			newTestBasicStorage(t),
 			Address{1, 2, 3, 4, 5, 6, 7, 8},
 			NewDefaultDigesterBuilder(),
-			typeInfo)
+			typeInfo,
+		)
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), m.Count())
 		require.Equal(t, typeInfo, m.Type())
@@ -3338,13 +3323,14 @@ func TestMapBatchSet(t *testing.T) {
 
 		const mapSize = 10
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		m, err := NewMap(
 			newTestBasicStorage(t),
 			Address{1, 2, 3, 4, 5, 6, 7, 8},
 			NewDefaultDigesterBuilder(),
-			typeInfo)
+			typeInfo,
+		)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapSize; i++ {
@@ -3413,13 +3399,14 @@ func TestMapBatchSet(t *testing.T) {
 
 		const mapSize = 1024 * 64
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		m, err := NewMap(
 			newTestBasicStorage(t),
 			Address{1, 2, 3, 4, 5, 6, 7, 8},
 			NewDefaultDigesterBuilder(),
-			typeInfo)
+			typeInfo,
+		)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapSize; i++ {
@@ -3485,13 +3472,14 @@ func TestMapBatchSet(t *testing.T) {
 
 		const mapSize = 1024 * 64
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		m, err := NewMap(
 			newTestBasicStorage(t),
 			Address{1, 2, 3, 4, 5, 6, 7, 8},
 			NewDefaultDigesterBuilder(),
-			typeInfo)
+			typeInfo,
+		)
 		require.NoError(t, err)
 
 		for m.Count() < mapSize {
@@ -3560,7 +3548,7 @@ func TestMapBatchSet(t *testing.T) {
 
 		const mapSize = 1024
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -3568,7 +3556,8 @@ func TestMapBatchSet(t *testing.T) {
 			newTestBasicStorage(t),
 			Address{1, 2, 3, 4, 5, 6, 7, 8},
 			digesterBuilder,
-			typeInfo)
+			typeInfo,
+		)
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapSize; i++ {
@@ -3636,12 +3625,32 @@ func TestMapBatchSet(t *testing.T) {
 		err = storage2.Load(encoded)
 		require.NoError(t, err)
 
-		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), typeInfo, digesterBuilder, compare, hashInputProvider, sortedKeys, keyValues)
+		testPopulatedMapFromStorage(
+			t,
+			storage2,
+			copied.StorageID(),
+			typeInfo,
+			digesterBuilder,
+			compare,
+			hashInputProvider,
+			sortedKeys,
+			keyValues,
+		)
 	})
 
 }
 
-func testPopulatedMapFromStorage(t *testing.T, storage SlabStorage, rootID StorageID, typeInfo cbor.RawMessage, digesterBuilder DigesterBuilder, comparator Comparator, hip HashInputProvider, sortedKeys []Value, keyValues map[Value]Value) {
+func testPopulatedMapFromStorage(
+	t *testing.T,
+	storage SlabStorage,
+	rootID StorageID,
+	typeInfo TypeInfo,
+	digesterBuilder DigesterBuilder,
+	comparator Comparator,
+	hip HashInputProvider,
+	sortedKeys []Value,
+	keyValues map[Value]Value,
+) {
 
 	m, err := NewMapWithRootID(storage, rootID, digesterBuilder)
 	require.NoError(t, err)
@@ -3668,7 +3677,7 @@ func testPopulatedMapFromStorage(t *testing.T, storage SlabStorage, rootID Stora
 	require.NoError(t, err)
 	require.Equal(t, len(keyValues), i)
 
-	err = ValidMap(m, typeInfo, hashInputProvider)
+	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}

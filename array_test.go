@@ -46,16 +46,20 @@ func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode)
-	storage.DecodeStorable = decodeStorable
-	return storage
+	return NewPersistentSlabStorage(
+		baseStorage,
+		encMode,
+		decMode,
+		decodeStorable,
+		decodeTypeInfo,
+	)
 }
 
 func TestAppendAndGet(t *testing.T) {
 
 	t.Parallel()
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	const arraySize = 256 * 256
 
@@ -82,7 +86,7 @@ func TestAppendAndGet(t *testing.T) {
 
 	require.Equal(t, typeInfo, array.Type())
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -103,7 +107,7 @@ func TestSetAndGet(t *testing.T) {
 	t.Run("set", func(t *testing.T) {
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -137,7 +141,7 @@ func TestSetAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -158,7 +162,7 @@ func TestSetAndGet(t *testing.T) {
 			SetThreshold(1024)
 		}()
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -193,7 +197,7 @@ func TestSetAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -214,7 +218,7 @@ func TestSetAndGet(t *testing.T) {
 			SetThreshold(1024)
 		}()
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -249,7 +253,7 @@ func TestSetAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -273,7 +277,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -298,7 +302,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -315,7 +319,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -340,7 +344,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -357,7 +361,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -387,7 +391,7 @@ func TestInsertAndGet(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -410,7 +414,7 @@ func TestRemove(t *testing.T) {
 	t.Run("remove-first", func(t *testing.T) {
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -441,7 +445,7 @@ func TestRemove(t *testing.T) {
 			require.Equal(t, typeInfo, array.Type())
 
 			if i%256 == 0 {
-				err = ValidArray(array, typeInfo, hashInputProvider)
+				err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 				if err != nil {
 					PrintArray(array)
 				}
@@ -462,7 +466,7 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -493,7 +497,7 @@ func TestRemove(t *testing.T) {
 			require.Equal(t, typeInfo, array.Type())
 
 			if i%256 == 0 {
-				err = ValidArray(array, typeInfo, hashInputProvider)
+				err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 				if err != nil {
 					PrintArray(array)
 				}
@@ -514,7 +518,7 @@ func TestRemove(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -545,7 +549,7 @@ func TestRemove(t *testing.T) {
 			require.Equal(t, typeInfo, array.Type())
 
 			if i%256 == 0 {
-				err = ValidArray(array, typeInfo, hashInputProvider)
+				err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 				if err != nil {
 					PrintArray(array)
 				}
@@ -574,7 +578,7 @@ func TestSplit(t *testing.T) {
 	t.Run("data slab as root", func(t *testing.T) {
 		const arraySize = 50
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -608,7 +612,7 @@ func TestSplit(t *testing.T) {
 
 		const arraySize = 50
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -649,7 +653,7 @@ func TestSplit(t *testing.T) {
 func TestIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -675,7 +679,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -709,7 +713,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -752,7 +756,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -791,7 +795,7 @@ func TestIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -826,7 +830,7 @@ func TestIterate(t *testing.T) {
 
 	t.Run("stop", func(t *testing.T) {
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -861,7 +865,7 @@ func TestIterate(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -906,7 +910,7 @@ func TestConstRootStorageID(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	storage := newTestPersistentStorage(t)
 
@@ -949,7 +953,7 @@ func TestSetRandomValue(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	storage := newTestPersistentStorage(t)
 
@@ -998,7 +1002,7 @@ func TestSetRandomValue(t *testing.T) {
 
 	require.Equal(t, typeInfo, array.Type())
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1022,7 +1026,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -1052,7 +1056,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -1069,7 +1073,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -1099,7 +1103,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -1116,7 +1120,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestPersistentStorage(t)
 
@@ -1149,7 +1153,7 @@ func TestInsertRandomValue(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -1172,7 +1176,7 @@ func TestRemoveRandomElement(t *testing.T) {
 
 	const arraySize = 256 * 256
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	storage := newTestPersistentStorage(t)
 
@@ -1215,7 +1219,7 @@ func TestRemoveRandomElement(t *testing.T) {
 	require.Equal(t, uint64(0), uint64(len(values)))
 	require.Equal(t, typeInfo, array.Type())
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1245,7 +1249,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	storage := newTestPersistentStorage(t)
 
@@ -1343,7 +1347,7 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1373,7 +1377,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	storage := newTestPersistentStorage(t)
 
@@ -1471,7 +1475,7 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1509,7 +1513,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	const actionCount = 256 * 256
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	storage := newTestPersistentStorage(t)
 
@@ -1613,7 +1617,7 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, len(values), i)
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1637,7 +1641,7 @@ func TestNestedArray(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		nestedTypeInfo := cbor.RawMessage{0x18, 0x2B} // unsigned(43)
+		nestedTypeInfo := testTypeInfo{43}
 
 		storage := newTestPersistentStorage(t)
 
@@ -1659,7 +1663,7 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested
 		}
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
@@ -1679,7 +1683,7 @@ func TestNestedArray(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -1690,7 +1694,7 @@ func TestNestedArray(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		nestedTypeInfo := cbor.RawMessage{0x18, 0x2B} // unsigned(43)
+		nestedTypeInfo := testTypeInfo{43}
 
 		storage := newTestPersistentStorage(t)
 
@@ -1710,7 +1714,7 @@ func TestNestedArray(t *testing.T) {
 			nestedArrays[i] = nested
 		}
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
@@ -1730,7 +1734,7 @@ func TestNestedArray(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -1752,11 +1756,10 @@ func TestEncode(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("no pointers", func(t *testing.T) {
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		// Create and populate array in memory
-		storage := NewBasicSlabStorage(encMode, decMode)
-		storage.DecodeStorable = decodeStorable
+		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1871,11 +1874,10 @@ func TestEncode(t *testing.T) {
 	})
 
 	t.Run("has pointers", func(t *testing.T) {
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		// Create and populate array in memory
-		storage := NewBasicSlabStorage(encMode, decMode)
-		storage.DecodeStorable = decodeStorable
+		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1893,7 +1895,7 @@ func TestEncode(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		typeInfo2 := cbor.RawMessage{0x18, 0x2B} // unsigned(43)
+		typeInfo2 := testTypeInfo{43}
 
 		array2, err := NewArray(storage, address, typeInfo2)
 		require.NoError(t, err)
@@ -2027,7 +2029,7 @@ func TestDecodeEncode(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2119,8 +2121,7 @@ func TestDecodeEncode(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	storage := NewBasicSlabStorage(encMode, decMode)
-	storage.DecodeStorable = decodeStorable
+	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	err = storage.Load(data)
 	require.NoError(t, err)
@@ -2185,10 +2186,9 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
-	storage := NewBasicSlabStorage(encMode, decMode)
-	storage.DecodeStorable = decodeStorable
+	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2222,7 +2222,7 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 
 	require.Equal(t, typeInfo, array.Type())
 
-	err = ValidArray(array, typeInfo, hashInputProvider)
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -2235,8 +2235,7 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decode data to new storage
-	storage2 := NewBasicSlabStorage(encMode, decMode)
-	storage2.DecodeStorable = decodeStorable
+	storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	err = storage2.Load(m1)
 	require.NoError(t, err)
@@ -2268,10 +2267,9 @@ func TestEmptyArray(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
-	storage := NewBasicSlabStorage(encMode, decMode)
-	storage.DecodeStorable = decodeStorable
+	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2370,7 +2368,7 @@ func TestStringElement(t *testing.T) {
 
 	t.Run("inline", func(t *testing.T) {
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		const arraySize = 256 * 256
 
@@ -2405,7 +2403,7 @@ func TestStringElement(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2423,7 +2421,7 @@ func TestStringElement(t *testing.T) {
 
 	t.Run("external slab", func(t *testing.T) {
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		const arraySize = 256 * 256
 
@@ -2461,7 +2459,7 @@ func TestStringElement(t *testing.T) {
 
 		require.Equal(t, typeInfo, array.Type())
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2482,7 +2480,7 @@ func TestArrayStoredValue(t *testing.T) {
 
 	const arraySize = 64 * 1024
 
-	typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2523,7 +2521,7 @@ func TestArrayStoredValue(t *testing.T) {
 func TestPopIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestBasicStorage(t)
 
@@ -2540,7 +2538,7 @@ func TestPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), i)
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2555,7 +2553,7 @@ func TestPopIterate(t *testing.T) {
 
 		const arraySize = 10
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestBasicStorage(t)
 
@@ -2582,7 +2580,7 @@ func TestPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, i, uint64(arraySize))
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2601,7 +2599,7 @@ func TestPopIterate(t *testing.T) {
 
 		const arraySize = 256 * 256
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		storage := newTestBasicStorage(t)
 
@@ -2628,7 +2626,7 @@ func TestPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(arraySize), i)
 
-		err = ValidArray(array, typeInfo, hashInputProvider)
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2644,7 +2642,7 @@ func TestPopIterate(t *testing.T) {
 func TestArrayBatchAppend(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		array, err := NewArray(
 			newTestBasicStorage(t),
@@ -2679,7 +2677,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		err = ValidArray(copied, typeInfo, hashInputProvider)
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2691,7 +2689,7 @@ func TestArrayBatchAppend(t *testing.T) {
 
 		const arraySize = 10
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		array, err := NewArray(
 			newTestBasicStorage(t),
@@ -2742,7 +2740,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
 
-		err = ValidArray(copied, typeInfo, hashInputProvider)
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2757,7 +2755,7 @@ func TestArrayBatchAppend(t *testing.T) {
 
 		const arraySize = 1024 * 64
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		array, err := NewArray(
 			newTestBasicStorage(t),
@@ -2807,7 +2805,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
 
-		err = ValidArray(copied, typeInfo, hashInputProvider)
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2822,7 +2820,7 @@ func TestArrayBatchAppend(t *testing.T) {
 
 		const arraySize = 1024 * 64
 
-		typeInfo := cbor.RawMessage{0x18, 0x2A} // unsigned(42)
+		typeInfo := testTypeInfo{42}
 
 		array, err := NewArray(
 			newTestBasicStorage(t),
@@ -2882,7 +2880,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
 
-		err = ValidArray(copied, typeInfo, hashInputProvider)
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
 			PrintArray(array)
 		}

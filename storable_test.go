@@ -486,6 +486,15 @@ func decodeStorable(dec *cbor.StreamDecoder, _ StorageID) (Storable, error) {
 	}
 }
 
+func decodeTypeInfo(dec *cbor.StreamDecoder) (TypeInfo, error) {
+	value, err := dec.DecodeUint64()
+	if err != nil {
+		return nil, err
+	}
+
+	return testTypeInfo{value: value}, nil
+}
+
 func compare(storage SlabStorage, value Value, storable Storable) (bool, error) {
 	switch v := value.(type) {
 

@@ -19,10 +19,13 @@
 package atree
 
 import (
+	"bytes"
 	"container/list"
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 type ArrayStats struct {
@@ -355,4 +358,252 @@ func validArraySlab(
 	}
 
 	return meta.header.count, dataSlabIDs, nextDataSlabIDs, nil
+}
+
+// ValidArraySerialization traverses array tree and verifies serialization
+// by encoding, decoding, and re-encoding slabs.
+// It compares in-memory objects of original slab with decoded slab.
+// It also compares encoded data of original slab with encoded data of decoded slab.
+func ValidArraySerialization(
+	a *Array,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+	return validArraySlabSerialization(
+		a.Storage,
+		a.root.ID(),
+		cborDecMode,
+		cborEncMode,
+		decodeStorable,
+		decodeTypeInfo,
+	)
+}
+
+func validArraySlabSerialization(
+	storage SlabStorage,
+	id StorageID,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+
+	slab, err := getArraySlab(storage, id)
+	if err != nil {
+		return err
+	}
+
+	// Encode slab
+	data, err := Encode(slab, cborEncMode)
+	if err != nil {
+		return err
+	}
+
+	// Decode encoded slab
+	decodedSlab, err := decodeSlab(id, data, cborDecMode, decodeStorable, decodeTypeInfo)
+	if err != nil {
+		return err
+	}
+
+	// Re-encode decoded slab
+	dataFromDecodedSlab, err := Encode(decodedSlab, cborEncMode)
+	if err != nil {
+		return err
+	}
+
+	// Extra check: encoded data size == header.size
+	encodedExtraDataSize, err := getEncodedExtraDataSize(slab.ExtraData(), cborEncMode)
+	if err != nil {
+		return err
+	}
+
+	// Need to exclude extra data size from encoded data size.
+	encodedSlabSize := uint32(len(data) - encodedExtraDataSize)
+	if slab.Header().size != encodedSlabSize {
+		return fmt.Errorf("slab %d encoded size %d != header.size %d (encoded extra data size %d)",
+			id, encodedSlabSize, slab.Header().size, encodedExtraDataSize)
+	}
+
+	// Compare encoded data of original slab with encoded data of decoded slab
+	if !bytes.Equal(data, dataFromDecodedSlab) {
+		return fmt.Errorf("slab %d encoded data is different from decoded slab's encoded data, got %v, want %v",
+			id, dataFromDecodedSlab, data)
+	}
+
+	if slab.IsData() {
+		dataSlab, ok := slab.(*ArrayDataSlab)
+		if !ok {
+			return fmt.Errorf("slab %d is not ArrayDataSlab", id)
+		}
+
+		decodedDataSlab, ok := decodedSlab.(*ArrayDataSlab)
+		if !ok {
+			return fmt.Errorf("decoded slab %d is not ArrayDataSlab", id)
+		}
+
+		// Compare slabs
+		err = arrayDataSlabEqual(dataSlab, decodedDataSlab, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		if err != nil {
+			return fmt.Errorf("data slab %d round-trip serialization failed: %s", id, err)
+		}
+
+		return nil
+	}
+
+	metaSlab, ok := slab.(*ArrayMetaDataSlab)
+	if !ok {
+		return fmt.Errorf("slab %d is not ArrayMetaDataSlab", id)
+	}
+
+	decodedMetaSlab, ok := decodedSlab.(*ArrayMetaDataSlab)
+	if !ok {
+		return fmt.Errorf("decoded slab %d is not ArrayMetaDataSlab", id)
+	}
+
+	// Compare slabs
+	err = arrayMetaDataSlabEqual(metaSlab, decodedMetaSlab)
+	if err != nil {
+		return fmt.Errorf("metadata slab %d round-trip serialization failed: %s", id, err)
+	}
+
+	for _, h := range metaSlab.childrenHeaders {
+		// Verify child slabs
+		err = validArraySlabSerialization(storage, h.id, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func arrayDataSlabEqual(
+	expected *ArrayDataSlab,
+	actual *ArrayDataSlab,
+	storage SlabStorage,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+
+	// Compare extra data
+	err := arrayExtraDataEqual(expected.extraData, actual.extraData)
+	if err != nil {
+		return err
+	}
+
+	// Compare next
+	if expected.next != actual.next {
+		return fmt.Errorf("next %d is wrong, want %d", actual.next, expected.next)
+	}
+
+	// Compare header
+	if !reflect.DeepEqual(expected.header, actual.header) {
+		return fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header)
+	}
+
+	// Compare elements length
+	if len(expected.elements) != len(actual.elements) {
+		return fmt.Errorf("elements len %d is wrong, want %d", len(actual.elements), len(expected.elements))
+	}
+
+	// Compare element
+	for i := 0; i < len(expected.elements); i++ {
+		ee := expected.elements[i]
+		ae := actual.elements[i]
+		if !reflect.DeepEqual(ee, ae) {
+			return fmt.Errorf("element %d %+v is wrong, want %+v", i, ae, ee)
+		}
+
+		// Compare nested element
+		if idStorable, ok := ee.(StorageIDStorable); ok {
+
+			ev, err := idStorable.StoredValue(storage)
+			if err != nil {
+				return err
+			}
+
+			return ValidValueSerialization(ev, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		}
+	}
+
+	return nil
+}
+
+func arrayMetaDataSlabEqual(expected, actual *ArrayMetaDataSlab) error {
+
+	// Compare extra data
+	err := arrayExtraDataEqual(expected.extraData, actual.extraData)
+	if err != nil {
+		return err
+	}
+
+	// Compare header
+	if !reflect.DeepEqual(expected.header, actual.header) {
+		return fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header)
+	}
+
+	// Compare childrenHeaders
+	if !reflect.DeepEqual(expected.childrenHeaders, actual.childrenHeaders) {
+		return fmt.Errorf("childrenHeaders %+v is wrong, want %+v", actual.childrenHeaders, expected.childrenHeaders)
+	}
+
+	// Compare childrenCountSum
+	if !reflect.DeepEqual(expected.childrenCountSum, actual.childrenCountSum) {
+		return fmt.Errorf("childrenCountSum %+v is wrong, want %+v", actual.childrenCountSum, expected.childrenCountSum)
+	}
+
+	return nil
+}
+
+func arrayExtraDataEqual(expected, actual *ArrayExtraData) error {
+
+	if (expected == nil) && (actual == nil) {
+		return nil
+	}
+
+	if (expected == nil) != (actual == nil) {
+		return fmt.Errorf("has extra data is %t, want %t", actual == nil, expected == nil)
+	}
+
+	if !reflect.DeepEqual(*expected, *actual) {
+		return fmt.Errorf("extra data %+v is wrong, want %+v", *actual, *expected)
+	}
+
+	return nil
+}
+
+func ValidValueSerialization(
+	value Value,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder) error {
+
+	switch v := value.(type) {
+	case (*Array):
+		return ValidArraySerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		//case (*OrderedMap):
+		//return ValidArraySerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+	}
+	return nil
+}
+
+func getEncodedExtraDataSize(extraData *ArrayExtraData, cborEncMode cbor.EncMode) (int, error) {
+	if extraData == nil {
+		return 0, nil
+	}
+
+	var buf bytes.Buffer
+	enc := NewEncoder(&buf, cborEncMode)
+
+	err := extraData.Encode(enc, byte(0))
+	if err != nil {
+		return 0, err
+	}
+
+	return len(buf.Bytes()), nil
 }

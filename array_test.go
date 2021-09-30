@@ -106,6 +106,12 @@ func TestAppendAndGet(t *testing.T) {
 	}
 	require.NoError(t, err)
 
+	err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
 	err = storage.Commit()
 	require.NoError(t, err)
 
@@ -156,6 +162,12 @@ func TestSetAndGet(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -217,6 +229,12 @@ func TestSetAndGet(t *testing.T) {
 		}
 		require.NoError(t, err)
 
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
 		err = storage.Commit()
 		require.NoError(t, err)
 
@@ -273,6 +291,12 @@ func TestSetAndGet(t *testing.T) {
 		}
 		require.NoError(t, err)
 
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
 		err = storage.Commit()
 		require.NoError(t, err)
 
@@ -322,6 +346,12 @@ func TestInsertAndGet(t *testing.T) {
 		}
 		require.NoError(t, err)
 
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
 		err = storage.Commit()
 		require.NoError(t, err)
 
@@ -359,6 +389,12 @@ func TestInsertAndGet(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -406,6 +442,12 @@ func TestInsertAndGet(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -464,6 +506,12 @@ func TestRemove(t *testing.T) {
 					PrintArray(array)
 				}
 				require.NoError(t, err)
+
+				err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+				if err != nil {
+					PrintArray(array)
+				}
+				require.NoError(t, err)
 			}
 		}
 
@@ -516,6 +564,12 @@ func TestRemove(t *testing.T) {
 					PrintArray(array)
 				}
 				require.NoError(t, err)
+
+				err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+				if err != nil {
+					PrintArray(array)
+				}
+				require.NoError(t, err)
 			}
 		}
 
@@ -564,6 +618,12 @@ func TestRemove(t *testing.T) {
 
 			if i%256 == 0 {
 				err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+				if err != nil {
+					PrintArray(array)
+				}
+				require.NoError(t, err)
+
+				err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 				if err != nil {
 					PrintArray(array)
 				}
@@ -1022,6 +1082,12 @@ func TestSetRandomValue(t *testing.T) {
 	}
 	require.NoError(t, err)
 
+	err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
 	err = storage.Commit()
 	require.NoError(t, err)
 
@@ -1076,6 +1142,12 @@ func TestInsertRandomValue(t *testing.T) {
 		}
 		require.NoError(t, err)
 
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
 		err = storage.Commit()
 		require.NoError(t, err)
 
@@ -1118,6 +1190,12 @@ func TestInsertRandomValue(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -1168,6 +1246,12 @@ func TestInsertRandomValue(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -1234,6 +1318,12 @@ func TestRemoveRandomElement(t *testing.T) {
 	require.Equal(t, typeInfo, array.Type())
 
 	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
+	err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1367,6 +1457,12 @@ func TestRandomAppendSetInsertRemove(t *testing.T) {
 	}
 	require.NoError(t, err)
 
+	err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
 	err = storage.Commit()
 	require.NoError(t, err)
 
@@ -1490,6 +1586,12 @@ func TestRandomAppendSetInsertRemoveUint8(t *testing.T) {
 	require.Equal(t, len(values), i)
 
 	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
+	err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1637,6 +1739,12 @@ func TestRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 	}
 	require.NoError(t, err)
 
+	err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
 	err = storage.Commit()
 	require.NoError(t, err)
 
@@ -1702,6 +1810,12 @@ func TestNestedArray(t *testing.T) {
 			PrintArray(array)
 		}
 		require.NoError(t, err)
+
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
 	})
 
 	t.Run("big", func(t *testing.T) {
@@ -1749,6 +1863,12 @@ func TestNestedArray(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2242,6 +2362,12 @@ func TestDecodeEncodeRandomData(t *testing.T) {
 	}
 	require.NoError(t, err)
 
+	err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
 	rootID := array.root.Header().id
 
 	// Encode slabs with random data of mixed types
@@ -2423,6 +2549,12 @@ func TestStringElement(t *testing.T) {
 		}
 		require.NoError(t, err)
 
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
 		err = storage.Commit()
 		require.NoError(t, err)
 
@@ -2474,6 +2606,12 @@ func TestStringElement(t *testing.T) {
 		require.Equal(t, typeInfo, array.Type())
 
 		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2558,6 +2696,12 @@ func TestPopIterate(t *testing.T) {
 		}
 		require.NoError(t, err)
 
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
 		require.Equal(t, uint64(0), array.Count())
 		require.Equal(t, 1, storage.Count())
 	})
@@ -2595,6 +2739,12 @@ func TestPopIterate(t *testing.T) {
 		require.Equal(t, i, uint64(arraySize))
 
 		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2646,6 +2796,12 @@ func TestPopIterate(t *testing.T) {
 		}
 		require.NoError(t, err)
 
+		err = ValidArraySerialization(array, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
 		require.Equal(t, uint64(0), array.Count())
 		require.Equal(t, typeInfo, array.Type())
 
@@ -2670,8 +2826,9 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create a new array with new storage, new address, and original array's elements.
+		storage := newTestBasicStorage(t)
 		copied, err := NewArrayFromBatchData(
-			newTestBasicStorage(t),
+			storage,
 			Address{2, 3, 4, 5, 6, 7, 8, 9},
 			array.Type(),
 			func() (Value, error) {
@@ -2692,6 +2849,12 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.Equal(t, 0, i)
 
 		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(copied, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2723,8 +2886,9 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create a new array with new storage, new address, and original array's elements.
+		storage := newTestBasicStorage(t)
 		copied, err := NewArrayFromBatchData(
-			newTestBasicStorage(t),
+			storage,
 			Address{2, 3, 4, 5, 6, 7, 8, 9},
 			array.Type(),
 			func() (Value, error) {
@@ -2755,6 +2919,12 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.Equal(t, arraySize, i)
 
 		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(copied, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2788,8 +2958,9 @@ func TestArrayBatchAppend(t *testing.T) {
 		iter, err := array.Iterator()
 		require.NoError(t, err)
 
+		storage := newTestBasicStorage(t)
 		copied, err := NewArrayFromBatchData(
-			newTestBasicStorage(t),
+			storage,
 			Address{2, 3, 4, 5, 6, 7, 8, 9},
 			array.Type(),
 			func() (Value, error) {
@@ -2820,6 +2991,12 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.Equal(t, arraySize, i)
 
 		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(copied, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}
@@ -2895,6 +3072,12 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.Equal(t, arraySize, i)
 
 		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = ValidArraySerialization(copied, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintArray(array)
 		}

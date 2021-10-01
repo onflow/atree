@@ -1,0 +1,32 @@
+---
+name: Reporting a Problem/Bug
+about: Reporting a Problem/Bug
+title: ''
+labels: bug
+assignees: fxamacker
+
+---
+
+<!---
+
+### Instructions
+
+Please fill out the template below to the best of your ability and include a label indicating which tool/service you were working with when you encountered the problem.
+
+-->
+
+### Problem
+
+<!--
+
+What is the problem you've encountered?
+
+-->
+
+### Steps to Reproduce
+
+<!--
+
+Share any details and steps to replicate
+
+-->

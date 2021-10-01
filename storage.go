@@ -403,7 +403,7 @@ func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
 // This is currently used for testing.
 func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 	for id, data := range m {
-		slab, err := decodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
+		slab, err := DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
 		if err != nil {
 			return err
 		}
@@ -649,7 +649,7 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	slab, err = decodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
+	slab, err = DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
 	if err == nil {
 		// save decoded slab to cache
 		s.cache[id] = slab

@@ -19,10 +19,13 @@
 package atree
 
 import (
+	"bytes"
 	"container/list"
 	"fmt"
 	"reflect"
 	"sort"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 type MapStats struct {
@@ -687,4 +690,457 @@ func ValidValue(value Value, typeInfo TypeInfo, tic TypeInfoComparator, hip Hash
 		return ValidMap(v, typeInfo, tic, hip)
 	}
 	return nil
+}
+
+// ValidMapSerialization traverses ordered map tree and verifies serialization
+// by encoding, decoding, and re-encoding slabs.
+// It compares in-memory objects of original slab with decoded slab.
+// It also compares encoded data of original slab with encoded data of decoded slab.
+func ValidMapSerialization(
+	m *OrderedMap,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+	return validMapSlabSerialization(
+		m.Storage,
+		m.root.ID(),
+		cborDecMode,
+		cborEncMode,
+		decodeStorable,
+		decodeTypeInfo,
+	)
+}
+
+func validMapSlabSerialization(
+	storage SlabStorage,
+	id StorageID,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+
+	slab, err := getMapSlab(storage, id)
+	if err != nil {
+		return err
+	}
+
+	// Encode slab
+	data, err := Encode(slab, cborEncMode)
+	if err != nil {
+		return err
+	}
+
+	// Decode encoded slab
+	decodedSlab, err := decodeSlab(id, data, cborDecMode, decodeStorable, decodeTypeInfo)
+	if err != nil {
+		return err
+	}
+
+	// Re-encode decoded slab
+	dataFromDecodedSlab, err := Encode(decodedSlab, cborEncMode)
+	if err != nil {
+		return err
+	}
+
+	// Extra check: encoded data size == header.size
+	encodedExtraDataSize, err := getEncodedMapExtraDataSize(slab.ExtraData(), cborEncMode)
+	if err != nil {
+		return err
+	}
+
+	// Need to exclude extra data size from encoded data size.
+	encodedSlabSize := uint32(len(data) - encodedExtraDataSize)
+	if slab.Header().size != encodedSlabSize {
+		return fmt.Errorf("slab %d encoded size %d != header.size %d (encoded extra data size %d)",
+			id, encodedSlabSize, slab.Header().size, encodedExtraDataSize)
+	}
+
+	// Compare encoded data of original slab with encoded data of decoded slab
+	if !bytes.Equal(data, dataFromDecodedSlab) {
+		return fmt.Errorf("slab %d encoded data is different from decoded slab's encoded data, got %v, want %v",
+			id, dataFromDecodedSlab, data)
+	}
+
+	if slab.IsData() {
+		dataSlab, ok := slab.(*MapDataSlab)
+		if !ok {
+			return fmt.Errorf("slab %d is not MapDataSlab", id)
+		}
+
+		decodedDataSlab, ok := decodedSlab.(*MapDataSlab)
+		if !ok {
+			return fmt.Errorf("decoded slab %d is not MapDataSlab", id)
+		}
+
+		// Compare slabs
+		err = mapDataSlabEqual(dataSlab, decodedDataSlab, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		if err != nil {
+			return fmt.Errorf("data slab %d round-trip serialization failed: %s", id, err)
+		}
+
+		return nil
+	}
+
+	metaSlab, ok := slab.(*MapMetaDataSlab)
+	if !ok {
+		return fmt.Errorf("slab %d is not MapMetaDataSlab", id)
+	}
+
+	decodedMetaSlab, ok := decodedSlab.(*MapMetaDataSlab)
+	if !ok {
+		return fmt.Errorf("decoded slab %d is not MapMetaDataSlab", id)
+	}
+
+	// Compare slabs
+	err = mapMetaDataSlabEqual(metaSlab, decodedMetaSlab)
+	if err != nil {
+		return fmt.Errorf("metadata slab %d round-trip serialization failed: %s", id, err)
+	}
+
+	for _, h := range metaSlab.childrenHeaders {
+		// Verify child slabs
+		err = validMapSlabSerialization(storage, h.id, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func mapDataSlabEqual(
+	expected *MapDataSlab,
+	actual *MapDataSlab,
+	storage SlabStorage,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+
+	// Compare extra data
+	err := mapExtraDataEqual(expected.extraData, actual.extraData)
+	if err != nil {
+		return err
+	}
+
+	// Compare next
+	if expected.next != actual.next {
+		return fmt.Errorf("next %d is wrong, want %d", actual.next, expected.next)
+	}
+
+	// Compare anySize flag
+	if expected.anySize != actual.anySize {
+		return fmt.Errorf("anySize %t is wrong, want %t", actual.anySize, expected.anySize)
+	}
+
+	// Compare collisionGroup flag
+	if expected.collisionGroup != actual.collisionGroup {
+		return fmt.Errorf("collisionGroup %t is wrong, want %t", actual.collisionGroup, expected.collisionGroup)
+	}
+
+	// Compare header
+	if !reflect.DeepEqual(expected.header, actual.header) {
+		return fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header)
+	}
+
+	// Compare elements
+	err = mapElementsEqual(expected.elements, actual.elements, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func mapElementsEqual(
+	expected elements,
+	actual elements,
+	storage SlabStorage,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+	switch expectedElems := expected.(type) {
+
+	case *hkeyElements:
+		actualElems, ok := actual.(*hkeyElements)
+		if !ok {
+			return fmt.Errorf("elements type %T is wrong, want %T", actual, expected)
+		}
+		return mapHkeyElementsEqual(expectedElems, actualElems, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+
+	case *singleElements:
+		actualElems, ok := actual.(*singleElements)
+		if !ok {
+			return fmt.Errorf("elements type %T is wrong, want %T", actual, expected)
+		}
+		return mapSingleElementsEqual(expectedElems, actualElems, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+
+	}
+
+	return nil
+}
+
+func mapHkeyElementsEqual(
+	expected *hkeyElements,
+	actual *hkeyElements,
+	storage SlabStorage,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+
+	if expected.level != actual.level {
+		return fmt.Errorf("hkeyElements level %d is wrong, want %d", actual.level, expected.level)
+	}
+
+	if expected.size != actual.size {
+		return fmt.Errorf("hkeyElements size %d is wrong, want %d", actual.size, expected.size)
+	}
+
+	if len(expected.hkeys) == 0 {
+		if len(actual.hkeys) != 0 {
+			return fmt.Errorf("hkeyElements hkeys %v is wrong, want %v", actual.hkeys, expected.hkeys)
+		}
+	} else {
+		if !reflect.DeepEqual(expected.hkeys, actual.hkeys) {
+			return fmt.Errorf("hkeyElements hkeys %v is wrong, want %v", actual.hkeys, expected.hkeys)
+		}
+	}
+
+	if len(expected.elems) != len(actual.elems) {
+		return fmt.Errorf("hkeyElements elems len %d is wrong, want %d", len(actual.elems), len(expected.elems))
+	}
+
+	for i := 0; i < len(expected.elems); i++ {
+		expectedEle := expected.elems[i]
+		actualEle := actual.elems[i]
+
+		err := mapElementEqual(expectedEle, actualEle, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func mapSingleElementsEqual(
+	expected *singleElements,
+	actual *singleElements,
+	storage SlabStorage,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+
+	if expected.level != actual.level {
+		return fmt.Errorf("singleElements level %d is wrong, want %d", actual.level, expected.level)
+	}
+
+	if expected.size != actual.size {
+		return fmt.Errorf("singleElements size %d is wrong, want %d", actual.size, expected.size)
+	}
+
+	if len(expected.elems) != len(actual.elems) {
+		return fmt.Errorf("singleElements elems len %d is wrong, want %d", len(actual.elems), len(expected.elems))
+	}
+
+	for i := 0; i < len(expected.elems); i++ {
+		expectedElem := expected.elems[i]
+		actualElem := actual.elems[i]
+
+		err := mapSingleElementEqual(expectedElem, actualElem, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func mapElementEqual(
+	expected element,
+	actual element,
+	storage SlabStorage,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+	switch expectedElem := expected.(type) {
+
+	case *singleElement:
+		actualElem, ok := actual.(*singleElement)
+		if !ok {
+			return fmt.Errorf("elements type %T is wrong, want %T", actual, expected)
+		}
+		return mapSingleElementEqual(expectedElem, actualElem, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+
+	case *inlineCollisionGroup:
+		actualElem, ok := actual.(*inlineCollisionGroup)
+		if !ok {
+			return fmt.Errorf("elements type %T is wrong, want %T", actual, expected)
+		}
+		return mapElementsEqual(expectedElem.elements, actualElem.elements, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+
+	case *externalCollisionGroup:
+		actualElem, ok := actual.(*externalCollisionGroup)
+		if !ok {
+			return fmt.Errorf("elements type %T is wrong, want %T", actual, expected)
+		}
+		return mapExternalCollisionElementsEqual(expectedElem, actualElem, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+
+	}
+
+	return nil
+}
+
+func mapExternalCollisionElementsEqual(
+	expected *externalCollisionGroup,
+	actual *externalCollisionGroup,
+	storage SlabStorage,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+
+	if expected.size != actual.size {
+		return fmt.Errorf("externalCollisionGroup size %d is wrong, want %d", actual.size, expected.size)
+	}
+
+	if expected.id != actual.id {
+		return fmt.Errorf("externalCollisionGroup id %d is wrong, want %d", actual.id, expected.id)
+	}
+
+	// Compare external collision slab
+	err := validMapSlabSerialization(storage, expected.id, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func mapSingleElementEqual(
+	expected *singleElement,
+	actual *singleElement,
+	storage SlabStorage,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) error {
+
+	if expected.size != actual.size {
+		return fmt.Errorf("singleElement size %d is wrong, want %d", actual.size, expected.size)
+	}
+
+	if expected.keyPointer != actual.keyPointer {
+		return fmt.Errorf("singleElement keyPointer %t is wrong, want %t", actual.keyPointer, expected.keyPointer)
+	}
+
+	if expected.valuePointer != actual.valuePointer {
+		return fmt.Errorf("singleElement valuePointer %t is wrong, want %t", actual.valuePointer, expected.valuePointer)
+	}
+
+	if !reflect.DeepEqual(expected.key, actual.key) {
+		return fmt.Errorf("singleElement key %v is wrong, want %v", actual.key, expected.key)
+	}
+
+	// Compare key stored in a separate slab
+	if idStorable, ok := expected.key.(StorageIDStorable); ok {
+
+		v, err := idStorable.StoredValue(storage)
+		if err != nil {
+			return err
+		}
+
+		err = ValidValueSerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		if err != nil {
+			return err
+		}
+	}
+
+	if !reflect.DeepEqual(expected.value, actual.value) {
+		return fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value)
+	}
+
+	// Compare value stored in a separate slab
+	if idStorable, ok := expected.value.(StorageIDStorable); ok {
+
+		v, err := idStorable.StoredValue(storage)
+		if err != nil {
+			return err
+		}
+
+		err = ValidValueSerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func mapMetaDataSlabEqual(expected, actual *MapMetaDataSlab) error {
+
+	// Compare extra data
+	err := mapExtraDataEqual(expected.extraData, actual.extraData)
+	if err != nil {
+		return err
+	}
+
+	// Compare header
+	if !reflect.DeepEqual(expected.header, actual.header) {
+		return fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header)
+	}
+
+	// Compare childrenHeaders
+	if !reflect.DeepEqual(expected.childrenHeaders, actual.childrenHeaders) {
+		return fmt.Errorf("childrenHeaders %+v is wrong, want %+v", actual.childrenHeaders, expected.childrenHeaders)
+	}
+
+	return nil
+}
+
+func mapExtraDataEqual(expected, actual *MapExtraData) error {
+
+	if (expected == nil) && (actual == nil) {
+		return nil
+	}
+
+	if (expected == nil) != (actual == nil) {
+		return fmt.Errorf("has extra data is %t, want %t", actual == nil, expected == nil)
+	}
+
+	if !reflect.DeepEqual(*expected, *actual) {
+		return fmt.Errorf("extra data %+v is wrong, want %+v", *actual, *expected)
+	}
+
+	return nil
+}
+
+func getEncodedMapExtraDataSize(extraData *MapExtraData, cborEncMode cbor.EncMode) (int, error) {
+	if extraData == nil {
+		return 0, nil
+	}
+
+	var buf bytes.Buffer
+	enc := NewEncoder(&buf, cborEncMode)
+
+	err := extraData.Encode(enc, byte(0), byte(0))
+	if err != nil {
+		return 0, err
+	}
+
+	return len(buf.Bytes()), nil
 }

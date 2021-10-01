@@ -414,7 +414,7 @@ func validArraySlabSerialization(
 	}
 
 	// Extra check: encoded data size == header.size
-	encodedExtraDataSize, err := getEncodedExtraDataSize(slab.ExtraData(), cborEncMode)
+	encodedExtraDataSize, err := getEncodedArrayExtraDataSize(slab.ExtraData(), cborEncMode)
 	if err != nil {
 		return err
 	}
@@ -576,23 +576,7 @@ func arrayExtraDataEqual(expected, actual *ArrayExtraData) error {
 	return nil
 }
 
-func ValidValueSerialization(
-	value Value,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder) error {
-
-	switch v := value.(type) {
-	case (*Array):
-		return ValidArraySerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
-		//case (*OrderedMap):
-		//return ValidArraySerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
-	}
-	return nil
-}
-
-func getEncodedExtraDataSize(extraData *ArrayExtraData, cborEncMode cbor.EncMode) (int, error) {
+func getEncodedArrayExtraDataSize(extraData *ArrayExtraData, cborEncMode cbor.EncMode) (int, error) {
 	if extraData == nil {
 		return 0, nil
 	}
@@ -606,4 +590,20 @@ func getEncodedExtraDataSize(extraData *ArrayExtraData, cborEncMode cbor.EncMode
 	}
 
 	return len(buf.Bytes()), nil
+}
+
+func ValidValueSerialization(
+	value Value,
+	cborDecMode cbor.DecMode,
+	cborEncMode cbor.EncMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder) error {
+
+	switch v := value.(type) {
+	case (*Array):
+		return ValidArraySerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+	case (*OrderedMap):
+		return ValidMapSerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+	}
+	return nil
 }

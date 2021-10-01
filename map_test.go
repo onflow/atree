@@ -70,7 +70,7 @@ func (d mockDigester) Levels() int {
 
 func (d mockDigester) Reset() {}
 
-func newTestInMemoryStorage(t testing.TB) SlabStorage {
+func newTestInMemoryStorage(t testing.TB) *BasicSlabStorage {
 
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
@@ -121,6 +121,12 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -180,6 +186,12 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -263,6 +275,12 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 		require.NoError(t, err)
 
+		err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
 		for k, v := range uniqueKeyValues {
 			strv := k.(StringValue)
 			require.NotNil(t, strv)
@@ -323,6 +341,12 @@ func TestMapHash(t *testing.T) {
 	}
 
 	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
+	err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -391,6 +415,12 @@ func TestMapRemove(t *testing.T) {
 		}
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -486,6 +516,12 @@ func TestMapRemove(t *testing.T) {
 		}
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -838,6 +874,12 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	}
 	require.NoError(t, err)
 
+	err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
 	for k, v := range uniqueKeyValues {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
@@ -930,6 +972,12 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 	}
 
 	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
+	err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -1054,6 +1102,12 @@ func TestMapLargeElement(t *testing.T) {
 	require.Equal(t, uint64(mapSize), m.Count())
 
 	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
+	err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -1213,6 +1267,13 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 		PrintMap(m)
 	}
 	require.NoError(t, err)
+
+	err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
 }
 
 func TestMapEncodeDecode(t *testing.T) {
@@ -2858,6 +2919,12 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 	}
 	require.NoError(t, err)
 
+	err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
 	rootID := m.StorageID()
 
 	// Encode slabs with random data of mixed types
@@ -2981,6 +3048,12 @@ func TestMapPopIterate(t *testing.T) {
 		}
 		require.NoError(t, err)
 
+		err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
 		require.Equal(t, uint64(0), m.Count())
 		require.Equal(t, 1, storage.Count())
 	})
@@ -3038,6 +3111,12 @@ func TestMapPopIterate(t *testing.T) {
 		require.Equal(t, 0, i)
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3103,6 +3182,12 @@ func TestMapPopIterate(t *testing.T) {
 		require.Equal(t, 0, i)
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3187,6 +3272,12 @@ func TestMapPopIterate(t *testing.T) {
 		require.Equal(t, 0, i)
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3660,7 +3751,7 @@ func TestMapBatchSet(t *testing.T) {
 
 func testPopulatedMapFromStorage(
 	t *testing.T,
-	storage SlabStorage,
+	storage *BasicSlabStorage,
 	rootID StorageID,
 	typeInfo TypeInfo,
 	digesterBuilder DigesterBuilder,
@@ -3696,6 +3787,12 @@ func testPopulatedMapFromStorage(
 	require.Equal(t, len(keyValues), i)
 
 	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
+	err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
 	if err != nil {
 		PrintMap(m)
 	}

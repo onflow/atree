@@ -1,6 +1,6 @@
 # Atree
 
-Atree provides scalable arrays and scalable ordered maps.
+Atree provides scalable arrays and scalable ordered maps.  It is used by [Cadence](https://github.com/onflow/cadence) in the [Flow](https://github.com/onflow/flow-go) blockchain.
 
 ## License
 

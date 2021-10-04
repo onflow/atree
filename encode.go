@@ -50,7 +50,7 @@ type StorableDecoder func(
 	error,
 )
 
-func decodeSlab(
+func DecodeSlab(
 	id StorageID,
 	data []byte,
 	decMode cbor.DecMode,

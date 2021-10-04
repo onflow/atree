@@ -70,31 +70,85 @@ func (d mockDigester) Levels() int {
 
 func (d mockDigester) Reset() {}
 
-func newTestInMemoryStorage(t testing.TB) SlabStorage {
-
-	encMode, err := cbor.EncOptions{}.EncMode()
-	require.NoError(t, err)
-
-	decMode, err := cbor.DecOptions{}.DecMode()
-	require.NoError(t, err)
-
-	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
-
-	return storage
-}
-
-// TODO: use newTestPersistentStorage after serialization is implemented.
 func TestMapSetAndGet(t *testing.T) {
 
 	t.Run("unique keys", func(t *testing.T) {
 
-		const mapSize = 64 * 1024
+		const mapSize = 1024 * 4
 
 		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		storage := newTestInMemoryStorage(t)
+		storage := newTestPersistentStorage(t)
+
+		uniqueKeys := make(map[string]bool, mapSize)
+		uniqueKeyValues := make(map[Value]Value, mapSize)
+		for i := uint64(0); i < mapSize; i++ {
+			for {
+				s := randStr(16)
+				if !uniqueKeys[s] {
+					uniqueKeys[s] = true
+
+					k := NewStringValue(s)
+					uniqueKeyValues[k] = Uint64Value(i)
+					break
+				}
+			}
+		}
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range uniqueKeyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = validMapSerialization(m, storage)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		for k, v := range uniqueKeyValues {
+			strv := k.(StringValue)
+			require.NotNil(t, strv)
+
+			s, err := m.Get(compare, hashInputProvider, NewStringValue(strv.str))
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, e)
+		}
+
+		require.Equal(t, typeInfo, m.Type())
+		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
+
+		stats, _ := GetMapStats(m)
+		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
+	})
+
+	t.Run("replicate keys", func(t *testing.T) {
+
+		const mapSize = 1024 * 4
+
+		typeInfo := testTypeInfo{42}
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		storage := newTestPersistentStorage(t)
 
 		uniqueKeys := make(map[string]bool, mapSize)
 		uniqueKeyValues := make(map[Value]Value, mapSize)
@@ -126,60 +180,7 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 		require.NoError(t, err)
 
-		for k, v := range uniqueKeyValues {
-			strv := k.(StringValue)
-			require.NotNil(t, strv)
-
-			s, err := m.Get(compare, hashInputProvider, NewStringValue(strv.str))
-			require.NoError(t, err)
-
-			e, err := s.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, e)
-		}
-
-		require.Equal(t, typeInfo, m.Type())
-		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
-
-		stats, _ := GetMapStats(m)
-		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
-	})
-
-	t.Run("replicate keys", func(t *testing.T) {
-
-		const mapSize = 64 * 1024
-
-		typeInfo := testTypeInfo{42}
-
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
-		storage := newTestInMemoryStorage(t)
-
-		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[Value]Value, mapSize)
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				s := randStr(16)
-				if !uniqueKeys[s] {
-					uniqueKeys[s] = true
-
-					k := NewStringValue(s)
-					uniqueKeyValues[k] = Uint64Value(i)
-					break
-				}
-			}
-		}
-
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
-		require.NoError(t, err)
-
-		for k, v := range uniqueKeyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-		}
-
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		err = validMapSerialization(m, storage)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -215,6 +216,9 @@ func TestMapSetAndGet(t *testing.T) {
 		require.Equal(t, typeInfo, m.Type())
 		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
 
+		err = storage.Commit()
+		require.NoError(t, err)
+
 		stats, _ := GetMapStats(m)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
 	})
@@ -222,7 +226,7 @@ func TestMapSetAndGet(t *testing.T) {
 	// Test random string with random length as key and random uint as value
 	t.Run("random key and value", func(t *testing.T) {
 
-		const mapSize = 64 * 1024
+		const mapSize = 1024 * 4
 		const maxKeyLength = 224
 
 		typeInfo := testTypeInfo{42}
@@ -246,7 +250,7 @@ func TestMapSetAndGet(t *testing.T) {
 			}
 		}
 
-		storage := newTestInMemoryStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
@@ -258,6 +262,12 @@ func TestMapSetAndGet(t *testing.T) {
 		}
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = validMapSerialization(m, storage)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -278,6 +288,9 @@ func TestMapSetAndGet(t *testing.T) {
 		require.Equal(t, typeInfo, m.Type())
 		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
 
+		err = storage.Commit()
+		require.NoError(t, err)
+
 		stats, _ := GetMapStats(m)
 		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
 	})
@@ -285,13 +298,13 @@ func TestMapSetAndGet(t *testing.T) {
 
 func TestMapHash(t *testing.T) {
 
-	const mapSize = 64 * 1024
+	const mapSize = 1024 * 4
 
 	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	storage := newTestInMemoryStorage(t)
+	storage := newTestPersistentStorage(t)
 
 	uniqueKeys := make(map[string]bool, mapSize*2)
 	var keysToInsert []string
@@ -328,6 +341,12 @@ func TestMapHash(t *testing.T) {
 	}
 	require.NoError(t, err)
 
+	err = validMapSerialization(m, storage)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
 	for _, k := range keysToInsert {
 		exist, err := m.Has(compare, hashInputProvider, NewStringValue(k))
 		require.NoError(t, err)
@@ -353,7 +372,7 @@ func TestMapRemove(t *testing.T) {
 
 	t.Run("small key and value", func(t *testing.T) {
 
-		const mapSize = 2 * 1024
+		const mapSize = 1024 * 4
 
 		const keyStringMaxSize = 16
 
@@ -363,7 +382,7 @@ func TestMapRemove(t *testing.T) {
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		storage := newTestInMemoryStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		uniqueKeys := make(map[string]bool, mapSize)
 		uniqueKeyValues := make(map[Value]Value, mapSize)
@@ -391,6 +410,12 @@ func TestMapRemove(t *testing.T) {
 		}
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = validMapSerialization(m, storage)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -438,6 +463,9 @@ func TestMapRemove(t *testing.T) {
 
 			require.Equal(t, typeInfo, m.Type())
 		}
+
+		err = storage.Commit()
+		require.NoError(t, err)
 
 		stats, _ := GetMapStats(m)
 		require.Equal(t, uint64(1), stats.DataSlabCount)
@@ -448,7 +476,7 @@ func TestMapRemove(t *testing.T) {
 	})
 
 	t.Run("large key and value", func(t *testing.T) {
-		const mapSize = 2 * 1024
+		const mapSize = 1024 * 4
 
 		const keyStringMaxSize = 512
 
@@ -458,7 +486,7 @@ func TestMapRemove(t *testing.T) {
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		storage := newTestInMemoryStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		uniqueKeys := make(map[string]bool, mapSize)
 		uniqueKeyValues := make(map[Value]Value, mapSize)
@@ -486,6 +514,12 @@ func TestMapRemove(t *testing.T) {
 		}
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = validMapSerialization(m, storage)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -534,6 +568,9 @@ func TestMapRemove(t *testing.T) {
 			require.Equal(t, typeInfo, m.Type())
 		}
 
+		err = storage.Commit()
+		require.NoError(t, err)
+
 		stats, _ := GetMapStats(m)
 		require.Equal(t, uint64(1), stats.DataSlabCount)
 		require.Equal(t, uint64(0), stats.MetaDataSlabCount)
@@ -543,13 +580,13 @@ func TestMapRemove(t *testing.T) {
 
 func TestMapIterate(t *testing.T) {
 	t.Run("no collision", func(t *testing.T) {
-		const mapSize = 64 * 1024
+		const mapSize = 1024 * 4
 
 		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		storage := newTestInMemoryStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		digesterBuilder := newBasicDigesterBuilder()
 
@@ -662,7 +699,7 @@ func TestMapIterate(t *testing.T) {
 
 		digesterBuilder := &mockDigesterBuilder{}
 
-		storage := newTestInMemoryStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		uniqueKeyValues := make(map[Value]Value, mapSize)
 
@@ -774,7 +811,7 @@ func TestMapIterate(t *testing.T) {
 
 func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 
-	const mapSize = 2 * 1024
+	const mapSize = 1024
 
 	// mockDigestCount is the number of unique set of digests.
 	// Each set has maxDigestLevel of digest.
@@ -797,7 +834,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		}
 	}
 
-	storage := newTestInMemoryStorage(t)
+	storage := newTestPersistentStorage(t)
 
 	uniqueKeyValues := make(map[Value]Value, mapSize)
 	uniqueKeys := make(map[string]bool)
@@ -838,6 +875,12 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	}
 	require.NoError(t, err)
 
+	err = validMapSerialization(m, storage)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
 	for k, v := range uniqueKeyValues {
 		strv := k.(StringValue)
 		require.NotNil(t, strv)
@@ -851,6 +894,9 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	}
 
 	require.Equal(t, typeInfo, m.Type())
+
+	err = storage.Commit()
+	require.NoError(t, err)
 
 	stats, _ := GetMapStats(m)
 	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
@@ -872,6 +918,9 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		require.Equal(t, v, removedValue)
 	}
 
+	err = storage.Commit()
+	require.NoError(t, err)
+
 	require.Equal(t, uint64(0), m.Count())
 
 	require.Equal(t, typeInfo, m.Type())
@@ -886,7 +935,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 
 func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
-	const mapSize = 2 * 1024
+	const mapSize = 1024
 
 	typeInfo := testTypeInfo{42}
 
@@ -894,7 +943,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 	digesterBuilder := &mockDigesterBuilder{}
 
-	storage := newTestInMemoryStorage(t)
+	storage := newTestPersistentStorage(t)
 
 	uniqueKeyValues := make(map[Value]Value, mapSize)
 	uniqueKeys := make(map[string]bool)
@@ -929,7 +978,16 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		require.Nil(t, existingStorable)
 	}
 
+	err = storage.Commit()
+	require.NoError(t, err)
+
 	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
+	err = validMapSerialization(m, storage)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -967,6 +1025,9 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		require.NoError(t, err)
 		require.Equal(t, v, removedValue)
 	}
+
+	err = storage.Commit()
+	require.NoError(t, err)
 
 	require.Equal(t, uint64(0), m.Count())
 
@@ -1013,7 +1074,7 @@ func TestMapLargeElement(t *testing.T) {
 
 	typeInfo := testTypeInfo{42}
 
-	const mapSize = 2 * 1024
+	const mapSize = 1024 * 4
 
 	const keySize = 512
 	const valueSize = 512
@@ -1025,7 +1086,7 @@ func TestMapLargeElement(t *testing.T) {
 		strs[k] = v
 	}
 
-	storage := newTestInMemoryStorage(t)
+	storage := newTestPersistentStorage(t)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1037,6 +1098,9 @@ func TestMapLargeElement(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
+
+	err = storage.Commit()
+	require.NoError(t, err)
 
 	for k, v := range strs {
 		s, err := m.Get(compare, hashInputProvider, NewStringValue(k))
@@ -1054,6 +1118,12 @@ func TestMapLargeElement(t *testing.T) {
 	require.Equal(t, uint64(mapSize), m.Count())
 
 	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
+	err = validMapSerialization(m, storage)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -1085,7 +1155,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	const actionCount = 2 * 1024
+	const actionCount = 1024 * 4
 
 	const digestMaxValue = 256
 
@@ -1095,7 +1165,7 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 
 	typeInfo := testTypeInfo{42}
 
-	storage := newTestInMemoryStorage(t)
+	storage := newTestPersistentStorage(t)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1213,6 +1283,13 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 		PrintMap(m)
 	}
 	require.NoError(t, err)
+
+	err = validMapSerialization(m, storage)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
 }
 
 func TestMapEncodeDecode(t *testing.T) {
@@ -2748,19 +2825,13 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 		SetThreshold(1024)
 	}()
 
-	const actionCount = 2 * 1024
+	const actionCount = 1024 * 4
 
 	const stringMaxSize = 512
 
 	typeInfo := testTypeInfo{42}
 
-	encMode, err := cbor.EncOptions{}.EncMode()
-	require.NoError(t, err)
-
-	decMode, err := cbor.DecOptions{}.DecMode()
-	require.NoError(t, err)
-
-	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
+	storage := newTestPersistentStorage(t)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2858,20 +2929,21 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 	}
 	require.NoError(t, err)
 
+	err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
 	rootID := m.StorageID()
 
-	// Encode slabs with random data of mixed types
-	encodedData, err := storage.Encode()
+	err = storage.Commit()
 	require.NoError(t, err)
 
-	// Decode data to new storage
-	storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
-
-	err = storage2.Load(encodedData)
-	require.NoError(t, err)
+	storage.DropCache()
 
 	// Create new map from new storage
-	m2, err := NewMapWithRootID(storage2, rootID, digesterBuilder)
+	m2, err := NewMapWithRootID(storage, rootID, digesterBuilder)
 	require.NoError(t, err)
 
 	require.Equal(t, typeInfo, m2.Type())
@@ -2891,13 +2963,13 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 
 func TestMapStoredValue(t *testing.T) {
 
-	const mapSize = 64 * 1024
+	const mapSize = 1024 * 4
 
 	typeInfo := testTypeInfo{42}
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	storage := newTestInMemoryStorage(t)
+	storage := newTestPersistentStorage(t)
 
 	uniqueKeys := make(map[string]bool, mapSize)
 	uniqueKeyValues := make(map[Value]Value, mapSize)
@@ -2958,7 +3030,7 @@ func TestMapPopIterate(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 
-		storage := newTestInMemoryStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2966,6 +3038,10 @@ func TestMapPopIterate(t *testing.T) {
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
 		require.Equal(t, 1, storage.Count())
 
 		i := uint64(0)
@@ -2975,7 +3051,16 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), i)
 
+		err = storage.Commit()
+		require.NoError(t, err)
+
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = validMapSerialization(m, storage)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -2992,7 +3077,7 @@ func TestMapPopIterate(t *testing.T) {
 
 		typeInfo := testTypeInfo{42}
 
-		storage := newTestBasicStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3017,6 +3102,10 @@ func TestMapPopIterate(t *testing.T) {
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
 		require.Equal(t, 1, storage.Count())
 
 		sortedKeys = sortSliceByDigest(t, sortedKeys, digesterBuilder, hashInputProvider)
@@ -3037,7 +3126,16 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
+		err = storage.Commit()
+		require.NoError(t, err)
+
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = validMapSerialization(m, storage)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3049,13 +3147,13 @@ func TestMapPopIterate(t *testing.T) {
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
-		const mapSize = 64 * 1024
+		const mapSize = 1024 * 4
 
 		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		storage := newTestInMemoryStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		digesterBuilder := newBasicDigesterBuilder()
 
@@ -3083,6 +3181,9 @@ func TestMapPopIterate(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
+		err = storage.Commit()
+		require.NoError(t, err)
+
 		sortedKeys = sortSliceByDigest(t, sortedKeys, digesterBuilder, hashInputProvider)
 
 		// Iterate key value pairs
@@ -3102,7 +3203,16 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
+		err = storage.Commit()
+		require.NoError(t, err)
+
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = validMapSerialization(m, storage)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3127,7 +3237,7 @@ func TestMapPopIterate(t *testing.T) {
 
 		digesterBuilder := &mockDigesterBuilder{}
 
-		storage := newTestInMemoryStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		uniqueKeyValues := make(map[Value]Value, mapSize)
 
@@ -3169,6 +3279,9 @@ func TestMapPopIterate(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
+		err = storage.Commit()
+		require.NoError(t, err)
+
 		// Iterate key value pairs
 		i := mapSize
 		err = m.PopIterate(func(k Storable, v Storable) {
@@ -3186,7 +3299,16 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
+		err = storage.Commit()
+		require.NoError(t, err)
+
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = validMapSerialization(m, storage)
 		if err != nil {
 			PrintMap(m)
 		}
@@ -3293,7 +3415,7 @@ func TestMapBatchSet(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 
 		m, err := NewMap(
-			newTestBasicStorage(t),
+			newTestPersistentStorage(t),
 			Address{1, 2, 3, 4, 5, 6, 7, 8},
 			NewDefaultDigesterBuilder(),
 			typeInfo,
@@ -3305,11 +3427,11 @@ func TestMapBatchSet(t *testing.T) {
 		iter, err := m.Iterator()
 		require.NoError(t, err)
 
-		storage1 := newTestBasicStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		// Create a new map with new storage, new address, and original map's elements.
 		copied, err := NewMapFromBatchData(
-			storage1,
+			storage,
 			Address{2, 3, 4, 5, 6, 7, 8, 9},
 			NewDefaultDigesterBuilder(),
 			m.Type(),
@@ -3324,16 +3446,12 @@ func TestMapBatchSet(t *testing.T) {
 		require.Equal(t, m.Type(), copied.Type())
 		require.NotEqual(t, copied.StorageID(), m.StorageID())
 
-		// Encode copied map
-		encoded, err := storage1.Encode()
+		err = storage.Commit()
 		require.NoError(t, err)
 
-		// Load encoded slabs into a new storage
-		storage2 := newTestBasicStorage(t)
-		err = storage2.Load(encoded)
-		require.NoError(t, err)
+		storage.DropCache()
 
-		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, nil, nil)
+		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, nil, nil)
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
@@ -3344,7 +3462,7 @@ func TestMapBatchSet(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 
 		m, err := NewMap(
-			newTestBasicStorage(t),
+			newTestPersistentStorage(t),
 			Address{1, 2, 3, 4, 5, 6, 7, 8},
 			NewDefaultDigesterBuilder(),
 			typeInfo,
@@ -3366,13 +3484,13 @@ func TestMapBatchSet(t *testing.T) {
 		var sortedKeys []Value
 		keyValues := make(map[Value]Value)
 
-		storage1 := newTestBasicStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		digesterBuilder := NewDefaultDigesterBuilder()
 
 		// Create a new map with new storage, new address, and original map's elements.
 		copied, err := NewMapFromBatchData(
-			storage1,
+			storage,
 			Address{2, 3, 4, 5, 6, 7, 8, 9},
 			digesterBuilder,
 			m.Type(),
@@ -3397,16 +3515,12 @@ func TestMapBatchSet(t *testing.T) {
 		require.Equal(t, typeInfo, copied.Type())
 		require.NotEqual(t, copied.StorageID(), m.StorageID())
 
-		// Encode copied map
-		encoded, err := storage1.Encode()
+		err = storage.Commit()
 		require.NoError(t, err)
 
-		// Load encoded slabs into a new storage
-		storage2 := newTestBasicStorage(t)
-		err = storage2.Load(encoded)
-		require.NoError(t, err)
+		storage.DropCache()
 
-		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
@@ -3415,12 +3529,12 @@ func TestMapBatchSet(t *testing.T) {
 			SetThreshold(1024)
 		}()
 
-		const mapSize = 1024 * 64
+		const mapSize = 1024 * 4
 
 		typeInfo := testTypeInfo{42}
 
 		m, err := NewMap(
-			newTestBasicStorage(t),
+			newTestPersistentStorage(t),
 			Address{1, 2, 3, 4, 5, 6, 7, 8},
 			NewDefaultDigesterBuilder(),
 			typeInfo,
@@ -3442,12 +3556,12 @@ func TestMapBatchSet(t *testing.T) {
 		var sortedKeys []Value
 		keyValues := make(map[Value]Value)
 
-		storage1 := newTestBasicStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		digesterBuilder := NewDefaultDigesterBuilder()
 
 		copied, err := NewMapFromBatchData(
-			storage1,
+			storage,
 			Address{2, 3, 4, 5, 6, 7, 8, 9},
 			digesterBuilder,
 			m.Type(),
@@ -3470,16 +3584,12 @@ func TestMapBatchSet(t *testing.T) {
 		require.Equal(t, typeInfo, copied.Type())
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		// Encode copied map
-		encoded, err := storage1.Encode()
+		err = storage.Commit()
 		require.NoError(t, err)
 
-		// Load encoded slabs into a new storage
-		storage2 := newTestBasicStorage(t)
-		err = storage2.Load(encoded)
-		require.NoError(t, err)
+		storage.DropCache()
 
-		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
 	})
 
 	t.Run("random", func(t *testing.T) {
@@ -3488,12 +3598,12 @@ func TestMapBatchSet(t *testing.T) {
 			SetThreshold(1024)
 		}()
 
-		const mapSize = 1024 * 64
+		const mapSize = 1024 * 4
 
 		typeInfo := testTypeInfo{42}
 
 		m, err := NewMap(
-			newTestBasicStorage(t),
+			newTestPersistentStorage(t),
 			Address{1, 2, 3, 4, 5, 6, 7, 8},
 			NewDefaultDigesterBuilder(),
 			typeInfo,
@@ -3514,7 +3624,7 @@ func TestMapBatchSet(t *testing.T) {
 		iter, err := m.Iterator()
 		require.NoError(t, err)
 
-		storage1 := newTestBasicStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		digesterBuilder := NewDefaultDigesterBuilder()
 
@@ -3522,7 +3632,7 @@ func TestMapBatchSet(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 
 		copied, err := NewMapFromBatchData(
-			storage1,
+			storage,
 			Address{2, 3, 4, 5, 6, 7, 8, 9},
 			digesterBuilder,
 			m.Type(),
@@ -3545,16 +3655,12 @@ func TestMapBatchSet(t *testing.T) {
 		require.Equal(t, typeInfo, copied.Type())
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		// Encode copied map
-		encoded, err := storage1.Encode()
+		err = storage.Commit()
 		require.NoError(t, err)
 
-		// Load encoded slabs into a new storage
-		storage2 := newTestBasicStorage(t)
-		err = storage2.Load(encoded)
-		require.NoError(t, err)
+		storage.DropCache()
 
-		testPopulatedMapFromStorage(t, storage2, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
 	})
 
 	t.Run("collision", func(t *testing.T) {
@@ -3571,7 +3677,7 @@ func TestMapBatchSet(t *testing.T) {
 		digesterBuilder := &mockDigesterBuilder{}
 
 		m, err := NewMap(
-			newTestBasicStorage(t),
+			newTestPersistentStorage(t),
 			Address{1, 2, 3, 4, 5, 6, 7, 8},
 			digesterBuilder,
 			typeInfo,
@@ -3606,11 +3712,11 @@ func TestMapBatchSet(t *testing.T) {
 		var sortedKeys []Value
 		keyValues := make(map[Value]Value)
 
-		storage1 := newTestBasicStorage(t)
+		storage := newTestPersistentStorage(t)
 
 		i := 0
 		copied, err := NewMapFromBatchData(
-			storage1,
+			storage,
 			Address{2, 3, 4, 5, 6, 7, 8, 9},
 			digesterBuilder,
 			m.Type(),
@@ -3634,18 +3740,14 @@ func TestMapBatchSet(t *testing.T) {
 		require.Equal(t, typeInfo, copied.Type())
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		// Encode copied map
-		encoded, err := storage1.Encode()
+		err = storage.Commit()
 		require.NoError(t, err)
 
-		// Load encoded slabs into a new storage
-		storage2 := newTestBasicStorage(t)
-		err = storage2.Load(encoded)
-		require.NoError(t, err)
+		storage.DropCache()
 
 		testPopulatedMapFromStorage(
 			t,
-			storage2,
+			storage,
 			copied.StorageID(),
 			typeInfo,
 			digesterBuilder,
@@ -3660,7 +3762,7 @@ func TestMapBatchSet(t *testing.T) {
 
 func testPopulatedMapFromStorage(
 	t *testing.T,
-	storage SlabStorage,
+	storage *PersistentSlabStorage,
 	rootID StorageID,
 	typeInfo TypeInfo,
 	digesterBuilder DigesterBuilder,
@@ -3700,4 +3802,20 @@ func testPopulatedMapFromStorage(
 		PrintMap(m)
 	}
 	require.NoError(t, err)
+
+	err = validMapSerialization(m, storage)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+}
+
+func validMapSerialization(m *OrderedMap, storage *PersistentSlabStorage) error {
+	return ValidMapSerialization(
+		m,
+		storage.cborDecMode,
+		storage.cborEncMode,
+		storage.DecodeStorable,
+		storage.DecodeTypeInfo,
+	)
 }

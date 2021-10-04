@@ -404,7 +404,7 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 
 	array := NewBasicArray(storage, address)
 
-	const arraySize = 256 * 256
+	const arraySize = 1024 * 4
 	values := make([]Value, arraySize)
 	for i := uint64(0); i < arraySize; i++ {
 

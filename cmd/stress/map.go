@@ -183,6 +183,7 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 
 			// Update keys
 			copy(keys[index:], keys[index+1:])
+			keys[len(keys)-1] = nil
 			keys = keys[:len(keys)-1]
 
 			// Update map

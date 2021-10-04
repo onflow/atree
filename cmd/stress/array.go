@@ -221,6 +221,7 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 
 			// Update values
 			copy(values[k:], values[k+1:])
+			values[len(values)-1] = nil
 			values = values[:len(values)-1]
 
 			// Update array

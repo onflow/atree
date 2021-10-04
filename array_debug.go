@@ -584,6 +584,8 @@ func getEncodedArrayExtraDataSize(extraData *ArrayExtraData, cborEncMode cbor.En
 	var buf bytes.Buffer
 	enc := NewEncoder(&buf, cborEncMode)
 
+	// Normally the flag shouldn't be 0. But in this case we just need the encoded data size
+	// so the content of the flag doesn't matter.
 	err := extraData.Encode(enc, byte(0))
 	if err != nil {
 		return 0, err

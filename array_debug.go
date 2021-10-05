@@ -293,13 +293,17 @@ func validArraySlab(
 		for _, e := range dataSlab.elements {
 			v, err := e.StoredValue(storage)
 			if err != nil {
-				return 0, nil, nil, fmt.Errorf("data slab %d element %s can't be converted to value, %s",
-					id, e, err)
+				return 0, nil, nil, fmt.Errorf(
+					"data slab %d element %s can't be converted to value: %w",
+					id, e, err,
+				)
 			}
 			err = ValidValue(v, nil, tic, hip)
 			if err != nil {
-				return 0, nil, nil, fmt.Errorf("data slab %d element %s isn't valid, %s",
-					id, e, err)
+				return 0, nil, nil, fmt.Errorf(
+					"data slab %d element %s isn't valid: %w",
+					id, e, err,
+				)
 			}
 		}
 
@@ -446,7 +450,7 @@ func validArraySlabSerialization(
 		// Compare slabs
 		err = arrayDataSlabEqual(dataSlab, decodedDataSlab, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
 		if err != nil {
-			return fmt.Errorf("data slab %d round-trip serialization failed: %s", id, err)
+			return fmt.Errorf("data slab %d round-trip serialization failed: %w", id, err)
 		}
 
 		return nil
@@ -465,7 +469,7 @@ func validArraySlabSerialization(
 	// Compare slabs
 	err = arrayMetaDataSlabEqual(metaSlab, decodedMetaSlab)
 	if err != nil {
-		return fmt.Errorf("metadata slab %d round-trip serialization failed: %s", id, err)
+		return fmt.Errorf("metadata slab %d round-trip serialization failed: %w", id, err)
 	}
 
 	for _, h := range metaSlab.childrenHeaders {

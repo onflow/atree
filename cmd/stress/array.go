@@ -277,11 +277,11 @@ func checkArrayDataLoss(array *atree.Array, values []atree.Value) error {
 	for i, v := range values {
 		storable, err := array.Get(uint64(i))
 		if err != nil {
-			return fmt.Errorf("failed to get element at %d: %s", i, err)
+			return fmt.Errorf("failed to get element at %d: %w", i, err)
 		}
 		equal, err := compare(array.Storage, v, storable)
 		if err != nil {
-			return fmt.Errorf("failed to compare %s and %s: %s", v, storable, err)
+			return fmt.Errorf("failed to compare %s and %s: %w", v, storable, err)
 		}
 		if !equal {
 			return fmt.Errorf("Get(%d) returns %s, want %s", i, storable, v)

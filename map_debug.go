@@ -536,12 +536,12 @@ func validMapHkeyElements(
 			// Verify element
 			computedSize, maxDigestLevel, err := validSingleElement(storage, db, tic, hip, se, hkeys)
 			if err != nil {
-				return 0, 0, fmt.Errorf("data slab %d %s", id, err)
+				return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
 			}
 
 			// Verify digest level
 			if digestLevel >= maxDigestLevel {
-				return 0, 0, fmt.Errorf("data slab %d hkey elements %s digest level %d is wrong, want < %d",
+				return 0, 0, fmt.Errorf("data slab %d, hkey elements %s: digest level %d is wrong, want < %d",
 					id, elements, digestLevel, maxDigestLevel)
 			}
 
@@ -587,7 +587,7 @@ func validMapSingleElements(
 		// Verify element
 		computedSize, maxDigestLevel, err := validSingleElement(storage, db, tic, hip, e, hkeyPrefixes)
 		if err != nil {
-			return 0, 0, fmt.Errorf("data slab %d %s", id, err)
+			return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
 		}
 
 		// Verify element size is <= inline size
@@ -634,12 +634,12 @@ func validSingleElement(
 	// Verify key
 	kv, err := e.key.StoredValue(storage)
 	if err != nil {
-		return 0, 0, fmt.Errorf("element %s key can't be converted to value, %s", e, err)
+		return 0, 0, fmt.Errorf("element %s key can't be converted to value: %w", e, err)
 	}
 
 	err = ValidValue(kv, nil, tic, hip)
 	if err != nil {
-		return 0, 0, fmt.Errorf("element %s key isn't valid, %s", e, err)
+		return 0, 0, fmt.Errorf("element %s key isn't valid: %w", e, err)
 	}
 
 	// Verify value pointer
@@ -650,12 +650,12 @@ func validSingleElement(
 	// Verify value
 	vv, err := e.value.StoredValue(storage)
 	if err != nil {
-		return 0, 0, fmt.Errorf("element %s value can't be converted to value, %s", e, err)
+		return 0, 0, fmt.Errorf("element %s value can't be converted to value: %w", e, err)
 	}
 
 	err = ValidValue(vv, nil, tic, hip)
 	if err != nil {
-		return 0, 0, fmt.Errorf("element %s value isn't valid, %s", e, err)
+		return 0, 0, fmt.Errorf("element %s value isn't valid: %w", e, err)
 	}
 
 	// Verify size
@@ -778,7 +778,7 @@ func validMapSlabSerialization(
 		// Compare slabs
 		err = mapDataSlabEqual(dataSlab, decodedDataSlab, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
 		if err != nil {
-			return fmt.Errorf("data slab %d round-trip serialization failed: %s", id, err)
+			return fmt.Errorf("data slab %d round-trip serialization failed: %w", id, err)
 		}
 
 		return nil
@@ -797,7 +797,7 @@ func validMapSlabSerialization(
 	// Compare slabs
 	err = mapMetaDataSlabEqual(metaSlab, decodedMetaSlab)
 	if err != nil {
-		return fmt.Errorf("metadata slab %d round-trip serialization failed: %s", id, err)
+		return fmt.Errorf("metadata slab %d round-trip serialization failed: %w", id, err)
 	}
 
 	for _, h := range metaSlab.childrenHeaders {

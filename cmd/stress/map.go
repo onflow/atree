@@ -260,11 +260,11 @@ func checkMapDataLoss(m *atree.OrderedMap, elements map[atree.Value]atree.Value)
 	for k, v := range elements {
 		storable, err := m.Get(compare, hashInputProvider, k)
 		if err != nil {
-			return fmt.Errorf("failed to get element with key %s: %s", k, err)
+			return fmt.Errorf("failed to get element with key %s: %w", k, err)
 		}
 		equal, err := compare(m.Storage, v, storable)
 		if err != nil {
-			return fmt.Errorf("failed to compare %s and %s: %s", v, storable, err)
+			return fmt.Errorf("failed to compare %s and %s: %w", v, storable, err)
 		}
 		if !equal {
 			return fmt.Errorf("Get(%s) returns %s, want %s", k, storable, v)

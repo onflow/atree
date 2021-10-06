@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"reflect"
 	"sort"
 	"testing"
 
@@ -2929,7 +2930,7 @@ func TestMapEncodeDecodeRandomData(t *testing.T) {
 	}
 	require.NoError(t, err)
 
-	err = ValidMapSerialization(m, storage.cborDecMode, storage.cborEncMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+	err = validMapSerialization(m, storage)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -3766,7 +3767,7 @@ func testPopulatedMapFromStorage(
 	rootID StorageID,
 	typeInfo TypeInfo,
 	digesterBuilder DigesterBuilder,
-	comparator Comparator,
+	comparator ValueComparator,
 	hip HashInputProvider,
 	sortedKeys []Value,
 	keyValues map[Value]Value,
@@ -3817,5 +3818,8 @@ func validMapSerialization(m *OrderedMap, storage *PersistentSlabStorage) error 
 		storage.cborEncMode,
 		storage.DecodeStorable,
 		storage.DecodeTypeInfo,
+		func(a, b Storable) bool {
+			return reflect.DeepEqual(a, b)
+		},
 	)
 }

@@ -702,6 +702,7 @@ func ValidMapSerialization(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 	return validMapSlabSerialization(
 		m.Storage,
@@ -710,6 +711,7 @@ func ValidMapSerialization(
 		cborEncMode,
 		decodeStorable,
 		decodeTypeInfo,
+		compare,
 	)
 }
 
@@ -720,6 +722,7 @@ func validMapSlabSerialization(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 
 	slab, err := getMapSlab(storage, id)
@@ -776,7 +779,16 @@ func validMapSlabSerialization(
 		}
 
 		// Compare slabs
-		err = mapDataSlabEqual(dataSlab, decodedDataSlab, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		err = mapDataSlabEqual(
+			dataSlab,
+			decodedDataSlab,
+			storage,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 		if err != nil {
 			return fmt.Errorf("data slab %d round-trip serialization failed: %w", id, err)
 		}
@@ -802,7 +814,15 @@ func validMapSlabSerialization(
 
 	for _, h := range metaSlab.childrenHeaders {
 		// Verify child slabs
-		err = validMapSlabSerialization(storage, h.id, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		err = validMapSlabSerialization(
+			storage,
+			h.id,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 		if err != nil {
 			return err
 		}
@@ -819,6 +839,7 @@ func mapDataSlabEqual(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 
 	// Compare extra data
@@ -848,7 +869,16 @@ func mapDataSlabEqual(
 	}
 
 	// Compare elements
-	err = mapElementsEqual(expected.elements, actual.elements, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+	err = mapElementsEqual(
+		expected.elements,
+		actual.elements,
+		storage,
+		cborDecMode,
+		cborEncMode,
+		decodeStorable,
+		decodeTypeInfo,
+		compare,
+	)
 	if err != nil {
 		return err
 	}
@@ -864,6 +894,7 @@ func mapElementsEqual(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 	switch expectedElems := expected.(type) {
 
@@ -872,14 +903,32 @@ func mapElementsEqual(
 		if !ok {
 			return fmt.Errorf("elements type %T is wrong, want %T", actual, expected)
 		}
-		return mapHkeyElementsEqual(expectedElems, actualElems, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		return mapHkeyElementsEqual(
+			expectedElems,
+			actualElems,
+			storage,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 
 	case *singleElements:
 		actualElems, ok := actual.(*singleElements)
 		if !ok {
 			return fmt.Errorf("elements type %T is wrong, want %T", actual, expected)
 		}
-		return mapSingleElementsEqual(expectedElems, actualElems, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		return mapSingleElementsEqual(
+			expectedElems,
+			actualElems,
+			storage,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 
 	}
 
@@ -894,6 +943,7 @@ func mapHkeyElementsEqual(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 
 	if expected.level != actual.level {
@@ -922,7 +972,16 @@ func mapHkeyElementsEqual(
 		expectedEle := expected.elems[i]
 		actualEle := actual.elems[i]
 
-		err := mapElementEqual(expectedEle, actualEle, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		err := mapElementEqual(
+			expectedEle,
+			actualEle,
+			storage,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 		if err != nil {
 			return err
 		}
@@ -939,6 +998,7 @@ func mapSingleElementsEqual(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 
 	if expected.level != actual.level {
@@ -957,7 +1017,16 @@ func mapSingleElementsEqual(
 		expectedElem := expected.elems[i]
 		actualElem := actual.elems[i]
 
-		err := mapSingleElementEqual(expectedElem, actualElem, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		err := mapSingleElementEqual(
+			expectedElem,
+			actualElem,
+			storage,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 		if err != nil {
 			return err
 		}
@@ -974,6 +1043,7 @@ func mapElementEqual(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 	switch expectedElem := expected.(type) {
 
@@ -982,21 +1052,48 @@ func mapElementEqual(
 		if !ok {
 			return fmt.Errorf("elements type %T is wrong, want %T", actual, expected)
 		}
-		return mapSingleElementEqual(expectedElem, actualElem, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		return mapSingleElementEqual(
+			expectedElem,
+			actualElem,
+			storage,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 
 	case *inlineCollisionGroup:
 		actualElem, ok := actual.(*inlineCollisionGroup)
 		if !ok {
 			return fmt.Errorf("elements type %T is wrong, want %T", actual, expected)
 		}
-		return mapElementsEqual(expectedElem.elements, actualElem.elements, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		return mapElementsEqual(
+			expectedElem.elements,
+			actualElem.elements,
+			storage,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 
 	case *externalCollisionGroup:
 		actualElem, ok := actual.(*externalCollisionGroup)
 		if !ok {
 			return fmt.Errorf("elements type %T is wrong, want %T", actual, expected)
 		}
-		return mapExternalCollisionElementsEqual(expectedElem, actualElem, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		return mapExternalCollisionElementsEqual(
+			expectedElem,
+			actualElem,
+			storage,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 
 	}
 
@@ -1011,6 +1108,7 @@ func mapExternalCollisionElementsEqual(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 
 	if expected.size != actual.size {
@@ -1022,7 +1120,15 @@ func mapExternalCollisionElementsEqual(
 	}
 
 	// Compare external collision slab
-	err := validMapSlabSerialization(storage, expected.id, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+	err := validMapSlabSerialization(
+		storage,
+		expected.id,
+		cborDecMode,
+		cborEncMode,
+		decodeStorable,
+		decodeTypeInfo,
+		compare,
+	)
 	if err != nil {
 		return err
 	}
@@ -1038,6 +1144,7 @@ func mapSingleElementEqual(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 
 	if expected.size != actual.size {
@@ -1052,7 +1159,7 @@ func mapSingleElementEqual(
 		return fmt.Errorf("singleElement valuePointer %t is wrong, want %t", actual.valuePointer, expected.valuePointer)
 	}
 
-	if !reflect.DeepEqual(expected.key, actual.key) {
+	if !compare(expected.key, actual.key) {
 		return fmt.Errorf("singleElement key %v is wrong, want %v", actual.key, expected.key)
 	}
 
@@ -1064,13 +1171,20 @@ func mapSingleElementEqual(
 			return err
 		}
 
-		err = ValidValueSerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		err = ValidValueSerialization(
+			v,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 		if err != nil {
 			return err
 		}
 	}
 
-	if !reflect.DeepEqual(expected.value, actual.value) {
+	if !compare(expected.value, actual.value) {
 		return fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value)
 	}
 
@@ -1082,7 +1196,14 @@ func mapSingleElementEqual(
 			return err
 		}
 
-		err = ValidValueSerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		err = ValidValueSerialization(
+			v,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 		if err != nil {
 			return err
 		}

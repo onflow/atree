@@ -412,6 +412,82 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 	return nil
 }
 
+// CheckHealth checks for the health of slab storage
+// This is currently used for testing.
+func (s *BasicSlabStorage) CheckHealth() error {
+
+	parentOf := make(map[StorageID]StorageID)
+	leafs := make([]StorageID, 0)
+	for id, slab := range s.Slabs {
+
+		switch v := slab.(type) {
+
+		case StorableSlab:
+			leafs = append(leafs, id)
+		case *ArrayDataSlab:
+			for _, e := range v.elements {
+				if s, ok := e.(StorableSlab); ok {
+					parentOf[s.StorageID] = id
+				}
+			}
+
+		case *ArrayMetaDataSlab:
+			for _, h := range v.childrenHeaders {
+				parentOf[h.id] = id
+			}
+		// iterate over values and collect external slabIDs
+		// case *MapDataSlab:
+		// 	for i := 0; i < int(v.Count()); i++ {
+		// 		el, err := v.Element(i)
+		// 		if err != nil {
+		// 			return err
+		// 		}
+		// 		if s, ok := el.(StorableSlab); ok {
+		// 			parentOf[s.StorageID] = id
+		// 		}
+		// 	}
+		case *MapMetaDataSlab:
+			for _, h := range v.childrenHeaders {
+				parentOf[h.id] = id
+			}
+		}
+
+	}
+
+	roots := make(map[StorageID]bool)
+	visited := make(map[StorageID]bool)
+	var id StorageID
+	for _, leaf := range leafs {
+		id = leaf
+		if visited[id] {
+			return fmt.Errorf("atleast two references found to leaf slab %s", id)
+		}
+		visited[id] = true
+		rootFound := false
+		for !rootFound {
+			p, found := parentOf[id]
+			if visited[p] {
+				return fmt.Errorf("atleast two references found to parent slab %s", p)
+			}
+			visited[p] = true
+			if s.Slabs[id].ID().Address != s.Slabs[p].ID().Address {
+				return fmt.Errorf("parent and child are not owned by the same account child.owner: %s, parent.owner: %s", s.Slabs[id].ID().Address, s.Slabs[p].ID().Address)
+			}
+			if !found {
+				roots[p] = true
+				break
+			}
+			id = p
+		}
+	}
+
+	// TODO check root slabs matches what is expected given outside info
+	if len(visited) != len(s.Slabs) {
+		return fmt.Errorf("an slab was not reachable from leafs - broken connection somewhere")
+	}
+	return nil
+}
+
 type PersistentSlabStorage struct {
 	baseStorage      BaseStorage
 	cache            map[StorageID]Slab

@@ -440,17 +440,37 @@ func (s *BasicSlabStorage) CheckHealth() error {
 			for _, h := range v.childrenHeaders {
 				parentOf[h.id] = id
 			}
-		// iterate over values and collect external slabIDs
-		// case *MapDataSlab:
-		// 	for i := 0; i < int(v.Count()); i++ {
-		// 		el, err := v.Element(i)
-		// 		if err != nil {
-		// 			return err
-		// 		}
-		// 		if s, ok := el.(StorableSlab); ok {
-		// 			parentOf[s.StorageID] = id
-		// 		}
-		// 	}
+		case *MapDataSlab:
+			slabID := v.ID()
+			atLeastOneExternalSlab := false
+			elemIterator := &MapElementIterator{
+				storage:  s,
+				elements: v.elements,
+			}
+			for {
+				keyStorable, valueStorable, err := elemIterator.Next()
+
+				if err != nil {
+
+				}
+
+				if keyStorable == nil {
+					break
+				}
+
+				if id, ok := keyStorable.(StorageIDStorable); ok {
+					parentOf[StorageID(id)] = slabID
+					atLeastOneExternalSlab = true
+				}
+
+				if id, ok := valueStorable.(StorageIDStorable); ok {
+					parentOf[StorageID(id)] = slabID
+					atLeastOneExternalSlab = true
+				}
+			}
+			if !atLeastOneExternalSlab {
+				leafs = append(leafs, id)
+			}
 		case *MapMetaDataSlab:
 			for _, h := range v.childrenHeaders {
 				parentOf[h.id] = id

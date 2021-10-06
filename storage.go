@@ -425,10 +425,15 @@ func (s *BasicSlabStorage) CheckHealth() error {
 		case StorableSlab:
 			leafs = append(leafs, id)
 		case *ArrayDataSlab:
+			atLeastOneExternalSlab := false
 			for _, e := range v.elements {
 				if s, ok := e.(StorableSlab); ok {
 					parentOf[s.StorageID] = id
+					atLeastOneExternalSlab = true
 				}
+			}
+			if !atLeastOneExternalSlab {
+				leafs = append(leafs, id)
 			}
 
 		case *ArrayMetaDataSlab:

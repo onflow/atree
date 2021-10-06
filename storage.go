@@ -449,9 +449,8 @@ func (s *BasicSlabStorage) CheckHealth() error {
 			}
 			for {
 				keyStorable, valueStorable, err := elemIterator.Next()
-
 				if err != nil {
-
+					return err
 				}
 
 				if keyStorable == nil {

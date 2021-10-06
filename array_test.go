@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
@@ -3104,5 +3105,8 @@ func validArraySerialization(array *Array, storage *PersistentSlabStorage) error
 		storage.cborEncMode,
 		storage.DecodeStorable,
 		storage.DecodeTypeInfo,
+		func(a, b Storable) bool {
+			return reflect.DeepEqual(a, b)
+		},
 	)
 }

@@ -374,6 +374,7 @@ func ValidArraySerialization(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 	return validArraySlabSerialization(
 		a.Storage,
@@ -382,6 +383,7 @@ func ValidArraySerialization(
 		cborEncMode,
 		decodeStorable,
 		decodeTypeInfo,
+		compare,
 	)
 }
 
@@ -392,6 +394,7 @@ func validArraySlabSerialization(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 
 	slab, err := getArraySlab(storage, id)
@@ -448,7 +451,16 @@ func validArraySlabSerialization(
 		}
 
 		// Compare slabs
-		err = arrayDataSlabEqual(dataSlab, decodedDataSlab, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		err = arrayDataSlabEqual(
+			dataSlab,
+			decodedDataSlab,
+			storage,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 		if err != nil {
 			return fmt.Errorf("data slab %d round-trip serialization failed: %w", id, err)
 		}
@@ -474,7 +486,15 @@ func validArraySlabSerialization(
 
 	for _, h := range metaSlab.childrenHeaders {
 		// Verify child slabs
-		err = validArraySlabSerialization(storage, h.id, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+		err = validArraySlabSerialization(
+			storage,
+			h.id,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 		if err != nil {
 			return err
 		}
@@ -491,6 +511,7 @@ func arrayDataSlabEqual(
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
 	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
 ) error {
 
 	// Compare extra data
@@ -518,7 +539,7 @@ func arrayDataSlabEqual(
 	for i := 0; i < len(expected.elements); i++ {
 		ee := expected.elements[i]
 		ae := actual.elements[i]
-		if !reflect.DeepEqual(ee, ae) {
+		if !compare(ee, ae) {
 			return fmt.Errorf("element %d %+v is wrong, want %+v", i, ae, ee)
 		}
 
@@ -530,7 +551,14 @@ func arrayDataSlabEqual(
 				return err
 			}
 
-			return ValidValueSerialization(ev, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+			return ValidValueSerialization(
+				ev,
+				cborDecMode,
+				cborEncMode,
+				decodeStorable,
+				decodeTypeInfo,
+				compare,
+			)
 		}
 	}
 
@@ -603,13 +631,29 @@ func ValidValueSerialization(
 	cborDecMode cbor.DecMode,
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder) error {
+	decodeTypeInfo TypeInfoDecoder,
+	compare StorableComparator,
+) error {
 
 	switch v := value.(type) {
-	case (*Array):
-		return ValidArraySerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
-	case (*OrderedMap):
-		return ValidMapSerialization(v, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo)
+	case *Array:
+		return ValidArraySerialization(
+			v,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
+	case *OrderedMap:
+		return ValidMapSerialization(
+			v,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			compare,
+		)
 	}
 	return nil
 }

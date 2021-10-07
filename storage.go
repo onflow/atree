@@ -413,11 +413,16 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 }
 
 // CheckHealth checks for the health of slab storage
-// it returns a map of parent relationship, a list of roots, a list of leafs and any errrors
-// This is currently used for testing.
-func (s *BasicSlabStorage) CheckHealth() (map[StorageID]StorageID, []StorageID, []StorageID, error) {
+// it traverse the slabs and checks these factors
+// - all non-root slabs only has a single parent reference (no double referencing)
+// - every child of a parent shares the same ownership (childStorageID.Address == parentStorageID.Address)
+// - number of root slabs are equal to the execpted number
+// This should be used for testing puporses only, as it might be slow to process
 
-	parentOf := make(map[StorageID]StorageID, 0)
+// TODO single parent relationship (no double referencing), address matching, check number of expected root levels
+func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
+
+	parentOf := make(map[StorageID]StorageID)
 	leafs := make([]StorageID, 0)
 	for id, slab := range s.Slabs {
 
@@ -430,7 +435,7 @@ func (s *BasicSlabStorage) CheckHealth() (map[StorageID]StorageID, []StorageID, 
 			for _, e := range v.elements {
 				if s, ok := e.(StorableSlab); ok {
 					if _, found := parentOf[s.StorageID]; found {
-						return nil, nil, nil, fmt.Errorf("two parents are captured for the slab %s", s.StorageID)
+						return fmt.Errorf("two parents are captured for the slab %s", s.StorageID)
 					}
 					parentOf[s.StorageID] = id
 					atLeastOneExternalSlab = true
@@ -443,7 +448,7 @@ func (s *BasicSlabStorage) CheckHealth() (map[StorageID]StorageID, []StorageID, 
 		case *ArrayMetaDataSlab:
 			for _, h := range v.childrenHeaders {
 				if _, found := parentOf[h.id]; found {
-					return nil, nil, nil, fmt.Errorf("two parents are captured for the slab %s", h.id)
+					return fmt.Errorf("two parents are captured for the slab %s", h.id)
 				}
 				parentOf[h.id] = id
 			}
@@ -457,7 +462,7 @@ func (s *BasicSlabStorage) CheckHealth() (map[StorageID]StorageID, []StorageID, 
 				keyStorable, valueStorable, err := elemIterator.Next()
 
 				if err != nil {
-					return nil, nil, nil, err
+					return err
 				}
 
 				if keyStorable == nil {
@@ -466,7 +471,7 @@ func (s *BasicSlabStorage) CheckHealth() (map[StorageID]StorageID, []StorageID, 
 
 				if cid, ok := keyStorable.(StorageIDStorable); ok {
 					if _, found := parentOf[StorageID(cid)]; found {
-						return nil, nil, nil, fmt.Errorf("two parents are captured for the slab %s", StorageID(cid))
+						return fmt.Errorf("two parents are captured for the slab %s", StorageID(cid))
 					}
 					parentOf[StorageID(cid)] = id
 					atLeastOneExternalSlab = true
@@ -474,7 +479,7 @@ func (s *BasicSlabStorage) CheckHealth() (map[StorageID]StorageID, []StorageID, 
 
 				if cid, ok := valueStorable.(StorageIDStorable); ok {
 					if _, found := parentOf[StorageID(cid)]; found {
-						return nil, nil, nil, fmt.Errorf("two parents are captured for the slab %s", StorageID(cid))
+						return fmt.Errorf("two parents are captured for the slab %s", StorageID(cid))
 					}
 					parentOf[StorageID(cid)] = id
 					atLeastOneExternalSlab = true
@@ -486,12 +491,12 @@ func (s *BasicSlabStorage) CheckHealth() (map[StorageID]StorageID, []StorageID, 
 		case *MapMetaDataSlab:
 			for _, h := range v.childrenHeaders {
 				if _, found := parentOf[h.id]; found {
-					return nil, nil, nil, fmt.Errorf("two parents are captured for the slab %s", h.id)
+					return fmt.Errorf("two parents are captured for the slab %s", h.id)
 				}
 				parentOf[h.id] = id
 			}
 		default:
-			fmt.Printf("Unknown type of slab %T \n", slab)
+			return fmt.Errorf("unknown type of slab %T \n", slab)
 		}
 	}
 
@@ -502,7 +507,7 @@ func (s *BasicSlabStorage) CheckHealth() (map[StorageID]StorageID, []StorageID, 
 	for _, leaf := range leafs {
 		id = leaf
 		if visited[id] {
-			return nil, nil, nil, fmt.Errorf("atleast two references found to the leaf slab %s", id)
+			return fmt.Errorf("atleast two references found to the leaf slab %s", id)
 		}
 		visited[id] = true
 		rootFound := false
@@ -514,7 +519,7 @@ func (s *BasicSlabStorage) CheckHealth() (map[StorageID]StorageID, []StorageID, 
 			}
 			visited[p] = true
 			if s.Slabs[id].ID().Address != s.Slabs[p].ID().Address {
-				return nil, nil, nil, fmt.Errorf("parent and child are not owned by the same account child.owner: %s, parent.owner: %s", s.Slabs[id].ID().Address, s.Slabs[p].ID().Address)
+				return fmt.Errorf("parent and child are not owned by the same account child.owner: %s, parent.owner: %s", s.Slabs[id].ID().Address, s.Slabs[p].ID().Address)
 			}
 			id = p
 		}
@@ -522,13 +527,19 @@ func (s *BasicSlabStorage) CheckHealth() (map[StorageID]StorageID, []StorageID, 
 
 	// TODO check root slabs matches what is expected given outside info
 	if len(visited) != len(s.Slabs) {
-		return nil, nil, nil, fmt.Errorf("an slab was not reachable from leafs - broken connection somewhere %d != %d", len(visited), len(s.Slabs))
+		return fmt.Errorf("an slab was not reachable from leafs - broken connection somewhere - number of slabs:%d, visited during traverse: %d", len(s.Slabs), len(visited))
 	}
 
 	for k := range rootsMap {
 		roots = append(roots, k)
 	}
-	return parentOf, roots, leafs, nil
+
+	if len(roots) != expectedNumberOfRootSlabs {
+		return fmt.Errorf("number of root slabs doesn't match expected: %d, got: %d", len(roots), expectedNumberOfRootSlabs)
+
+	}
+
+	return nil
 }
 
 type PersistentSlabStorage struct {

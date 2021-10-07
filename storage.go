@@ -452,41 +452,20 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 				parentOf[h.id] = id
 			}
 		case *MapDataSlab:
-			atLeastOneExternalSlab := false
-			elemIterator := &MapElementIterator{
-				storage:  s,
-				elements: v.elements,
+
+			externalIDs, err := getMapElementExternalRefs(s, v.elements, nil)
+			if err != nil {
+				return err
 			}
-			for i := 0; i < int(v.Count()); i++ {
-				keyStorable, valueStorable, err := elemIterator.Next()
 
-				if err != nil {
-					return err
-				}
-
-				if keyStorable == nil {
-					break
-				}
-
-				if cid, ok := keyStorable.(StorageIDStorable); ok {
-					if _, found := parentOf[StorageID(cid)]; found {
-						return fmt.Errorf("two parents are captured for the slab %s", StorageID(cid))
-					}
-					parentOf[StorageID(cid)] = id
-					atLeastOneExternalSlab = true
-				}
-
-				if cid, ok := valueStorable.(StorageIDStorable); ok {
-					if _, found := parentOf[StorageID(cid)]; found {
-						return fmt.Errorf("two parents are captured for the slab %s", StorageID(cid))
-					}
-					parentOf[StorageID(cid)] = id
-					atLeastOneExternalSlab = true
-				}
+			for _, eid := range externalIDs {
+				parentOf[eid] = id
 			}
-			if !atLeastOneExternalSlab {
+
+			if len(externalIDs) == 0 {
 				leafs = append(leafs, id)
 			}
+
 		case *MapMetaDataSlab:
 			for _, h := range v.childrenHeaders {
 				if _, found := parentOf[h.id]; found {
@@ -538,6 +517,51 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 	}
 
 	return nil
+}
+
+func getMapElementExternalRefs(storage SlabStorage, elems elements, externalIDs []StorageID) ([]StorageID, error) {
+
+	for i := 0; i < int(elems.Count()); i++ {
+
+		e, err := elems.Element(i)
+		if err != nil {
+			return nil, err
+		}
+
+		switch v := e.(type) {
+
+		case elementGroup:
+
+			if ev, ok := v.(*externalCollisionGroup); ok {
+				externalIDs = append(externalIDs, ev.id)
+			}
+
+			groupElements, err := v.Elements(storage)
+			if err != nil {
+				return nil, err
+			}
+
+			externalIDs, err = getMapElementExternalRefs(storage, groupElements, externalIDs)
+			if err != nil {
+				return nil, err
+			}
+
+		case *singleElement:
+
+			if cid, ok := v.key.(StorageIDStorable); ok {
+				externalIDs = append(externalIDs, StorageID(cid))
+			}
+
+			if cid, ok := v.value.(StorageIDStorable); ok {
+				externalIDs = append(externalIDs, StorageID(cid))
+			}
+
+		default:
+			return nil, fmt.Errorf("unrecognized element type %T", e)
+		}
+	}
+
+	return externalIDs, nil
 }
 
 type PersistentSlabStorage struct {

@@ -89,26 +89,6 @@ func (v StorageIDStorable) String() string {
 	return fmt.Sprintf("StorageIDStorable(%d)", v)
 }
 
-// NonStorable represents a value that cannot be stored
-//
-type NonStorable struct {
-	Value Value
-}
-
-var _ Storable = NonStorable{}
-
-func (n NonStorable) Encode(_ *Encoder) error {
-	return fmt.Errorf("value is non-storable")
-}
-
-func (n NonStorable) ByteSize() uint32 {
-	return 1
-}
-
-func (n NonStorable) StoredValue(_ SlabStorage) (Value, error) {
-	return n.Value, nil
-}
-
 // Encode is a wrapper for Storable.Encode()
 func Encode(storable Storable, encMode cbor.EncMode) ([]byte, error) {
 	var buf bytes.Buffer

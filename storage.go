@@ -418,8 +418,6 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 // - every child of a parent shares the same ownership (childStorageID.Address == parentStorageID.Address)
 // - number of root slabs are equal to the execpted number
 // This should be used for testing puporses only, as it might be slow to process
-
-// TODO single parent relationship (no double referencing), address matching, check number of expected root levels
 func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 
 	parentOf := make(map[StorageID]StorageID)
@@ -496,7 +494,7 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 				parentOf[h.id] = id
 			}
 		default:
-			return fmt.Errorf("unknown type of slab %T \n", slab)
+			return fmt.Errorf("unknown type of slab %T", slab)
 		}
 	}
 

@@ -523,7 +523,6 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 		}
 	}
 
-	// TODO check root slabs matches what is expected given outside info
 	if len(visited) != len(s.Slabs) {
 		return fmt.Errorf("an slab was not reachable from leafs - broken connection somewhere - number of slabs:%d, visited during traverse: %d", len(s.Slabs), len(visited))
 	}

@@ -508,11 +508,11 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 			return fmt.Errorf("atleast two references found to the leaf slab %s", id)
 		}
 		visited[id] = true
-		rootFound := false
-		for !rootFound {
+		for {
 			p, found := parentOf[id]
 			if !found {
-				rootsMap[p] = true
+				// we reach the root
+				rootsMap[id] = true
 				break
 			}
 			visited[p] = true
@@ -532,7 +532,7 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 	}
 
 	if len(roots) != expectedNumberOfRootSlabs {
-		return fmt.Errorf("number of root slabs doesn't match expected: %d, got: %d", len(roots), expectedNumberOfRootSlabs)
+		return fmt.Errorf("number of root slabs doesn't match expected: %d, got: %d", expectedNumberOfRootSlabs, len(roots))
 
 	}
 

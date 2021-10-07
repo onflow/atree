@@ -431,11 +431,12 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 		case *ArrayDataSlab:
 			atLeastOneExternalSlab := false
 			for _, e := range v.elements {
-				if s, ok := e.(StorableSlab); ok {
-					if _, found := parentOf[s.StorageID]; found {
-						return fmt.Errorf("two parents are captured for the slab %s", s.StorageID)
+				if s, ok := e.(StorageIDStorable); ok {
+					sid := StorageID(s)
+					if _, found := parentOf[sid]; found {
+						return fmt.Errorf("two parents are captured for the slab %s", sid)
 					}
-					parentOf[s.StorageID] = id
+					parentOf[sid] = id
 					atLeastOneExternalSlab = true
 				}
 			}

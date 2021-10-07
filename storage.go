@@ -478,7 +478,6 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 		}
 	}
 
-	roots := make([]StorageID, 0)
 	rootsMap := make(map[StorageID]bool)
 	visited := make(map[StorageID]bool)
 	var id StorageID
@@ -507,13 +506,8 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 		return fmt.Errorf("an slab was not reachable from leafs - broken connection somewhere - number of slabs:%d, visited during traverse: %d", len(s.Slabs), len(visited))
 	}
 
-	for k := range rootsMap {
-		roots = append(roots, k)
-	}
-
-	if len(roots) != expectedNumberOfRootSlabs {
-		return fmt.Errorf("number of root slabs doesn't match expected: %d, got: %d", expectedNumberOfRootSlabs, len(roots))
-
+	if len(rootsMap) != expectedNumberOfRootSlabs {
+		return fmt.Errorf("number of root slabs doesn't match expected: %d, got: %d", expectedNumberOfRootSlabs, len(rootsMap))
 	}
 
 	return nil

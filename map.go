@@ -2165,6 +2165,46 @@ func (m *MapDataSlab) hasPointer() bool {
 	return m.elements.HasPointer()
 }
 
+func (m *MapDataSlab) ChildStorables() []Storable {
+	return elementsStorables(m.elements, nil)
+}
+
+func elementsStorables(elems elements, childStorables []Storable) []Storable {
+
+	switch v := elems.(type) {
+
+	case *hkeyElements:
+		for i := 0; i < len(v.elems); i++ {
+			childStorables = elementStorables(v.elems[i], childStorables)
+		}
+
+	case *singleElements:
+		for i := 0; i < len(v.elems); i++ {
+			childStorables = elementStorables(v.elems[i], childStorables)
+		}
+
+	}
+
+	return childStorables
+}
+
+func elementStorables(e element, childStorables []Storable) []Storable {
+
+	switch v := e.(type) {
+
+	case *externalCollisionGroup:
+		return append(childStorables, StorageIDStorable(v.id))
+
+	case *inlineCollisionGroup:
+		return elementsStorables(v.elements, childStorables)
+
+	case *singleElement:
+		return append(childStorables, v.key, v.value)
+	}
+
+	return nil // not reachable
+}
+
 func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	if m.extraData == nil {
 		return nil, NewNotValueError()
@@ -2604,6 +2644,10 @@ func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		root:            m,
 		digesterBuilder: digestBuilder,
 	}, nil
+}
+
+func (m *MapMetaDataSlab) ChildStorables() []Storable {
+	return nil
 }
 
 func (m *MapMetaDataSlab) Get(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapValue, error) {

@@ -31,6 +31,8 @@ type Storable interface {
 	ByteSize() uint32
 
 	StoredValue(storage SlabStorage) (Value, error)
+
+	ChildStorables() []Storable
 }
 
 const (
@@ -43,6 +45,10 @@ const (
 type StorageIDStorable StorageID
 
 var _ Storable = StorageIDStorable{}
+
+func (v StorageIDStorable) ChildStorables() []Storable {
+	return nil
+}
 
 func (v StorageIDStorable) StoredValue(storage SlabStorage) (Value, error) {
 	id := StorageID(v)

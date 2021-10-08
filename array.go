@@ -447,6 +447,12 @@ func (a *ArrayDataSlab) hasPointer() bool {
 	return false
 }
 
+func (a *ArrayDataSlab) ChildStorables() []Storable {
+	s := make([]Storable, len(a.elements))
+	copy(s, a.elements)
+	return s
+}
+
 func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
 		return nil, NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
@@ -988,6 +994,10 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 		}
 	}
 
+	return nil
+}
+
+func (a *ArrayMetaDataSlab) ChildStorables() []Storable {
 	return nil
 }
 

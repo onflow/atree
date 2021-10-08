@@ -524,8 +524,9 @@ func (s *PersistentSlabStorage) Commit() error {
 		// add to read cache
 		s.cache[id] = slab
 	}
-	// reset deltas
-	s.deltas = make(map[StorageID]Slab)
+
+	// Do NOT reset deltas because slabs with empty address are not saved.
+
 	return nil
 }
 
@@ -618,8 +619,8 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		s.cache[id] = s.deltas[id]
 	}
 
-	// reset deltas
-	s.deltas = make(map[StorageID]Slab)
+	// Do NOT reset deltas because slabs with empty address are not saved.
+
 	return nil
 }
 

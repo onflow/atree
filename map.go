@@ -2202,7 +2202,7 @@ func elementStorables(e element, childStorables []Storable) []Storable {
 		return append(childStorables, v.key, v.value)
 	}
 
-	return nil // not reachable
+	panic(NewUnreachableError())
 }
 
 func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {

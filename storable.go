@@ -32,6 +32,8 @@ type Storable interface {
 
 	StoredValue(storage SlabStorage) (Value, error)
 
+	// ChildStorables only returns child storables in this storable
+	// (not recursive).  This function shouldn't load extra slabs.
 	ChildStorables() []Storable
 }
 

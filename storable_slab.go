@@ -35,6 +35,10 @@ type StorableSlab struct {
 
 var _ Slab = StorableSlab{}
 
+func (s StorableSlab) ChildStorables() []Storable {
+	return []Storable{s.Storable}
+}
+
 func (s StorableSlab) Encode(enc *Encoder) error {
 	// Encode version
 	enc.Scratch[0] = 0

@@ -136,6 +136,12 @@ func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
+func (a *BasicArrayDataSlab) ChildStorables() []Storable {
+	s := make([]Storable, len(a.elements))
+	copy(s, a.elements)
+	return s
+}
+
 func (a *BasicArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
 		return nil, fmt.Errorf("out of bounds")

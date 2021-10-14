@@ -422,24 +422,38 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 
 	parentOf := make(map[StorageID]StorageID)
 	leafs := make([]StorageID, 0)
+
 	for id, slab := range s.Slabs {
 
 		switch v := slab.(type) {
 
-		case *StorableSlab:
-			leafs = append(leafs, id)
-		case *ArrayDataSlab:
+		case *StorableSlab, *ArrayDataSlab, *MapDataSlab:
+
 			atLeastOneExternalSlab := false
-			for _, e := range v.elements {
-				if s, ok := e.(StorageIDStorable); ok {
-					sid := StorageID(s)
-					if _, found := parentOf[sid]; found {
-						return fmt.Errorf("two parents are captured for the slab %s", sid)
+
+			childrenStorables := v.ChildStorables()
+
+			for len(childrenStorables) > 0 {
+
+				var next []Storable
+
+				for _, s := range childrenStorables {
+
+					if sids, ok := s.(StorageIDStorable); ok {
+						sid := StorageID(sids)
+						if _, found := parentOf[sid]; found {
+							return fmt.Errorf("two parents are captured for the slab %s", sid)
+						}
+						parentOf[sid] = id
+						atLeastOneExternalSlab = true
 					}
-					parentOf[sid] = id
-					atLeastOneExternalSlab = true
+
+					next = append(next, s.ChildStorables()...)
 				}
+
+				childrenStorables = next
 			}
+
 			if !atLeastOneExternalSlab {
 				leafs = append(leafs, id)
 			}
@@ -451,20 +465,6 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 				}
 				parentOf[h.id] = id
 			}
-		case *MapDataSlab:
-
-			externalIDs, err := getMapElementExternalRefs(s, v.elements, nil)
-			if err != nil {
-				return err
-			}
-
-			for _, eid := range externalIDs {
-				parentOf[eid] = id
-			}
-
-			if len(externalIDs) == 0 {
-				leafs = append(leafs, id)
-			}
 
 		case *MapMetaDataSlab:
 			for _, h := range v.childrenHeaders {
@@ -473,6 +473,7 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 				}
 				parentOf[h.id] = id
 			}
+
 		default:
 			return fmt.Errorf("unknown type of slab %T", slab)
 		}
@@ -511,51 +512,6 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 	}
 
 	return nil
-}
-
-func getMapElementExternalRefs(storage SlabStorage, elems elements, externalIDs []StorageID) ([]StorageID, error) {
-
-	for i := 0; i < int(elems.Count()); i++ {
-
-		e, err := elems.Element(i)
-		if err != nil {
-			return nil, err
-		}
-
-		switch v := e.(type) {
-
-		case elementGroup:
-
-			if ev, ok := v.(*externalCollisionGroup); ok {
-				externalIDs = append(externalIDs, ev.id)
-			}
-
-			groupElements, err := v.Elements(storage)
-			if err != nil {
-				return nil, err
-			}
-
-			externalIDs, err = getMapElementExternalRefs(storage, groupElements, externalIDs)
-			if err != nil {
-				return nil, err
-			}
-
-		case *singleElement:
-
-			if cid, ok := v.key.(StorageIDStorable); ok {
-				externalIDs = append(externalIDs, StorageID(cid))
-			}
-
-			if cid, ok := v.value.(StorageIDStorable); ok {
-				externalIDs = append(externalIDs, StorageID(cid))
-			}
-
-		default:
-			return nil, fmt.Errorf("unrecognized element type %T", e)
-		}
-	}
-
-	return externalIDs, nil
 }
 
 type PersistentSlabStorage struct {

@@ -413,10 +413,10 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 }
 
 // CheckHealth checks for the health of slab storage
-// it traverse the slabs and checks these factors
+// it traverses the slabs and checks these factors
 // - all non-root slabs only has a single parent reference (no double referencing)
 // - every child of a parent shares the same ownership (childStorageID.Address == parentStorageID.Address)
-// - number of root slabs are equal to the execpted number
+// - number of root slabs are equal to the expected number (skipped if expectedNumberOfRootSlabs is -1)
 // This should be used for testing puporses only, as it might be slow to process
 func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 
@@ -506,7 +506,7 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 		return fmt.Errorf("an slab was not reachable from leafs - broken connection somewhere - number of slabs:%d, visited during traverse: %d", len(s.Slabs), len(visited))
 	}
 
-	if len(rootsMap) != expectedNumberOfRootSlabs {
+	if (expectedNumberOfRootSlabs >= 0) && (len(rootsMap) != expectedNumberOfRootSlabs) {
 		return fmt.Errorf("number of root slabs doesn't match expected: %d, got: %d", expectedNumberOfRootSlabs, len(rootsMap))
 	}
 

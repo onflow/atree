@@ -42,6 +42,10 @@ type Uint8Value uint8
 var _ atree.Value = Uint8Value(0)
 var _ atree.Storable = Uint8Value(0)
 
+func (v Uint8Value) ChildStorables() []atree.Storable {
+	return nil
+}
+
 func (v Uint8Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
@@ -102,6 +106,10 @@ type Uint16Value uint16
 var _ atree.Value = Uint16Value(0)
 var _ atree.Storable = Uint16Value(0)
 
+func (v Uint16Value) ChildStorables() []atree.Storable {
+	return nil
+}
+
 func (v Uint16Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
@@ -161,6 +169,10 @@ type Uint32Value uint32
 
 var _ atree.Value = Uint32Value(0)
 var _ atree.Storable = Uint32Value(0)
+
+func (v Uint32Value) ChildStorables() []atree.Storable {
+	return nil
+}
 
 func (v Uint32Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
@@ -233,6 +245,10 @@ type Uint64Value uint64
 
 var _ atree.Value = Uint64Value(0)
 var _ atree.Storable = Uint64Value(0)
+
+func (v Uint64Value) ChildStorables() []atree.Storable {
+	return nil
+}
 
 func (v Uint64Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
@@ -317,6 +333,10 @@ var _ atree.Storable = &StringValue{}
 func NewStringValue(s string) StringValue {
 	size := atree.GetUintCBORSize(uint64(len(s))) + uint32(len(s))
 	return StringValue{str: s, size: size}
+}
+
+func (v StringValue) ChildStorables() []atree.Storable {
+	return nil
 }
 
 func (v StringValue) StoredValue(_ atree.SlabStorage) (atree.Value, error) {

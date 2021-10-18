@@ -599,28 +599,11 @@ func compare(storage SlabStorage, value Value, storable Storable) (bool, error) 
 }
 
 func hashInputProvider(value Value, buffer []byte) ([]byte, error) {
-	switch v := value.(type) {
-
-	case Uint8Value:
-		return v.HashInput(buffer)
-
-	case Uint16Value:
-		return v.HashInput(buffer)
-
-	case Uint32Value:
-		return v.HashInput(buffer)
-
-	case Uint64Value:
-		return v.HashInput(buffer)
-
-	case StringValue:
-		return v.HashInput(buffer)
-
-	case SomeValue:
-		return v.HashInput(buffer)
+	if hashable, ok := value.(HashableValue); ok {
+		return hashable.HashInput(buffer)
 	}
 
-	return nil, fmt.Errorf("value %T not supported for hash input", value)
+	return nil, fmt.Errorf("value %T doesn't implement HashableValue interface", value)
 }
 
 type SomeValue struct {

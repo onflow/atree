@@ -427,17 +427,27 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 
 		switch v := slab.(type) {
 
-		case *StorableSlab, *ArrayDataSlab, *MapDataSlab:
+		case MetaDataSlab:
+
+			childIDs := v.ChildIDs()
+			for _, cid := range childIDs {
+				if _, found := parentOf[cid]; found {
+					return fmt.Errorf("two parents are captured for the slab %s", cid)
+				}
+				parentOf[cid] = id
+			}
+
+		default:
+			// Data slabs can be *StorableSlab, *ArrayDataSlab, and *MapDataSlab.
 
 			atLeastOneExternalSlab := false
+			childStorables := v.ChildStorables()
 
-			childrenStorables := v.ChildStorables()
-
-			for len(childrenStorables) > 0 {
+			for len(childStorables) > 0 {
 
 				var next []Storable
 
-				for _, s := range childrenStorables {
+				for _, s := range childStorables {
 
 					if sids, ok := s.(StorageIDStorable); ok {
 						sid := StorageID(sids)
@@ -451,31 +461,12 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 					next = append(next, s.ChildStorables()...)
 				}
 
-				childrenStorables = next
+				childStorables = next
 			}
 
 			if !atLeastOneExternalSlab {
 				leafs = append(leafs, id)
 			}
-
-		case *ArrayMetaDataSlab:
-			for _, h := range v.childrenHeaders {
-				if _, found := parentOf[h.id]; found {
-					return fmt.Errorf("two parents are captured for the slab %s", h.id)
-				}
-				parentOf[h.id] = id
-			}
-
-		case *MapMetaDataSlab:
-			for _, h := range v.childrenHeaders {
-				if _, found := parentOf[h.id]; found {
-					return fmt.Errorf("two parents are captured for the slab %s", h.id)
-				}
-				parentOf[h.id] = id
-			}
-
-		default:
-			return fmt.Errorf("unknown type of slab %T", slab)
 		}
 	}
 

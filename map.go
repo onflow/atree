@@ -247,6 +247,7 @@ type MapMetaDataSlab struct {
 }
 
 var _ MapSlab = &MapMetaDataSlab{}
+var _ MetaDataSlab = &MapMetaDataSlab{}
 
 type MapSlab interface {
 	Slab
@@ -2648,6 +2649,16 @@ func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 
 func (m *MapMetaDataSlab) ChildStorables() []Storable {
 	return nil
+}
+
+func (m *MapMetaDataSlab) ChildIDs() []StorageID {
+	childIDs := make([]StorageID, len(m.childrenHeaders))
+
+	for i, h := range m.childrenHeaders {
+		childIDs[i] = h.id
+	}
+
+	return childIDs
 }
 
 func (m *MapMetaDataSlab) Get(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapValue, error) {

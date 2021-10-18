@@ -99,6 +99,7 @@ type ArrayMetaDataSlab struct {
 }
 
 var _ ArraySlab = &ArrayMetaDataSlab{}
+var _ MetaDataSlab = &ArrayMetaDataSlab{}
 
 func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	if a.extraData == nil {
@@ -999,6 +1000,16 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
 func (a *ArrayMetaDataSlab) ChildStorables() []Storable {
 	return nil
+}
+
+func (a *ArrayMetaDataSlab) ChildIDs() []StorageID {
+	childIDs := make([]StorageID, len(a.childrenHeaders))
+
+	for i, h := range a.childrenHeaders {
+		childIDs[i] = h.id
+	}
+
+	return childIDs
 }
 
 // TODO: improve naming

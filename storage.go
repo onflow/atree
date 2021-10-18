@@ -412,6 +412,99 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 	return nil
 }
 
+// CheckHealth checks for the health of slab storage
+// it traverses the slabs and checks these factors
+// - all non-root slabs only has a single parent reference (no double referencing)
+// - every child of a parent shares the same ownership (childStorageID.Address == parentStorageID.Address)
+// - number of root slabs are equal to the expected number (skipped if expectedNumberOfRootSlabs is -1)
+// This should be used for testing puporses only, as it might be slow to process
+func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
+
+	parentOf := make(map[StorageID]StorageID)
+	leafs := make([]StorageID, 0)
+
+	for id, slab := range s.Slabs {
+
+		switch v := slab.(type) {
+
+		case MetaDataSlab:
+
+			childIDs := v.ChildIDs()
+			for _, cid := range childIDs {
+				if _, found := parentOf[cid]; found {
+					return fmt.Errorf("two parents are captured for the slab %s", cid)
+				}
+				parentOf[cid] = id
+			}
+
+		default:
+			// Data slabs can be *StorableSlab, *ArrayDataSlab, and *MapDataSlab.
+
+			atLeastOneExternalSlab := false
+			childStorables := v.ChildStorables()
+
+			for len(childStorables) > 0 {
+
+				var next []Storable
+
+				for _, s := range childStorables {
+
+					if sids, ok := s.(StorageIDStorable); ok {
+						sid := StorageID(sids)
+						if _, found := parentOf[sid]; found {
+							return fmt.Errorf("two parents are captured for the slab %s", sid)
+						}
+						parentOf[sid] = id
+						atLeastOneExternalSlab = true
+					}
+
+					next = append(next, s.ChildStorables()...)
+				}
+
+				childStorables = next
+			}
+
+			if !atLeastOneExternalSlab {
+				leafs = append(leafs, id)
+			}
+		}
+	}
+
+	rootsMap := make(map[StorageID]bool)
+	visited := make(map[StorageID]bool)
+	var id StorageID
+	for _, leaf := range leafs {
+		id = leaf
+		if visited[id] {
+			return fmt.Errorf("atleast two references found to the leaf slab %s", id)
+		}
+		visited[id] = true
+		for {
+			p, found := parentOf[id]
+			if !found {
+				// we reach the root
+				rootsMap[id] = true
+				break
+			}
+			visited[p] = true
+			if s.Slabs[id].ID().Address != s.Slabs[p].ID().Address {
+				return fmt.Errorf("parent and child are not owned by the same account child.owner: %s, parent.owner: %s", s.Slabs[id].ID().Address, s.Slabs[p].ID().Address)
+			}
+			id = p
+		}
+	}
+
+	if len(visited) != len(s.Slabs) {
+		return fmt.Errorf("an slab was not reachable from leafs - broken connection somewhere - number of slabs:%d, visited during traverse: %d", len(s.Slabs), len(visited))
+	}
+
+	if (expectedNumberOfRootSlabs >= 0) && (len(rootsMap) != expectedNumberOfRootSlabs) {
+		return fmt.Errorf("number of root slabs doesn't match expected: %d, got: %d", expectedNumberOfRootSlabs, len(rootsMap))
+	}
+
+	return nil
+}
+
 type PersistentSlabStorage struct {
 	baseStorage      BaseStorage
 	cache            map[StorageID]Slab

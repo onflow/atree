@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
@@ -3822,4 +3823,177 @@ func validMapSerialization(m *OrderedMap, storage *PersistentSlabStorage) error 
 			return reflect.DeepEqual(a, b)
 		},
 	)
+}
+
+func TestMapNestedStorables(t *testing.T) {
+
+	t.Run("SomeValue", func(t *testing.T) {
+
+		typeInfo := testTypeInfo{42}
+
+		const mapSize = 1024 * 4
+
+		storage := newTestBasicStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+
+			ks := strings.Repeat("a", int(i))
+			k := SomeValue{Value: NewStringValue(ks)}
+
+			vs := strings.Repeat("b", int(i))
+			v := SomeValue{Value: NewStringValue(vs)}
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		for i := uint64(0); i < mapSize; i++ {
+
+			ks := strings.Repeat("a", int(i))
+			k := SomeValue{Value: NewStringValue(ks)}
+
+			e, err := m.Get(compare, hashInputProvider, k)
+			require.NoError(t, err)
+
+			v, err := e.StoredValue(storage)
+			require.NoError(t, err)
+
+			someValue, ok := v.(SomeValue)
+			require.True(t, ok)
+
+			s, ok := someValue.Value.(StringValue)
+			require.True(t, ok)
+
+			require.Equal(t, strings.Repeat("b", int(i)), s.str)
+		}
+
+		require.Equal(t, typeInfo, m.Type())
+
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = ValidMapSerialization(
+			m,
+			storage.cborDecMode,
+			storage.cborEncMode,
+			storage.DecodeStorable,
+			storage.DecodeTypeInfo,
+			func(a, b Storable) bool {
+				return reflect.DeepEqual(a, b)
+			},
+		)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = storage.CheckHealth(1)
+		if err != nil {
+			fmt.Printf("CheckHealth %s\n", err)
+		}
+		require.NoError(t, err)
+	})
+
+	t.Run("Array", func(t *testing.T) {
+
+		typeInfo := testTypeInfo{42}
+
+		const mapSize = 1024 * 4
+
+		storage := newTestBasicStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+
+			// Create a nested array with one element
+			array, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			vs := strings.Repeat("b", int(i))
+			v := SomeValue{Value: NewStringValue(vs)}
+
+			err = array.Append(v)
+			require.NoError(t, err)
+
+			// Insert nested array into map
+			ks := strings.Repeat("a", int(i))
+			k := SomeValue{Value: NewStringValue(ks)}
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, array)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		for i := uint64(0); i < mapSize; i++ {
+
+			ks := strings.Repeat("a", int(i))
+			k := SomeValue{Value: NewStringValue(ks)}
+
+			e, err := m.Get(compare, hashInputProvider, k)
+			require.NoError(t, err)
+
+			v, err := e.StoredValue(storage)
+			require.NoError(t, err)
+
+			array, ok := v.(*Array)
+			require.True(t, ok)
+			require.Equal(t, uint64(1), array.Count())
+
+			existingStorable, err := array.Get(0)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+
+			someValue, ok := existingValue.(SomeValue)
+			require.True(t, ok)
+
+			s, ok := someValue.Value.(StringValue)
+			require.True(t, ok)
+
+			require.Equal(t, strings.Repeat("b", int(i)), s.str)
+		}
+
+		require.Equal(t, typeInfo, m.Type())
+
+		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = ValidMapSerialization(
+			m,
+			storage.cborDecMode,
+			storage.cborEncMode,
+			storage.DecodeStorable,
+			storage.DecodeTypeInfo,
+			func(a, b Storable) bool {
+				return reflect.DeepEqual(a, b)
+			},
+		)
+		if err != nil {
+			PrintMap(m)
+		}
+		require.NoError(t, err)
+
+		err = storage.CheckHealth(1)
+		if err != nil {
+			fmt.Printf("CheckHealth %s\n", err)
+		}
+		require.NoError(t, err)
+	})
 }

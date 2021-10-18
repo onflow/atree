@@ -24,6 +24,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -3109,4 +3110,74 @@ func validArraySerialization(array *Array, storage *PersistentSlabStorage) error
 			return reflect.DeepEqual(a, b)
 		},
 	)
+}
+
+func TestArrayNestedStorables(t *testing.T) {
+
+	t.Parallel()
+
+	typeInfo := testTypeInfo{42}
+
+	const arraySize = 1024 * 4
+
+	storage := newTestBasicStorage(t)
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	for i := uint64(0); i < arraySize; i++ {
+
+		s := strings.Repeat("a", int(i))
+		v := SomeValue{Value: NewStringValue(s)}
+
+		err := array.Append(v)
+		require.NoError(t, err)
+	}
+
+	for i := uint64(0); i < arraySize; i++ {
+		e, err := array.Get(i)
+		require.NoError(t, err)
+
+		v, err := e.StoredValue(storage)
+		require.NoError(t, err)
+
+		someValue, ok := v.(SomeValue)
+		require.True(t, ok)
+
+		s, ok := someValue.Value.(StringValue)
+		require.True(t, ok)
+
+		require.Equal(t, strings.Repeat("a", int(i)), s.str)
+	}
+
+	require.Equal(t, typeInfo, array.Type())
+
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
+	err = ValidArraySerialization(
+		array,
+		storage.cborDecMode,
+		storage.cborEncMode,
+		storage.DecodeStorable,
+		storage.DecodeTypeInfo,
+		func(a, b Storable) bool {
+			return reflect.DeepEqual(a, b)
+		},
+	)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
+	err = storage.CheckHealth(1)
+	if err != nil {
+		fmt.Printf("CheckHealth %s\n", err)
+	}
+	require.NoError(t, err)
 }

@@ -32,6 +32,11 @@ type Slab interface {
 	BorrowFromRight(Slab) error
 }
 
+type MetaDataSlab interface {
+	Slab
+	ChildIDs() []StorageID
+}
+
 // TODO: make it inline.
 func IsRootOfAnObject(slabData []byte) (bool, error) {
 	if len(slabData) < 2 {

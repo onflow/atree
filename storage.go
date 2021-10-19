@@ -593,6 +593,10 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 	}
 
 	for id, slab := range s.deltas {
+		if slab == nil {
+			continue
+		}
+
 		slabs = append(slabs, struct {
 			StorageID
 			Slab

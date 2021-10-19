@@ -457,7 +457,7 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) erro
 		return fmt.Errorf("failed to create slab iterator: %w", err)
 	}
 
-	var slabCount int
+	slabs := map[StorageID]Slab{}
 
 	for {
 		id, slab := slabIterator()
@@ -465,7 +465,7 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) erro
 			break
 		}
 
-		slabCount++
+		slabs[id] = slab
 
 		switch v := slab.(type) {
 
@@ -554,11 +554,23 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) erro
 		}
 	}
 
-	if len(visited) != slabCount {
+	if len(visited) != len(slabs) {
+
+		var unreachableID StorageID
+		var unreachableSlab Slab
+
+		for id, slab := range slabs {
+			if _, ok := visited[id]; !ok {
+				unreachableID = id
+				unreachableSlab = slab
+				break
+			}
+		}
+
 		return fmt.Errorf(
-			"a slab was not reachable from leaves (broken connection somewhere): number of slabs: %d, visited during traverse: %d",
-			slabCount,
-			len(visited),
+			"slab was not reachable from leaves: %s: %s",
+			unreachableID,
+			unreachableSlab,
 		)
 	}
 

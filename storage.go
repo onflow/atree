@@ -334,34 +334,6 @@ type BasicSlabStorage struct {
 	cborDecMode    cbor.DecMode
 }
 
-func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
-	var slabs []struct {
-		StorageID
-		Slab
-	}
-
-	for id, slab := range s.Slabs {
-		slabs = append(slabs, struct {
-			StorageID
-			Slab
-		}{
-			StorageID: id,
-			Slab:      slab,
-		})
-	}
-
-	var i int
-
-	return func() (StorageID, Slab) {
-		if i >= len(slabs) {
-			return StorageIDUndefined, nil
-		}
-		slabEntry := slabs[i]
-		i++
-		return slabEntry.StorageID, slabEntry.Slab
-	}, nil
-}
-
 var _ SlabStorage = &BasicSlabStorage{}
 
 func NewBasicSlabStorage(
@@ -442,6 +414,34 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 	return nil
 }
 
+func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
+	var slabs []struct {
+		StorageID
+		Slab
+	}
+
+	for id, slab := range s.Slabs {
+		slabs = append(slabs, struct {
+			StorageID
+			Slab
+		}{
+			StorageID: id,
+			Slab:      slab,
+		})
+	}
+
+	var i int
+
+	return func() (StorageID, Slab) {
+		if i >= len(slabs) {
+			return StorageIDUndefined, nil
+		}
+		slabEntry := slabs[i]
+		i++
+		return slabEntry.StorageID, slabEntry.Slab
+	}, nil
+}
+
 // CheckStorageHealth checks for the health of slab storage.
 // It traverses the slabs and checks these factors:
 // - All non-root slabs only has a single parent reference (no double referencing)
@@ -461,7 +461,7 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) erro
 
 	for {
 		id, slab := slabIterator()
-		if slab == nil {
+		if id == StorageIDUndefined {
 			break
 		}
 

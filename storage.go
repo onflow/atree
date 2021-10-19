@@ -602,6 +602,20 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 		})
 	}
 
+	for id, slab := range s.cache {
+		if _, ok := s.deltas[id]; ok {
+			continue
+		}
+
+		slabs = append(slabs, struct {
+			StorageID
+			Slab
+		}{
+			StorageID: id,
+			Slab:      slab,
+		})
+	}
+
 	var i int
 
 	return func() (StorageID, Slab) {

@@ -735,6 +735,8 @@ func (s *PersistentSlabStorage) Commit() error {
 			if err != nil {
 				return err
 			}
+			delete(s.deltas, id)
+			delete(s.cache, id)
 			continue
 		}
 
@@ -752,6 +754,7 @@ func (s *PersistentSlabStorage) Commit() error {
 
 		// add to read cache
 		s.cache[id] = slab
+		delete(s.deltas, id)
 	}
 
 	// Do NOT reset deltas because slabs with empty address are not saved.
@@ -833,6 +836,8 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 			if err != nil {
 				return err
 			}
+			delete(s.deltas, id)
+			delete(s.cache, id)
 			continue
 		}
 
@@ -842,10 +847,8 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 			return err
 		}
 
-		// TODO: we might skip this since cadence
-		// never uses the storage after commit
-		// add to read cache
 		s.cache[id] = s.deltas[id]
+		delete(s.deltas, id)
 	}
 
 	// Do NOT reset deltas because slabs with empty address are not saved.

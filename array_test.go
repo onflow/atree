@@ -2723,3 +2723,56 @@ func TestArrayNestedStorables(t *testing.T) {
 	}
 	require.NoError(t, err)
 }
+
+func TestArrayString(t *testing.T) {
+
+	SetThreshold(128)
+	defer func() {
+		SetThreshold(1024)
+	}()
+
+	t.Run("small", func(t *testing.T) {
+		const arraySize = 6
+
+		typeInfo := testTypeInfo{42}
+
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		want := `[0 1 2 3 4 5]`
+		require.Equal(t, want, array.String())
+	})
+
+	t.Run("large", func(t *testing.T) {
+		const arraySize = 190
+
+		typeInfo := testTypeInfo{42}
+
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		wantArrayString := `[0 1 2 ... 27 28 29] [30 31 32 ... 49 50 51] [52 53 54 ... 71 72 73] [74 75 76 ... 93 94 95] [96 97 98 ... 115 116 117] [118 119 120 ... 137 138 139] [140 141 142 ... 159 160 161] [162 163 164 ... 187 188 189]`
+		require.Equal(t, wantArrayString, array.String())
+
+		wantMetaDataSlabString := `[{id:0x102030405060708.10 size:100 count:96} {id:0x102030405060708.11 size:100 count:94}]`
+		require.Equal(t, wantMetaDataSlabString, array.root.String())
+	})
+}

@@ -150,10 +150,6 @@ func (a *Array) Address() Address {
 	return a.root.ID().Address
 }
 
-func (a *Array) Value(_ SlabStorage) (Value, error) {
-	return a, nil
-}
-
 func (a *Array) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
 	return StorageIDStorable(a.StorageID()), nil
 }

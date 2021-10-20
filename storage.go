@@ -740,8 +740,8 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 
 	// fetch from base storage last
 	data, ok, err := s.baseStorage.Retrieve(id)
-	if err != nil {
-		return nil, false, err
+	if !ok || err != nil {
+		return nil, ok, err
 	}
 	slab, err = DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
 	if err == nil {

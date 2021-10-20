@@ -34,6 +34,25 @@ func TestPersistentStorage(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
+	t.Run("empty", func(t *testing.T) {
+		baseStorage := NewInMemBaseStorage()
+		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
+
+		tempStorageID, err := NewStorageIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
+		require.NoError(t, err)
+
+		permStorageID, err := NewStorageIDFromRawBytes([]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
+		require.NoError(t, err)
+
+		_, found, err := storage.Retrieve(tempStorageID)
+		require.NoError(t, err)
+		require.False(t, found)
+
+		_, found, err = storage.Retrieve(permStorageID)
+		require.NoError(t, err)
+		require.False(t, found)
+	})
+
 	t.Run("TestTempAllocation", func(t *testing.T) {
 
 		baseStorage := NewInMemBaseStorage()
@@ -58,13 +77,47 @@ func TestPersistentStorage(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
+		// Slab with temp storage id is NOT persisted in base storage.
 		_, found, err := baseStorage.Retrieve(tempStorageID)
 		require.NoError(t, err)
 		require.False(t, found)
 
+		// Slab with temp storage id is cached in storage.
+		_, found, err = storage.Retrieve(tempStorageID)
+		require.NoError(t, err)
+		require.True(t, found)
+
+		// Slab with perm storage id is persisted in base storage.
 		_, found, err = baseStorage.Retrieve(permStorageID)
 		require.NoError(t, err)
 		require.True(t, found)
+
+		// Slab with perm storage id is cached in storage.
+		_, found, err = storage.Retrieve(permStorageID)
+		require.NoError(t, err)
+		require.True(t, found)
+
+		// Remove slab with perm storage id
+		err = storage.Remove(permStorageID)
+		require.NoError(t, err)
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		// Slab with temp storage id is still cached in storage.
+		_, found, err = storage.Retrieve(tempStorageID)
+		require.NoError(t, err)
+		require.True(t, found)
+
+		// Slab with perm storage id is removed from base storage.
+		_, found, err = baseStorage.Retrieve(permStorageID)
+		require.NoError(t, err)
+		require.False(t, found)
+
+		// Slab with perm storage id is removed from cache in storage.
+		_, found, err = storage.Retrieve(permStorageID)
+		require.NoError(t, err)
+		require.False(t, found)
 	})
 
 	t.Run("Test commit functionality", func(t *testing.T) {

@@ -1770,7 +1770,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 		// Create a new storage with serialized slab data
 		storage2 := newTestBasicStorage(t)
-		storage2.Load(m)
+		err = storage2.Load(m)
+		require.NoError(t, err)
 
 		// Decode slabs from storage
 		rootSlab, ok, err := storage2.Retrieve(id1)
@@ -1949,7 +1950,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 		// Create a new storage with serialized slab data
 		storage2 := newTestBasicStorage(t)
-		storage2.Load(m)
+		err = storage2.Load(m)
+		require.NoError(t, err)
 
 		// Decode slabs from storage
 		rootSlab, ok, err := storage2.Retrieve(id1)
@@ -2148,7 +2150,8 @@ func TestEmptyArray(t *testing.T) {
 		require.Equal(t, expectedData, slabData[array.StorageID()])
 
 		storage2 := newTestBasicStorage(t)
-		storage2.Load(slabData)
+		err = storage2.Load(slabData)
+		require.NoError(t, err)
 
 		array2, err := NewArrayWithRootID(storage2, array.StorageID())
 		require.NoError(t, err)

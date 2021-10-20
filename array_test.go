@@ -3045,9 +3045,11 @@ func TestArrayBatchAppend(t *testing.T) {
 			typeInfo)
 		require.NoError(t, err)
 
-		array.Insert(0, NewStringValue(strings.Repeat("a", int(MaxInlineElementSize-2))))
+		err = array.Insert(0, NewStringValue(strings.Repeat("a", int(MaxInlineElementSize-2))))
+		require.NoError(t, err)
 		for i := 0; i < 35; i++ {
-			array.Append(Uint64Value(i))
+			err = array.Append(Uint64Value(i))
+			require.NoError(t, err)
 		}
 
 		require.Equal(t, uint64(36), array.Count())
@@ -3137,9 +3139,11 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := 0; i < 35; i++ {
-			array.Append(Uint64Value(i))
+			err = array.Append(Uint64Value(i))
+			require.NoError(t, err)
 		}
-		array.Insert(25, NewStringValue(strings.Repeat("a", int(MaxInlineElementSize-2))))
+		err = array.Insert(25, NewStringValue(strings.Repeat("a", int(MaxInlineElementSize-2))))
+		require.NoError(t, err)
 
 		require.Equal(t, uint64(36), array.Count())
 		require.Equal(t, typeInfo, array.Type())

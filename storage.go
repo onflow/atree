@@ -254,26 +254,27 @@ func NewLedgerBaseStorage(ledger Ledger) *LedgerBaseStorage {
 }
 
 func (s *LedgerBaseStorage) Retrieve(id StorageID) ([]byte, bool, error) {
-	prefixedKey := []byte(LedgerBaseStorageSlabPrefix + string(id.Index[:]))
-	v, err := s.ledger.GetValue(id.Address[:], prefixedKey)
+	v, err := s.ledger.GetValue(id.Address[:], SlabIndexToLedgerKey(id.Index))
 	s.bytesRetrieved += len(v)
 	return v, len(v) > 0, err
 }
 
 func (s *LedgerBaseStorage) Store(id StorageID, data []byte) error {
 	s.bytesStored += len(data)
-	prefixedKey := []byte(LedgerBaseStorageSlabPrefix + string(id.Index[:]))
-	return s.ledger.SetValue(id.Address[:], prefixedKey, data)
+	return s.ledger.SetValue(id.Address[:], SlabIndexToLedgerKey(id.Index), data)
 }
 
 func (s *LedgerBaseStorage) Remove(id StorageID) error {
-	prefixedKey := []byte(LedgerBaseStorageSlabPrefix + string(id.Index[:]))
-	return s.ledger.SetValue(id.Address[:], prefixedKey, nil)
+	return s.ledger.SetValue(id.Address[:], SlabIndexToLedgerKey(id.Index), nil)
 }
 
 func (s *LedgerBaseStorage) GenerateStorageID(address Address) (StorageID, error) {
 	idx, err := s.ledger.AllocateStorageIndex(address[:])
 	return NewStorageID(address, idx), err
+}
+
+func SlabIndexToLedgerKey(ind StorageIndex) []byte {
+	return []byte(LedgerBaseStorageSlabPrefix + string(ind[:]))
 }
 
 func (s *LedgerBaseStorage) BytesRetrieved() int {

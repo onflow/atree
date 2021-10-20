@@ -22,7 +22,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -165,30 +164,6 @@ func BenchmarkBatchAppendArray100000Elems(b *testing.B) {
 
 // XXXLArray takes too long to run.
 // func BenchmarkLookupXXXLArray(b *testing.B) { benchmarkLookup(b, 100_000_000, 100) }
-
-type testTypeInfo struct {
-	value uint64
-}
-
-var _ TypeInfo = testTypeInfo{}
-
-func (i testTypeInfo) Encode(enc *cbor.StreamEncoder) error {
-	return enc.EncodeUint64(i.value)
-}
-
-func (i testTypeInfo) Equal(other TypeInfo) bool {
-	otherTestTypeInfo, ok := other.(testTypeInfo)
-	return ok && i.value == otherTestTypeInfo.value
-}
-
-func typeInfoComparator(a, b TypeInfo) bool {
-	x, ok := a.(testTypeInfo)
-	if !ok {
-		return false
-	}
-	y, ok := b.(testTypeInfo)
-	return ok && x.value == y.value
-}
 
 func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, error) {
 

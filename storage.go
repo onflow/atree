@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -275,6 +276,10 @@ func (s *LedgerBaseStorage) GenerateStorageID(address Address) (StorageID, error
 
 func SlabIndexToLedgerKey(ind StorageIndex) []byte {
 	return []byte(LedgerBaseStorageSlabPrefix + string(ind[:]))
+}
+
+func LedgerKeyIsSlabKey(key string) bool {
+	return strings.HasPrefix(key, LedgerBaseStorageSlabPrefix)
 }
 
 func (s *LedgerBaseStorage) BytesRetrieved() int {

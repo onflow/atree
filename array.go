@@ -2153,13 +2153,18 @@ func (a *Array) string(meta *ArrayMetaDataSlab) string {
 }
 
 func getArraySlab(storage SlabStorage, id StorageID) (ArraySlab, error) {
-	slab, _, err := storage.Retrieve(id)
-
-	if arraySlab, ok := slab.(ArraySlab); ok {
-		return arraySlab, nil
+	slab, found, err := storage.Retrieve(id)
+	if err != nil {
+		return nil, err
 	}
-
-	return nil, NewSlabNotFoundErrorf(id, "getArraySlab failed: %w", err)
+	if !found {
+		return nil, NewSlabNotFoundErrorf(id, "array slab not found")
+	}
+	arraySlab, ok := slab.(ArraySlab)
+	if !ok {
+		return nil, NewSlabDataErrorf("slab %d is not ArraySlab", id)
+	}
+	return arraySlab, nil
 }
 
 func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) {

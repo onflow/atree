@@ -883,14 +883,17 @@ func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b Dig
 // TODO: updated element can be inlineCollisionGroup if size < MaxInlineElementSize.
 func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, level int, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, element, error) {
 
-	slab, _, err := storage.Retrieve(e.id)
+	slab, found, err := storage.Retrieve(e.id)
 	if err != nil {
 		return nil, nil, nil, NewSlabNotFoundErrorf(e.id, "get map slab failed: %w", err)
+	}
+	if !found {
+		return nil, nil, nil, NewSlabNotFoundErrorf(e.id, "map slab not found")
 	}
 
 	dataSlab, ok := slab.(*MapDataSlab)
 	if !ok {
-		return nil, nil, nil, NewSlabNotFoundErrorf(e.id, "get map data slab failed: got %T", slab)
+		return nil, nil, nil, NewSlabDataErrorf("slab %d is not MapDataSlab", e.id)
 	}
 
 	// Adjust level and hkey for collision group
@@ -3662,13 +3665,18 @@ func (m *OrderedMap) string(meta *MapMetaDataSlab) string {
 }
 
 func getMapSlab(storage SlabStorage, id StorageID) (MapSlab, error) {
-	slab, _, err := storage.Retrieve(id)
-
-	if mapSlab, ok := slab.(MapSlab); ok {
-		return mapSlab, nil
+	slab, found, err := storage.Retrieve(id)
+	if err != nil {
+		return nil, err
 	}
-
-	return nil, NewSlabNotFoundErrorf(id, "get map slab failed: %w", err)
+	if !found {
+		return nil, NewSlabNotFoundErrorf(id, "map slab not found")
+	}
+	mapSlab, ok := slab.(MapSlab)
+	if !ok {
+		return nil, NewSlabDataErrorf("slab %d is not MapSlab", id)
+	}
+	return mapSlab, nil
 }
 
 func firstMapDataSlab(storage SlabStorage, slab MapSlab) (MapSlab, error) {

@@ -3594,6 +3594,162 @@ func TestMapBatchSet(t *testing.T) {
 		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
 	})
 
+	t.Run("rebalance two data slabs", func(t *testing.T) {
+		SetThreshold(256)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		const mapSize = 10
+
+		typeInfo := testTypeInfo{42}
+
+		m, err := NewMap(
+			newTestPersistentStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			NewDefaultDigesterBuilder(),
+			typeInfo,
+		)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+			storable, err := m.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*10))
+			require.NoError(t, err)
+			require.Nil(t, storable)
+		}
+
+		storable, err := m.Set(
+			compare,
+			hashInputProvider,
+			NewStringValue(strings.Repeat("a", int(maxInlineMapElementSize-2))),
+			NewStringValue(strings.Repeat("b", int(maxInlineMapElementSize-2))),
+		)
+		require.NoError(t, err)
+		require.Nil(t, storable)
+
+		require.Equal(t, uint64(mapSize+1), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+
+		iter, err := m.Iterator()
+		require.NoError(t, err)
+
+		var sortedKeys []Value
+		keyValues := make(map[Value]Value)
+
+		storage := newTestPersistentStorage(t)
+
+		digesterBuilder := NewDefaultDigesterBuilder()
+
+		copied, err := NewMapFromBatchData(
+			storage,
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			digesterBuilder,
+			m.Type(),
+			compare,
+			hashInputProvider,
+			m.Seed(),
+			func() (Value, Value, error) {
+				k, v, err := iter.Next()
+
+				if k != nil {
+					sortedKeys = append(sortedKeys, k)
+					keyValues[k] = v
+				}
+
+				return k, v, err
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, m.Count(), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.NotEqual(t, m.StorageID(), copied.StorageID())
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		storage.DropCache()
+
+		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+	})
+
+	t.Run("merge two data slabs", func(t *testing.T) {
+		SetThreshold(256)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		const mapSize = 8
+
+		typeInfo := testTypeInfo{42}
+
+		m, err := NewMap(
+			newTestPersistentStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			NewDefaultDigesterBuilder(),
+			typeInfo,
+		)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+			storable, err := m.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*10))
+			require.NoError(t, err)
+			require.Nil(t, storable)
+		}
+
+		storable, err := m.Set(
+			compare,
+			hashInputProvider,
+			NewStringValue(strings.Repeat("b", int(maxInlineMapElementSize-2))),
+			NewStringValue(strings.Repeat("b", int(maxInlineMapElementSize-2))),
+		)
+		require.NoError(t, err)
+		require.Nil(t, storable)
+
+		require.Equal(t, uint64(mapSize+1), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+
+		iter, err := m.Iterator()
+		require.NoError(t, err)
+
+		var sortedKeys []Value
+		keyValues := make(map[Value]Value)
+
+		storage := newTestPersistentStorage(t)
+
+		digesterBuilder := NewDefaultDigesterBuilder()
+
+		copied, err := NewMapFromBatchData(
+			storage,
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			digesterBuilder,
+			m.Type(),
+			compare,
+			hashInputProvider,
+			m.Seed(),
+			func() (Value, Value, error) {
+				k, v, err := iter.Next()
+
+				if k != nil {
+					sortedKeys = append(sortedKeys, k)
+					keyValues[k] = v
+				}
+
+				return k, v, err
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, m.Count(), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.NotEqual(t, m.StorageID(), copied.StorageID())
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		storage.DropCache()
+
+		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+	})
+
 	t.Run("random", func(t *testing.T) {
 		SetThreshold(100)
 		defer func() {

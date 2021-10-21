@@ -314,13 +314,15 @@ func (s *LedgerBaseStorage) ResetReporter() {
 	s.bytesRetrieved = 0
 }
 
+type SlabIterator func() (StorageID, Slab)
+
 type SlabStorage interface {
 	Store(StorageID, Slab) error
 	Retrieve(StorageID) (Slab, bool, error)
 	Remove(StorageID) error
 	GenerateStorageID(address Address) (StorageID, error)
-
 	Count() int
+	SlabIterator() (SlabIterator, error)
 }
 
 type BasicSlabStorage struct {
@@ -412,18 +414,58 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 	return nil
 }
 
-// CheckHealth checks for the health of slab storage
-// it traverses the slabs and checks these factors
-// - all non-root slabs only has a single parent reference (no double referencing)
-// - every child of a parent shares the same ownership (childStorageID.Address == parentStorageID.Address)
-// - number of root slabs are equal to the expected number (skipped if expectedNumberOfRootSlabs is -1)
-// This should be used for testing puporses only, as it might be slow to process
-func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
-
-	parentOf := make(map[StorageID]StorageID)
-	leafs := make([]StorageID, 0)
+func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
+	var slabs []struct {
+		StorageID
+		Slab
+	}
 
 	for id, slab := range s.Slabs {
+		slabs = append(slabs, struct {
+			StorageID
+			Slab
+		}{
+			StorageID: id,
+			Slab:      slab,
+		})
+	}
+
+	var i int
+
+	return func() (StorageID, Slab) {
+		if i >= len(slabs) {
+			return StorageIDUndefined, nil
+		}
+		slabEntry := slabs[i]
+		i++
+		return slabEntry.StorageID, slabEntry.Slab
+	}, nil
+}
+
+// CheckStorageHealth checks for the health of slab storage.
+// It traverses the slabs and checks these factors:
+// - All non-root slabs only has a single parent reference (no double referencing)
+// - Every child of a parent shares the same ownership (childStorageID.Address == parentStorageID.Address)
+// - The number of root slabs are equal to the expected number (skipped if expectedNumberOfRootSlabs is -1)
+// This should be used for testing purposes only, as it might be slow to process
+func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) error {
+	parentOf := make(map[StorageID]StorageID)
+	leaves := make([]StorageID, 0)
+
+	slabIterator, err := storage.SlabIterator()
+	if err != nil {
+		return fmt.Errorf("failed to create slab iterator: %w", err)
+	}
+
+	slabs := map[StorageID]Slab{}
+
+	for {
+		id, slab := slabIterator()
+		if id == StorageIDUndefined {
+			break
+		}
+
+		slabs[id] = slab
 
 		switch v := slab.(type) {
 
@@ -465,7 +507,7 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 			}
 
 			if !atLeastOneExternalSlab {
-				leafs = append(leafs, id)
+				leaves = append(leaves, id)
 			}
 		}
 	}
@@ -473,33 +515,71 @@ func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
 	rootsMap := make(map[StorageID]bool)
 	visited := make(map[StorageID]bool)
 	var id StorageID
-	for _, leaf := range leafs {
+	for _, leaf := range leaves {
 		id = leaf
 		if visited[id] {
 			return fmt.Errorf("atleast two references found to the leaf slab %s", id)
 		}
 		visited[id] = true
 		for {
-			p, found := parentOf[id]
+			parentID, found := parentOf[id]
 			if !found {
 				// we reach the root
 				rootsMap[id] = true
 				break
 			}
-			visited[p] = true
-			if s.Slabs[id].ID().Address != s.Slabs[p].ID().Address {
-				return fmt.Errorf("parent and child are not owned by the same account child.owner: %s, parent.owner: %s", s.Slabs[id].ID().Address, s.Slabs[p].ID().Address)
+			visited[parentID] = true
+
+			childSlab, ok, err := storage.Retrieve(id)
+			if !ok || err != nil {
+				return fmt.Errorf("failed to get child slab: %w", err)
 			}
-			id = p
+
+			parentSlab, ok, err := storage.Retrieve(parentID)
+			if !ok || err != nil {
+				return fmt.Errorf("failed to get parent slab: %w", err)
+			}
+
+			childOwner := childSlab.ID().Address
+			parentOwner := parentSlab.ID().Address
+
+			if childOwner != parentOwner {
+				return fmt.Errorf(
+					"parent and child are not owned by the same account: child.owner: %s, parent.owner: %s",
+					childOwner,
+					parentOwner,
+				)
+			}
+			id = parentID
 		}
 	}
 
-	if len(visited) != len(s.Slabs) {
-		return fmt.Errorf("an slab was not reachable from leafs - broken connection somewhere - number of slabs:%d, visited during traverse: %d", len(s.Slabs), len(visited))
+	if len(visited) != len(slabs) {
+
+		var unreachableID StorageID
+		var unreachableSlab Slab
+
+		for id, slab := range slabs {
+			if _, ok := visited[id]; !ok {
+				unreachableID = id
+				unreachableSlab = slab
+				break
+			}
+		}
+
+		return fmt.Errorf(
+			"slab was not reachable from leaves: %s: %s",
+			unreachableID,
+			unreachableSlab,
+		)
 	}
 
 	if (expectedNumberOfRootSlabs >= 0) && (len(rootsMap) != expectedNumberOfRootSlabs) {
-		return fmt.Errorf("number of root slabs doesn't match expected: %d, got: %d", expectedNumberOfRootSlabs, len(rootsMap))
+		return fmt.Errorf(
+			"number of root slabs doesn't match: expected %d, got %d",
+			expectedNumberOfRootSlabs,
+			len(rootsMap),
+		)
 	}
 
 	return nil
@@ -515,6 +595,53 @@ type PersistentSlabStorage struct {
 	cborEncMode      cbor.EncMode
 	cborDecMode      cbor.DecMode
 	autoCommit       bool // flag to call commit after each operation
+}
+
+func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
+
+	var slabs []struct {
+		StorageID
+		Slab
+	}
+
+	for id, slab := range s.deltas {
+		if slab == nil {
+			continue
+		}
+
+		slabs = append(slabs, struct {
+			StorageID
+			Slab
+		}{
+			StorageID: id,
+			Slab:      slab,
+		})
+	}
+
+	for id, slab := range s.cache {
+		if _, ok := s.deltas[id]; ok {
+			continue
+		}
+
+		slabs = append(slabs, struct {
+			StorageID
+			Slab
+		}{
+			StorageID: id,
+			Slab:      slab,
+		})
+	}
+
+	var i int
+
+	return func() (StorageID, Slab) {
+		if i >= len(slabs) {
+			return StorageIDUndefined, nil
+		}
+		slabEntry := slabs[i]
+		i++
+		return slabEntry.StorageID, slabEntry.Slab
+	}, nil
 }
 
 var _ SlabStorage = &PersistentSlabStorage{}

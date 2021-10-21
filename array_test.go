@@ -1428,14 +1428,14 @@ func TestArrayAppendSetInsertRemoveRandomValues(t *testing.T) {
 	)
 }
 
-func TestNestedArray(t *testing.T) {
+func TestArrayNestedArrayMap(t *testing.T) {
 
 	SetThreshold(256)
 	defer func() {
 		SetThreshold(1024)
 	}()
 
-	t.Run("small", func(t *testing.T) {
+	t.Run("small array", func(t *testing.T) {
 
 		const arraySize = 4096
 
@@ -1451,10 +1451,7 @@ func TestNestedArray(t *testing.T) {
 			nested, err := NewArray(storage, address, nestedTypeInfo)
 			require.NoError(t, err)
 
-			err = nested.Append(Uint64Value(i * 2))
-			require.NoError(t, err)
-
-			err = nested.Append(Uint64Value(i*2 + 1))
+			err = nested.Append(Uint64Value(i))
 			require.NoError(t, err)
 
 			require.True(t, nested.root.IsData())
@@ -1509,7 +1506,7 @@ func TestNestedArray(t *testing.T) {
 		)
 	})
 
-	t.Run("big", func(t *testing.T) {
+	t.Run("big array", func(t *testing.T) {
 
 		const arraySize = 4096
 
@@ -1550,6 +1547,138 @@ func TestNestedArray(t *testing.T) {
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
 			require.Equal(t, nestedArrays[i], existingValue)
+		}
+
+		require.Equal(t, typeInfo, array.Type())
+		require.Equal(t, address, array.Address())
+		require.Equal(t, uint64(arraySize), array.Count())
+
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = validArraySerialization(array, storage)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+	})
+
+	t.Run("small map", func(t *testing.T) {
+
+		const arraySize = 4096
+
+		nestedTypeInfo := testTypeInfo{43}
+
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		nestedMaps := make([]*OrderedMap, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			nested, err := NewMap(storage, address, NewDefaultDigesterBuilder(), nestedTypeInfo)
+			require.NoError(t, err)
+
+			storable, err := nested.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*2))
+			require.NoError(t, err)
+			require.Nil(t, storable)
+
+			require.True(t, nested.root.IsData())
+
+			nestedMaps[i] = nested
+		}
+
+		typeInfo := testTypeInfo{42}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for _, a := range nestedMaps {
+			err := array.Append(a)
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			existingStorable, err := array.Get(i)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, nestedMaps[i], existingValue)
+		}
+
+		require.Equal(t, typeInfo, array.Type())
+		require.Equal(t, address, array.Address())
+		require.Equal(t, uint64(arraySize), array.Count())
+
+		err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = validArraySerialization(array, storage)
+		if err != nil {
+			PrintArray(array)
+		}
+		require.NoError(t, err)
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		stats, err := GetArrayStats(array)
+		require.NoError(t, err)
+		require.Equal(
+			t,
+			stats.DataSlabCount+stats.MetaDataSlabCount+arraySize,
+			uint64(array.Storage.Count()),
+		)
+	})
+
+	t.Run("big map", func(t *testing.T) {
+
+		const arraySize = 4096
+
+		nestedTypeInfo := testTypeInfo{43}
+
+		storage := newTestPersistentStorage(t)
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		nestedMaps := make([]*OrderedMap, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			nested, err := NewMap(storage, address, NewDefaultDigesterBuilder(), nestedTypeInfo)
+			require.NoError(t, err)
+
+			for i := uint64(0); i < 25; i++ {
+				storable, err := nested.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*2))
+				require.NoError(t, err)
+				require.Nil(t, storable)
+			}
+
+			require.False(t, nested.root.IsData())
+
+			nestedMaps[i] = nested
+		}
+
+		typeInfo := testTypeInfo{42}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+		for _, a := range nestedMaps {
+			err := array.Append(a)
+			require.NoError(t, err)
+		}
+
+		for i := uint64(0); i < arraySize; i++ {
+			existingStorable, err := array.Get(i)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, nestedMaps[i], existingValue)
 		}
 
 		require.Equal(t, typeInfo, array.Type())

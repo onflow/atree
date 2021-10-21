@@ -20,7 +20,6 @@ package atree
 
 import (
 	"bytes"
-	"container/list"
 	"fmt"
 	"reflect"
 
@@ -38,21 +37,17 @@ type ArrayStats struct {
 func GetArrayStats(a *Array) (ArrayStats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
-	metaDataSlabSize := uint64(0)
 	dataSlabCount := uint64(0)
-	dataSlabSize := uint64(0)
 
-	nextLevelIDs := list.New()
-	nextLevelIDs.PushBack(a.root.Header().id)
+	nextLevelIDs := []StorageID{a.StorageID()}
 
-	for nextLevelIDs.Len() > 0 {
+	for len(nextLevelIDs) > 0 {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = list.New()
+		nextLevelIDs = []StorageID{}
 
-		for e := ids.Front(); e != nil; e = e.Next() {
-			id := e.Value.(StorageID)
+		for _, id := range ids {
 
 			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
@@ -60,17 +55,11 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 			}
 
 			if slab.IsData() {
-				leaf := slab.(*ArrayDataSlab)
 				dataSlabCount++
-				dataSlabSize += uint64(leaf.header.size)
 			} else {
-				meta := slab.(*ArrayMetaDataSlab)
 				metaDataSlabCount++
-				metaDataSlabSize += uint64(meta.header.size)
-
-				for _, h := range meta.childrenHeaders {
-					nextLevelIDs.PushBack(h.id)
-				}
+				meta := slab.(*ArrayMetaDataSlab)
+				nextLevelIDs = append(nextLevelIDs, meta.ChildIDs()...)
 			}
 		}
 

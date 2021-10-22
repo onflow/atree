@@ -3377,7 +3377,7 @@ func TestArrayNestedStorables(t *testing.T) {
 	}
 	require.NoError(t, err)
 
-	err = CheckStorageHealth(storage, 1)
+	_, err = CheckStorageHealth(storage, 1)
 	if err != nil {
 		fmt.Printf("CheckStorageHealth %s\n", err)
 	}

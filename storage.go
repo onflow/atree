@@ -448,13 +448,13 @@ func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
 // - Every child of a parent shares the same ownership (childStorageID.Address == parentStorageID.Address)
 // - The number of root slabs are equal to the expected number (skipped if expectedNumberOfRootSlabs is -1)
 // This should be used for testing purposes only, as it might be slow to process
-func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) error {
+func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map[StorageID]struct{}, error) {
 	parentOf := make(map[StorageID]StorageID)
 	leaves := make([]StorageID, 0)
 
 	slabIterator, err := storage.SlabIterator()
 	if err != nil {
-		return fmt.Errorf("failed to create slab iterator: %w", err)
+		return nil, fmt.Errorf("failed to create slab iterator: %w", err)
 	}
 
 	slabs := map[StorageID]Slab{}
@@ -465,6 +465,9 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) erro
 			break
 		}
 
+		if _, ok := slabs[id]; ok {
+			return nil, fmt.Errorf("duplicate slab: %s", id)
+		}
 		slabs[id] = slab
 
 		switch v := slab.(type) {
@@ -474,7 +477,7 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) erro
 			childIDs := v.ChildIDs()
 			for _, cid := range childIDs {
 				if _, found := parentOf[cid]; found {
-					return fmt.Errorf("two parents are captured for the slab %s", cid)
+					return nil, fmt.Errorf("two parents are captured for the slab %s", cid)
 				}
 				parentOf[cid] = id
 			}
@@ -494,7 +497,7 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) erro
 					if sids, ok := s.(StorageIDStorable); ok {
 						sid := StorageID(sids)
 						if _, found := parentOf[sid]; found {
-							return fmt.Errorf("two parents are captured for the slab %s", sid)
+							return nil, fmt.Errorf("two parents are captured for the slab %s", sid)
 						}
 						parentOf[sid] = id
 						atLeastOneExternalSlab = true
@@ -512,39 +515,39 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) erro
 		}
 	}
 
-	rootsMap := make(map[StorageID]bool)
-	visited := make(map[StorageID]bool)
+	rootsMap := make(map[StorageID]struct{})
+	visited := make(map[StorageID]struct{})
 	var id StorageID
 	for _, leaf := range leaves {
 		id = leaf
-		if visited[id] {
-			return fmt.Errorf("atleast two references found to the leaf slab %s", id)
+		if _, ok := visited[id]; ok {
+			return nil, fmt.Errorf("atleast two references found to the leaf slab %s", id)
 		}
-		visited[id] = true
+		visited[id] = struct{}{}
 		for {
 			parentID, found := parentOf[id]
 			if !found {
 				// we reach the root
-				rootsMap[id] = true
+				rootsMap[id] = struct{}{}
 				break
 			}
-			visited[parentID] = true
+			visited[parentID] = struct{}{}
 
 			childSlab, ok, err := storage.Retrieve(id)
 			if !ok || err != nil {
-				return fmt.Errorf("failed to get child slab: %w", err)
+				return nil, fmt.Errorf("failed to get child slab: %w", err)
 			}
 
 			parentSlab, ok, err := storage.Retrieve(parentID)
 			if !ok || err != nil {
-				return fmt.Errorf("failed to get parent slab: %w", err)
+				return nil, fmt.Errorf("failed to get parent slab: %w", err)
 			}
 
 			childOwner := childSlab.ID().Address
 			parentOwner := parentSlab.ID().Address
 
 			if childOwner != parentOwner {
-				return fmt.Errorf(
+				return nil, fmt.Errorf(
 					"parent and child are not owned by the same account: child.owner: %s, parent.owner: %s",
 					childOwner,
 					parentOwner,
@@ -567,7 +570,7 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) erro
 			}
 		}
 
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"slab was not reachable from leaves: %s: %s",
 			unreachableID,
 			unreachableSlab,
@@ -575,14 +578,14 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) erro
 	}
 
 	if (expectedNumberOfRootSlabs >= 0) && (len(rootsMap) != expectedNumberOfRootSlabs) {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"number of root slabs doesn't match: expected %d, got %d",
 			expectedNumberOfRootSlabs,
 			len(rootsMap),
 		)
 	}
 
-	return nil
+	return rootsMap, nil
 }
 
 type PersistentSlabStorage struct {

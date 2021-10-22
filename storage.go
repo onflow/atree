@@ -599,8 +599,11 @@ func (s *PersistentSlabStorage) Commit() error {
 			if err != nil {
 				return err
 			}
+			// Deleted slabs are removed from deltas and added to read cache so that:
+			// 1. next read is from in-memory read cache
+			// 2. deleted slabs are not re-committed in next commit
+			s.cache[id] = nil
 			delete(s.deltas, id)
-			delete(s.cache, id)
 			continue
 		}
 
@@ -618,6 +621,9 @@ func (s *PersistentSlabStorage) Commit() error {
 
 		// add to read cache
 		s.cache[id] = slab
+		// It's safe to remove slab from deltas because
+		// iteration is on non-temp slabs and temp slabs
+		// are still in deltas.
 		delete(s.deltas, id)
 	}
 
@@ -700,8 +706,11 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 			if err != nil {
 				return err
 			}
+			// Deleted slabs are removed from deltas and added to read cache so that:
+			// 1. next read is from in-memory read cache
+			// 2. deleted slabs are not re-committed in next commit
+			s.cache[id] = nil
 			delete(s.deltas, id)
-			delete(s.cache, id)
 			continue
 		}
 
@@ -712,6 +721,9 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		}
 
 		s.cache[id] = s.deltas[id]
+		// It's safe to remove slab from deltas because
+		// iteration is on non-temp slabs and temp slabs
+		// are still in deltas.
 		delete(s.deltas, id)
 	}
 
@@ -738,7 +750,7 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 
 	// check the read cache next
 	if slab, ok := s.cache[id]; ok {
-		return slab, true, nil
+		return slab, slab != nil, nil
 	}
 
 	// fetch from base storage last

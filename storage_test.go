@@ -101,13 +101,12 @@ func TestPersistentStorage(t *testing.T) {
 		err = storage.Remove(permStorageID)
 		require.NoError(t, err)
 
-		err = storage.Commit()
+		// Remove slab with temp storage id
+		err = storage.Remove(tempStorageID)
 		require.NoError(t, err)
 
-		// Slab with temp storage id is still cached in storage.
-		_, found, err = storage.Retrieve(tempStorageID)
+		err = storage.Commit()
 		require.NoError(t, err)
-		require.True(t, found)
 
 		// Slab with perm storage id is removed from base storage.
 		_, found, err = baseStorage.Retrieve(permStorageID)
@@ -119,10 +118,7 @@ func TestPersistentStorage(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, found)
 
-		// Remove slab with temp storage id
-		err = storage.Remove(tempStorageID)
-		require.NoError(t, err)
-
+		// Slab with temp storage id is removed from cache in storage.
 		_, found, err = storage.Retrieve(tempStorageID)
 		require.NoError(t, err)
 		require.False(t, found)

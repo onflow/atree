@@ -31,6 +31,11 @@ type ArrayStats struct {
 	ElementCount      uint64
 	MetaDataSlabCount uint64
 	DataSlabCount     uint64
+	StorableSlabCount uint64
+}
+
+func (s *ArrayStats) SlabCount() uint64 {
+	return s.DataSlabCount + s.MetaDataSlabCount + s.StorableSlabCount
 }
 
 // GetArrayStats returns stats about array slabs.
@@ -38,6 +43,7 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
 	dataSlabCount := uint64(0)
+	storableSlabCount := uint64(0)
 
 	nextLevelIDs := []StorageID{a.StorageID()}
 
@@ -56,6 +62,13 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 
 			if slab.IsData() {
 				dataSlabCount++
+
+				childStorables := slab.ChildStorables()
+				for _, s := range childStorables {
+					if _, ok := s.(StorageIDStorable); ok {
+						storableSlabCount++
+					}
+				}
 			} else {
 				metaDataSlabCount++
 				meta := slab.(*ArrayMetaDataSlab)
@@ -71,6 +84,7 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 		ElementCount:      a.Count(),
 		MetaDataSlabCount: metaDataSlabCount,
 		DataSlabCount:     dataSlabCount,
+		StorableSlabCount: storableSlabCount,
 	}, nil
 }
 

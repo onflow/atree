@@ -44,9 +44,7 @@ func TestArrayAppendAndGet(t *testing.T) {
 	// with 14 metadata slabs, and 109 data slabs.
 
 	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	const arraySize = 4096
 
@@ -163,9 +161,7 @@ func TestArraySetAndGet(t *testing.T) {
 		const arraySize = 50
 
 		SetThreshold(256)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		typeInfo := testTypeInfo{42}
 
@@ -232,9 +228,7 @@ func TestArraySetAndGet(t *testing.T) {
 		const arraySize = 50
 
 		SetThreshold(256)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		typeInfo := testTypeInfo{42}
 
@@ -293,9 +287,7 @@ func TestArraySetAndGet(t *testing.T) {
 func TestArrayInsertAndGet(t *testing.T) {
 
 	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	t.Run("insert-first", func(t *testing.T) {
 
@@ -449,9 +441,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 func TestArrayRemove(t *testing.T) {
 	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	t.Run("remove-first", func(t *testing.T) {
 
@@ -675,9 +665,7 @@ func TestArrayIterate(t *testing.T) {
 
 	t.Run("append", func(t *testing.T) {
 		SetThreshold(256)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		const arraySize = 4096
 
@@ -707,9 +695,7 @@ func TestArrayIterate(t *testing.T) {
 
 	t.Run("set", func(t *testing.T) {
 		SetThreshold(256)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		const arraySize = 4096
 
@@ -748,9 +734,7 @@ func TestArrayIterate(t *testing.T) {
 
 	t.Run("insert", func(t *testing.T) {
 		SetThreshold(256)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		const arraySize = 4096
 
@@ -785,9 +769,7 @@ func TestArrayIterate(t *testing.T) {
 
 	t.Run("remove", func(t *testing.T) {
 		SetThreshold(256)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		const arraySize = 4096
 
@@ -894,9 +876,7 @@ func TestArrayIterate(t *testing.T) {
 
 func TestArrayRootStorageID(t *testing.T) {
 	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	const arraySize = 4096
 
@@ -939,9 +919,7 @@ func TestArrayRootStorageID(t *testing.T) {
 func TestArraySetRandomValues(t *testing.T) {
 
 	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	const arraySize = 4096
 
@@ -1009,9 +987,7 @@ func TestArraySetRandomValues(t *testing.T) {
 func TestArrayInsertRandomValues(t *testing.T) {
 
 	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	t.Run("insert-first", func(t *testing.T) {
 
@@ -1188,9 +1164,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 func TestArrayRemoveRandomValues(t *testing.T) {
 
 	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	const arraySize = 4096
 
@@ -1277,9 +1251,7 @@ func TestArrayAppendSetInsertRemoveRandomValues(t *testing.T) {
 	)
 
 	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	const opCount = 4096
 
@@ -1414,9 +1386,7 @@ func TestArrayAppendSetInsertRemoveRandomValues(t *testing.T) {
 func TestArrayNestedArrayMap(t *testing.T) {
 
 	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	t.Run("small array", func(t *testing.T) {
 
@@ -1747,9 +1717,7 @@ func TestArrayStringElement(t *testing.T) {
 func TestArrayEncodeDecode(t *testing.T) {
 
 	SetThreshold(60)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	t.Run("no pointers", func(t *testing.T) {
 		typeInfo := testTypeInfo{42}
@@ -2102,9 +2070,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 func TestArrayEncodeDecodeRandomValues(t *testing.T) {
 
 	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	typeInfo := testTypeInfo{42}
 
@@ -2400,9 +2366,7 @@ func TestArrayPopIterate(t *testing.T) {
 
 	t.Run("root-metaslab", func(t *testing.T) {
 		SetThreshold(256)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		const arraySize = 4096
 
@@ -2451,7 +2415,7 @@ func TestArrayPopIterate(t *testing.T) {
 	})
 }
 
-func TestArrayBatchAppend(t *testing.T) {
+func TestArrayFromBatchData(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		typeInfo := testTypeInfo{42}
@@ -2582,9 +2546,7 @@ func TestArrayBatchAppend(t *testing.T) {
 
 	t.Run("root-metaslab", func(t *testing.T) {
 		SetThreshold(256)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		const arraySize = 4096
 
@@ -2659,9 +2621,7 @@ func TestArrayBatchAppend(t *testing.T) {
 
 	t.Run("random", func(t *testing.T) {
 		SetThreshold(256)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		const arraySize = 4096
 
@@ -2829,9 +2789,7 @@ func TestArrayNestedStorables(t *testing.T) {
 func TestArrayString(t *testing.T) {
 
 	SetThreshold(128)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	t.Run("small", func(t *testing.T) {
 		const arraySize = 6

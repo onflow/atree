@@ -91,7 +91,7 @@ func verifyMap(
 	keyValues map[Value]Value,
 	sortedKeys []Value,
 ) {
-	require.Equal(t, typeInfo, m.Type())
+	require.True(t, typeInfoComparator(typeInfo, m.Type()))
 	require.Equal(t, address, m.Address())
 	require.Equal(t, uint64(len(keyValues)), m.Count())
 
@@ -117,8 +117,8 @@ func verifyMap(
 			expectedKey := sortedKeys[i]
 			expectedValue := keyValues[expectedKey]
 
-			require.Equal(t, expectedKey, k)
-			require.Equal(t, expectedValue, v)
+			valueEqual(t, typeInfoComparator, expectedKey, k)
+			valueEqual(t, typeInfoComparator, expectedValue, v)
 
 			i++
 			return true, nil
@@ -287,7 +287,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, oldValue, existingValue)
+			valueEqual(t, typeInfoComparator, oldValue, existingValue)
 
 			keyValues[k] = newValue
 		}
@@ -368,13 +368,13 @@ func TestMapHas(t *testing.T) {
 	for _, k := range keysToInsert {
 		exist, err := m.Has(compare, hashInputProvider, k)
 		require.NoError(t, err)
-		require.Equal(t, true, exist)
+		require.True(t, exist)
 	}
 
 	for _, k := range keysToNotInsert {
 		exist, err := m.Has(compare, hashInputProvider, k)
 		require.NoError(t, err)
-		require.Equal(t, false, exist)
+		require.False(t, exist)
 	}
 }
 
@@ -441,11 +441,11 @@ func TestMapRemove(t *testing.T) {
 
 				removedKey, err := removedKeyStorable.StoredValue(storage)
 				require.NoError(t, err)
-				require.Equal(t, k, removedKey)
+				valueEqual(t, typeInfoComparator, k, removedKey)
 
 				removedValue, err := removedValueStorable.StoredValue(storage)
 				require.NoError(t, err)
-				require.Equal(t, v, removedValue)
+				valueEqual(t, typeInfoComparator, v, removedValue)
 
 				if id, ok := removedKeyStorable.(StorageIDStorable); ok {
 					storage.Remove(StorageID(id))
@@ -463,7 +463,7 @@ func TestMapRemove(t *testing.T) {
 
 				count--
 
-				require.Equal(t, typeInfo, m.Type())
+				require.True(t, typeInfoComparator(typeInfo, m.Type()))
 				require.Equal(t, address, m.Address())
 				require.Equal(t, uint64(count), m.Count())
 			}
@@ -512,8 +512,8 @@ func TestMapIterate(t *testing.T) {
 		// Iterate key value pairs
 		i = uint64(0)
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
-			require.Equal(t, sortedKeys[i], k)
-			require.Equal(t, keyValues[k], v)
+			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
+			valueEqual(t, typeInfoComparator, keyValues[k], v)
 			i++
 			return true, nil
 		})
@@ -524,7 +524,7 @@ func TestMapIterate(t *testing.T) {
 		// Iterate keys
 		i = uint64(0)
 		err = m.IterateKeys(func(k Value) (resume bool, err error) {
-			require.Equal(t, sortedKeys[i], k)
+			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
 			i++
 			return true, nil
 		})
@@ -536,7 +536,7 @@ func TestMapIterate(t *testing.T) {
 		i = uint64(0)
 		err = m.IterateValues(func(v Value) (resume bool, err error) {
 			k := sortedKeys[i]
-			require.Equal(t, keyValues[k], v)
+			valueEqual(t, typeInfoComparator, keyValues[k], v)
 			i++
 			return true, nil
 		})
@@ -591,8 +591,8 @@ func TestMapIterate(t *testing.T) {
 		// Iterate key value pairs
 		i := uint64(0)
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
-			require.Equal(t, sortedKeys[i], k)
-			require.Equal(t, keyValues[k], v)
+			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
+			valueEqual(t, typeInfoComparator, keyValues[k], v)
 			i++
 			return true, nil
 		})
@@ -602,7 +602,7 @@ func TestMapIterate(t *testing.T) {
 		// Iterate keys
 		i = uint64(0)
 		err = m.IterateKeys(func(k Value) (resume bool, err error) {
-			require.Equal(t, sortedKeys[i], k)
+			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
 			i++
 			return true, nil
 		})
@@ -612,7 +612,7 @@ func TestMapIterate(t *testing.T) {
 		// Iterate values
 		i = uint64(0)
 		err = m.IterateValues(func(v Value) (resume bool, err error) {
-			require.Equal(t, keyValues[sortedKeys[i]], v)
+			valueEqual(t, typeInfoComparator, keyValues[sortedKeys[i]], v)
 			i++
 			return true, nil
 		})
@@ -698,11 +698,11 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 
 		removedKey, err := removedKeyStorable.StoredValue(storage)
 		require.NoError(t, err)
-		require.Equal(t, k, removedKey)
+		valueEqual(t, typeInfoComparator, k, removedKey)
 
 		removedValue, err := removedValueStorable.StoredValue(storage)
 		require.NoError(t, err)
-		require.Equal(t, v, removedValue)
+		valueEqual(t, typeInfoComparator, v, removedValue)
 
 		if id, ok := removedKeyStorable.(StorageIDStorable); ok {
 			storage.Remove(StorageID(id))
@@ -764,11 +764,11 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 		removedKey, err := removedKeyStorable.StoredValue(storage)
 		require.NoError(t, err)
-		require.Equal(t, k, removedKey)
+		valueEqual(t, typeInfoComparator, k, removedKey)
 
 		removedValue, err := removedValueStorable.StoredValue(storage)
 		require.NoError(t, err)
-		require.Equal(t, v, removedValue)
+		valueEqual(t, typeInfoComparator, v, removedValue)
 
 		if id, ok := removedKeyStorable.(StorageIDStorable); ok {
 			storage.Remove(StorageID(id))
@@ -860,7 +860,7 @@ func testMapSetRemoveRandomValues(
 
 				existingValue, err := existingStorable.StoredValue(storage)
 				require.NoError(t, err)
-				require.Equal(t, oldv, existingValue)
+				valueEqual(t, typeInfoComparator, oldv, existingValue)
 
 				if id, ok := existingStorable.(StorageIDStorable); ok {
 					storage.Remove(StorageID(id))
@@ -882,11 +882,11 @@ func testMapSetRemoveRandomValues(
 
 			removedKey, err := removedKeyStorable.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, k, removedKey)
+			valueEqual(t, typeInfoComparator, k, removedKey)
 
 			removedValue, err := removedValueStorable.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, keyValues[k], removedValue)
+			valueEqual(t, typeInfoComparator, keyValues[k], removedValue)
 
 			if id, ok := removedKeyStorable.(StorageIDStorable); ok {
 				storage.Remove(StorageID(id))
@@ -901,9 +901,9 @@ func testMapSetRemoveRandomValues(
 			keys = keys[:len(keys)-1]
 		}
 
-		require.Equal(t, uint64(len(keys)), m.Count())
-		require.Equal(t, typeInfo, m.Type())
+		require.True(t, typeInfoComparator(typeInfo, m.Type()))
 		require.Equal(t, address, m.Address())
+		require.Equal(t, uint64(len(keys)), m.Count())
 	}
 
 	return m, keyValues
@@ -2282,7 +2282,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		existingValue, err := existingStorable.StoredValue(storage)
 		require.NoError(t, err)
-		require.Equal(t, v, existingValue)
+		valueEqual(t, typeInfoComparator, v, existingValue)
 
 		expectedHasPointer := []byte{
 
@@ -2456,11 +2456,11 @@ func TestMapPopIterate(t *testing.T) {
 
 			kv, err := k.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, sortedKeys[i], kv)
+			valueEqual(t, typeInfoComparator, sortedKeys[i], kv)
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, keyValues[sortedKeys[i]], vv)
+			valueEqual(t, typeInfoComparator, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
@@ -2510,11 +2510,11 @@ func TestMapPopIterate(t *testing.T) {
 
 			kv, err := k.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, sortedKeys[i], kv)
+			valueEqual(t, typeInfoComparator, sortedKeys[i], kv)
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, keyValues[sortedKeys[i]], vv)
+			valueEqual(t, typeInfoComparator, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
@@ -2577,11 +2577,11 @@ func TestMapPopIterate(t *testing.T) {
 
 			kv, err := k.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, sortedKeys[i], kv)
+			valueEqual(t, typeInfoComparator, sortedKeys[i], kv)
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, keyValues[sortedKeys[i]], vv)
+			valueEqual(t, typeInfoComparator, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
@@ -2631,7 +2631,7 @@ func TestEmptyMap(t *testing.T) {
 	})
 
 	t.Run("type", func(t *testing.T) {
-		require.Equal(t, typeInfo, m.Type())
+		require.True(t, typeInfoComparator(typeInfo, m.Type()))
 	})
 
 	t.Run("address", func(t *testing.T) {
@@ -2983,7 +2983,7 @@ func TestMapNestedStorables(t *testing.T) {
 			require.Equal(t, strings.Repeat("b", int(i)), s.str)
 		}
 
-		require.Equal(t, typeInfo, m.Type())
+		require.True(t, typeInfoComparator(typeInfo, m.Type()))
 		require.Equal(t, address, m.Address())
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
@@ -3076,7 +3076,7 @@ func TestMapNestedStorables(t *testing.T) {
 			require.Equal(t, strings.Repeat("b", int(i)), s.str)
 		}
 
-		require.Equal(t, typeInfo, m.Type())
+		require.True(t, typeInfoComparator(typeInfo, m.Type()))
 		require.Equal(t, address, m.Address())
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)

@@ -476,48 +476,32 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map
 		}
 		slabs[id] = slab
 
-		switch v := slab.(type) {
+		atLeastOneExternalSlab := false
+		childStorables := slab.ChildStorables()
 
-		case MetaDataSlab:
+		for len(childStorables) > 0 {
 
-			childIDs := v.ChildIDs()
-			for _, cid := range childIDs {
-				if _, found := parentOf[cid]; found {
-					return nil, fmt.Errorf("two parents are captured for the slab %s", cid)
-				}
-				parentOf[cid] = id
-			}
+			var next []Storable
 
-		default:
-			// Data slabs can be *StorableSlab, *ArrayDataSlab, and *MapDataSlab.
+			for _, s := range childStorables {
 
-			atLeastOneExternalSlab := false
-			childStorables := v.ChildStorables()
-
-			for len(childStorables) > 0 {
-
-				var next []Storable
-
-				for _, s := range childStorables {
-
-					if sids, ok := s.(StorageIDStorable); ok {
-						sid := StorageID(sids)
-						if _, found := parentOf[sid]; found {
-							return nil, fmt.Errorf("two parents are captured for the slab %s", sid)
-						}
-						parentOf[sid] = id
-						atLeastOneExternalSlab = true
+				if sids, ok := s.(StorageIDStorable); ok {
+					sid := StorageID(sids)
+					if _, found := parentOf[sid]; found {
+						return nil, fmt.Errorf("two parents are captured for the slab %s", sid)
 					}
-
-					next = append(next, s.ChildStorables()...)
+					parentOf[sid] = id
+					atLeastOneExternalSlab = true
 				}
 
-				childStorables = next
+				next = append(next, s.ChildStorables()...)
 			}
 
-			if !atLeastOneExternalSlab {
-				leaves = append(leaves, id)
-			}
+			childStorables = next
+		}
+
+		if !atLeastOneExternalSlab {
+			leaves = append(leaves, id)
 		}
 	}
 

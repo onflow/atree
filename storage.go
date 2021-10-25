@@ -597,32 +597,105 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 		Slab
 	}
 
+	appendChildStorables := func(slab Slab) error {
+		childStorables := slab.ChildStorables()
+
+		for len(childStorables) > 0 {
+
+			var nextChildStorables []Storable
+
+			for _, childStorable := range childStorables {
+
+				storageIDStorable, ok := childStorable.(StorageIDStorable)
+				if !ok {
+					continue
+				}
+
+				id := StorageID(storageIDStorable)
+
+				if _, ok := s.deltas[id]; ok {
+					continue
+				}
+
+				if _, ok := s.cache[id]; ok {
+					continue
+				}
+
+				var err error
+				slab, ok, err = s.RetrieveIgnoringDeltas(id)
+				if !ok {
+					return fmt.Errorf("missing slab: %s", id)
+				}
+				if err != nil {
+					return err
+				}
+
+				slabs = append(slabs, struct {
+					StorageID
+					Slab
+				}{
+					StorageID: id,
+					Slab:      slab,
+				})
+
+				nextChildStorables = append(
+					nextChildStorables,
+					slab.ChildStorables()...,
+				)
+			}
+
+			childStorables = nextChildStorables
+		}
+
+		return nil
+	}
+
+	appendSlab := func(id StorageID, slab Slab) error {
+		slabs = append(slabs, struct {
+			StorageID
+			Slab
+		}{
+			StorageID: id,
+			Slab:      slab,
+		})
+
+		return appendChildStorables(slab)
+	}
+
 	for id, slab := range s.deltas {
 		if slab == nil {
 			continue
 		}
 
-		slabs = append(slabs, struct {
-			StorageID
-			Slab
-		}{
-			StorageID: id,
-			Slab:      slab,
-		})
+		err := appendSlab(id, slab)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	for id, slab := range s.cache {
+	// Create a temporary copy of all the cached IDs,
+	// as s.cache will get mutated inside the for-loop
+
+	var cached []StorageID
+	for id := range s.cache {
+		cached = append(cached, id)
+	}
+
+	for _, id := range cached {
+		slab := s.cache[id]
+
+		if slab == nil {
+			continue
+		}
+
 		if _, ok := s.deltas[id]; ok {
 			continue
 		}
 
-		slabs = append(slabs, struct {
-			StorageID
-			Slab
-		}{
-			StorageID: id,
-			Slab:      slab,
-		})
+		err := appendSlab(id, slab)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var i int
@@ -860,13 +933,7 @@ func (s *PersistentSlabStorage) DropCache() {
 	s.cache = make(map[StorageID]Slab)
 }
 
-func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
-	var slab Slab
-
-	// check deltas first
-	if slab, ok := s.deltas[id]; ok {
-		return slab, slab != nil, nil
-	}
+func (s *PersistentSlabStorage) RetrieveIgnoringDeltas(id StorageID) (Slab, bool, error) {
 
 	// check the read cache next
 	if slab, ok := s.cache[id]; ok {
@@ -878,12 +945,23 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 	if !ok || err != nil {
 		return nil, ok, err
 	}
-	slab, err = DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
+
+	slab, err := DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
 	if err == nil {
 		// save decoded slab to cache
 		s.cache[id] = slab
 	}
+
 	return slab, ok, err
+}
+
+func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
+	// check deltas first
+	if slab, ok := s.deltas[id]; ok {
+		return slab, slab != nil, nil
+	}
+
+	return s.RetrieveIgnoringDeltas(id)
 }
 
 func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {

@@ -597,43 +597,7 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 		Slab
 	}
 
-	for id, slab := range s.deltas {
-		if slab == nil {
-			continue
-		}
-
-		slabs = append(slabs, struct {
-			StorageID
-			Slab
-		}{
-			StorageID: id,
-			Slab:      slab,
-		})
-	}
-
-	// Create a temporary copy of all the cached IDs,
-	// as s.cache will get mutated inside the for-loop
-
-	var cached []StorageID
-	for id := range s.cache {
-		cached = append(cached, id)
-	}
-
-	for _, id := range cached {
-		slab := s.cache[id]
-
-		if _, ok := s.deltas[id]; ok {
-			continue
-		}
-
-		slabs = append(slabs, struct {
-			StorageID
-			Slab
-		}{
-			StorageID: id,
-			Slab:      slab,
-		})
-
+	appendChildStorables := func(slab Slab) error {
 		childStorables := slab.ChildStorables()
 
 		for len(childStorables) > 0 {
@@ -647,7 +611,7 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 					continue
 				}
 
-				id = StorageID(storageIDStorable)
+				id := StorageID(storageIDStorable)
 
 				if _, ok := s.deltas[id]; ok {
 					continue
@@ -660,10 +624,10 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 				var err error
 				slab, ok, err = s.RetrieveIgnoringDeltas(id)
 				if !ok {
-					return nil, fmt.Errorf("missing slab: %s", id)
+					return fmt.Errorf("missing slab: %s", id)
 				}
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				slabs = append(slabs, struct {
@@ -681,6 +645,56 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 			}
 
 			childStorables = nextChildStorables
+		}
+
+		return nil
+	}
+
+	appendSlab := func(id StorageID, slab Slab) error {
+		slabs = append(slabs, struct {
+			StorageID
+			Slab
+		}{
+			StorageID: id,
+			Slab:      slab,
+		})
+
+		return appendChildStorables(slab)
+	}
+
+	for id, slab := range s.deltas {
+		if slab == nil {
+			continue
+		}
+
+		err := appendSlab(id, slab)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Create a temporary copy of all the cached IDs,
+	// as s.cache will get mutated inside the for-loop
+
+	var cached []StorageID
+	for id := range s.cache {
+		cached = append(cached, id)
+	}
+
+	for _, id := range cached {
+		slab := s.cache[id]
+
+		if slab == nil {
+			continue
+		}
+
+		if _, ok := s.deltas[id]; ok {
+			continue
+		}
+
+		err := appendSlab(id, slab)
+		if err != nil {
+			return nil, err
 		}
 	}
 

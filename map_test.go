@@ -20,14 +20,12 @@ package atree
 
 import (
 	"fmt"
-	"math"
 	"math/rand"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
 
-	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -72,716 +70,530 @@ func (d mockDigester) Levels() int {
 
 func (d mockDigester) Reset() {}
 
+func verifyEmptyMap(
+	t *testing.T,
+	storage *PersistentSlabStorage,
+	typeInfo TypeInfo,
+	address Address,
+	m *OrderedMap,
+) {
+	verifyMap(t, storage, typeInfo, address, m, nil, nil)
+}
+
+// verifyMap verifies map elements and validates serialization and in-memory slab tree.
+// It also verifies elements ordering if sortedKeys is not nil.
+func verifyMap(
+	t *testing.T,
+	storage *PersistentSlabStorage,
+	typeInfo TypeInfo,
+	address Address,
+	m *OrderedMap,
+	keyValues map[Value]Value,
+	sortedKeys []Value,
+) {
+	require.Equal(t, typeInfo, m.Type())
+	require.Equal(t, address, m.Address())
+	require.Equal(t, uint64(len(keyValues)), m.Count())
+
+	var err error
+
+	// Verify map elements
+	for k, v := range keyValues {
+		s, err := m.Get(compare, hashInputProvider, k)
+		require.NoError(t, err)
+
+		e, err := s.StoredValue(m.Storage)
+		require.NoError(t, err)
+
+		valueEqual(t, typeInfoComparator, v, e)
+	}
+
+	// Verify map elements ordering
+	if len(sortedKeys) > 0 {
+		require.Equal(t, len(keyValues), len(sortedKeys))
+
+		i := 0
+		err = m.Iterate(func(k, v Value) (bool, error) {
+			expectedKey := sortedKeys[i]
+			expectedValue := keyValues[expectedKey]
+
+			require.Equal(t, expectedKey, k)
+			require.Equal(t, expectedValue, v)
+
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, len(keyValues), i)
+	}
+
+	// Verify in-memory slabs
+	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
+	// Verify slab serializations
+	err = ValidMapSerialization(
+		m,
+		storage.cborDecMode,
+		storage.cborEncMode,
+		storage.DecodeStorable,
+		storage.DecodeTypeInfo,
+		func(a, b Storable) bool {
+			return reflect.DeepEqual(a, b)
+		},
+	)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
+	// Need to call Commit before calling storage.Count() for PersistentSlabStorage.
+	err = storage.Commit()
+	require.NoError(t, err)
+
+	stats, err := GetMapStats(m)
+	require.NoError(t, err)
+	require.Equal(t, stats.SlabCount(), uint64(storage.Count()))
+
+	if len(keyValues) == 0 {
+		// Verify slab count for empty map
+		require.Equal(t, uint64(1), stats.DataSlabCount)
+		require.Equal(t, uint64(0), stats.MetaDataSlabCount)
+		require.Equal(t, uint64(0), stats.StorableSlabCount)
+		require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
+	}
+}
+
+type keysByDigest struct {
+	keys            []Value
+	digesterBuilder DigesterBuilder
+}
+
+func (d keysByDigest) Len() int { return len(d.keys) }
+
+func (d keysByDigest) Swap(i, j int) { d.keys[i], d.keys[j] = d.keys[j], d.keys[i] }
+
+func (d keysByDigest) Less(i, j int) bool {
+	d1, err := d.digesterBuilder.Digest(hashInputProvider, d.keys[i])
+	if err != nil {
+		panic(err)
+	}
+
+	digest1, err := d1.DigestPrefix(d1.Levels())
+	if err != nil {
+		panic(err)
+	}
+
+	d2, err := d.digesterBuilder.Digest(hashInputProvider, d.keys[j])
+	if err != nil {
+		panic(err)
+	}
+
+	digest2, err := d2.DigestPrefix(d2.Levels())
+	if err != nil {
+		panic(err)
+	}
+
+	for z := 0; z < len(digest1); z++ {
+		if digest1[z] != digest2[z] {
+			return digest1[z] < digest2[z] // sort by hkey
+		}
+	}
+	return i < j // sort by insertion order with hash collision
+}
+
 func TestMapSetAndGet(t *testing.T) {
 
 	t.Run("unique keys", func(t *testing.T) {
+		// Map tree will be 4 levels, with ~35 metadata slabs, and ~270 data slabs when
+		// slab size is 256 bytes, number of map elements is 2048,
+		// keys are strings of 16 bytes of random content, values are 0-2048,
 
-		const mapSize = 1024 * 4
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		const (
+			mapSize       = 2048
+			keyStringSize = 16
+		)
+
+		keyValues := make(map[Value]Value, mapSize)
+		i := uint64(0)
+		for len(keyValues) < mapSize {
+			k := NewStringValue(randStr(keyStringSize))
+			v := Uint64Value(i)
+			keyValues[k] = v
+			i++
+		}
 
 		typeInfo := testTypeInfo{42}
-
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
 		storage := newTestPersistentStorage(t)
-
-		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[Value]Value, mapSize)
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				s := randStr(16)
-				if !uniqueKeys[s] {
-					uniqueKeys[s] = true
-
-					k := NewStringValue(s)
-					uniqueKeyValues[k] = Uint64Value(i)
-					break
-				}
-			}
-		}
 
 		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		for k, v := range uniqueKeyValues {
+		for k, v := range keyValues {
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		err = validMapSerialization(m, storage)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		for k, v := range uniqueKeyValues {
-			strv := k.(StringValue)
-			require.NotNil(t, strv)
-
-			s, err := m.Get(compare, hashInputProvider, NewStringValue(strv.str))
-			require.NoError(t, err)
-
-			e, err := s.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, e)
-		}
-
-		require.Equal(t, typeInfo, m.Type())
-		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
-
-		stats, _ := GetMapStats(m)
-		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
 	})
 
 	t.Run("replicate keys", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
 
-		const mapSize = 1024 * 4
+		const (
+			mapSize       = 2048
+			keyStringSize = 16
+		)
+
+		keyValues := make(map[Value]Value, mapSize)
+		i := uint64(0)
+		for len(keyValues) < mapSize {
+			k := NewStringValue(randStr(keyStringSize))
+			v := Uint64Value(i)
+			keyValues[k] = v
+			i++
+		}
 
 		typeInfo := testTypeInfo{42}
-
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
 		storage := newTestPersistentStorage(t)
-
-		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[Value]Value, mapSize)
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				s := randStr(16)
-				if !uniqueKeys[s] {
-					uniqueKeys[s] = true
-
-					k := NewStringValue(s)
-					uniqueKeyValues[k] = Uint64Value(i)
-					break
-				}
-			}
-		}
 
 		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		for k, v := range uniqueKeyValues {
+		for k, v := range keyValues {
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
+		// Overwrite values
+		for k, v := range keyValues {
+			oldValue := v.(Uint64Value)
+			newValue := Uint64Value(uint64(oldValue) + mapSize)
 
-		err = validMapSerialization(m, storage)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		// Overwrite previously inserted values
-		for k := range uniqueKeyValues {
-			oldv, _ := uniqueKeyValues[k].(Uint64Value)
-			v := Uint64Value(uint64(oldv) + mapSize)
-			uniqueKeyValues[k] = v
-
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, oldv, existingValue)
+			require.Equal(t, oldValue, existingValue)
+
+			keyValues[k] = newValue
 		}
 
-		for k, v := range uniqueKeyValues {
-			strv := k.(StringValue)
-			require.NotNil(t, strv)
-
-			s, err := m.Get(compare, hashInputProvider, NewStringValue(strv.str))
-			require.NoError(t, err)
-
-			e, err := s.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, e)
-		}
-
-		require.Equal(t, typeInfo, m.Type())
-		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
-
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		stats, _ := GetMapStats(m)
-		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
 	})
 
-	// Test random string with random length as key and random uint as value
 	t.Run("random key and value", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
 
-		const mapSize = 1024 * 4
-		const maxKeyLength = 224
+		const (
+			mapSize          = 2048
+			keyStringMaxSize = 1024
+		)
 
-		typeInfo := testTypeInfo{42}
-
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
-		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[Value]Value, mapSize)
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				slen := rand.Intn(maxKeyLength + 1)
-				s := randStr(slen)
-
-				if !uniqueKeys[s] {
-					uniqueKeys[s] = true
-
-					k := NewStringValue(s)
-					uniqueKeyValues[k] = RandomValue()
-					break
-				}
-			}
+		keyValues := make(map[Value]Value, mapSize)
+		for len(keyValues) < mapSize {
+			slen := rand.Intn(keyStringMaxSize)
+			k := NewStringValue(randStr(slen))
+			v := randomValue(int(maxInlineMapElementSize))
+			keyValues[k] = v
 		}
 
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
 		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		for k, v := range uniqueKeyValues {
+		for k, v := range keyValues {
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		err = validMapSerialization(m, storage)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		for k, v := range uniqueKeyValues {
-			strv := k.(StringValue)
-			require.NotNil(t, strv)
-
-			s, err := m.Get(compare, hashInputProvider, NewStringValue(strv.str))
-			require.NoError(t, err)
-
-			e, err := s.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, e)
-		}
-
-		require.Equal(t, typeInfo, m.Type())
-		require.Equal(t, uint64(len(uniqueKeyValues)), m.Count())
-
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		stats, _ := GetMapStats(m)
-		require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
 	})
 }
 
-func TestMapHash(t *testing.T) {
+func TestMapHas(t *testing.T) {
 
-	const mapSize = 1024 * 4
+	const (
+		mapSize       = 2048
+		keyStringSize = 16
+	)
 
-	typeInfo := testTypeInfo{42}
+	keys := make(map[Value]bool, mapSize*2)
+	keysToInsert := make([]Value, 0, mapSize)
+	keysToNotInsert := make([]Value, 0, mapSize)
+	for len(keysToInsert) < mapSize || len(keysToNotInsert) < mapSize {
+		k := NewStringValue(randStr(keyStringSize))
+		if !keys[k] {
+			keys[k] = true
 
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
-	storage := newTestPersistentStorage(t)
-
-	uniqueKeys := make(map[string]bool, mapSize*2)
-	var keysToInsert []string
-	var keysToNotInsert []string
-	for i := uint64(0); i < mapSize*2; i++ {
-		for {
-			s := randStr(16)
-			if !uniqueKeys[s] {
-				uniqueKeys[s] = true
-
-				if i%2 == 0 {
-					keysToInsert = append(keysToInsert, s)
-				} else {
-					keysToNotInsert = append(keysToNotInsert, s)
-				}
-
-				break
+			if len(keysToInsert) < mapSize {
+				keysToInsert = append(keysToInsert, k)
+			} else {
+				keysToNotInsert = append(keysToNotInsert, k)
 			}
 		}
 	}
+
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	storage := newTestPersistentStorage(t)
 
 	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	for i, k := range keysToInsert {
-		existingStorable, err := m.Set(compare, hashInputProvider, NewStringValue(k), Uint64Value(i))
+		existingStorable, err := m.Set(compare, hashInputProvider, k, Uint64Value(i))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
 
-	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
-
-	err = validMapSerialization(m, storage)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
-
 	for _, k := range keysToInsert {
-		exist, err := m.Has(compare, hashInputProvider, NewStringValue(k))
+		exist, err := m.Has(compare, hashInputProvider, k)
 		require.NoError(t, err)
 		require.Equal(t, true, exist)
 	}
 
 	for _, k := range keysToNotInsert {
-		exist, err := m.Has(compare, hashInputProvider, NewStringValue(k))
+		exist, err := m.Has(compare, hashInputProvider, k)
 		require.NoError(t, err)
 		require.Equal(t, false, exist)
 	}
-
-	require.Equal(t, typeInfo, m.Type())
-	require.Equal(t, uint64(mapSize), m.Count())
 }
 
 func TestMapRemove(t *testing.T) {
 
 	SetThreshold(512)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
-	t.Run("small key and value", func(t *testing.T) {
+	const (
+		mapSize              = 2048
+		smallKeyStringSize   = 16
+		smallValueStringSize = 16
+		largeKeyStringSize   = 512
+		largeValueStringSize = 512
+	)
 
-		const mapSize = 1024 * 4
+	smallKeyValues := make(map[Value]Value, mapSize)
+	for len(smallKeyValues) < mapSize {
+		k := NewStringValue(randStr(smallKeyStringSize))
+		v := NewStringValue(randStr(smallValueStringSize))
+		smallKeyValues[k] = v
+	}
 
-		const keyStringMaxSize = 16
+	largeKeyValues := make(map[Value]Value, mapSize)
+	for len(largeKeyValues) < mapSize {
+		k := NewStringValue(randStr(largeKeyStringSize))
+		v := NewStringValue(randStr(largeValueStringSize))
+		largeKeyValues[k] = v
+	}
 
-		const valueStringMaxSize = 16
+	testCases := []struct {
+		name      string
+		keyValues map[Value]Value
+	}{
+		{name: "small key and value", keyValues: smallKeyValues},
+		{name: "large key and value", keyValues: largeKeyValues},
+	}
 
-		typeInfo := testTypeInfo{42}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			typeInfo := testTypeInfo{42}
+			address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+			storage := newTestPersistentStorage(t)
 
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+			m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			require.NoError(t, err)
 
-		storage := newTestPersistentStorage(t)
-
-		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[Value]Value, mapSize)
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				s := randStr(keyStringMaxSize)
-				if !uniqueKeys[s] {
-					uniqueKeys[s] = true
-
-					k := NewStringValue(s)
-					uniqueKeyValues[k] = NewStringValue(randStr(valueStringMaxSize))
-					break
-				}
+			// Insert elements
+			for k, v := range tc.keyValues {
+				existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+				require.NoError(t, err)
+				require.Nil(t, existingStorable)
 			}
-		}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
-		require.NoError(t, err)
+			verifyMap(t, storage, typeInfo, address, m, tc.keyValues, nil)
 
-		// Insert elements
-		for k, v := range uniqueKeyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-		}
+			count := len(tc.keyValues)
 
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
+			// Remove all elements
+			for k, v := range tc.keyValues {
 
-		err = validMapSerialization(m, storage)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
+				removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
+				require.NoError(t, err)
 
-		// Get elements
-		for k, v := range uniqueKeyValues {
-			strv := k.(StringValue)
-			require.NotNil(t, strv)
+				removedKey, err := removedKeyStorable.StoredValue(storage)
+				require.NoError(t, err)
+				require.Equal(t, k, removedKey)
 
-			s, err := m.Get(compare, hashInputProvider, NewStringValue(strv.str))
-			require.NoError(t, err)
+				removedValue, err := removedValueStorable.StoredValue(storage)
+				require.NoError(t, err)
+				require.Equal(t, v, removedValue)
 
-			e, err := s.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, e)
-		}
-
-		count := len(uniqueKeyValues)
-
-		// Remove all elements
-		for k, v := range uniqueKeyValues {
-			strv := k.(StringValue)
-			require.NotNil(t, strv)
-
-			removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, NewStringValue(strv.str))
-			require.NoError(t, err)
-
-			removedKey, err := removedKeyStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, k, removedKey)
-
-			removedValue, err := removedValueStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, removedValue)
-
-			removedKeyStorable, removedValueStorable, err = m.Remove(compare, hashInputProvider, NewStringValue(strv.str))
-			require.Error(t, err)
-			require.Nil(t, removedKeyStorable)
-			require.Nil(t, removedValueStorable)
-
-			count--
-
-			require.Equal(t, uint64(count), m.Count())
-
-			require.Equal(t, typeInfo, m.Type())
-		}
-
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		stats, _ := GetMapStats(m)
-		require.Equal(t, uint64(1), stats.DataSlabCount)
-		require.Equal(t, uint64(0), stats.MetaDataSlabCount)
-		require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
-
-		require.Equal(t, int(1), m.Storage.Count())
-	})
-
-	t.Run("large key and value", func(t *testing.T) {
-		const mapSize = 1024 * 4
-
-		const keyStringMaxSize = 512
-
-		const valueStringMaxSize = 512
-
-		typeInfo := testTypeInfo{42}
-
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
-		storage := newTestPersistentStorage(t)
-
-		uniqueKeys := make(map[string]bool, mapSize)
-		uniqueKeyValues := make(map[Value]Value, mapSize)
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				s := randStr(keyStringMaxSize)
-				if !uniqueKeys[s] {
-					uniqueKeys[s] = true
-
-					k := NewStringValue(s)
-					uniqueKeyValues[k] = NewStringValue(randStr(valueStringMaxSize))
-					break
+				if id, ok := removedKeyStorable.(StorageIDStorable); ok {
+					storage.Remove(StorageID(id))
 				}
+
+				if id, ok := removedValueStorable.(StorageIDStorable); ok {
+					storage.Remove(StorageID(id))
+				}
+
+				// Remove the same key for the second time.
+				removedKeyStorable, removedValueStorable, err = m.Remove(compare, hashInputProvider, k)
+				require.Error(t, err, KeyNotFoundError{})
+				require.Nil(t, removedKeyStorable)
+				require.Nil(t, removedValueStorable)
+
+				count--
+
+				require.Equal(t, typeInfo, m.Type())
+				require.Equal(t, address, m.Address())
+				require.Equal(t, uint64(count), m.Count())
 			}
-		}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
-		require.NoError(t, err)
-
-		// Insert elements
-		for k, v := range uniqueKeyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-		}
-
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		err = validMapSerialization(m, storage)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		// Get elements
-		for k, v := range uniqueKeyValues {
-			strv := k.(StringValue)
-			require.NotNil(t, strv)
-
-			s, err := m.Get(compare, hashInputProvider, NewStringValue(strv.str))
-			require.NoError(t, err)
-
-			e, err := s.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, e)
-		}
-
-		count := len(uniqueKeyValues)
-
-		// Remove all elements
-		for k, v := range uniqueKeyValues {
-			strv := k.(StringValue)
-			require.NotNil(t, strv)
-
-			removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, NewStringValue(strv.str))
-			require.NoError(t, err)
-
-			removedKey, err := removedKeyStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, k, removedKey)
-
-			removedValue, err := removedValueStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, removedValue)
-
-			removedKeyStorable, removedValueStorable, err = m.Remove(compare, hashInputProvider, NewStringValue(strv.str))
-			require.Error(t, err)
-			require.Nil(t, removedKeyStorable)
-			require.Nil(t, removedValueStorable)
-
-			count--
-
-			require.Equal(t, uint64(count), m.Count())
-
-			require.Equal(t, typeInfo, m.Type())
-		}
-
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		stats, _ := GetMapStats(m)
-		require.Equal(t, uint64(1), stats.DataSlabCount)
-		require.Equal(t, uint64(0), stats.MetaDataSlabCount)
-		require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
-	})
+			verifyEmptyMap(t, storage, typeInfo, address, m)
+		})
+	}
 }
 
 func TestMapIterate(t *testing.T) {
 	t.Run("no collision", func(t *testing.T) {
-		const mapSize = 1024 * 4
+		const (
+			mapSize       = 2048
+			keyStringSize = 16
+		)
+
+		keyValues := make(map[Value]Value, mapSize)
+		sortedKeys := make([]Value, mapSize)
+		i := uint64(0)
+		for len(keyValues) < mapSize {
+			k := NewStringValue(randStr(keyStringSize))
+			if _, found := keyValues[k]; !found {
+				keyValues[k] = Uint64Value(i)
+				sortedKeys[i] = k
+				i++
+			}
+		}
 
 		typeInfo := testTypeInfo{42}
-
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
 		storage := newTestPersistentStorage(t)
-
 		digesterBuilder := newBasicDigesterBuilder()
 
-		uniqueKeyValues := make(map[string]uint64, mapSize)
-
-		sortedKeys := make([]StringValue, mapSize)
-
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				s := randStr(16)
-				if _, exist := uniqueKeyValues[s]; !exist {
-					sortedKeys[i] = NewStringValue(s)
-					uniqueKeyValues[s] = i
-					break
-				}
-			}
-		}
-
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		for k, v := range uniqueKeyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, NewStringValue(k), Uint64Value(v))
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-		}
-
-		// Sort keys by hashed value
-		sort.SliceStable(sortedKeys, func(i, j int) bool {
-			d1, err := digesterBuilder.Digest(hashInputProvider, sortedKeys[i])
-			require.NoError(t, err)
-
-			digest1, err := d1.DigestPrefix(d1.Levels())
-			require.NoError(t, err)
-
-			d2, err := digesterBuilder.Digest(hashInputProvider, sortedKeys[j])
-			require.NoError(t, err)
-
-			digest2, err := d2.DigestPrefix(d2.Levels())
-			require.NoError(t, err)
-
-			for z := 0; z < len(digest1); z++ {
-				if digest1[z] != digest2[z] {
-					return digest1[z] < digest2[z] // sort by hkey
-				}
-			}
-			return i < j // sort by insertion order with hash collision
-		})
-
-		// Iterate key value pairs
-		i := uint64(0)
-		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
-			ks, ok := k.(StringValue)
-			require.True(t, ok)
-			require.Equal(t, sortedKeys[i].String(), ks.String())
-
-			vi, ok := v.(Uint64Value)
-			require.True(t, ok)
-			require.Equal(t, uniqueKeyValues[ks.String()], uint64(vi))
-
-			i++
-
-			return true, nil
-		})
-
-		require.NoError(t, err)
-		require.Equal(t, i, uint64(mapSize))
-
-		// Iterate keys
-		i = uint64(0)
-		err = m.IterateKeys(func(k Value) (resume bool, err error) {
-			ks, ok := k.(StringValue)
-			require.True(t, ok)
-			require.Equal(t, sortedKeys[i].String(), ks.String())
-
-			i++
-
-			return true, nil
-		})
-
-		require.NoError(t, err)
-		require.Equal(t, i, uint64(mapSize))
-
-		// Iterate values
-		i = uint64(0)
-		err = m.IterateValues(func(v Value) (resume bool, err error) {
-			key := sortedKeys[i]
-
-			vi, ok := v.(Uint64Value)
-			require.True(t, ok)
-			require.Equal(t, uniqueKeyValues[key.str], uint64(vi))
-
-			i++
-
-			return true, nil
-		})
-
-		require.NoError(t, err)
-		require.Equal(t, i, uint64(mapSize))
-
-		require.Equal(t, typeInfo, m.Type())
-	})
-
-	t.Run("collision", func(t *testing.T) {
-		const mapSize = 1024
-
-		typeInfo := testTypeInfo{42}
-
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
-		digesterBuilder := &mockDigesterBuilder{}
-
-		storage := newTestPersistentStorage(t)
-
-		uniqueKeyValues := make(map[Value]Value, mapSize)
-
-		uniqueKeys := make(map[string]bool, mapSize)
-
-		sortedKeys := make([]Value, mapSize)
-
-		// keys is needed to insert elements with collision in deterministic order.
-		keys := make([]Value, mapSize)
-
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				s := randStr(16)
-
-				if !uniqueKeys[s] {
-					uniqueKeys[s] = true
-
-					k := NewStringValue(s)
-					v := NewStringValue(randStr(16))
-
-					sortedKeys[i] = k
-					keys[i] = k
-					uniqueKeyValues[k] = v
-
-					digests := []Digest{
-						Digest(rand.Intn(256)),
-						Digest(rand.Intn(256)),
-						Digest(rand.Intn(256)),
-						Digest(rand.Intn(256)),
-					}
-
-					digesterBuilder.On("Digest", k).Return(mockDigester{digests})
-					break
-				}
-			}
-		}
-
-		// Sort keys by hashed value
-		sort.SliceStable(sortedKeys, func(i, j int) bool {
-
-			d1, err := digesterBuilder.Digest(hashInputProvider, sortedKeys[i])
-			require.NoError(t, err)
-
-			digest1, err := d1.DigestPrefix(d1.Levels())
-			require.NoError(t, err)
-
-			d2, err := digesterBuilder.Digest(hashInputProvider, sortedKeys[j])
-			require.NoError(t, err)
-
-			digest2, err := d2.DigestPrefix(d2.Levels())
-			require.NoError(t, err)
-
-			for z := 0; z < len(digest1); z++ {
-				if digest1[z] != digest2[z] {
-					return digest1[z] < digest2[z] // sort by hkey
-				}
-			}
-			return i < j // sort by insertion order with hash collision
-		})
-
-		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		for _, k := range keys {
-			v, ok := uniqueKeyValues[k]
-			require.True(t, ok)
-
+		for k, v := range keyValues {
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		// Iterate key value pairs
+		i = uint64(0)
+		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
+			require.Equal(t, sortedKeys[i], k)
+			require.Equal(t, keyValues[k], v)
+			i++
+			return true, nil
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(mapSize), i)
+
+		// Iterate keys
+		i = uint64(0)
+		err = m.IterateKeys(func(k Value) (resume bool, err error) {
+			require.Equal(t, sortedKeys[i], k)
+			i++
+			return true, nil
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(mapSize), i)
+
+		// Iterate values
+		i = uint64(0)
+		err = m.IterateValues(func(v Value) (resume bool, err error) {
+			k := sortedKeys[i]
+			require.Equal(t, keyValues[k], v)
+			i++
+			return true, nil
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, uint64(mapSize), i)
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys)
+	})
+
+	t.Run("collision", func(t *testing.T) {
+		const (
+			mapSize       = 1024
+			keyStringSize = 16
+		)
+
+		digesterBuilder := &mockDigesterBuilder{}
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[Value]Value, mapSize)
+		sortedKeys := make([]Value, 0, mapSize)
+		for len(keyValues) < mapSize {
+			k := NewStringValue(randStr(keyStringSize))
+
+			if _, found := keyValues[k]; !found {
+				v := NewStringValue(randStr(16))
+				sortedKeys = append(sortedKeys, k)
+				keyValues[k] = v
+
+				digests := []Digest{
+					Digest(rand.Intn(256)),
+					Digest(rand.Intn(256)),
+					Digest(rand.Intn(256)),
+					Digest(rand.Intn(256)),
+				}
+				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+				existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+				require.NoError(t, err)
+				require.Nil(t, existingStorable)
+			}
+		}
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
 		// Iterate key value pairs
 		i := uint64(0)
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
 			require.Equal(t, sortedKeys[i], k)
-			require.Equal(t, uniqueKeyValues[k], v)
-
+			require.Equal(t, keyValues[k], v)
 			i++
-
 			return true, nil
 		})
 		require.NoError(t, err)
@@ -800,115 +612,88 @@ func TestMapIterate(t *testing.T) {
 		// Iterate values
 		i = uint64(0)
 		err = m.IterateValues(func(v Value) (resume bool, err error) {
-			require.Equal(t, uniqueKeyValues[sortedKeys[i]], v)
+			require.Equal(t, keyValues[sortedKeys[i]], v)
 			i++
 			return true, nil
 		})
 		require.NoError(t, err)
 		require.Equal(t, i, uint64(mapSize))
 
-		require.Equal(t, typeInfo, m.Type())
+		verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys)
 	})
 }
 
 func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 
-	const mapSize = 1024
+	const (
+		mapSize            = 1024
+		keyStringMaxSize   = 1024
+		valueStringMaxSize = 1024
 
-	// mockDigestCount is the number of unique set of digests.
-	// Each set has maxDigestLevel of digest.
-	const mockDigestCount = 8
+		// mockDigestCount is the number of unique set of digests.
+		// Each set has maxDigestLevel of digest.
+		mockDigestCount = 8
+	)
 
-	typeInfo := testTypeInfo{42}
+	uniqueFirstLevelDigests := make(map[Digest]bool, mockDigestCount)
+	firstLevelDigests := make([]Digest, 0, mockDigestCount)
+	for len(firstLevelDigests) < mockDigestCount {
+		d := Digest(uint64(rand.Intn(256)))
+		if !uniqueFirstLevelDigests[d] {
+			uniqueFirstLevelDigests[d] = true
+			firstLevelDigests = append(firstLevelDigests, d)
+		}
+	}
 
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	digestsGroup := make([][]Digest, mockDigestCount)
+	for i := 0; i < mockDigestCount; i++ {
+		digests := make([]Digest, maxDigestLevel)
+		digests[0] = firstLevelDigests[i]
+		for j := 1; j < maxDigestLevel; j++ {
+			digests[j] = Digest(uint64(rand.Intn(256)))
+		}
+		digestsGroup[i] = digests
+	}
 
 	digesterBuilder := &mockDigesterBuilder{}
 
-	// Generate mockDigestCount*maxDigestLevel number of unique digest
-	digests := make([]Digest, 0, mockDigestCount*maxDigestLevel)
-	uniqueDigest := make(map[Digest]bool)
-	for len(uniqueDigest) < mockDigestCount*maxDigestLevel {
-		d := Digest(uint64(rand.Intn(256)))
-		if !uniqueDigest[d] {
-			uniqueDigest[d] = true
-			digests = append(digests, d)
+	keyValues := make(map[Value]Value, mapSize)
+	i := 0
+	for len(keyValues) < mapSize {
+		k := NewStringValue(randStr(rand.Intn(keyStringMaxSize)))
+		if _, found := keyValues[k]; !found {
+			keyValues[k] = NewStringValue(randStr(rand.Intn(valueStringMaxSize)))
+
+			index := i % len(digestsGroup)
+			digests := digestsGroup[index]
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+			i++
 		}
 	}
 
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestPersistentStorage(t)
-
-	uniqueKeyValues := make(map[Value]Value, mapSize)
-	uniqueKeys := make(map[string]bool)
-	for i := uint64(0); i < mapSize; i++ {
-		for {
-			s := randStr(16)
-			if !uniqueKeys[s] {
-				uniqueKeys[s] = true
-
-				k := NewStringValue(s)
-				uniqueKeyValues[k] = NewStringValue(randStr(16))
-
-				index := (i % mockDigestCount)
-				startIndex := int(index) * maxDigestLevel
-				endIndex := int(index)*maxDigestLevel + maxDigestLevel
-
-				digests := digests[startIndex:endIndex]
-
-				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
-
-				break
-			}
-		}
-	}
 
 	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
 
-	for k, v := range uniqueKeyValues {
+	for k, v := range keyValues {
 		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
 
-	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-	if err != nil {
-		PrintMap(m)
-	}
+	verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
+
+	stats, err := GetMapStats(m)
 	require.NoError(t, err)
-
-	err = validMapSerialization(m, storage)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
-
-	for k, v := range uniqueKeyValues {
-		strv := k.(StringValue)
-		require.NotNil(t, strv)
-
-		s, err := m.Get(compare, hashInputProvider, NewStringValue(strv.str))
-		require.NoError(t, err)
-
-		e, err := s.StoredValue(storage)
-		require.NoError(t, err)
-		require.Equal(t, v, e)
-	}
-
-	require.Equal(t, typeInfo, m.Type())
-
-	err = storage.Commit()
-	require.NoError(t, err)
-
-	stats, _ := GetMapStats(m)
-	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
 	require.Equal(t, uint64(mockDigestCount), stats.CollisionDataSlabCount)
 
-	for k, v := range uniqueKeyValues {
-		strv := k.(StringValue)
-		require.NotNil(t, strv)
-
-		removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, NewStringValue(strv.str))
+	// Remove all elements
+	for k, v := range keyValues {
+		removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
 		require.NoError(t, err)
 
 		removedKey, err := removedKeyStorable.StoredValue(storage)
@@ -918,105 +703,63 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		removedValue, err := removedValueStorable.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, v, removedValue)
+
+		if id, ok := removedKeyStorable.(StorageIDStorable); ok {
+			storage.Remove(StorageID(id))
+		}
+
+		if id, ok := removedValueStorable.(StorageIDStorable); ok {
+			storage.Remove(StorageID(id))
+		}
 	}
 
-	err = storage.Commit()
-	require.NoError(t, err)
-
-	require.Equal(t, uint64(0), m.Count())
-
-	require.Equal(t, typeInfo, m.Type())
-
-	require.Equal(t, uint64(1), uint64(m.Storage.Count()))
-
-	stats, _ = GetMapStats(m)
-	require.Equal(t, uint64(1), stats.DataSlabCount)
-	require.Equal(t, uint64(0), stats.MetaDataSlabCount)
-	require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
+	verifyEmptyMap(t, storage, typeInfo, address, m)
 }
 
 func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
-	const mapSize = 1024
-
-	typeInfo := testTypeInfo{42}
-
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	const (
+		mapSize            = 1024
+		keyStringMaxSize   = 1024
+		valueStringMaxSize = 1024
+	)
 
 	digesterBuilder := &mockDigesterBuilder{}
 
-	storage := newTestPersistentStorage(t)
+	keyValues := make(map[Value]Value, mapSize)
+	for len(keyValues) < mapSize {
+		k := NewStringValue(randStr(rand.Intn(keyStringMaxSize)))
 
-	uniqueKeyValues := make(map[Value]Value, mapSize)
-	uniqueKeys := make(map[string]bool)
-	for i := uint64(0); i < mapSize; i++ {
-		for {
-			s := randStr(rand.Intn(16))
+		if _, found := keyValues[k]; !found {
+			keyValues[k] = NewStringValue(randStr(valueStringMaxSize))
 
-			if !uniqueKeys[s] {
-				uniqueKeys[s] = true
-
-				k := NewStringValue(s)
-				uniqueKeyValues[k] = NewStringValue(randStr(16))
-
-				var digests []Digest
-				for i := 0; i < maxDigestLevel; i++ {
-					digests = append(digests, Digest(rand.Intn(256)))
-				}
-
-				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
-
-				break
+			var digests []Digest
+			for i := 0; i < maxDigestLevel; i++ {
+				digests = append(digests, Digest(rand.Intn(256)))
 			}
+
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 		}
 	}
+
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	storage := newTestPersistentStorage(t)
 
 	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
 
-	for k, v := range uniqueKeyValues {
+	for k, v := range keyValues {
 		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
 
-	err = storage.Commit()
-	require.NoError(t, err)
+	verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
 
-	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
-
-	err = validMapSerialization(m, storage)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
-
-	for k, v := range uniqueKeyValues {
-		strv := k.(StringValue)
-		require.NotNil(t, strv)
-
-		s, err := m.Get(compare, hashInputProvider, NewStringValue(strv.str))
-		require.NoError(t, err)
-
-		e, err := s.StoredValue(storage)
-		require.NoError(t, err)
-		require.Equal(t, v, e)
-	}
-
-	require.Equal(t, typeInfo, m.Type())
-
-	stats, _ := GetMapStats(m)
-	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+stats.CollisionDataSlabCount, uint64(m.Storage.Count()))
-
-	for k, v := range uniqueKeyValues {
-		strv := k.(StringValue)
-		require.NotNil(t, strv)
-
-		removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, NewStringValue(strv.str))
+	// Remove all elements
+	for k, v := range keyValues {
+		removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
 		require.NoError(t, err)
 
 		removedKey, err := removedKeyStorable.StoredValue(storage)
@@ -1026,29 +769,23 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		removedValue, err := removedValueStorable.StoredValue(storage)
 		require.NoError(t, err)
 		require.Equal(t, v, removedValue)
+
+		if id, ok := removedKeyStorable.(StorageIDStorable); ok {
+			storage.Remove(StorageID(id))
+		}
+
+		if id, ok := removedValueStorable.(StorageIDStorable); ok {
+			storage.Remove(StorageID(id))
+		}
 	}
 
-	err = storage.Commit()
-	require.NoError(t, err)
-
-	require.Equal(t, uint64(0), m.Count())
-
-	require.Equal(t, typeInfo, m.Type())
-
-	require.Equal(t, uint64(1), uint64(m.Storage.Count()))
-
-	stats, _ = GetMapStats(m)
-	require.Equal(t, uint64(1), stats.DataSlabCount)
-	require.Equal(t, uint64(0), stats.MetaDataSlabCount)
-	require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
+	verifyEmptyMap(t, storage, typeInfo, address, m)
 }
 
 func TestMapHashCollision(t *testing.T) {
 
 	SetThreshold(512)
-	defer func() {
-		SetThreshold(1024)
-	}()
+	defer SetThreshold(1024)
 
 	const maxDigestLevel = 4
 
@@ -1067,109 +804,24 @@ func TestMapHashCollision(t *testing.T) {
 	}
 }
 
-func TestMapLargeElement(t *testing.T) {
-
-	SetThreshold(512)
-	defer func() {
-		SetThreshold(1024)
-	}()
-
-	typeInfo := testTypeInfo{42}
-
-	const mapSize = 1024 * 4
-
-	const keySize = 512
-	const valueSize = 512
-
-	strs := make(map[string]string, mapSize)
-	for i := uint64(0); i < mapSize; i++ {
-		k := randStr(keySize)
-		v := randStr(valueSize)
-		strs[k] = v
-	}
-
-	storage := newTestPersistentStorage(t)
-
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
-	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
-	require.NoError(t, err)
-
-	for k, v := range strs {
-		existingStorable, err := m.Set(compare, hashInputProvider, NewStringValue(k), NewStringValue(v))
-		require.NoError(t, err)
-		require.Nil(t, existingStorable)
-	}
-
-	err = storage.Commit()
-	require.NoError(t, err)
-
-	for k, v := range strs {
-		s, err := m.Get(compare, hashInputProvider, NewStringValue(k))
-		require.NoError(t, err)
-
-		e, err := s.StoredValue(storage)
-		require.NoError(t, err)
-
-		sv, ok := e.(StringValue)
-		require.True(t, ok)
-		require.Equal(t, v, sv.str)
-	}
-
-	require.Equal(t, typeInfo, m.Type())
-	require.Equal(t, uint64(mapSize), m.Count())
-
-	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
-
-	err = validMapSerialization(m, storage)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
-
-	stats, _ := GetMapStats(m)
-	require.Equal(t, stats.DataSlabCount+stats.MetaDataSlabCount+mapSize*2, uint64(m.Storage.Count()))
-}
-
-func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
+func testMapSetRemoveRandomValues(
+	t *testing.T,
+	storage *PersistentSlabStorage,
+	typeInfo TypeInfo,
+	address Address,
+) (*OrderedMap, map[Value]Value) {
 
 	const (
-		SetAction = iota
-		RemoveAction
-		MaxAction
+		MapSetOp = iota
+		MapRemoveOp
+		MapMaxOp
 	)
 
 	const (
-		Uint8Type = iota
-		Uint16Type
-		Uint32Type
-		Uint64Type
-		StringType
-		MaxType
+		opCount         = 4096
+		digestMaxValue  = 256
+		digestMaxLevels = 4
 	)
-
-	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
-
-	const actionCount = 1024 * 4
-
-	const digestMaxValue = 256
-
-	const digestMaxLevels = 4
-
-	const stringMaxSize = 512
-
-	typeInfo := testTypeInfo{42}
-
-	storage := newTestPersistentStorage(t)
-
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	digesterBuilder := &mockDigesterBuilder{}
 
@@ -1178,46 +830,20 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 
 	keyValues := make(map[Value]Value)
 	var keys []Value
+	for i := uint64(0); i < opCount; i++ {
 
-	for i := uint64(0); i < actionCount; i++ {
+		nextOp := rand.Intn(MapMaxOp)
 
-		switch rand.Intn(MaxAction) {
+		if m.Count() == 0 {
+			nextOp = MapSetOp
+		}
 
-		case SetAction:
+		switch nextOp {
 
-			var k Value
+		case MapSetOp:
 
-			switch rand.Intn(MaxType) {
-			case Uint8Type:
-				n := rand.Intn(math.MaxUint8 + 1)
-				k = Uint8Value(n)
-			case Uint16Type:
-				n := rand.Intn(math.MaxUint16 + 1)
-				k = Uint16Value(n)
-			case Uint32Type:
-				k = Uint32Value(rand.Uint32())
-			case Uint64Type:
-				k = Uint64Value(rand.Uint64())
-			case StringType:
-				k = NewStringValue(randStr(rand.Intn(stringMaxSize)))
-			}
-
-			var v Value
-
-			switch rand.Intn(MaxType) {
-			case Uint8Type:
-				n := rand.Intn(math.MaxUint8 + 1)
-				v = Uint8Value(n)
-			case Uint16Type:
-				n := rand.Intn(math.MaxUint16 + 1)
-				v = Uint16Value(n)
-			case Uint32Type:
-				v = Uint32Value(rand.Uint32())
-			case Uint64Type:
-				v = Uint64Value(rand.Uint64())
-			case StringType:
-				v = NewStringValue(randStr(rand.Intn(stringMaxSize)))
-			}
+			k := randomValue(int(maxInlineMapElementSize))
+			v := randomValue(int(maxInlineMapElementSize))
 
 			var digests []Digest
 			for i := 0; i < digestMaxLevels; i++ {
@@ -1235,80 +861,76 @@ func TestMapRandomSetRemoveMixedTypes(t *testing.T) {
 				existingValue, err := existingStorable.StoredValue(storage)
 				require.NoError(t, err)
 				require.Equal(t, oldv, existingValue)
+
+				if id, ok := existingStorable.(StorageIDStorable); ok {
+					storage.Remove(StorageID(id))
+				}
 			} else {
 				require.Nil(t, existingStorable)
-			}
 
-			if existingStorable == nil {
 				keys = append(keys, k)
 			}
 
 			keyValues[k] = v
 
-		case RemoveAction:
-			if len(keys) > 0 {
-				ki := rand.Intn(len(keys))
-				k := keys[ki]
+		case MapRemoveOp:
+			kIndex := rand.Intn(len(keys))
+			k := keys[kIndex]
 
-				removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
-				require.NoError(t, err)
+			removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
+			require.NoError(t, err)
 
-				removedKey, err := removedKeyStorable.StoredValue(storage)
-				require.NoError(t, err)
-				require.Equal(t, k, removedKey)
+			removedKey, err := removedKeyStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, k, removedKey)
 
-				removedValue, err := removedValueStorable.StoredValue(storage)
-				require.NoError(t, err)
-				require.Equal(t, keyValues[k], removedValue)
+			removedValue, err := removedValueStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, keyValues[k], removedValue)
 
-				delete(keyValues, k)
-				copy(keys[ki:], keys[ki+1:])
-				keys = keys[:len(keys)-1]
+			if id, ok := removedKeyStorable.(StorageIDStorable); ok {
+				storage.Remove(StorageID(id))
 			}
+
+			if id, ok := removedValueStorable.(StorageIDStorable); ok {
+				storage.Remove(StorageID(id))
+			}
+
+			delete(keyValues, k)
+			copy(keys[kIndex:], keys[kIndex+1:])
+			keys = keys[:len(keys)-1]
 		}
 
-		require.Equal(t, m.Count(), uint64(len(keys)))
+		require.Equal(t, uint64(len(keys)), m.Count())
 		require.Equal(t, typeInfo, m.Type())
+		require.Equal(t, address, m.Address())
 	}
 
-	for k, v := range keyValues {
-		s, err := m.Get(compare, hashInputProvider, k)
-		require.NoError(t, err)
+	return m, keyValues
+}
 
-		e, err := s.StoredValue(storage)
-		require.NoError(t, err)
-		require.Equal(t, v, e)
-	}
+func TestMapSetRemoveRandomValues(t *testing.T) {
 
-	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
+	SetThreshold(256)
+	defer SetThreshold(1024)
 
-	err = validMapSerialization(m, storage)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
+	storage := newTestPersistentStorage(t)
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
+	m, keyValues := testMapSetRemoveRandomValues(t, storage, typeInfo, address)
+
+	verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
 }
 
 func TestMapEncodeDecode(t *testing.T) {
 
-	encMode, err := cbor.EncOptions{}.EncMode()
-	require.NoError(t, err)
-
-	decMode, err := cbor.DecOptions{}.DecMode()
-	require.NoError(t, err)
-
 	typeInfo := testTypeInfo{42}
-
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
 
-		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
+		storage := newTestBasicStorage(t)
 
 		// Create map
 		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
@@ -1358,35 +980,26 @@ func TestMapEncodeDecode(t *testing.T) {
 		// Verify encoded data
 		stored, err := storage.Encode()
 		require.NoError(t, err)
+		require.Equal(t, 1, len(stored))
 		require.Equal(t, expected[id1], stored[id1])
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
-
-		err = storage2.Load(stored)
-		require.NoError(t, err)
+		storage2 := newTestPersistentStorageWithData(t, stored)
 
 		// Test new map from storage2
 		decodedMap, err := NewMapWithRootID(storage2, id1, NewDefaultDigesterBuilder())
 		require.NoError(t, err)
 
-		require.Equal(t, uint64(0), decodedMap.Count())
-		require.Equal(t, typeInfo, decodedMap.Type())
-
-		storable, err := decodedMap.Get(compare, hashInputProvider, Uint64Value(0))
-		require.Error(t, err, KeyNotFoundError{})
-		require.Nil(t, storable)
+		verifyEmptyMap(t, storage2, typeInfo, address, decodedMap)
 	})
 
 	t.Run("no pointer no collision", func(t *testing.T) {
 
 		SetThreshold(100)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
+		storage := newTestBasicStorage(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -1395,9 +1008,11 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const mapSize = 10
+		keyValues := make(map[Value]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			k := Uint64Value(i)
 			v := Uint64Value(i * 2)
+			keyValues[k] = v
 
 			digests := []Digest{Digest(i), Digest(i * 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
@@ -1544,6 +1159,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		stored, err := storage.Encode()
 		require.NoError(t, err)
 
+		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
 		require.Equal(t, expected[id2], stored[id2])
 		require.Equal(t, expected[id3], stored[id3])
@@ -1556,37 +1172,22 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
-
-		err = storage2.Load(stored)
-		require.NoError(t, err)
+		storage2 := newTestPersistentStorageWithData(t, stored)
 
 		// Test new map from storage2
 		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
 		require.NoError(t, err)
 
-		require.Equal(t, uint64(mapSize), decodedMap.Count())
-		require.Equal(t, typeInfo, decodedMap.Type())
-
-		for i := uint64(0); i < mapSize; i++ {
-			s, err := decodedMap.Get(compare, hashInputProvider, Uint64Value(i))
-			require.NoError(t, err)
-
-			v, err := s.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, Uint64Value(i*2), v)
-		}
+		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil)
 	})
 
 	t.Run("has pointer no collision", func(t *testing.T) {
 
 		SetThreshold(100)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
+		storage := newTestBasicStorage(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -1595,13 +1196,14 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const mapSize = 10
+		keyValues := make(map[Value]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
 
 			digests := []Digest{Digest(i), Digest(i * 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
+			var v Value
 			if i == mapSize-1 {
 				// Create nested array
 				typeInfo2 := testTypeInfo{43}
@@ -1612,15 +1214,16 @@ func TestMapEncodeDecode(t *testing.T) {
 				err = array.Append(Uint64Value(0))
 				require.NoError(t, err)
 
-				// Insert array to map
-				existingStorable, err := m.Set(compare, hashInputProvider, k, array)
-				require.NoError(t, err)
-				require.Nil(t, existingStorable)
+				v = array
 			} else {
-				existingStorable, err := m.Set(compare, hashInputProvider, k, v)
-				require.NoError(t, err)
-				require.Nil(t, existingStorable)
+				v = Uint64Value(i * 2)
 			}
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
@@ -1778,8 +1381,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		stored, err := storage.Encode()
 		require.NoError(t, err)
-
-		require.Equal(t, 4, len(stored))
+		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
 		require.Equal(t, expected[id2], stored[id2])
 		require.Equal(t, expected[id3], stored[id3])
@@ -1793,58 +1395,22 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
-
-		err = storage2.Load(stored)
-		require.NoError(t, err)
+		storage2 := newTestPersistentStorageWithData(t, stored)
 
 		// Test new map from storage2
 		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
 		require.NoError(t, err)
 
-		require.Equal(t, uint64(mapSize), decodedMap.Count())
-		require.Equal(t, typeInfo, decodedMap.Type())
-
-		for i := uint64(0); i < mapSize; i++ {
-
-			if i == mapSize-1 {
-				// Get nested array
-				storable, err := decodedMap.Get(compare, hashInputProvider, Uint64Value(i))
-				require.NoError(t, err)
-
-				v, err := storable.StoredValue(storage)
-				require.NoError(t, err)
-
-				a, ok := v.(*Array)
-				require.True(t, ok)
-
-				require.Equal(t, uint64(1), a.Count())
-				storable, err = a.Get(0)
-				require.NoError(t, err)
-
-				s, err := storable.StoredValue(storage)
-				require.NoError(t, err)
-				require.Equal(t, Uint64Value(0), s)
-			} else {
-				s, err := decodedMap.Get(compare, hashInputProvider, Uint64Value(i))
-				require.NoError(t, err)
-
-				v, err := s.StoredValue(storage)
-				require.NoError(t, err)
-				require.Equal(t, Uint64Value(i*2), v)
-			}
-		}
+		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil)
 	})
 
 	t.Run("inline collision 1 level", func(t *testing.T) {
 
 		SetThreshold(150)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
+		storage := newTestBasicStorage(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -1853,6 +1419,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const mapSize = 10
+		keyValues := make(map[Value]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			k := Uint64Value(i)
 			v := Uint64Value(i * 2)
@@ -1863,6 +1430,8 @@ func TestMapEncodeDecode(t *testing.T) {
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
@@ -2069,7 +1638,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		stored, err := storage.Encode()
 		require.NoError(t, err)
-
+		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
 		require.Equal(t, expected[id2], stored[id2])
 		require.Equal(t, expected[id3], stored[id3])
@@ -2082,38 +1651,22 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
-
-		err = storage2.Load(stored)
-		require.NoError(t, err)
+		storage2 := newTestPersistentStorageWithData(t, stored)
 
 		// Test new map from storage2
 		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
 		require.NoError(t, err)
 
-		require.Equal(t, uint64(mapSize), decodedMap.Count())
-		require.Equal(t, typeInfo, decodedMap.Type())
-
-		for i := uint64(0); i < mapSize; i++ {
-			s, err := decodedMap.Get(compare, hashInputProvider, Uint64Value(i))
-			require.NoError(t, err)
-
-			v, err := s.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, Uint64Value(i*2), v)
-		}
+		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil)
 	})
 
 	t.Run("inline collision 2 levels", func(t *testing.T) {
 
 		SetThreshold(150)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode, nil, nil)
-		storage.DecodeStorable = decodeStorable
+		storage := newTestBasicStorage(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -2122,6 +1675,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const mapSize = 10
+		keyValues := make(map[Value]Value)
 		for i := uint64(0); i < mapSize; i++ {
 			k := Uint64Value(i)
 			v := Uint64Value(i * 2)
@@ -2132,6 +1686,8 @@ func TestMapEncodeDecode(t *testing.T) {
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
@@ -2385,7 +1941,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		stored, err := storage.Encode()
 		require.NoError(t, err)
-
+		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
 		require.Equal(t, expected[id2], stored[id2])
 		require.Equal(t, expected[id3], stored[id3])
@@ -2398,37 +1954,22 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
-
-		err = storage2.Load(stored)
-		require.NoError(t, err)
+		storage2 := newTestPersistentStorageWithData(t, stored)
 
 		// Test new map from storage2
 		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
 		require.NoError(t, err)
 
-		require.Equal(t, uint64(mapSize), decodedMap.Count())
-		require.Equal(t, typeInfo, decodedMap.Type())
-
-		for i := uint64(0); i < mapSize; i++ {
-			s, err := decodedMap.Get(compare, hashInputProvider, Uint64Value(i))
-			require.NoError(t, err)
-
-			v, err := s.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, Uint64Value(i*2), v)
-		}
+		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil)
 	})
 
 	t.Run("external collision", func(t *testing.T) {
 
 		SetThreshold(100)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
+		storage := newTestBasicStorage(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -2437,6 +1978,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const mapSize = 20
+		keyValues := make(map[Value]Value)
 		for i := uint64(0); i < mapSize; i++ {
 			k := Uint64Value(i)
 			v := Uint64Value(i * 2)
@@ -2447,6 +1989,8 @@ func TestMapEncodeDecode(t *testing.T) {
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
@@ -2645,37 +2189,24 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		stored, err := storage.Encode()
 		require.NoError(t, err)
-
+		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
 		require.Equal(t, expected[id2], stored[id2])
 		require.Equal(t, expected[id3], stored[id3])
 
 		// Decode data to new storage
-		storage2 := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
-
-		err = storage2.Load(stored)
-		require.NoError(t, err)
+		storage2 := newTestPersistentStorageWithData(t, stored)
 
 		// Test new map from storage2
 		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
 		require.NoError(t, err)
 
-		require.Equal(t, uint64(mapSize), decodedMap.Count())
-		require.Equal(t, typeInfo, decodedMap.Type())
-
-		for i := uint64(0); i < mapSize; i++ {
-			s, err := decodedMap.Get(compare, hashInputProvider, Uint64Value(i))
-			require.NoError(t, err)
-
-			v, err := s.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, Uint64Value(i*2), v)
-		}
+		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil)
 	})
 
 	t.Run("pointer", func(t *testing.T) {
 		// Create and populate map in memory
-		storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
+		storage := newTestBasicStorage(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -2741,7 +2272,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		// Verify encoded data
 		stored, err := storage.Encode()
 		require.NoError(t, err)
-
+		require.Equal(t, 1, len(stored))
 		require.Equal(t, expectedNoPointer, stored[id1])
 
 		// Overwrite existing value with long string
@@ -2799,199 +2330,54 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		stored, err = storage.Encode()
 		require.NoError(t, err)
-
+		require.Equal(t, 2, len(stored))
 		require.Equal(t, expectedHasPointer, stored[id1])
-
 	})
 }
 
-func TestMapEncodeDecodeRandomData(t *testing.T) {
-
-	const (
-		SetAction = iota
-		RemoveAction
-		MaxAction
-	)
-
-	const (
-		Uint8Type = iota
-		Uint16Type
-		Uint32Type
-		Uint64Type
-		StringType
-		MaxType
-	)
+func TestMapEncodeDecodeRandomValues(t *testing.T) {
 
 	SetThreshold(256)
-	defer func() {
-		SetThreshold(1024)
-	}()
-
-	const actionCount = 1024 * 4
-
-	const stringMaxSize = 512
+	defer SetThreshold(1024)
 
 	typeInfo := testTypeInfo{42}
-
 	storage := newTestPersistentStorage(t)
-
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	digesterBuilder := newBasicDigesterBuilder()
+	m, keyValues := testMapSetRemoveRandomValues(t, storage, typeInfo, address)
 
-	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
-	require.NoError(t, err)
+	verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
 
-	keyValues := make(map[Value]Value)
-	var keys []Value
-
-	for i := uint64(0); i < actionCount; i++ {
-
-		action := SetAction
-
-		if len(keys) > 0 {
-			action = rand.Intn(MaxAction)
-		}
-
-		switch action {
-
-		case SetAction:
-
-			var k Value
-
-			switch rand.Intn(MaxType) {
-			case Uint8Type:
-				n := rand.Intn(math.MaxUint8 + 1)
-				k = Uint8Value(n)
-			case Uint16Type:
-				n := rand.Intn(math.MaxUint16 + 1)
-				k = Uint16Value(n)
-			case Uint32Type:
-				k = Uint32Value(rand.Uint32())
-			case Uint64Type:
-				k = Uint64Value(rand.Uint64())
-			case StringType:
-				k = NewStringValue(randStr(rand.Intn(stringMaxSize)))
-			}
-
-			var v Value
-
-			switch rand.Intn(MaxType) {
-			case Uint8Type:
-				n := rand.Intn(math.MaxUint8 + 1)
-				v = Uint8Value(n)
-			case Uint16Type:
-				n := rand.Intn(math.MaxUint16 + 1)
-				v = Uint16Value(n)
-			case Uint32Type:
-				v = Uint32Value(rand.Uint32())
-			case Uint64Type:
-				v = Uint64Value(rand.Uint64())
-			case StringType:
-				v = NewStringValue(randStr(rand.Intn(stringMaxSize)))
-			}
-
-			keyValues[k] = v
-
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
-			require.NoError(t, err)
-
-			if existingStorable == nil {
-				keys = append(keys, k)
-			}
-
-		case RemoveAction:
-
-			ki := rand.Intn(len(keys))
-			k := keys[ki]
-
-			removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
-			require.NoError(t, err)
-
-			removedKey, err := removedKeyStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, k, removedKey)
-
-			removedValue, err := removedValueStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, keyValues[k], removedValue)
-
-			delete(keyValues, k)
-			copy(keys[ki:], keys[ki+1:])
-			keys = keys[:len(keys)-1]
-		}
-
-		require.Equal(t, m.Count(), uint64(len(keys)))
-		require.Equal(t, typeInfo, m.Type())
-	}
-
-	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
-
-	err = validMapSerialization(m, storage)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
-
-	rootID := m.StorageID()
-
-	err = storage.Commit()
-	require.NoError(t, err)
-
-	storage.DropCache()
+	// Create a new storage with encoded data from base storage
+	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
 
 	// Create new map from new storage
-	m2, err := NewMapWithRootID(storage, rootID, digesterBuilder)
+	m2, err := NewMapWithRootID(storage2, m.StorageID(), m.digesterBuilder)
 	require.NoError(t, err)
 
-	require.Equal(t, typeInfo, m2.Type())
-	require.Equal(t, uint64(len(keys)), m2.Count())
-
-	// Get and check every element from new map.
-
-	for k, v := range keyValues {
-		s, err := m2.Get(compare, hashInputProvider, k)
-		require.NoError(t, err)
-
-		e, err := s.StoredValue(storage)
-		require.NoError(t, err)
-		require.Equal(t, v, e)
-	}
+	verifyMap(t, storage2, typeInfo, address, m2, keyValues, nil)
 }
 
 func TestMapStoredValue(t *testing.T) {
 
-	const mapSize = 1024 * 4
+	const mapSize = 4096
 
 	typeInfo := testTypeInfo{42}
-
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
 	storage := newTestPersistentStorage(t)
 
-	uniqueKeys := make(map[string]bool, mapSize)
-	uniqueKeyValues := make(map[Value]Value, mapSize)
-	for i := uint64(0); i < mapSize; i++ {
-		for {
-			s := randStr(16)
-			if !uniqueKeys[s] {
-				uniqueKeys[s] = true
-
-				k := NewStringValue(s)
-				uniqueKeyValues[k] = Uint64Value(i)
-				break
-			}
-		}
+	keyValues := make(map[Value]Value, mapSize)
+	i := 0
+	for len(keyValues) < mapSize {
+		k := NewStringValue(randStr(16))
+		keyValues[k] = Uint64Value(i)
+		i++
 	}
 
 	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	for k, v := range uniqueKeyValues {
+	for k, v := range keyValues {
 		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
@@ -3003,39 +2389,15 @@ func TestMapStoredValue(t *testing.T) {
 	m2, ok := value.(*OrderedMap)
 	require.True(t, ok)
 
-	require.Equal(t, typeInfo, m2.Type())
-	require.Equal(t, uint64(len(uniqueKeyValues)), m2.Count())
-
-	for k, v := range uniqueKeyValues {
-		strv := k.(StringValue)
-		require.NotNil(t, strv)
-
-		s, err := m2.Get(compare, hashInputProvider, NewStringValue(strv.str))
-		require.NoError(t, err)
-
-		e, err := s.StoredValue(storage)
-		require.NoError(t, err)
-		require.Equal(t, v, e)
-	}
-
-	firstDataSlab, err := firstMapDataSlab(storage, m.root)
-	require.NoError(t, err)
-
-	if firstDataSlab.ID() != m.StorageID() {
-		_, err = firstDataSlab.StoredValue(storage)
-		require.Error(t, err)
-	}
+	verifyMap(t, storage, typeInfo, address, m2, keyValues, nil)
 }
 
 func TestMapPopIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		typeInfo := testTypeInfo{42}
-
 		storage := newTestPersistentStorage(t)
-
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
 		digesterBuilder := newBasicDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
@@ -3053,54 +2415,30 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), i)
 
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		err = validMapSerialization(m, storage)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		require.Equal(t, uint64(0), m.Count())
-		require.Equal(t, 1, storage.Count())
+		verifyEmptyMap(t, storage, typeInfo, address, m)
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
-		SetThreshold(1024)
-
 		const mapSize = 10
 
 		typeInfo := testTypeInfo{42}
-
 		storage := newTestPersistentStorage(t)
-
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
 		digesterBuilder := newBasicDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		uniqueKeyValues := make(map[Value]Value, mapSize)
-
+		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, mapSize)
-
 		for i := uint64(0); i < mapSize; i++ {
 			key, value := Uint64Value(i), Uint64Value(i*10)
-
 			sortedKeys[i] = key
+			keyValues[key] = value
 
-			uniqueKeyValues[key] = value
-
-			_, err := m.Set(compare, hashInputProvider, key, value)
+			existingStorable, err := m.Set(compare, hashInputProvider, key, value)
 			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
@@ -3110,7 +2448,7 @@ func TestMapPopIterate(t *testing.T) {
 
 		require.Equal(t, 1, storage.Count())
 
-		sortedKeys = sortSliceByDigest(t, sortedKeys, digesterBuilder, hashInputProvider)
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := mapSize
 		err = m.PopIterate(func(k, v Storable) {
@@ -3122,62 +2460,39 @@ func TestMapPopIterate(t *testing.T) {
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, uniqueKeyValues[sortedKeys[i]], vv)
+			require.Equal(t, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		err = validMapSerialization(m, storage)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		require.Equal(t, uint64(0), m.Count())
-		require.Equal(t, typeInfo, m.Type())
-		require.Equal(t, 1, storage.Count())
+		verifyEmptyMap(t, storage, typeInfo, address, m)
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
-		const mapSize = 1024 * 4
+		const mapSize = 4096
 
-		typeInfo := testTypeInfo{42}
-
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
-		storage := newTestPersistentStorage(t)
-
-		digesterBuilder := newBasicDigesterBuilder()
-
-		uniqueKeyValues := make(map[Value]Value, mapSize)
-
+		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, mapSize)
-
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				k := NewStringValue(randStr(16))
-				if _, exist := uniqueKeyValues[k]; !exist {
-					sortedKeys[i] = k
-					uniqueKeyValues[k] = NewStringValue(randStr(16))
-					break
-				}
+		i := 0
+		for len(keyValues) < mapSize {
+			k := NewStringValue(randStr(16))
+			if _, found := keyValues[k]; !found {
+				sortedKeys[i] = k
+				keyValues[k] = NewStringValue(randStr(16))
+				i++
 			}
 		}
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := newBasicDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		for k, v := range uniqueKeyValues {
+		for k, v := range keyValues {
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
@@ -3186,10 +2501,10 @@ func TestMapPopIterate(t *testing.T) {
 		err = storage.Commit()
 		require.NoError(t, err)
 
-		sortedKeys = sortSliceByDigest(t, sortedKeys, digesterBuilder, hashInputProvider)
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		// Iterate key value pairs
-		i := len(uniqueKeyValues)
+		i = len(keyValues)
 		err = m.PopIterate(func(k Storable, v Storable) {
 			i--
 
@@ -3199,30 +2514,13 @@ func TestMapPopIterate(t *testing.T) {
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, uniqueKeyValues[sortedKeys[i]], vv)
+			require.Equal(t, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		err = validMapSerialization(m, storage)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		require.Equal(t, uint64(0), m.Count())
-		require.Equal(t, typeInfo, m.Type())
-		require.Equal(t, 1, storage.Count())
+		verifyEmptyMap(t, storage, typeInfo, address, m)
 	})
 
 	t.Run("collision", func(t *testing.T) {
@@ -3234,58 +2532,46 @@ func TestMapPopIterate(t *testing.T) {
 		defer SetThreshold(1024)
 
 		typeInfo := testTypeInfo{42}
-
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
 		digesterBuilder := &mockDigesterBuilder{}
-
 		storage := newTestPersistentStorage(t)
-
-		uniqueKeyValues := make(map[Value]Value, mapSize)
-
-		sortedKeys := make([]Value, mapSize)
-
-		// keys is needed to insert elements with collision in deterministic order.
-		keys := make([]Value, mapSize)
-
-		for i := uint64(0); i < mapSize; i++ {
-			for {
-				k := NewStringValue(randStr(16))
-
-				if _, ok := uniqueKeyValues[k]; !ok {
-
-					sortedKeys[i] = k
-					keys[i] = k
-					uniqueKeyValues[k] = NewStringValue(randStr(16))
-
-					digests := []Digest{
-						Digest(i % 100),
-						Digest(i % 5),
-					}
-
-					digesterBuilder.On("Digest", k).Return(mockDigester{digests})
-					break
-				}
-			}
-		}
-
-		sortedKeys = sortSliceByDigest(t, sortedKeys, digesterBuilder, hashInputProvider)
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		// Populate map
-		for _, k := range keys {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, uniqueKeyValues[k])
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
+		keyValues := make(map[Value]Value, mapSize)
+		sortedKeys := make([]Value, mapSize)
+		i := 0
+		for len(keyValues) < mapSize {
+			k := NewStringValue(randStr(16))
+
+			if _, found := keyValues[k]; !found {
+
+				sortedKeys[i] = k
+				keyValues[k] = NewStringValue(randStr(16))
+
+				digests := []Digest{
+					Digest(i % 100),
+					Digest(i % 5),
+				}
+
+				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+				existingStorable, err := m.Set(compare, hashInputProvider, k, keyValues[k])
+				require.NoError(t, err)
+				require.Nil(t, existingStorable)
+
+				i++
+			}
 		}
+
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		err = storage.Commit()
 		require.NoError(t, err)
 
 		// Iterate key value pairs
-		i := mapSize
+		i = mapSize
 		err = m.PopIterate(func(k Storable, v Storable) {
 			i--
 
@@ -3295,57 +2581,14 @@ func TestMapPopIterate(t *testing.T) {
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, uniqueKeyValues[sortedKeys[i]], vv)
+			require.Equal(t, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		err = validMapSerialization(m, storage)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		require.Equal(t, uint64(0), m.Count())
-		require.Equal(t, typeInfo, m.Type())
-		require.Equal(t, 1, storage.Count())
+		verifyEmptyMap(t, storage, typeInfo, address, m)
 	})
-}
-
-func sortSliceByDigest(t *testing.T, x []Value, digesterBuilder DigesterBuilder, hip HashInputProvider) []Value {
-
-	sort.SliceStable(x, func(i, j int) bool {
-		d1, err := digesterBuilder.Digest(hip, x[i])
-		require.NoError(t, err)
-
-		digest1, err := d1.DigestPrefix(d1.Levels())
-		require.NoError(t, err)
-
-		d2, err := digesterBuilder.Digest(hip, x[j])
-		require.NoError(t, err)
-
-		digest2, err := d2.DigestPrefix(d2.Levels())
-		require.NoError(t, err)
-
-		for z := 0; z < len(digest1); z++ {
-			if digest1[z] != digest2[z] {
-				return digest1[z] < digest2[z] // sort by hkey
-			}
-		}
-		return i < j // sort by insertion order with hash collision
-	})
-
-	return x
 }
 
 func TestEmptyMap(t *testing.T) {
@@ -3353,21 +2596,11 @@ func TestEmptyMap(t *testing.T) {
 	t.Parallel()
 
 	typeInfo := testTypeInfo{42}
-
 	storage := newTestPersistentStorage(t)
-
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
-
-	rootID := m.root.Header().id
-
-	err = storage.Commit()
-	require.NoError(t, err)
-
-	storage.DropCache()
-	storage.DropDeltas()
 
 	t.Run("get", func(t *testing.T) {
 		s, err := m.Get(compare, hashInputProvider, Uint64Value(0))
@@ -3383,13 +2616,13 @@ func TestEmptyMap(t *testing.T) {
 	})
 
 	t.Run("iterate", func(t *testing.T) {
-		i := uint64(0)
+		i := 0
 		err := m.Iterate(func(k Value, v Value) (bool, error) {
 			i++
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, uint64(0), i)
+		require.Equal(t, 0, i)
 	})
 
 	t.Run("count", func(t *testing.T) {
@@ -3401,17 +2634,14 @@ func TestEmptyMap(t *testing.T) {
 		require.Equal(t, typeInfo, m.Type())
 	})
 
-	t.Run("decode", func(t *testing.T) {
-		m2, err := NewMapWithRootID(storage, rootID, newBasicDigesterBuilder())
-		require.NoError(t, err)
-		require.True(t, m2.root.IsData())
-		require.Equal(t, uint64(0), m2.Count())
-		require.Equal(t, typeInfo, m2.Type())
-		require.Equal(t, uint32(mapRootDataSlabPrefixSize+hkeyElementsPrefixSize), m2.root.Header().size)
+	t.Run("address", func(t *testing.T) {
+		require.Equal(t, address, m.Address())
 	})
+
+	// TestMapEncodeDecode/empty tests empty map encoding and decoding
 }
 
-func TestMapBatchSet(t *testing.T) {
+func TestMapFromBatchData(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		typeInfo := testTypeInfo{42}
@@ -3424,17 +2654,17 @@ func TestMapBatchSet(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), m.Count())
-		require.Equal(t, typeInfo, m.Type())
 
 		iter, err := m.Iterator()
 		require.NoError(t, err)
 
 		storage := newTestPersistentStorage(t)
+		address := Address{2, 3, 4, 5, 6, 7, 8, 9}
 
-		// Create a new map with new storage, new address, and original map's elements.
+		// Create a map with new storage, new address, and original map's elements.
 		copied, err := NewMapFromBatchData(
 			storage,
-			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			address,
 			NewDefaultDigesterBuilder(),
 			m.Type(),
 			compare,
@@ -3444,16 +2674,9 @@ func TestMapBatchSet(t *testing.T) {
 				return iter.Next()
 			})
 		require.NoError(t, err)
-		require.Equal(t, uint64(0), copied.Count())
-		require.Equal(t, m.Type(), copied.Type())
 		require.NotEqual(t, copied.StorageID(), m.StorageID())
 
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		storage.DropCache()
-
-		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, nil, nil)
+		verifyEmptyMap(t, storage, typeInfo, address, copied)
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
@@ -3478,7 +2701,6 @@ func TestMapBatchSet(t *testing.T) {
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
-		require.Equal(t, typeInfo, m.Type())
 
 		iter, err := m.Iterator()
 		require.NoError(t, err)
@@ -3487,13 +2709,13 @@ func TestMapBatchSet(t *testing.T) {
 		keyValues := make(map[Value]Value)
 
 		storage := newTestPersistentStorage(t)
-
 		digesterBuilder := NewDefaultDigesterBuilder()
+		address := Address{2, 3, 4, 5, 6, 7, 8, 9}
 
-		// Create a new map with new storage, new address, and original map's elements.
+		// Create a map with new storage, new address, and original map's elements.
 		copied, err := NewMapFromBatchData(
 			storage,
-			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			address,
 			digesterBuilder,
 			m.Type(),
 			compare,
@@ -3513,25 +2735,16 @@ func TestMapBatchSet(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.Equal(t, uint64(mapSize), copied.Count())
-		require.Equal(t, typeInfo, copied.Type())
 		require.NotEqual(t, copied.StorageID(), m.StorageID())
 
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		storage.DropCache()
-
-		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys)
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
 		SetThreshold(100)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
-		const mapSize = 1024 * 4
+		const mapSize = 4096
 
 		typeInfo := testTypeInfo{42}
 
@@ -3550,7 +2763,6 @@ func TestMapBatchSet(t *testing.T) {
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
-		require.Equal(t, typeInfo, m.Type())
 
 		iter, err := m.Iterator()
 		require.NoError(t, err)
@@ -3559,12 +2771,12 @@ func TestMapBatchSet(t *testing.T) {
 		keyValues := make(map[Value]Value)
 
 		storage := newTestPersistentStorage(t)
-
 		digesterBuilder := NewDefaultDigesterBuilder()
+		address := Address{2, 3, 4, 5, 6, 7, 8, 9}
 
 		copied, err := NewMapFromBatchData(
 			storage,
-			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			address,
 			digesterBuilder,
 			m.Type(),
 			compare,
@@ -3582,25 +2794,16 @@ func TestMapBatchSet(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.Equal(t, uint64(mapSize), copied.Count())
-		require.Equal(t, typeInfo, copied.Type())
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		storage.DropCache()
-
-		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys)
 	})
 
 	t.Run("random", func(t *testing.T) {
 		SetThreshold(100)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
-		const mapSize = 1024 * 4
+		const mapSize = 4096
 
 		typeInfo := testTypeInfo{42}
 
@@ -3613,21 +2816,20 @@ func TestMapBatchSet(t *testing.T) {
 		require.NoError(t, err)
 
 		for m.Count() < mapSize {
-			k := RandomValue()
-			v := RandomValue()
+			k := randomValue(int(maxInlineMapElementSize))
+			v := randomValue(int(maxInlineMapElementSize))
 
 			_, err = m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
-		require.Equal(t, typeInfo, m.Type())
 
 		iter, err := m.Iterator()
 		require.NoError(t, err)
 
 		storage := newTestPersistentStorage(t)
-
+		address := Address{2, 3, 4, 5, 6, 7, 8, 9}
 		digesterBuilder := NewDefaultDigesterBuilder()
 
 		var sortedKeys []Value
@@ -3635,7 +2837,7 @@ func TestMapBatchSet(t *testing.T) {
 
 		copied, err := NewMapFromBatchData(
 			storage,
-			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			address,
 			digesterBuilder,
 			m.Type(),
 			compare,
@@ -3653,24 +2855,15 @@ func TestMapBatchSet(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.Equal(t, uint64(mapSize), copied.Count())
-		require.Equal(t, typeInfo, copied.Type())
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		storage.DropCache()
-
-		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, NewDefaultDigesterBuilder(), compare, hashInputProvider, sortedKeys, keyValues)
+		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys)
 	})
 
 	t.Run("collision", func(t *testing.T) {
 
 		SetThreshold(512)
-		defer func() {
-			SetThreshold(1024)
-		}()
+		defer SetThreshold(1024)
 
 		const mapSize = 1024
 
@@ -3706,7 +2899,6 @@ func TestMapBatchSet(t *testing.T) {
 		}
 
 		require.Equal(t, uint64(mapSize), m.Count())
-		require.Equal(t, typeInfo, m.Type())
 
 		iter, err := m.Iterator()
 		require.NoError(t, err)
@@ -3715,11 +2907,12 @@ func TestMapBatchSet(t *testing.T) {
 		keyValues := make(map[Value]Value)
 
 		storage := newTestPersistentStorage(t)
+		address := Address{2, 3, 4, 5, 6, 7, 8, 9}
 
 		i := 0
 		copied, err := NewMapFromBatchData(
 			storage,
-			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			address,
 			digesterBuilder,
 			m.Type(),
 			compare,
@@ -3738,103 +2931,20 @@ func TestMapBatchSet(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.Equal(t, uint64(mapSize), copied.Count())
-		require.Equal(t, typeInfo, copied.Type())
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		err = storage.Commit()
-		require.NoError(t, err)
-
-		storage.DropCache()
-
-		testPopulatedMapFromStorage(
-			t,
-			storage,
-			copied.StorageID(),
-			typeInfo,
-			digesterBuilder,
-			compare,
-			hashInputProvider,
-			sortedKeys,
-			keyValues,
-		)
+		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys)
 	})
-
-}
-
-func testPopulatedMapFromStorage(
-	t *testing.T,
-	storage *PersistentSlabStorage,
-	rootID StorageID,
-	typeInfo TypeInfo,
-	digesterBuilder DigesterBuilder,
-	comparator ValueComparator,
-	hip HashInputProvider,
-	sortedKeys []Value,
-	keyValues map[Value]Value,
-) {
-
-	m, err := NewMapWithRootID(storage, rootID, digesterBuilder)
-	require.NoError(t, err)
-
-	// Get map's elements to test tree traversal.
-	for k, v := range keyValues {
-		storable, err := m.Get(comparator, hip, k)
-		require.NoError(t, err)
-		require.Equal(t, v, storable)
-	}
-
-	// Iterate through map to test data slab's next
-	i := 0
-	err = m.Iterate(func(k, v Value) (bool, error) {
-		expectedKey := sortedKeys[i]
-		expectedValue := keyValues[expectedKey]
-
-		require.Equal(t, expectedKey, k)
-		require.Equal(t, expectedValue, v)
-
-		i++
-		return true, nil
-	})
-	require.NoError(t, err)
-	require.Equal(t, len(keyValues), i)
-
-	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
-
-	err = validMapSerialization(m, storage)
-	if err != nil {
-		PrintMap(m)
-	}
-	require.NoError(t, err)
-}
-
-func validMapSerialization(m *OrderedMap, storage *PersistentSlabStorage) error {
-	return ValidMapSerialization(
-		m,
-		storage.cborDecMode,
-		storage.cborEncMode,
-		storage.DecodeStorable,
-		storage.DecodeTypeInfo,
-		func(a, b Storable) bool {
-			return reflect.DeepEqual(a, b)
-		},
-	)
 }
 
 func TestMapNestedStorables(t *testing.T) {
 
 	t.Run("SomeValue", func(t *testing.T) {
 
+		const mapSize = 4096
+
 		typeInfo := testTypeInfo{42}
-
-		const mapSize = 1024 * 4
-
 		storage := newTestBasicStorage(t)
-
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
@@ -3874,6 +2984,7 @@ func TestMapNestedStorables(t *testing.T) {
 		}
 
 		require.Equal(t, typeInfo, m.Type())
+		require.Equal(t, address, m.Address())
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
@@ -3905,12 +3016,10 @@ func TestMapNestedStorables(t *testing.T) {
 
 	t.Run("Array", func(t *testing.T) {
 
+		const mapSize = 4096
+
 		typeInfo := testTypeInfo{42}
-
-		const mapSize = 1024 * 4
-
 		storage := newTestBasicStorage(t)
-
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
@@ -3968,6 +3077,7 @@ func TestMapNestedStorables(t *testing.T) {
 		}
 
 		require.Equal(t, typeInfo, m.Type())
+		require.Equal(t, address, m.Address())
 
 		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {

@@ -37,6 +37,10 @@ type MapStats struct {
 	StorableSlabCount      uint64
 }
 
+func (s *MapStats) SlabCount() uint64 {
+	return s.DataSlabCount + s.MetaDataSlabCount + s.CollisionDataSlabCount + s.StorableSlabCount
+}
+
 // GetMapStats returns stats about the map slabs.
 func GetMapStats(m *OrderedMap) (MapStats, error) {
 	level := uint64(0)

@@ -109,6 +109,29 @@ func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
 	)
 }
 
+func newTestPersistentStorageWithData(t testing.TB, data map[StorageID][]byte) *PersistentSlabStorage {
+	baseStorage := NewInMemBaseStorage()
+	baseStorage.segments = data
+	return newTestPersistentStorageWithBaseStorage(t, baseStorage)
+}
+
+func newTestPersistentStorageWithBaseStorage(t testing.TB, baseStorage BaseStorage) *PersistentSlabStorage {
+
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	return NewPersistentSlabStorage(
+		baseStorage,
+		encMode,
+		decMode,
+		decodeStorable,
+		decodeTypeInfo,
+	)
+}
+
 func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
@@ -122,4 +145,82 @@ func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
 		decodeStorable,
 		decodeTypeInfo,
 	)
+}
+
+func valueEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
+	switch a.(type) {
+	case *Array:
+		arrayEqual(t, tic, a, b)
+	case *OrderedMap:
+		mapEqual(t, tic, a, b)
+	default:
+		require.Equal(t, a, b)
+	}
+}
+
+func arrayEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
+	array1, ok := a.(*Array)
+	require.True(t, ok)
+
+	array2, ok := b.(*Array)
+	require.True(t, ok)
+
+	require.True(t, tic(array1.Type(), array2.Type()))
+	require.Equal(t, array1.Address(), array2.Address())
+	require.Equal(t, array1.Count(), array2.Count())
+	require.Equal(t, array1.StorageID(), array2.StorageID())
+
+	iterator1, err := array1.Iterator()
+	require.NoError(t, err)
+
+	iterator2, err := array2.Iterator()
+	require.NoError(t, err)
+
+	for {
+		value1, err := iterator1.Next()
+		require.NoError(t, err)
+
+		value2, err := iterator2.Next()
+		require.NoError(t, err)
+
+		valueEqual(t, tic, value1, value2)
+
+		if value1 == nil || value2 == nil {
+			break
+		}
+	}
+}
+
+func mapEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
+	m1, ok := a.(*OrderedMap)
+	require.True(t, ok)
+
+	m2, ok := b.(*OrderedMap)
+	require.True(t, ok)
+
+	require.True(t, tic(m1.Type(), m2.Type()))
+	require.Equal(t, m1.Address(), m2.Address())
+	require.Equal(t, m1.Count(), m2.Count())
+	require.Equal(t, m1.StorageID(), m2.StorageID())
+
+	iterator1, err := m1.Iterator()
+	require.NoError(t, err)
+
+	iterator2, err := m2.Iterator()
+	require.NoError(t, err)
+
+	for {
+		key1, value1, err := iterator1.Next()
+		require.NoError(t, err)
+
+		key2, value2, err := iterator2.Next()
+		require.NoError(t, err)
+
+		valueEqual(t, tic, key1, key2)
+		valueEqual(t, tic, value1, value2)
+
+		if key1 == nil || key2 == nil {
+			break
+		}
+	}
 }

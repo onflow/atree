@@ -3411,7 +3411,7 @@ func TestEmptyMap(t *testing.T) {
 	})
 }
 
-func TestMapBatchSet(t *testing.T) {
+func TestMapFromBatchData(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		typeInfo := testTypeInfo{42}
@@ -3916,6 +3916,102 @@ func TestMapBatchSet(t *testing.T) {
 		)
 	})
 
+	t.Run("data slab too large", func(t *testing.T) {
+
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		typeInfo := testTypeInfo{42}
+
+		digesterBuilder := &mockDigesterBuilder{}
+
+		m, err := NewMap(
+			newTestPersistentStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			digesterBuilder,
+			typeInfo,
+		)
+		require.NoError(t, err)
+
+		var k, v Value
+		var storable Storable
+
+		k = Uint64Value(2732145905)
+		v = NewStringValue(randStr(1024))
+		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3881892766069237908}})
+
+		storable, err = m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+		require.Nil(t, storable)
+
+		k = NewStringValue("Hqtu")
+		v = Uint64Value(837174059053136161)
+		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3882976639190041664}})
+
+		storable, err = m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+		require.Nil(t, storable)
+
+		k = NewStringValue("zFKUYYNfIfJCCakcDuIEHj")
+		v = NewStringValue("EZbaCxxjDtMnbRlXJMgfHnZ")
+		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3883321011075439822}})
+
+		storable, err = m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+		require.Nil(t, storable)
+
+		k = NewStringValue("ZFKUYYNfIfJCCakcDuIEHj")
+		v = NewStringValue("eZbaCxxjDtMnbRlXJMgfHnZ")
+		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3883321011075439823}})
+
+		storable, err = m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+		require.Nil(t, storable)
+
+		require.Equal(t, uint64(4), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+
+		iter, err := m.Iterator()
+		require.NoError(t, err)
+
+		var sortedKeys []Value
+		keyValues := make(map[Value]Value)
+
+		storage := newTestPersistentStorage(t)
+
+		copied, err := NewMapFromBatchData(
+			storage,
+			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			digesterBuilder,
+			m.Type(),
+			compare,
+			hashInputProvider,
+			m.Seed(),
+			func() (Value, Value, error) {
+				k, v, err := iter.Next()
+
+				if k != nil {
+					sortedKeys = append(sortedKeys, k)
+					keyValues[k] = v
+				}
+
+				return k, v, err
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, m.Count(), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.NotEqual(t, m.StorageID(), copied.StorageID())
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		storage.DropCache()
+
+		testPopulatedMapFromStorage(t, storage, copied.StorageID(), typeInfo, digesterBuilder, compare, hashInputProvider, sortedKeys, keyValues)
+	})
 }
 
 func testPopulatedMapFromStorage(
@@ -3935,9 +4031,12 @@ func testPopulatedMapFromStorage(
 
 	// Get map's elements to test tree traversal.
 	for k, v := range keyValues {
-		storable, err := m.Get(comparator, hip, k)
+		existingStorable, err := m.Get(comparator, hip, k)
 		require.NoError(t, err)
-		require.Equal(t, v, storable)
+
+		existingValue, err := existingStorable.StoredValue(storage)
+		require.NoError(t, err)
+		require.Equal(t, v, existingValue)
 	}
 
 	// Iterate through map to test data slab's next

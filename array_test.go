@@ -2823,7 +2823,7 @@ func TestArrayPopIterate(t *testing.T) {
 	})
 }
 
-func TestArrayBatchAppend(t *testing.T) {
+func TestArrayFromBatchData(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		typeInfo := testTypeInfo{42}
@@ -3286,6 +3286,94 @@ func TestArrayBatchAppend(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
+
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(copied)
+		}
+		require.NoError(t, err)
+
+		err = validArraySerialization(copied, storage)
+		if err != nil {
+			PrintArray(copied)
+		}
+		require.NoError(t, err)
+	})
+
+	t.Run("data slab too large", func(t *testing.T) {
+
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(
+			newTestPersistentStorage(t),
+			address,
+			typeInfo)
+		require.NoError(t, err)
+
+		var values []Value
+		var v Value
+
+		v = NewStringValue(randStr(26))
+		values = append(values, v)
+		err = array.Append(v)
+		require.NoError(t, err)
+
+		v = NewStringValue(randStr(int(MaxInlineElementSize - 2)))
+		values = append(values, v)
+		err = array.Append(v)
+		require.NoError(t, err)
+
+		v = NewStringValue(randStr(int(MaxInlineElementSize - 2)))
+		values = append(values, v)
+		err = array.Append(v)
+		require.NoError(t, err)
+
+		iter, err := array.Iterator()
+		require.NoError(t, err)
+
+		storage := newTestPersistentStorage(t)
+
+		address = Address{2, 3, 4, 5, 6, 7, 8, 9}
+		copied, err := NewArrayFromBatchData(
+			storage,
+			address,
+			array.Type(),
+			func() (Value, error) {
+				return iter.Next()
+			})
+
+		require.NoError(t, err)
+		require.NotEqual(t, array.StorageID(), copied.StorageID())
+		require.Equal(t, array.Count(), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.Equal(t, address, copied.Address())
+
+		// Get copied array's element to test tree traversal.
+		for i := uint64(0); i < copied.Count(); i++ {
+			storable, err := copied.Get(i)
+			require.NoError(t, err)
+
+			v, err := storable.StoredValue(storage)
+			require.NoError(t, err)
+
+			require.Equal(t, values[i], v)
+		}
+
+		// Iterate through copied array to test data slab's next
+		i := uint64(0)
+		err = copied.Iterate(func(v Value) (bool, error) {
+			require.Equal(t, values[i], v)
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, array.Count(), i)
 
 		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {

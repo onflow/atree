@@ -4112,8 +4112,16 @@ func NewMapFromBatchData(
 
 		putDigester(digester)
 
+		elem, err := newSingleElement(storage, address, key, value)
+		if err != nil {
+			return nil, err
+		}
+
 		// Finalize data slab
-		if mapDataSlabPrefixSize+elements.Size() >= uint32(targetThreshold) {
+		currentSlabSize := mapDataSlabPrefixSize + elements.Size()
+		newElementSize := digestSize + elem.Size()
+		if currentSlabSize >= uint32(targetThreshold) ||
+			currentSlabSize+newElementSize > uint32(maxThreshold) {
 
 			// Generate storge id for next data slab
 			nextID, err := storage.GenerateStorageID(address)
@@ -4145,11 +4153,6 @@ func NewMapFromBatchData(
 				hkeys: make([]Digest, 0, defaultElementCountInSlab),
 				elems: make([]element, 0, defaultElementCountInSlab),
 			}
-		}
-
-		elem, err := newSingleElement(storage, address, key, value)
-		if err != nil {
-			return nil, err
 		}
 
 		elements.hkeys = append(elements.hkeys, hkey)

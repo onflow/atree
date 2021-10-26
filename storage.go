@@ -19,6 +19,7 @@
 package atree
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -111,6 +112,14 @@ func (id StorageID) Valid() error {
 		return ErrStorageIndex
 	}
 	return nil
+}
+
+func (id StorageID) Compare(other StorageID) int {
+	result := bytes.Compare(id.Address[:], other.Address[:])
+	if result == 0 {
+		return bytes.Compare(id.Index[:], other.Index[:])
+	}
+	return result
 }
 
 type BaseStorageUsageReporter interface {

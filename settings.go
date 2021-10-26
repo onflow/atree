@@ -18,25 +18,46 @@
 
 package atree
 
-var (
-	// Default slab size
-	targetThreshold = uint64(1024) // 1kb
+// Slab invariants:
+// - each element can't take up more than half of slab size (including encoding overhead and digest)
+// - data slab must have at least 2 elements
 
-	minThreshold = targetThreshold / 2
-	maxThreshold = uint64(float64(targetThreshold) * 1.5)
-
-	MaxInlineElementSize = targetThreshold / 2
-
-	maxInlineMapElementSize = MaxInlineElementSize / 2
+const (
+	defaultSlabSize       = uint64(1024) // 1kb
+	minElementCountInSlab = 2
 )
 
-func SetThreshold(threshold uint64) (uint64, uint64, uint64) {
-	targetThreshold = threshold
-	// minThreshold = targetThreshold / 4
-	minThreshold = targetThreshold / 2
-	maxThreshold = uint64(float64(targetThreshold) * 1.5)
-	MaxInlineElementSize = targetThreshold / 2
-	maxInlineMapElementSize = MaxInlineElementSize / 2
+var (
+	targetThreshold         uint64
+	minThreshold            uint64
+	maxThreshold            uint64
+	MaxInlineElementSize    uint64
+	maxInlineMapElementSize uint64
+)
 
-	return minThreshold, maxThreshold, MaxInlineElementSize
+func init() {
+	SetThreshold(defaultSlabSize)
+}
+
+func SetThreshold(threshold uint64) (uint64, uint64, uint64, uint64) {
+	targetThreshold = threshold
+	minThreshold = uint64(targetThreshold / 2)
+	maxThreshold = uint64(float64(targetThreshold) * 1.5)
+
+	// Total slab size available for array elements, excluding slab encoding overhead
+	availableArrayElementsSize := targetThreshold - arrayDataSlabPrefixSize
+	MaxInlineElementSize = uint64(availableArrayElementsSize / minElementCountInSlab)
+
+	// Total slab size available for map elements, excluding slab encoding overhead
+	availableMapElementsSize := targetThreshold - mapDataSlabPrefixSize - hkeyElementsPrefixSize
+
+	// Total encoding overhead for one map element (key+value)
+	mapElementOverheadSize := uint64(digestSize + singleElementPrefixSize)
+
+	// Max inline size for a map's key value pair
+	maxInlineKeyValueSize := uint64(availableMapElementsSize/minElementCountInSlab) - mapElementOverheadSize
+
+	maxInlineMapElementSize = uint64(maxInlineKeyValueSize / 2)
+
+	return minThreshold, maxThreshold, MaxInlineElementSize, maxInlineMapElementSize
 }

@@ -118,12 +118,12 @@ func main() {
 
 	flag.Parse()
 
-	targetThreshold, minThreshold, maxThreshold := atree.SetThreshold(slabSize)
+	minThreshold, maxThreshold, _, _ := atree.SetThreshold(slabSize)
 
 	fmt.Printf(
 		"Inserting %d elements (uint64) into array with slab size %d, min size %d, and max size %d ...\n",
 		numElements,
-		targetThreshold,
+		slabSize,
 		minThreshold,
 		maxThreshold,
 	)

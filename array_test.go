@@ -247,7 +247,7 @@ func TestArraySetAndGet(t *testing.T) {
 	t.Run("child-as-new-root", func(t *testing.T) {
 		const arraySize = 20
 
-		SetThreshold(100)
+		SetThreshold(128)
 		defer func() {
 			SetThreshold(1024)
 		}()
@@ -3468,6 +3468,55 @@ func TestArrayNestedStorables(t *testing.T) {
 	_, err = CheckStorageHealth(storage, 1)
 	if err != nil {
 		fmt.Printf("CheckStorageHealth %s\n", err)
+	}
+	require.NoError(t, err)
+}
+
+func TestArrayMaxInlineElement(t *testing.T) {
+	t.Parallel()
+
+	typeInfo := testTypeInfo{42}
+	storage := newTestPersistentStorage(t)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	var values []Value
+	for i := 0; i < 2; i++ {
+		// String length is MaxInlineElementSize - 3 to account for string encoding overhead.
+		v := NewStringValue(randStr(int(MaxInlineElementSize - 3)))
+		values = append(values, v)
+
+		err = array.Append(v)
+		require.NoError(t, err)
+	}
+
+	for i := 0; i < len(values); i++ {
+		existingStorable, err := array.Get(uint64(i))
+		require.NoError(t, err)
+
+		existingValue, err := existingStorable.StoredValue(array.Storage)
+		require.NoError(t, err)
+		require.Equal(t, values[i], existingValue)
+	}
+
+	require.True(t, array.root.IsData())
+
+	// Size of root data slab with two elements of max inlined size is target slab size minus
+	// storage id size (next storage id is omitted in root slab), and minus 1 byte
+	// (for rounding when computing max inline array element size).
+	require.Equal(t, targetThreshold-storageIDSize-1, uint64(array.root.Header().size))
+
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
+	err = validArraySerialization(array, storage)
+	if err != nil {
+		PrintArray(array)
 	}
 	require.NoError(t, err)
 }

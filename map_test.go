@@ -1838,7 +1838,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 	t.Run("inline collision 1 level", func(t *testing.T) {
 
-		SetThreshold(150)
+		SetThreshold(160)
 		defer func() {
 			SetThreshold(1024)
 		}()
@@ -2106,7 +2106,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 	t.Run("inline collision 2 levels", func(t *testing.T) {
 
-		SetThreshold(150)
+		SetThreshold(160)
 		defer func() {
 			SetThreshold(1024)
 		}()
@@ -4251,4 +4251,54 @@ func TestMapNestedStorables(t *testing.T) {
 		}
 		require.NoError(t, err)
 	})
+}
+
+func TestMapMaxInlineElement(t *testing.T) {
+	t.Parallel()
+
+	typeInfo := testTypeInfo{42}
+	storage := newTestPersistentStorage(t)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	keyValues := make(map[Value]Value)
+	for len(keyValues) < 2 {
+		// String length is MaxInlineElementSize - 2 to account for string encoding overhead.
+		k := NewStringValue(randStr(int(maxInlineMapElementSize - 2)))
+		v := NewStringValue(randStr(int(maxInlineMapElementSize - 2)))
+		keyValues[k] = v
+
+		_, err := m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+	}
+
+	for k, v := range keyValues {
+		existingStorable, err := m.Get(compare, hashInputProvider, k)
+		require.NoError(t, err)
+
+		existingValue, err := existingStorable.StoredValue(m.Storage)
+		require.NoError(t, err)
+		require.Equal(t, v, existingValue)
+	}
+
+	require.True(t, m.root.IsData())
+
+	// Size of root data slab with two elements (key+value pairs) of
+	// max inlined size is target slab size minus
+	// storage id size (next storage id is omitted in root slab)
+	require.Equal(t, targetThreshold-storageIDSize, uint64(m.root.Header().size))
+
+	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
+
+	err = validMapSerialization(m, storage)
+	if err != nil {
+		PrintMap(m)
+	}
+	require.NoError(t, err)
 }

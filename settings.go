@@ -20,7 +20,7 @@ package atree
 
 // Slab invariants:
 // - each element can't take up more than half of slab size (including encoding overhead and digest)
-// - data slab must have at least 2 elements
+// - data slab must have at least 2 elements when slab size > maxThreshold
 
 const (
 	defaultSlabSize       = uint64(1024) // 1kb

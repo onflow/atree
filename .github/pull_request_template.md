@@ -11,7 +11,7 @@ ______
 
 <!-- Complete: -->
 
-- [ ] Targeted PR against `master` branch
+- [ ] Targeted PR against `main` branch
 - [ ] Linked to Github issue with discussion and accepted design OR link to spec that describes this work
 - [ ] Code follows the [standards mentioned here](https://github.com/onflow/atree/blob/master/CONTRIBUTING.md#styleguides)
 - [ ] Updated relevant documentation 

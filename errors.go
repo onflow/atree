@@ -20,6 +20,7 @@ package atree
 
 import (
 	"fmt"
+	"runtime/debug"
 )
 
 type FatalError struct {
@@ -380,4 +381,18 @@ func NewTypeAssertionError(wantType string, gotType string) error {
 
 func (e *TypeAssertionError) Error() string {
 	return fmt.Sprintf("type assertion failed: want %s, got %s", e.wantType, e.gotType)
+}
+
+// UnreachableError is used by panic when unreachable code is reached.
+// This is copied from Cadence.
+type UnreachableError struct {
+	Stack []byte
+}
+
+func (e UnreachableError) Error() string {
+	return fmt.Sprintf("unreachable\n%s", e.Stack)
+}
+
+func NewUnreachableError() *UnreachableError {
+	return &UnreachableError{Stack: debug.Stack()}
 }

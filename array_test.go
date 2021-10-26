@@ -24,6 +24,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -2822,27 +2823,31 @@ func TestArrayPopIterate(t *testing.T) {
 	})
 }
 
-func TestArrayBatchAppend(t *testing.T) {
+func TestArrayFromBatchData(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
 		array, err := NewArray(
 			newTestPersistentStorage(t),
-			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			address,
 			typeInfo)
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), array.Count())
 		require.Equal(t, typeInfo, array.Type())
+		require.Equal(t, address, array.Address())
 
 		iter, err := array.Iterator()
 		require.NoError(t, err)
 
 		// Create a new array with new storage, new address, and original array's elements.
+		address = Address{2, 3, 4, 5, 6, 7, 8, 9}
 		storage := newTestPersistentStorage(t)
 		copied, err := NewArrayFromBatchData(
 			storage,
-			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			address,
 			array.Type(),
 			func() (Value, error) {
 				return iter.Next()
@@ -2850,6 +2855,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), copied.Count())
 		require.Equal(t, array.Type(), copied.Type())
+		require.Equal(t, address, copied.Address())
 		require.NotEqual(t, copied.StorageID(), array.StorageID())
 
 		// Iterate through copied array to test data slab's next
@@ -2863,27 +2869,27 @@ func TestArrayBatchAppend(t *testing.T) {
 
 		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
-			PrintArray(array)
+			PrintArray(copied)
 		}
 		require.NoError(t, err)
 
-		err = validArraySerialization(array, storage)
+		err = validArraySerialization(copied, storage)
 		if err != nil {
-			PrintArray(array)
+			PrintArray(copied)
 		}
 		require.NoError(t, err)
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
-		SetThreshold(1024)
 
 		const arraySize = 10
 
 		typeInfo := testTypeInfo{42}
 
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		array, err := NewArray(
 			newTestPersistentStorage(t),
-			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			address,
 			typeInfo)
 		require.NoError(t, err)
 
@@ -2894,15 +2900,17 @@ func TestArrayBatchAppend(t *testing.T) {
 
 		require.Equal(t, uint64(arraySize), array.Count())
 		require.Equal(t, typeInfo, array.Type())
+		require.Equal(t, address, array.Address())
 
 		iter, err := array.Iterator()
 		require.NoError(t, err)
 
 		// Create a new array with new storage, new address, and original array's elements.
+		address = Address{2, 3, 4, 5, 6, 7, 8, 9}
 		storage := newTestPersistentStorage(t)
 		copied, err := NewArrayFromBatchData(
 			storage,
-			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			address,
 			array.Type(),
 			func() (Value, error) {
 				return iter.Next()
@@ -2911,6 +2919,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(arraySize), copied.Count())
 		require.Equal(t, typeInfo, copied.Type())
+		require.Equal(t, address, copied.Address())
 		require.NotEqual(t, copied.StorageID(), array.StorageID())
 
 		// Get copied array's element to test tree traversal.
@@ -2924,7 +2933,6 @@ func TestArrayBatchAppend(t *testing.T) {
 		i := 0
 		err = copied.Iterate(func(v Value) (bool, error) {
 			require.Equal(t, Uint64Value(i), v)
-
 			i++
 			return true, nil
 		})
@@ -2933,30 +2941,32 @@ func TestArrayBatchAppend(t *testing.T) {
 
 		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
-			PrintArray(array)
+			PrintArray(copied)
 		}
 		require.NoError(t, err)
 
-		err = validArraySerialization(array, storage)
+		err = validArraySerialization(copied, storage)
 		if err != nil {
-			PrintArray(array)
+			PrintArray(copied)
 		}
 		require.NoError(t, err)
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
-		SetThreshold(100)
+		SetThreshold(256)
 		defer func() {
 			SetThreshold(1024)
 		}()
 
-		const arraySize = 1024 * 4
+		const arraySize = 4096
 
 		typeInfo := testTypeInfo{42}
 
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
 		array, err := NewArray(
 			newTestPersistentStorage(t),
-			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			address,
 			typeInfo)
 		require.NoError(t, err)
 
@@ -2967,14 +2977,17 @@ func TestArrayBatchAppend(t *testing.T) {
 
 		require.Equal(t, uint64(arraySize), array.Count())
 		require.Equal(t, typeInfo, array.Type())
+		require.Equal(t, address, array.Address())
 
 		iter, err := array.Iterator()
 		require.NoError(t, err)
 
+		address = Address{2, 3, 4, 5, 6, 7, 8, 9}
+
 		storage := newTestPersistentStorage(t)
 		copied, err := NewArrayFromBatchData(
 			storage,
-			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			address,
 			array.Type(),
 			func() (Value, error) {
 				return iter.Next()
@@ -2983,6 +2996,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(arraySize), copied.Count())
 		require.Equal(t, typeInfo, copied.Type())
+		require.Equal(t, address, copied.Address())
 		require.NotEqual(t, array.StorageID(), copied.StorageID())
 
 		// Get copied array's element to test tree traversal.
@@ -2996,7 +3010,6 @@ func TestArrayBatchAppend(t *testing.T) {
 		i := 0
 		err = copied.Iterate(func(v Value) (bool, error) {
 			require.Equal(t, Uint64Value(i), v)
-
 			i++
 			return true, nil
 		})
@@ -3005,30 +3018,218 @@ func TestArrayBatchAppend(t *testing.T) {
 
 		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
-			PrintArray(array)
+			PrintArray(copied)
 		}
 		require.NoError(t, err)
 
-		err = validArraySerialization(array, storage)
+		err = validArraySerialization(copied, storage)
 		if err != nil {
-			PrintArray(array)
+			PrintArray(copied)
+		}
+		require.NoError(t, err)
+	})
+
+	t.Run("rebalance two data slabs", func(t *testing.T) {
+		SetThreshold(256)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		typeInfo := testTypeInfo{42}
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(
+			newTestPersistentStorage(t),
+			address,
+			typeInfo)
+		require.NoError(t, err)
+
+		err = array.Insert(0, NewStringValue(strings.Repeat("a", int(MaxInlineElementSize-2))))
+		require.NoError(t, err)
+		for i := 0; i < 35; i++ {
+			err = array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(36), array.Count())
+		require.Equal(t, typeInfo, array.Type())
+		require.Equal(t, address, array.Address())
+
+		iter, err := array.Iterator()
+		require.NoError(t, err)
+
+		address = Address{2, 3, 4, 5, 6, 7, 8, 9}
+
+		storage := newTestPersistentStorage(t)
+		copied, err := NewArrayFromBatchData(
+			storage,
+			address,
+			array.Type(),
+			func() (Value, error) {
+				return iter.Next()
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, array.Count(), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.Equal(t, address, copied.Address())
+		require.NotEqual(t, array.StorageID(), copied.StorageID())
+
+		// Get copied array's element to test tree traversal.
+		for i := uint64(0); i < array.Count(); i++ {
+			originalStorable, err := array.Get(i)
+			require.NoError(t, err)
+
+			originalValue, err := originalStorable.StoredValue(array.Storage)
+			require.NoError(t, err)
+
+			storable, err := copied.Get(i)
+			require.NoError(t, err)
+
+			value, err := storable.StoredValue(copied.Storage)
+			require.NoError(t, err)
+
+			require.Equal(t, originalValue, value)
+		}
+
+		// Iterate through copied array to test data slab's next
+		i := uint64(0)
+		err = copied.Iterate(func(v Value) (bool, error) {
+			storable, err := array.Get(i)
+			require.NoError(t, err)
+
+			value, err := storable.StoredValue(array.Storage)
+			require.NoError(t, err)
+
+			require.Equal(t, value, v)
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, array.Count(), i)
+
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(copied)
+		}
+		require.NoError(t, err)
+
+		err = validArraySerialization(copied, storage)
+		if err != nil {
+			PrintArray(copied)
+		}
+		require.NoError(t, err)
+	})
+
+	t.Run("merge two data slabs", func(t *testing.T) {
+		SetThreshold(256)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		typeInfo := testTypeInfo{42}
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(
+			newTestPersistentStorage(t),
+			address,
+			typeInfo)
+		require.NoError(t, err)
+
+		for i := 0; i < 35; i++ {
+			err = array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+		err = array.Insert(25, NewStringValue(strings.Repeat("a", int(MaxInlineElementSize-2))))
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(36), array.Count())
+		require.Equal(t, typeInfo, array.Type())
+		require.Equal(t, address, array.Address())
+
+		iter, err := array.Iterator()
+		require.NoError(t, err)
+
+		address = Address{2, 3, 4, 5, 6, 7, 8, 9}
+
+		storage := newTestPersistentStorage(t)
+		copied, err := NewArrayFromBatchData(
+			storage,
+			address,
+			array.Type(),
+			func() (Value, error) {
+				return iter.Next()
+			})
+
+		require.NoError(t, err)
+		require.Equal(t, array.Count(), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.Equal(t, address, copied.Address())
+		require.NotEqual(t, array.StorageID(), copied.StorageID())
+
+		// Get copied array's element to test tree traversal.
+		for i := uint64(0); i < array.Count(); i++ {
+			originalStorable, err := array.Get(i)
+			require.NoError(t, err)
+
+			originalValue, err := originalStorable.StoredValue(array.Storage)
+			require.NoError(t, err)
+
+			storable, err := copied.Get(i)
+			require.NoError(t, err)
+
+			value, err := storable.StoredValue(copied.Storage)
+			require.NoError(t, err)
+
+			require.Equal(t, originalValue, value)
+		}
+
+		// Iterate through copied array to test data slab's next
+		i := uint64(0)
+		err = copied.Iterate(func(v Value) (bool, error) {
+			storable, err := array.Get(i)
+			require.NoError(t, err)
+
+			value, err := storable.StoredValue(array.Storage)
+			require.NoError(t, err)
+
+			require.Equal(t, value, v)
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, array.Count(), i)
+
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(copied)
+		}
+		require.NoError(t, err)
+
+		err = validArraySerialization(copied, storage)
+		if err != nil {
+			PrintArray(copied)
 		}
 		require.NoError(t, err)
 	})
 
 	t.Run("random", func(t *testing.T) {
-		SetThreshold(100)
+		SetThreshold(256)
 		defer func() {
 			SetThreshold(1024)
 		}()
 
-		const arraySize = 1024 * 4
+		const arraySize = 4096
 
 		typeInfo := testTypeInfo{42}
 
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
 		array, err := NewArray(
 			newTestPersistentStorage(t),
-			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			address,
 			typeInfo)
 		require.NoError(t, err)
 
@@ -3043,15 +3244,17 @@ func TestArrayBatchAppend(t *testing.T) {
 
 		require.Equal(t, uint64(arraySize), array.Count())
 		require.Equal(t, typeInfo, array.Type())
+		require.Equal(t, address, array.Address())
 
 		iter, err := array.Iterator()
 		require.NoError(t, err)
 
 		storage := newTestPersistentStorage(t)
 
+		address = Address{2, 3, 4, 5, 6, 7, 8, 9}
 		copied, err := NewArrayFromBatchData(
 			storage,
-			Address{2, 3, 4, 5, 6, 7, 8, 9},
+			address,
 			array.Type(),
 			func() (Value, error) {
 				return iter.Next()
@@ -3060,6 +3263,7 @@ func TestArrayBatchAppend(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(arraySize), copied.Count())
 		require.Equal(t, typeInfo, copied.Type())
+		require.Equal(t, address, copied.Address())
 		require.NotEqual(t, array.StorageID(), copied.StorageID())
 
 		// Get copied array's element to test tree traversal.
@@ -3077,7 +3281,6 @@ func TestArrayBatchAppend(t *testing.T) {
 		i := 0
 		err = copied.Iterate(func(v Value) (bool, error) {
 			require.Equal(t, values[i], v)
-
 			i++
 			return true, nil
 		})
@@ -3086,13 +3289,101 @@ func TestArrayBatchAppend(t *testing.T) {
 
 		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
 		if err != nil {
-			PrintArray(array)
+			PrintArray(copied)
 		}
 		require.NoError(t, err)
 
-		err = validArraySerialization(array, storage)
+		err = validArraySerialization(copied, storage)
 		if err != nil {
-			PrintArray(array)
+			PrintArray(copied)
+		}
+		require.NoError(t, err)
+	})
+
+	t.Run("data slab too large", func(t *testing.T) {
+
+		SetThreshold(100)
+		defer func() {
+			SetThreshold(1024)
+		}()
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(
+			newTestPersistentStorage(t),
+			address,
+			typeInfo)
+		require.NoError(t, err)
+
+		var values []Value
+		var v Value
+
+		v = NewStringValue(randStr(26))
+		values = append(values, v)
+		err = array.Append(v)
+		require.NoError(t, err)
+
+		v = NewStringValue(randStr(int(MaxInlineElementSize - 2)))
+		values = append(values, v)
+		err = array.Append(v)
+		require.NoError(t, err)
+
+		v = NewStringValue(randStr(int(MaxInlineElementSize - 2)))
+		values = append(values, v)
+		err = array.Append(v)
+		require.NoError(t, err)
+
+		iter, err := array.Iterator()
+		require.NoError(t, err)
+
+		storage := newTestPersistentStorage(t)
+
+		address = Address{2, 3, 4, 5, 6, 7, 8, 9}
+		copied, err := NewArrayFromBatchData(
+			storage,
+			address,
+			array.Type(),
+			func() (Value, error) {
+				return iter.Next()
+			})
+
+		require.NoError(t, err)
+		require.NotEqual(t, array.StorageID(), copied.StorageID())
+		require.Equal(t, array.Count(), copied.Count())
+		require.Equal(t, typeInfo, copied.Type())
+		require.Equal(t, address, copied.Address())
+
+		// Get copied array's element to test tree traversal.
+		for i := uint64(0); i < copied.Count(); i++ {
+			storable, err := copied.Get(i)
+			require.NoError(t, err)
+
+			v, err := storable.StoredValue(storage)
+			require.NoError(t, err)
+
+			require.Equal(t, values[i], v)
+		}
+
+		// Iterate through copied array to test data slab's next
+		i := uint64(0)
+		err = copied.Iterate(func(v Value) (bool, error) {
+			require.Equal(t, values[i], v)
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, array.Count(), i)
+
+		err = ValidArray(copied, typeInfo, typeInfoComparator, hashInputProvider)
+		if err != nil {
+			PrintArray(copied)
+		}
+		require.NoError(t, err)
+
+		err = validArraySerialization(copied, storage)
+		if err != nil {
+			PrintArray(copied)
 		}
 		require.NoError(t, err)
 	})
@@ -3109,4 +3400,74 @@ func validArraySerialization(array *Array, storage *PersistentSlabStorage) error
 			return reflect.DeepEqual(a, b)
 		},
 	)
+}
+
+func TestArrayNestedStorables(t *testing.T) {
+
+	t.Parallel()
+
+	typeInfo := testTypeInfo{42}
+
+	const arraySize = 1024 * 4
+
+	storage := newTestBasicStorage(t)
+
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	for i := uint64(0); i < arraySize; i++ {
+
+		s := strings.Repeat("a", int(i))
+		v := SomeValue{Value: NewStringValue(s)}
+
+		err := array.Append(v)
+		require.NoError(t, err)
+	}
+
+	for i := uint64(0); i < arraySize; i++ {
+		e, err := array.Get(i)
+		require.NoError(t, err)
+
+		v, err := e.StoredValue(storage)
+		require.NoError(t, err)
+
+		someValue, ok := v.(SomeValue)
+		require.True(t, ok)
+
+		s, ok := someValue.Value.(StringValue)
+		require.True(t, ok)
+
+		require.Equal(t, strings.Repeat("a", int(i)), s.str)
+	}
+
+	require.Equal(t, typeInfo, array.Type())
+
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
+	err = ValidArraySerialization(
+		array,
+		storage.cborDecMode,
+		storage.cborEncMode,
+		storage.DecodeStorable,
+		storage.DecodeTypeInfo,
+		func(a, b Storable) bool {
+			return reflect.DeepEqual(a, b)
+		},
+	)
+	if err != nil {
+		PrintArray(array)
+	}
+	require.NoError(t, err)
+
+	_, err = CheckStorageHealth(storage, 1)
+	if err != nil {
+		fmt.Printf("CheckStorageHealth %s\n", err)
+	}
+	require.NoError(t, err)
 }

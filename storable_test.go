@@ -34,12 +34,21 @@ const (
 	cborTagUInt16Value = 162
 	cborTagUInt32Value = 163
 	cborTagUInt64Value = 164
+	cborTagSomeValue   = 165
 )
+
+type HashableValue interface {
+	Value
+	HashInput(scratch []byte) ([]byte, error)
+}
 
 type Uint8Value uint8
 
 var _ Value = Uint8Value(0)
 var _ Storable = Uint8Value(0)
+var _ HashableValue = Uint8Value(0)
+
+func (v Uint8Value) ChildStorables() []Storable { return nil }
 
 func (v Uint8Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -65,7 +74,7 @@ func (v Uint8Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint8(uint8(v))
 }
 
-func (v Uint8Value) getHashInput(scratch []byte) ([]byte, error) {
+func (v Uint8Value) HashInput(scratch []byte) ([]byte, error) {
 
 	const cborTypePositiveInt = 0x00
 
@@ -104,6 +113,9 @@ type Uint16Value uint16
 
 var _ Value = Uint16Value(0)
 var _ Storable = Uint16Value(0)
+var _ HashableValue = Uint16Value(0)
+
+func (v Uint16Value) ChildStorables() []Storable { return nil }
 
 func (v Uint16Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -124,7 +136,7 @@ func (v Uint16Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint16(uint16(v))
 }
 
-func (v Uint16Value) getHashInput(scratch []byte) ([]byte, error) {
+func (v Uint16Value) HashInput(scratch []byte) ([]byte, error) {
 	const cborTypePositiveInt = 0x00
 
 	buf := scratch
@@ -168,6 +180,9 @@ type Uint32Value uint32
 
 var _ Value = Uint32Value(0)
 var _ Storable = Uint32Value(0)
+var _ HashableValue = Uint32Value(0)
+
+func (v Uint32Value) ChildStorables() []Storable { return nil }
 
 func (v Uint32Value) DeepCopy(_ SlabStorage, _ Address) (Value, error) {
 	return v, nil
@@ -197,7 +212,7 @@ func (v Uint32Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint32(uint32(v))
 }
 
-func (v Uint32Value) getHashInput(scratch []byte) ([]byte, error) {
+func (v Uint32Value) HashInput(scratch []byte) ([]byte, error) {
 
 	const cborTypePositiveInt = 0x00
 
@@ -248,6 +263,9 @@ type Uint64Value uint64
 
 var _ Value = Uint64Value(0)
 var _ Storable = Uint64Value(0)
+var _ HashableValue = Uint64Value(0)
+
+func (v Uint64Value) ChildStorables() []Storable { return nil }
 
 func (v Uint64Value) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -273,7 +291,7 @@ func (v Uint64Value) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeUint64(uint64(v))
 }
 
-func (v Uint64Value) getHashInput(scratch []byte) ([]byte, error) {
+func (v Uint64Value) HashInput(scratch []byte) ([]byte, error) {
 	const cborTypePositiveInt = 0x00
 
 	buf := scratch
@@ -330,13 +348,16 @@ type StringValue struct {
 	size uint32
 }
 
-var _ Value = &StringValue{}
-var _ Storable = &StringValue{}
+var _ Value = StringValue{}
+var _ Storable = StringValue{}
+var _ HashableValue = StringValue{}
 
 func NewStringValue(s string) StringValue {
 	size := GetUintCBORSize(uint64(len(s))) + uint32(len(s))
 	return StringValue{str: s, size: size}
 }
+
+func (v StringValue) ChildStorables() []Storable { return nil }
 
 func (v StringValue) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
@@ -373,7 +394,7 @@ func (v StringValue) Encode(enc *Encoder) error {
 	return enc.CBOR.EncodeString(v.str)
 }
 
-func (v StringValue) getHashInput(scratch []byte) ([]byte, error) {
+func (v StringValue) HashInput(scratch []byte) ([]byte, error) {
 
 	const cborTypeTextString = 0x60
 
@@ -431,7 +452,7 @@ func (v StringValue) KeyString() string {
 	return v.str
 }
 
-func decodeStorable(dec *cbor.StreamDecoder, _ StorageID) (Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, id StorageID) (Storable, error) {
 	t, err := dec.NextType()
 	if err != nil {
 		return nil, err
@@ -491,6 +512,13 @@ func decodeStorable(dec *cbor.StreamDecoder, _ StorageID) (Storable, error) {
 				return nil, err
 			}
 			return Uint64Value(n), nil
+
+		case cborTagSomeValue:
+			storable, err := decodeStorable(dec, id)
+			if err != nil {
+				return nil, err
+			}
+			return SomeStorable{Storable: storable}, nil
 
 		default:
 			return nil, fmt.Errorf("invalid tag number %d", tagNumber)
@@ -557,29 +585,109 @@ func compare(storage SlabStorage, value Value, storable Storable) (bool, error) 
 		}
 
 		return false, nil
+
+	case SomeValue:
+		other, ok := storable.(SomeStorable)
+		if !ok {
+			return false, nil
+		}
+
+		return compare(storage, v.Value, other.Storable)
 	}
 
 	return false, fmt.Errorf("value %T not supported for comparison", value)
 }
 
 func hashInputProvider(value Value, buffer []byte) ([]byte, error) {
-	switch v := value.(type) {
-
-	case Uint8Value:
-		return v.getHashInput(buffer)
-
-	case Uint16Value:
-		return v.getHashInput(buffer)
-
-	case Uint32Value:
-		return v.getHashInput(buffer)
-
-	case Uint64Value:
-		return v.getHashInput(buffer)
-
-	case StringValue:
-		return v.getHashInput(buffer)
+	if hashable, ok := value.(HashableValue); ok {
+		return hashable.HashInput(buffer)
 	}
 
-	return nil, fmt.Errorf("value %T not supported for hash input", value)
+	return nil, fmt.Errorf("value %T doesn't implement HashableValue interface", value)
+}
+
+type SomeValue struct {
+	Value Value
+}
+
+var _ Value = SomeValue{}
+var _ HashableValue = SomeValue{}
+
+func (v SomeValue) Storable(storage SlabStorage, address Address, maxSize uint64) (Storable, error) {
+
+	valueStorable, err := v.Value.Storable(
+		storage,
+		address,
+		maxSize-2,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return SomeStorable{
+		Storable: valueStorable,
+	}, nil
+}
+
+func (v SomeValue) HashInput(scratch []byte) ([]byte, error) {
+
+	wv, ok := v.Value.(HashableValue)
+	if !ok {
+		return nil, fmt.Errorf("failed to hash wrapped value: %s", v.Value)
+	}
+
+	b, err := wv.HashInput(scratch)
+	if err != nil {
+		return nil, err
+	}
+
+	hi := make([]byte, len(b)+2)
+	hi[0] = 0xd8
+	hi[1] = cborTagSomeValue
+	copy(hi[2:], b)
+
+	return hi, nil
+}
+
+func (v SomeValue) String() string {
+	return fmt.Sprintf("%s", v.Value)
+}
+
+type SomeStorable struct {
+	Storable Storable
+}
+
+var _ Storable = SomeStorable{}
+
+func (v SomeStorable) ByteSize() uint32 {
+	// tag number (2 bytes) + encoded content
+	return 2 + v.Storable.ByteSize()
+}
+
+func (v SomeStorable) Encode(enc *Encoder) error {
+	err := enc.CBOR.EncodeRawBytes([]byte{
+		// tag number
+		0xd8, cborTagSomeValue,
+	})
+	if err != nil {
+		return err
+	}
+	return v.Storable.Encode(enc)
+}
+
+func (v SomeStorable) ChildStorables() []Storable {
+	return []Storable{v.Storable}
+}
+
+func (v SomeStorable) StoredValue(storage SlabStorage) (Value, error) {
+	wv, err := v.Storable.StoredValue(storage)
+	if err != nil {
+		return nil, err
+	}
+
+	return SomeValue{wv}, nil
+}
+
+func (v SomeStorable) String() string {
+	return fmt.Sprintf("%s", v.Storable)
 }

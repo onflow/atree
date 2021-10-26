@@ -447,6 +447,12 @@ func (a *ArrayDataSlab) hasPointer() bool {
 	return false
 }
 
+func (a *ArrayDataSlab) ChildStorables() []Storable {
+	s := make([]Storable, len(a.elements))
+	copy(s, a.elements)
+	return s
+}
+
 func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
 		return nil, NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
@@ -989,6 +995,17 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 	}
 
 	return nil
+}
+
+func (a *ArrayMetaDataSlab) ChildStorables() []Storable {
+
+	childIDs := make([]Storable, len(a.childrenHeaders))
+
+	for i, h := range a.childrenHeaders {
+		childIDs[i] = StorageIDStorable(h.id)
+	}
+
+	return childIDs
 }
 
 // TODO: improve naming
@@ -2132,13 +2149,18 @@ func (a *Array) string(meta *ArrayMetaDataSlab) string {
 }
 
 func getArraySlab(storage SlabStorage, id StorageID) (ArraySlab, error) {
-	slab, _, err := storage.Retrieve(id)
-
-	if arraySlab, ok := slab.(ArraySlab); ok {
-		return arraySlab, nil
+	slab, found, err := storage.Retrieve(id)
+	if err != nil {
+		return nil, err
 	}
-
-	return nil, NewSlabNotFoundErrorf(id, "getArraySlab failed: %w", err)
+	if !found {
+		return nil, NewSlabNotFoundErrorf(id, "array slab not found")
+	}
+	arraySlab, ok := slab.(ArraySlab)
+	if !ok {
+		return nil, NewSlabDataErrorf("slab %d is not ArraySlab", id)
+	}
+	return arraySlab, nil
 }
 
 func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) {
@@ -2249,11 +2271,6 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 	// Append last data slab to slabs
 	slabs = append(slabs, dataSlab)
 
-	if len(slabs) == 1 {
-		// root is data slab, adjust its size
-		dataSlab.header.size = dataSlab.header.size - arrayDataSlabPrefixSize + arrayRootDataSlabPrefixSize
-	}
-
 	for len(slabs) > 1 {
 
 		lastSlab := slabs[len(slabs)-1]
@@ -2287,6 +2304,12 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 
 		// All slabs are within target size range.
 
+		if len(slabs) == 1 {
+			// This happens when there were exactly two slabs and
+			// last slab has merged with the first slab.
+			break
+		}
+
 		// Store all slabs
 		for _, slab := range slabs {
 			err = storage.Store(slab.ID(), slab)
@@ -2305,6 +2328,15 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 
 	// found root slab
 	root := slabs[0]
+
+	// root is data slab, adjust its size
+	if root.IsData() {
+		dataSlab, ok := root.(*ArrayDataSlab)
+		if !ok {
+			return nil, NewSlabDataError(fmt.Errorf("slab isn't ArrayDataSlab"))
+		}
+		dataSlab.header.size = dataSlab.header.size - arrayDataSlabPrefixSize + arrayRootDataSlabPrefixSize
+	}
 
 	extraData := &ArrayExtraData{TypeInfo: typeInfo}
 

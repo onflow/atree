@@ -19,11 +19,14 @@
 package atree
 
 import (
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/fxamacker/circlehash"
@@ -3365,7 +3368,30 @@ func (m *OrderedMap) Get(comparator ValueComparator, hip HashInputProvider, key 
 	return m.root.Get(m.Storage, keyDigest, level, hkey, comparator, key)
 }
 
-func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key Value, value Value) (Storable, error) {
+var file *os.File
+
+func init() {
+	var err error
+	file, err = os.Create(fmt.Sprintf("hashinput_%d.csv", int32(time.Now().Unix())))
+	if err != nil {
+		panic(err)
+	}
+}
+
+func CloseHashInputLog() {
+	if file == nil {
+		return
+	}
+
+	err := file.Close()
+	if err != nil {
+		panic(err)
+	}
+}
+
+var n = 0
+
+func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key Value, value Value) (s Storable, err error) {
 
 	keyDigest, err := m.digesterBuilder.Digest(hip, key)
 	if err != nil {
@@ -3379,6 +3405,42 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 	if err != nil {
 		return nil, err
 	}
+
+	defer func() {
+		if err != nil {
+			return
+		}
+
+		var scratch [32]byte
+		msg, err := hip(key, scratch[:])
+		if err != nil {
+			panic(err)
+		}
+
+		address := m.StorageID().Address
+		index := m.StorageID().Index
+		hashinput := base64.StdEncoding.EncodeToString(msg)
+
+		file.WriteString(
+			fmt.Sprintf("%x,%x,%x,%x,%s\n",
+				address[:],
+				index[:],
+				m.Seed(),
+				hkey,
+				hashinput,
+			),
+		)
+		if n < 10 {
+			fmt.Println(fmt.Sprintf("%x,%x,%x,%x,%s\n",
+				address[:],
+				index[:],
+				m.Seed(),
+				hkey,
+				hashinput,
+			))
+			n++
+		}
+	}()
 
 	existingValue, err := m.root.Set(m.Storage, m.digesterBuilder, keyDigest, level, hkey, comparator, hip, key, value)
 	if err != nil {

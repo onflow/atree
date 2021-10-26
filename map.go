@@ -3326,12 +3326,6 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 		return nil, NewStorageError(err)
 	}
 
-	sIDBytes := make([]byte, storageIDSize)
-	_, err = sID.ToRawBytes(sIDBytes)
-	if err != nil {
-		return nil, NewStorageError(err)
-	}
-
 	// Create seed for non-crypto hash algos (CircleHash64, SipHash) to use.
 	// Ideally, seed should be a nondeterministic 128-bit secret because
 	// these hashes rely on its key being secret for its security.  Since
@@ -3340,7 +3334,11 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 	// a 128-bit secret key. And for performance reasons, we first use
 	// noncrypto hash algos and fall back to crypto algo after collisions.
 	// This is for creating the seed, so the seed used here is OK to be 0.
-	k0 := circlehash.Hash64(sIDBytes, uint64(0))
+	// LittleEndian is needed for compatibility (same digest from []byte and
+	// two uint64).
+	a := binary.LittleEndian.Uint64(sID.Address[:])
+	b := binary.LittleEndian.Uint64(sID.Index[:])
+	k0 := circlehash.Hash64Uint64x2(a, b, uint64(0))
 
 	// To save storage space, only store 64-bits of the seed.
 	// Use a 64-bit const for the unstored half to create 128-bit seed.

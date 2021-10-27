@@ -19,10 +19,12 @@
 package atree
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -110,6 +112,14 @@ func (id StorageID) Valid() error {
 		return ErrStorageIndex
 	}
 	return nil
+}
+
+func (id StorageID) Compare(other StorageID) int {
+	result := bytes.Compare(id.Address[:], other.Address[:])
+	if result == 0 {
+		return bytes.Compare(id.Index[:], other.Index[:])
+	}
+	return result
 }
 
 type BaseStorageUsageReporter interface {
@@ -254,26 +264,31 @@ func NewLedgerBaseStorage(ledger Ledger) *LedgerBaseStorage {
 }
 
 func (s *LedgerBaseStorage) Retrieve(id StorageID) ([]byte, bool, error) {
-	prefixedKey := []byte(LedgerBaseStorageSlabPrefix + string(id.Index[:]))
-	v, err := s.ledger.GetValue(id.Address[:], prefixedKey)
+	v, err := s.ledger.GetValue(id.Address[:], SlabIndexToLedgerKey(id.Index))
 	s.bytesRetrieved += len(v)
 	return v, len(v) > 0, err
 }
 
 func (s *LedgerBaseStorage) Store(id StorageID, data []byte) error {
 	s.bytesStored += len(data)
-	prefixedKey := []byte(LedgerBaseStorageSlabPrefix + string(id.Index[:]))
-	return s.ledger.SetValue(id.Address[:], prefixedKey, data)
+	return s.ledger.SetValue(id.Address[:], SlabIndexToLedgerKey(id.Index), data)
 }
 
 func (s *LedgerBaseStorage) Remove(id StorageID) error {
-	prefixedKey := []byte(LedgerBaseStorageSlabPrefix + string(id.Index[:]))
-	return s.ledger.SetValue(id.Address[:], prefixedKey, nil)
+	return s.ledger.SetValue(id.Address[:], SlabIndexToLedgerKey(id.Index), nil)
 }
 
 func (s *LedgerBaseStorage) GenerateStorageID(address Address) (StorageID, error) {
 	idx, err := s.ledger.AllocateStorageIndex(address[:])
 	return NewStorageID(address, idx), err
+}
+
+func SlabIndexToLedgerKey(ind StorageIndex) []byte {
+	return []byte(LedgerBaseStorageSlabPrefix + string(ind[:]))
+}
+
+func LedgerKeyIsSlabKey(key string) bool {
+	return strings.HasPrefix(key, LedgerBaseStorageSlabPrefix)
 }
 
 func (s *LedgerBaseStorage) BytesRetrieved() int {
@@ -314,13 +329,15 @@ func (s *LedgerBaseStorage) ResetReporter() {
 	s.bytesRetrieved = 0
 }
 
+type SlabIterator func() (StorageID, Slab)
+
 type SlabStorage interface {
 	Store(StorageID, Slab) error
 	Retrieve(StorageID) (Slab, bool, error)
 	Remove(StorageID) error
 	GenerateStorageID(address Address) (StorageID, error)
-
 	Count() int
+	SlabIterator() (SlabIterator, error)
 }
 
 type BasicSlabStorage struct {
@@ -412,97 +429,162 @@ func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
 	return nil
 }
 
-// CheckHealth checks for the health of slab storage
-// it traverses the slabs and checks these factors
-// - all non-root slabs only has a single parent reference (no double referencing)
-// - every child of a parent shares the same ownership (childStorageID.Address == parentStorageID.Address)
-// - number of root slabs are equal to the expected number (skipped if expectedNumberOfRootSlabs is -1)
-// This should be used for testing puporses only, as it might be slow to process
-func (s *BasicSlabStorage) CheckHealth(expectedNumberOfRootSlabs int) error {
-
-	parentOf := make(map[StorageID]StorageID)
-	leafs := make([]StorageID, 0)
+func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
+	var slabs []struct {
+		StorageID
+		Slab
+	}
 
 	for id, slab := range s.Slabs {
+		slabs = append(slabs, struct {
+			StorageID
+			Slab
+		}{
+			StorageID: id,
+			Slab:      slab,
+		})
+	}
 
-		switch v := slab.(type) {
+	var i int
 
-		case MetaDataSlab:
+	return func() (StorageID, Slab) {
+		if i >= len(slabs) {
+			return StorageIDUndefined, nil
+		}
+		slabEntry := slabs[i]
+		i++
+		return slabEntry.StorageID, slabEntry.Slab
+	}, nil
+}
 
-			childIDs := v.ChildIDs()
-			for _, cid := range childIDs {
-				if _, found := parentOf[cid]; found {
-					return fmt.Errorf("two parents are captured for the slab %s", cid)
-				}
-				parentOf[cid] = id
-			}
+// CheckStorageHealth checks for the health of slab storage.
+// It traverses the slabs and checks these factors:
+// - All non-root slabs only has a single parent reference (no double referencing)
+// - Every child of a parent shares the same ownership (childStorageID.Address == parentStorageID.Address)
+// - The number of root slabs are equal to the expected number (skipped if expectedNumberOfRootSlabs is -1)
+// This should be used for testing purposes only, as it might be slow to process
+func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map[StorageID]struct{}, error) {
+	parentOf := make(map[StorageID]StorageID)
+	leaves := make([]StorageID, 0)
 
-		default:
-			// Data slabs can be *StorableSlab, *ArrayDataSlab, and *MapDataSlab.
+	slabIterator, err := storage.SlabIterator()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create slab iterator: %w", err)
+	}
 
-			atLeastOneExternalSlab := false
-			childStorables := v.ChildStorables()
+	slabs := map[StorageID]Slab{}
 
-			for len(childStorables) > 0 {
+	for {
+		id, slab := slabIterator()
+		if id == StorageIDUndefined {
+			break
+		}
 
-				var next []Storable
+		if _, ok := slabs[id]; ok {
+			return nil, fmt.Errorf("duplicate slab: %s", id)
+		}
+		slabs[id] = slab
 
-				for _, s := range childStorables {
+		atLeastOneExternalSlab := false
+		childStorables := slab.ChildStorables()
 
-					if sids, ok := s.(StorageIDStorable); ok {
-						sid := StorageID(sids)
-						if _, found := parentOf[sid]; found {
-							return fmt.Errorf("two parents are captured for the slab %s", sid)
-						}
-						parentOf[sid] = id
-						atLeastOneExternalSlab = true
+		for len(childStorables) > 0 {
+
+			var next []Storable
+
+			for _, s := range childStorables {
+
+				if sids, ok := s.(StorageIDStorable); ok {
+					sid := StorageID(sids)
+					if _, found := parentOf[sid]; found {
+						return nil, fmt.Errorf("two parents are captured for the slab %s", sid)
 					}
-
-					next = append(next, s.ChildStorables()...)
+					parentOf[sid] = id
+					atLeastOneExternalSlab = true
 				}
 
-				childStorables = next
+				next = append(next, s.ChildStorables()...)
 			}
 
-			if !atLeastOneExternalSlab {
-				leafs = append(leafs, id)
-			}
+			childStorables = next
+		}
+
+		if !atLeastOneExternalSlab {
+			leaves = append(leaves, id)
 		}
 	}
 
-	rootsMap := make(map[StorageID]bool)
-	visited := make(map[StorageID]bool)
+	rootsMap := make(map[StorageID]struct{})
+	visited := make(map[StorageID]struct{})
 	var id StorageID
-	for _, leaf := range leafs {
+	for _, leaf := range leaves {
 		id = leaf
-		if visited[id] {
-			return fmt.Errorf("atleast two references found to the leaf slab %s", id)
+		if _, ok := visited[id]; ok {
+			return nil, fmt.Errorf("atleast two references found to the leaf slab %s", id)
 		}
-		visited[id] = true
+		visited[id] = struct{}{}
 		for {
-			p, found := parentOf[id]
+			parentID, found := parentOf[id]
 			if !found {
 				// we reach the root
-				rootsMap[id] = true
+				rootsMap[id] = struct{}{}
 				break
 			}
-			visited[p] = true
-			if s.Slabs[id].ID().Address != s.Slabs[p].ID().Address {
-				return fmt.Errorf("parent and child are not owned by the same account child.owner: %s, parent.owner: %s", s.Slabs[id].ID().Address, s.Slabs[p].ID().Address)
+			visited[parentID] = struct{}{}
+
+			childSlab, ok, err := storage.Retrieve(id)
+			if !ok || err != nil {
+				return nil, fmt.Errorf("failed to get child slab: %w", err)
 			}
-			id = p
+
+			parentSlab, ok, err := storage.Retrieve(parentID)
+			if !ok || err != nil {
+				return nil, fmt.Errorf("failed to get parent slab: %w", err)
+			}
+
+			childOwner := childSlab.ID().Address
+			parentOwner := parentSlab.ID().Address
+
+			if childOwner != parentOwner {
+				return nil, fmt.Errorf(
+					"parent and child are not owned by the same account: child.owner: %s, parent.owner: %s",
+					childOwner,
+					parentOwner,
+				)
+			}
+			id = parentID
 		}
 	}
 
-	if len(visited) != len(s.Slabs) {
-		return fmt.Errorf("an slab was not reachable from leafs - broken connection somewhere - number of slabs:%d, visited during traverse: %d", len(s.Slabs), len(visited))
+	if len(visited) != len(slabs) {
+
+		var unreachableID StorageID
+		var unreachableSlab Slab
+
+		for id, slab := range slabs {
+			if _, ok := visited[id]; !ok {
+				unreachableID = id
+				unreachableSlab = slab
+				break
+			}
+		}
+
+		return nil, fmt.Errorf(
+			"slab was not reachable from leaves: %s: %s",
+			unreachableID,
+			unreachableSlab,
+		)
 	}
 
 	if (expectedNumberOfRootSlabs >= 0) && (len(rootsMap) != expectedNumberOfRootSlabs) {
-		return fmt.Errorf("number of root slabs doesn't match expected: %d, got: %d", expectedNumberOfRootSlabs, len(rootsMap))
+		return nil, fmt.Errorf(
+			"number of root slabs doesn't match: expected %d, got %d",
+			expectedNumberOfRootSlabs,
+			len(rootsMap),
+		)
 	}
 
-	return nil
+	return rootsMap, nil
 }
 
 type PersistentSlabStorage struct {
@@ -515,6 +597,126 @@ type PersistentSlabStorage struct {
 	cborEncMode      cbor.EncMode
 	cborDecMode      cbor.DecMode
 	autoCommit       bool // flag to call commit after each operation
+}
+
+func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
+
+	var slabs []struct {
+		StorageID
+		Slab
+	}
+
+	appendChildStorables := func(slab Slab) error {
+		childStorables := slab.ChildStorables()
+
+		for len(childStorables) > 0 {
+
+			var nextChildStorables []Storable
+
+			for _, childStorable := range childStorables {
+
+				storageIDStorable, ok := childStorable.(StorageIDStorable)
+				if !ok {
+					continue
+				}
+
+				id := StorageID(storageIDStorable)
+
+				if _, ok := s.deltas[id]; ok {
+					continue
+				}
+
+				if _, ok := s.cache[id]; ok {
+					continue
+				}
+
+				var err error
+				slab, ok, err = s.RetrieveIgnoringDeltas(id)
+				if !ok {
+					return fmt.Errorf("missing slab: %s", id)
+				}
+				if err != nil {
+					return err
+				}
+
+				slabs = append(slabs, struct {
+					StorageID
+					Slab
+				}{
+					StorageID: id,
+					Slab:      slab,
+				})
+
+				nextChildStorables = append(
+					nextChildStorables,
+					slab.ChildStorables()...,
+				)
+			}
+
+			childStorables = nextChildStorables
+		}
+
+		return nil
+	}
+
+	appendSlab := func(id StorageID, slab Slab) error {
+		slabs = append(slabs, struct {
+			StorageID
+			Slab
+		}{
+			StorageID: id,
+			Slab:      slab,
+		})
+
+		return appendChildStorables(slab)
+	}
+
+	for id, slab := range s.deltas {
+		if slab == nil {
+			continue
+		}
+
+		err := appendSlab(id, slab)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Create a temporary copy of all the cached IDs,
+	// as s.cache will get mutated inside the for-loop
+
+	var cached []StorageID
+	for id := range s.cache {
+		cached = append(cached, id)
+	}
+
+	for _, id := range cached {
+		slab := s.cache[id]
+
+		if slab == nil {
+			continue
+		}
+
+		if _, ok := s.deltas[id]; ok {
+			continue
+		}
+
+		err := appendSlab(id, slab)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var i int
+
+	return func() (StorageID, Slab) {
+		if i >= len(slabs) {
+			return StorageIDUndefined, nil
+		}
+		slabEntry := slabs[i]
+		i++
+		return slabEntry.StorageID, slabEntry.Slab
+	}, nil
 }
 
 var _ SlabStorage = &PersistentSlabStorage{}
@@ -599,6 +801,11 @@ func (s *PersistentSlabStorage) Commit() error {
 			if err != nil {
 				return err
 			}
+			// Deleted slabs are removed from deltas and added to read cache so that:
+			// 1. next read is from in-memory read cache
+			// 2. deleted slabs are not re-committed in next commit
+			s.cache[id] = nil
+			delete(s.deltas, id)
 			continue
 		}
 
@@ -616,6 +823,10 @@ func (s *PersistentSlabStorage) Commit() error {
 
 		// add to read cache
 		s.cache[id] = slab
+		// It's safe to remove slab from deltas because
+		// iteration is on non-temp slabs and temp slabs
+		// are still in deltas.
+		delete(s.deltas, id)
 	}
 
 	// Do NOT reset deltas because slabs with empty address are not saved.
@@ -697,6 +908,11 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 			if err != nil {
 				return err
 			}
+			// Deleted slabs are removed from deltas and added to read cache so that:
+			// 1. next read is from in-memory read cache
+			// 2. deleted slabs are not re-committed in next commit
+			s.cache[id] = nil
+			delete(s.deltas, id)
 			continue
 		}
 
@@ -706,10 +922,11 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 			return err
 		}
 
-		// TODO: we might skip this since cadence
-		// never uses the storage after commit
-		// add to read cache
 		s.cache[id] = s.deltas[id]
+		// It's safe to remove slab from deltas because
+		// iteration is on non-temp slabs and temp slabs
+		// are still in deltas.
+		delete(s.deltas, id)
 	}
 
 	// Do NOT reset deltas because slabs with empty address are not saved.
@@ -725,17 +942,11 @@ func (s *PersistentSlabStorage) DropCache() {
 	s.cache = make(map[StorageID]Slab)
 }
 
-func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
-	var slab Slab
-
-	// check deltas first
-	if slab, ok := s.deltas[id]; ok {
-		return slab, slab != nil, nil
-	}
+func (s *PersistentSlabStorage) RetrieveIgnoringDeltas(id StorageID) (Slab, bool, error) {
 
 	// check the read cache next
 	if slab, ok := s.cache[id]; ok {
-		return slab, true, nil
+		return slab, slab != nil, nil
 	}
 
 	// fetch from base storage last
@@ -743,12 +954,23 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 	if !ok || err != nil {
 		return nil, ok, err
 	}
-	slab, err = DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
+
+	slab, err := DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
 	if err == nil {
 		// save decoded slab to cache
 		s.cache[id] = slab
 	}
+
 	return slab, ok, err
+}
+
+func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
+	// check deltas first
+	if slab, ok := s.deltas[id]; ok {
+		return slab, slab != nil, nil
+	}
+
+	return s.RetrieveIgnoringDeltas(id)
 }
 
 func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {

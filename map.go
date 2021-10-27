@@ -247,7 +247,6 @@ type MapMetaDataSlab struct {
 }
 
 var _ MapSlab = &MapMetaDataSlab{}
-var _ MetaDataSlab = &MapMetaDataSlab{}
 
 type MapSlab interface {
 	Slab
@@ -883,14 +882,17 @@ func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b Dig
 // TODO: updated element can be inlineCollisionGroup if size < MaxInlineElementSize.
 func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, level int, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, element, error) {
 
-	slab, _, err := storage.Retrieve(e.id)
+	slab, found, err := storage.Retrieve(e.id)
 	if err != nil {
 		return nil, nil, nil, NewSlabNotFoundErrorf(e.id, "get map slab failed: %w", err)
+	}
+	if !found {
+		return nil, nil, nil, NewSlabNotFoundErrorf(e.id, "map slab not found")
 	}
 
 	dataSlab, ok := slab.(*MapDataSlab)
 	if !ok {
-		return nil, nil, nil, NewSlabNotFoundErrorf(e.id, "get map data slab failed: got %T", slab)
+		return nil, nil, nil, NewSlabDataErrorf("slab %d is not MapDataSlab", e.id)
 	}
 
 	// Adjust level and hkey for collision group
@@ -2648,14 +2650,10 @@ func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 }
 
 func (m *MapMetaDataSlab) ChildStorables() []Storable {
-	return nil
-}
-
-func (m *MapMetaDataSlab) ChildIDs() []StorageID {
-	childIDs := make([]StorageID, len(m.childrenHeaders))
+	childIDs := make([]Storable, len(m.childrenHeaders))
 
 	for i, h := range m.childrenHeaders {
-		childIDs[i] = h.id
+		childIDs[i] = StorageIDStorable(h.id)
 	}
 
 	return childIDs
@@ -3328,12 +3326,6 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 		return nil, NewStorageError(err)
 	}
 
-	sIDBytes := make([]byte, storageIDSize)
-	_, err = sID.ToRawBytes(sIDBytes)
-	if err != nil {
-		return nil, NewStorageError(err)
-	}
-
 	// Create seed for non-crypto hash algos (CircleHash64, SipHash) to use.
 	// Ideally, seed should be a nondeterministic 128-bit secret because
 	// these hashes rely on its key being secret for its security.  Since
@@ -3342,7 +3334,11 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 	// a 128-bit secret key. And for performance reasons, we first use
 	// noncrypto hash algos and fall back to crypto algo after collisions.
 	// This is for creating the seed, so the seed used here is OK to be 0.
-	k0 := circlehash.Hash64(sIDBytes, uint64(0))
+	// LittleEndian is needed for compatibility (same digest from []byte and
+	// two uint64).
+	a := binary.LittleEndian.Uint64(sID.Address[:])
+	b := binary.LittleEndian.Uint64(sID.Index[:])
+	k0 := circlehash.Hash64Uint64x2(a, b, uint64(0))
 
 	// To save storage space, only store 64-bits of the seed.
 	// Use a 64-bit const for the unstored half to create 128-bit seed.
@@ -3662,13 +3658,18 @@ func (m *OrderedMap) string(meta *MapMetaDataSlab) string {
 }
 
 func getMapSlab(storage SlabStorage, id StorageID) (MapSlab, error) {
-	slab, _, err := storage.Retrieve(id)
-
-	if mapSlab, ok := slab.(MapSlab); ok {
-		return mapSlab, nil
+	slab, found, err := storage.Retrieve(id)
+	if err != nil {
+		return nil, err
 	}
-
-	return nil, NewSlabNotFoundErrorf(id, "get map slab failed: %w", err)
+	if !found {
+		return nil, NewSlabNotFoundErrorf(id, "map slab not found")
+	}
+	mapSlab, ok := slab.(MapSlab)
+	if !ok {
+		return nil, NewSlabDataErrorf("slab %d is not MapSlab", id)
+	}
+	return mapSlab, nil
 }
 
 func firstMapDataSlab(storage SlabStorage, slab MapSlab) (MapSlab, error) {
@@ -4109,8 +4110,16 @@ func NewMapFromBatchData(
 
 		putDigester(digester)
 
+		elem, err := newSingleElement(storage, address, key, value)
+		if err != nil {
+			return nil, err
+		}
+
 		// Finalize data slab
-		if mapDataSlabPrefixSize+elements.Size() >= uint32(targetThreshold) {
+		currentSlabSize := mapDataSlabPrefixSize + elements.Size()
+		newElementSize := digestSize + elem.Size()
+		if currentSlabSize >= uint32(targetThreshold) ||
+			currentSlabSize+newElementSize > uint32(maxThreshold) {
 
 			// Generate storge id for next data slab
 			nextID, err := storage.GenerateStorageID(address)
@@ -4144,11 +4153,6 @@ func NewMapFromBatchData(
 			}
 		}
 
-		elem, err := newSingleElement(storage, address, key, value)
-		if err != nil {
-			return nil, err
-		}
-
 		elements.hkeys = append(elements.hkeys, hkey)
 		elements.elems = append(elements.elems, elem)
 		elements.size += digestSize + elem.Size()
@@ -4170,11 +4174,6 @@ func NewMapFromBatchData(
 
 	// Append last data slab to slabs
 	slabs = append(slabs, dataSlab)
-
-	if len(slabs) == 1 {
-		// root is data slab, adjust its size
-		dataSlab.header.size = dataSlab.header.size - mapDataSlabPrefixSize + mapRootDataSlabPrefixSize
-	}
 
 	for len(slabs) > 1 {
 
@@ -4209,6 +4208,12 @@ func NewMapFromBatchData(
 
 		// All slabs are within target size range.
 
+		if len(slabs) == 1 {
+			// This happens when there were exactly two slabs and
+			// last slab has merged with the first slab.
+			break
+		}
+
 		// Store all slabs
 		for _, slab := range slabs {
 			err = storage.Store(slab.ID(), slab)
@@ -4227,6 +4232,15 @@ func NewMapFromBatchData(
 
 	// found root slab
 	root := slabs[0]
+
+	// root is data slab, adjust its size
+	if root.IsData() {
+		dataSlab, ok := root.(*MapDataSlab)
+		if !ok {
+			return nil, NewSlabDataError(fmt.Errorf("slab isn't MapDataSlab"))
+		}
+		dataSlab.header.size = dataSlab.header.size - mapDataSlabPrefixSize + mapRootDataSlabPrefixSize
+	}
 
 	extraData := &MapExtraData{TypeInfo: typeInfo, Count: count, Seed: seed}
 

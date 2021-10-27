@@ -1929,6 +1929,106 @@ func TestArrayFromBatchData(t *testing.T) {
 		verifyArray(t, storage, typeInfo, address, copied, values)
 	})
 
+	t.Run("rebalance two data slabs", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		typeInfo := testTypeInfo{42}
+
+		array, err := NewArray(
+			newTestPersistentStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			typeInfo)
+		require.NoError(t, err)
+
+		var values []Value
+		var v Value
+
+		v = NewStringValue(strings.Repeat("a", int(MaxInlineElementSize-2)))
+		values = append(values, v)
+
+		err = array.Insert(0, v)
+		require.NoError(t, err)
+
+		for i := 0; i < 35; i++ {
+			v = Uint64Value(i)
+			values = append(values, v)
+
+			err = array.Append(v)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(36), array.Count())
+
+		iter, err := array.Iterator()
+		require.NoError(t, err)
+
+		storage := newTestPersistentStorage(t)
+		address := Address{2, 3, 4, 5, 6, 7, 8, 9}
+		copied, err := NewArrayFromBatchData(
+			storage,
+			address,
+			array.Type(),
+			func() (Value, error) {
+				return iter.Next()
+			})
+
+		require.NoError(t, err)
+		require.NotEqual(t, array.StorageID(), copied.StorageID())
+
+		verifyArray(t, storage, typeInfo, address, copied, values)
+	})
+
+	t.Run("merge two data slabs", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		typeInfo := testTypeInfo{42}
+
+		array, err := NewArray(
+			newTestPersistentStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			typeInfo)
+		require.NoError(t, err)
+
+		var values []Value
+		var v Value
+		for i := 0; i < 35; i++ {
+			v = Uint64Value(i)
+			values = append(values, v)
+			err = array.Append(v)
+			require.NoError(t, err)
+		}
+
+		v = NewStringValue(strings.Repeat("a", int(MaxInlineElementSize-2)))
+		values = append(values, nil)
+		copy(values[25+1:], values[25:])
+		values[25] = v
+
+		err = array.Insert(25, v)
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(36), array.Count())
+
+		iter, err := array.Iterator()
+		require.NoError(t, err)
+
+		storage := newTestPersistentStorage(t)
+		address := Address{2, 3, 4, 5, 6, 7, 8, 9}
+		copied, err := NewArrayFromBatchData(
+			storage,
+			address,
+			array.Type(),
+			func() (Value, error) {
+				return iter.Next()
+			})
+
+		require.NoError(t, err)
+		require.NotEqual(t, array.StorageID(), copied.StorageID())
+
+		verifyArray(t, storage, typeInfo, address, copied, values)
+	})
+
 	t.Run("random", func(t *testing.T) {
 		SetThreshold(256)
 		defer SetThreshold(1024)
@@ -1959,6 +2059,55 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		storage := newTestPersistentStorage(t)
 
+		address := Address{2, 3, 4, 5, 6, 7, 8, 9}
+		copied, err := NewArrayFromBatchData(
+			storage,
+			address,
+			array.Type(),
+			func() (Value, error) {
+				return iter.Next()
+			})
+
+		require.NoError(t, err)
+		require.NotEqual(t, array.StorageID(), copied.StorageID())
+
+		verifyArray(t, storage, typeInfo, address, copied, values)
+	})
+
+	t.Run("data slab too large", func(t *testing.T) {
+
+		SetThreshold(100)
+		defer SetThreshold(1024)
+
+		typeInfo := testTypeInfo{42}
+		array, err := NewArray(
+			newTestPersistentStorage(t),
+			Address{1, 2, 3, 4, 5, 6, 7, 8},
+			typeInfo)
+		require.NoError(t, err)
+
+		var values []Value
+		var v Value
+
+		v = NewStringValue(randStr(26))
+		values = append(values, v)
+		err = array.Append(v)
+		require.NoError(t, err)
+
+		v = NewStringValue(randStr(int(MaxInlineElementSize - 2)))
+		values = append(values, v)
+		err = array.Append(v)
+		require.NoError(t, err)
+
+		v = NewStringValue(randStr(int(MaxInlineElementSize - 2)))
+		values = append(values, v)
+		err = array.Append(v)
+		require.NoError(t, err)
+
+		iter, err := array.Iterator()
+		require.NoError(t, err)
+
+		storage := newTestPersistentStorage(t)
 		address := Address{2, 3, 4, 5, 6, 7, 8, 9}
 		copied, err := NewArrayFromBatchData(
 			storage,
@@ -2037,10 +2186,7 @@ func TestArrayNestedStorables(t *testing.T) {
 	}
 	require.NoError(t, err)
 
-	err = storage.CheckHealth(1)
-	if err != nil {
-		fmt.Printf("CheckHealth %s\n", err)
-	}
+	_, err = CheckStorageHealth(storage, 1)
 	require.NoError(t, err)
 }
 

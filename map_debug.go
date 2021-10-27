@@ -111,8 +111,13 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 			} else {
 				metaDataSlabCount++
 
-				meta := slab.(*MapMetaDataSlab)
-				nextLevelIDs = append(nextLevelIDs, meta.ChildIDs()...)
+				for _, storable := range slab.ChildStorables() {
+					id, ok := storable.(StorageIDStorable)
+					if !ok {
+						return MapStats{}, fmt.Errorf("metadata slab's child storables are not of type StorageIDStorable")
+					}
+					nextLevelIDs = append(nextLevelIDs, StorageID(id))
+				}
 			}
 		}
 

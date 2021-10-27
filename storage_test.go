@@ -34,7 +34,7 @@ func TestPersistentStorage(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	t.Run("empty", func(t *testing.T) {
+	t.Run("empty storage", func(t *testing.T) {
 		baseStorage := NewInMemBaseStorage()
 		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
@@ -53,7 +53,7 @@ func TestPersistentStorage(t *testing.T) {
 		require.False(t, found)
 	})
 
-	t.Run("TestTempAllocation", func(t *testing.T) {
+	t.Run("temp address", func(t *testing.T) {
 
 		baseStorage := NewInMemBaseStorage()
 		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
@@ -101,13 +101,12 @@ func TestPersistentStorage(t *testing.T) {
 		err = storage.Remove(permStorageID)
 		require.NoError(t, err)
 
-		err = storage.Commit()
+		// Remove slab with temp storage id
+		err = storage.Remove(tempStorageID)
 		require.NoError(t, err)
 
-		// Slab with temp storage id is still cached in storage.
-		_, found, err = storage.Retrieve(tempStorageID)
+		err = storage.Commit()
 		require.NoError(t, err)
-		require.True(t, found)
 
 		// Slab with perm storage id is removed from base storage.
 		_, found, err = baseStorage.Retrieve(permStorageID)
@@ -118,9 +117,14 @@ func TestPersistentStorage(t *testing.T) {
 		_, found, err = storage.Retrieve(permStorageID)
 		require.NoError(t, err)
 		require.False(t, found)
+
+		// Slab with temp storage id is removed from cache in storage.
+		_, found, err = storage.Retrieve(tempStorageID)
+		require.NoError(t, err)
+		require.False(t, found)
 	})
 
-	t.Run("Test commit functionality", func(t *testing.T) {
+	t.Run("commit", func(t *testing.T) {
 		numberOfAccounts := 100
 		numberOfSlabsPerAccount := 10
 
@@ -158,6 +162,9 @@ func TestPersistentStorage(t *testing.T) {
 		err = storageWithFastCommit.FastCommit(10)
 		require.NoError(t, err)
 
+		require.Equal(t, len(simpleMap), storage.Count())
+		require.Equal(t, len(simpleMap), storageWithFastCommit.Count())
+
 		// check update functionality
 		for sid, value := range simpleMap {
 			storedValue, found, err := baseStorage.Retrieve(sid)
@@ -169,6 +176,40 @@ func TestPersistentStorage(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, found)
 			require.Equal(t, value, storedValue)
+		}
+
+		// compare orders
+		require.Equal(t, baseStorage.SegTouchOrder(), baseStorage2.SegTouchOrder())
+
+		// remove all slabs from storage
+		for sid := range simpleMap {
+			err = storage.Remove(sid)
+			require.NoError(t, err)
+
+			err = storageWithFastCommit.Remove(sid)
+			require.NoError(t, err)
+		}
+
+		err = storage.Commit()
+		require.NoError(t, err)
+
+		err = storageWithFastCommit.FastCommit(10)
+		require.NoError(t, err)
+
+		require.Equal(t, 0, storage.Count())
+		require.Equal(t, 0, storageWithFastCommit.Count())
+
+		// check remove functionality
+		for sid := range simpleMap {
+			storedValue, found, err := storage.Retrieve(sid)
+			require.NoError(t, err)
+			require.False(t, found)
+			require.Nil(t, storedValue)
+
+			storedValue, found, err = storageWithFastCommit.Retrieve(sid)
+			require.NoError(t, err)
+			require.False(t, found)
+			require.Nil(t, storedValue)
 		}
 
 		// compare orders
@@ -234,7 +275,7 @@ func (s *accessOrderTrackerBaseStorage) GenerateStorageID(address Address) (Stor
 	return NewStorageID(address, nextIndex), nil
 }
 
-func (s *accessOrderTrackerBaseStorage) SegmentCounts() int { return 0 }
+func (s *accessOrderTrackerBaseStorage) SegmentCounts() int { return len(s.segments) }
 
 func (s *accessOrderTrackerBaseStorage) Size() int { return 0 }
 

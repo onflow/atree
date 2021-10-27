@@ -71,8 +71,14 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 				}
 			} else {
 				metaDataSlabCount++
-				meta := slab.(*ArrayMetaDataSlab)
-				nextLevelIDs = append(nextLevelIDs, meta.ChildIDs()...)
+
+				for _, storable := range slab.ChildStorables() {
+					id, ok := storable.(StorageIDStorable)
+					if !ok {
+						return ArrayStats{}, fmt.Errorf("metadata slab's child storables are not of type StorageIDStorable")
+					}
+					nextLevelIDs = append(nextLevelIDs, StorageID(id))
+				}
 			}
 		}
 
@@ -139,7 +145,14 @@ func PrintArray(a *Array) {
 					meta,
 				)
 
-				nextLevelIDs = append(nextLevelIDs, meta.ChildIDs()...)
+				for _, storable := range slab.ChildStorables() {
+					id, ok := storable.(StorageIDStorable)
+					if !ok {
+						fmt.Printf("metadata slab's child storables are not of type StorageIDStorable")
+						return
+					}
+					nextLevelIDs = append(nextLevelIDs, StorageID(id))
+				}
 			}
 		}
 

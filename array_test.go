@@ -3045,7 +3045,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			typeInfo)
 		require.NoError(t, err)
 
-		err = array.Insert(0, NewStringValue(strings.Repeat("a", int(MaxInlineElementSize-2))))
+		err = array.Insert(0, NewStringValue(strings.Repeat("a", int(MaxInlineArrayElementSize-2))))
 		require.NoError(t, err)
 		for i := 0; i < 35; i++ {
 			err = array.Append(Uint64Value(i))
@@ -3142,7 +3142,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			err = array.Append(Uint64Value(i))
 			require.NoError(t, err)
 		}
-		err = array.Insert(25, NewStringValue(strings.Repeat("a", int(MaxInlineElementSize-2))))
+		err = array.Insert(25, NewStringValue(strings.Repeat("a", int(MaxInlineArrayElementSize-2))))
 		require.NoError(t, err)
 
 		require.Equal(t, uint64(36), array.Count())
@@ -3324,12 +3324,12 @@ func TestArrayFromBatchData(t *testing.T) {
 		err = array.Append(v)
 		require.NoError(t, err)
 
-		v = NewStringValue(randStr(int(MaxInlineElementSize - 2)))
+		v = NewStringValue(randStr(int(MaxInlineArrayElementSize - 2)))
 		values = append(values, v)
 		err = array.Append(v)
 		require.NoError(t, err)
 
-		v = NewStringValue(randStr(int(MaxInlineElementSize - 2)))
+		v = NewStringValue(randStr(int(MaxInlineArrayElementSize - 2)))
 		values = append(values, v)
 		err = array.Append(v)
 		require.NoError(t, err)
@@ -3484,8 +3484,8 @@ func TestArrayMaxInlineElement(t *testing.T) {
 
 	var values []Value
 	for i := 0; i < 2; i++ {
-		// String length is MaxInlineElementSize - 3 to account for string encoding overhead.
-		v := NewStringValue(randStr(int(MaxInlineElementSize - 3)))
+		// String length is MaxInlineArrayElementSize - 3 to account for string encoding overhead.
+		v := NewStringValue(randStr(int(MaxInlineArrayElementSize - 3)))
 		values = append(values, v)
 
 		err = array.Append(v)

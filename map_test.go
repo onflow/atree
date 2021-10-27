@@ -1406,7 +1406,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 	t.Run("inline collision 1 level", func(t *testing.T) {
 
-		SetThreshold(150)
+		SetThreshold(160)
 		defer SetThreshold(1024)
 
 		// Create and populate map in memory
@@ -1418,7 +1418,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		const mapSize = 10
+		const mapSize = 8
 		keyValues := make(map[Value]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
 			k := Uint64Value(i)
@@ -1455,8 +1455,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// type info: "map"
 				//0x63, 0x6d, 0x61, 0x70,
 				0x18, 0x2A,
-				// count: 10
-				0x0a,
+				// count: 8
+				0x08,
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
@@ -1469,7 +1469,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				// child header 1 (storage id, first key, size)
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00, 0x00, 0xbc,
+				0x00, 0x00, 0x00, 0x9e,
 				// child header 2
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
@@ -1511,24 +1511,20 @@ func TestMapEncodeDecode(t *testing.T) {
 				// level: 1
 				0x01,
 
-				// hkeys (byte string of length 8 * 3)
-				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18,
+				// hkeys (byte string of length 8 * 2)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
 				// hkey: 0
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				// hkey: 4
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
-				// hkey: 8
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
 
-				// elements (array of 3 elements)
+				// elements (array of 2 elements)
 				// each element is encoded as CBOR array of 2 elements (key, value)
-				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 				// element: [uint64(0), uint64(0)]
 				0x82, 0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x00,
 				// element: [uint64(4), uint64(8)]
 				0x82, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x08,
-				// element: [uint64(8), uint64(16)]
-				0x82, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x10,
 
 				// inline collision group corresponding to hkey 1
 				// (tag number CBORTagInlineCollisionGroup)
@@ -1539,24 +1535,20 @@ func TestMapEncodeDecode(t *testing.T) {
 				// level: 1
 				0x01,
 
-				// hkeys (byte string of length 8 * 3)
-				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18,
+				// hkeys (byte string of length 8 * 2)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
 				// hkey: 1
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
 				// hkey: 5
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
-				// hkey: 9
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09,
 
-				// elements (array of 3 elements)
+				// elements (array of 2 elements)
 				// each element is encoded as CBOR array of 2 elements (key, value)
-				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 				// element: [uint64(1), uint64(2)]
 				0x82, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02,
 				// element: [uint64(5), uint64(10)]
 				0x82, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x0a,
-				// element: [uint64(9), uint64(18)]
-				0x82, 0xd8, 0xa4, 0x09, 0xd8, 0xa4, 0x12,
 			},
 
 			// map data slab
@@ -1662,7 +1654,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 	t.Run("inline collision 2 levels", func(t *testing.T) {
 
-		SetThreshold(150)
+		SetThreshold(170)
 		defer SetThreshold(1024)
 
 		// Create and populate map in memory
@@ -1674,7 +1666,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		const mapSize = 10
+		const mapSize = 8
 		keyValues := make(map[Value]Value)
 		for i := uint64(0); i < mapSize; i++ {
 			k := Uint64Value(i)
@@ -1711,8 +1703,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// type info: "map"
 				//0x63, 0x6d, 0x61, 0x70,
 				0x18, 0x2A,
-				// count: 10
-				0x0a,
+				// count: 8
+				0x08,
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
@@ -1725,7 +1717,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				// child header 1 (storage id, first key, size)
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00, 0x00, 0xb8,
+				0x00, 0x00, 0x00, 0xaa,
 				// child header 2
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
@@ -1788,15 +1780,13 @@ func TestMapEncodeDecode(t *testing.T) {
 				// hkeys (empty byte string)
 				0x40,
 
-				// elements (array of 3 elements)
+				// elements (array of 2 elements)
 				// each element is encoded as CBOR array of 2 elements (key, value)
-				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 				// element: [uint64(0), uint64(0)]
 				0x82, 0xd8, 0xa4, 0x00, 0xd8, 0xa4, 0x00,
 				// element: [uint64(4), uint64(8)]
 				0x82, 0xd8, 0xa4, 0x04, 0xd8, 0xa4, 0x08,
-				// element: [uint64(8), uint64(16)]
-				0x82, 0xd8, 0xa4, 0x08, 0xd8, 0xa4, 0x10,
 
 				// inline collision group corresponding to hkey 1
 				// (tag number CBORTagInlineCollisionGroup)
@@ -1827,15 +1817,13 @@ func TestMapEncodeDecode(t *testing.T) {
 				// hkeys (empty byte string)
 				0x40,
 
-				// elements (array of 3 elements)
+				// elements (array of 2 elements)
 				// each element is encoded as CBOR array of 2 elements (key, value)
-				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 				// element: [uint64(1), uint64(2)]
 				0x82, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02,
 				// element: [uint64(5), uint64(10)]
 				0x82, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x0a,
-				// element: [uint64(9), uint64(18)]
-				0x82, 0xd8, 0xa4, 0x09, 0xd8, 0xa4, 0x12,
 			},
 
 			// map data slab
@@ -2934,7 +2922,7 @@ func TestMapFromBatchData(t *testing.T) {
 	})
 
 	t.Run("random", func(t *testing.T) {
-		SetThreshold(100)
+		SetThreshold(256)
 		defer SetThreshold(1024)
 
 		const mapSize = 4096
@@ -3072,7 +3060,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 	t.Run("data slab too large", func(t *testing.T) {
 
-		SetThreshold(100)
+		SetThreshold(192)
 		defer SetThreshold(1024)
 
 		typeInfo := testTypeInfo{42}
@@ -3087,19 +3075,16 @@ func TestMapFromBatchData(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		var k, v Value
-		var storable Storable
-
-		k = Uint64Value(2732145905)
-		v = NewStringValue(randStr(1024))
+		k := NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
+		v := NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3881892766069237908}})
 
-		storable, err = m.Set(compare, hashInputProvider, k, v)
+		storable, err := m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
 		require.Nil(t, storable)
 
-		k = NewStringValue("Hqtu")
-		v = Uint64Value(837174059053136161)
+		k = NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
+		v = NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3882976639190041664}})
 
 		storable, err = m.Set(compare, hashInputProvider, k, v)
@@ -3113,16 +3098,6 @@ func TestMapFromBatchData(t *testing.T) {
 		storable, err = m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
 		require.Nil(t, storable)
-
-		k = NewStringValue("ZFKUYYNfIfJCCakcDuIEHj")
-		v = NewStringValue("eZbaCxxjDtMnbRlXJMgfHnZ")
-		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3883321011075439823}})
-
-		storable, err = m.Set(compare, hashInputProvider, k, v)
-		require.NoError(t, err)
-		require.Nil(t, storable)
-
-		require.Equal(t, uint64(4), m.Count())
 
 		iter, err := m.Iterator()
 		require.NoError(t, err)
@@ -3322,4 +3297,44 @@ func TestMapNestedStorables(t *testing.T) {
 		_, err = CheckStorageHealth(storage, 1)
 		require.NoError(t, err)
 	})
+}
+
+func TestMapMaxInlineElement(t *testing.T) {
+	t.Parallel()
+
+	typeInfo := testTypeInfo{42}
+	storage := newTestPersistentStorage(t)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	keyValues := make(map[Value]Value)
+	for len(keyValues) < 2 {
+		// String length is MaxInlineMapElementSize - 2 to account for string encoding overhead.
+		k := NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
+		v := NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
+		keyValues[k] = v
+
+		_, err := m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+	}
+
+	for k, v := range keyValues {
+		existingStorable, err := m.Get(compare, hashInputProvider, k)
+		require.NoError(t, err)
+
+		existingValue, err := existingStorable.StoredValue(m.Storage)
+		require.NoError(t, err)
+		require.Equal(t, v, existingValue)
+	}
+
+	require.True(t, m.root.IsData())
+
+	// Size of root data slab with two elements (key+value pairs) of
+	// max inlined size is target slab size minus
+	// storage id size (next storage id is omitted in root slab)
+	require.Equal(t, targetThreshold-storageIDSize, uint64(m.root.Header().size))
+
+	verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
 }

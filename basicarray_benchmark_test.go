@@ -79,7 +79,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	// setup
 	for i := 0; i < initialArraySize; i++ {
 		v := RandomValue()
-		storable, err := v.Storable(storage, array.Address(), MaxInlineElementSize)
+		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 		require.NoError(b, err)
 		totalRawDataSize += storable.ByteSize()
 		err = array.Append(v)
@@ -98,7 +98,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue()
-		storable, err := v.Storable(storage, array.Address(), MaxInlineElementSize)
+		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 		require.NoError(b, err)
 		totalRawDataSize += storable.ByteSize()
 		err = array.Append(v)
@@ -117,7 +117,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 		ind := rand.Intn(int(array.Count()))
 		s, err := array.Remove(uint64(ind))
 		require.NoError(b, err)
-		storable, err := s.Storable(storage, array.Address(), MaxInlineElementSize)
+		storable, err := s.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 		require.NoError(b, err)
 		totalRawDataSize -= storable.ByteSize()
 	}
@@ -133,7 +133,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	for i := 0; i < numberOfElements; i++ {
 		ind := rand.Intn(int(array.Count()))
 		v := RandomValue()
-		storable, err := v.Storable(storage, array.Address(), MaxInlineElementSize)
+		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 		require.NoError(b, err)
 		totalRawDataSize += storable.ByteSize()
 		err = array.Insert(uint64(ind), v)

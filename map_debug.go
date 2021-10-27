@@ -508,9 +508,9 @@ func validMapHkeyElements(
 
 		// Verify element size is <= inline size
 		if digestLevel == 0 {
-			if e.Size()-singleElementPrefixSize > uint32(MaxInlineElementSize) {
+			if e.Size() > uint32(maxInlineMapElementSize) {
 				return 0, 0, fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
-					id, e, e.Size(), MaxInlineElementSize)
+					id, e, e.Size(), maxInlineMapElementSize)
 			}
 		}
 
@@ -614,9 +614,9 @@ func validMapSingleElements(
 		}
 
 		// Verify element size is <= inline size
-		if e.Size() > uint32(MaxInlineElementSize) {
+		if e.Size() > uint32(maxInlineMapElementSize) {
 			return 0, 0, fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
-				id, e, e.Size(), MaxInlineElementSize)
+				id, e, e.Size(), maxInlineMapElementSize)
 		}
 
 		// Verify digest level

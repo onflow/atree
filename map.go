@@ -3473,22 +3473,24 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 		hashinput := base64.StdEncoding.EncodeToString(msg)
 
 		file.WriteString(
-			fmt.Sprintf("%x,%x,%x,%x,%s\n",
-				address[:],
-				index[:],
+			fmt.Sprintf("%016x,%016x,%016x,%016x,%s\n",
+				binary.LittleEndian.Uint64(address[:]),
+				binary.LittleEndian.Uint64(index[:]),
 				m.Seed(),
 				hkey,
 				hashinput,
 			),
 		)
 		if n < 10 {
-			fmt.Println(fmt.Sprintf("%x,%x,%x,%x,%s\n",
-				address[:],
-				index[:],
-				m.Seed(),
-				hkey,
-				hashinput,
-			))
+			fmt.Println(
+				fmt.Sprintf("%016x,%016x,%016x,%016x,%s\n",
+					binary.LittleEndian.Uint64(address[:]),
+					binary.LittleEndian.Uint64(index[:]),
+					m.Seed(),
+					hkey,
+					hashinput,
+				),
+			)
 			n++
 		}
 	}()

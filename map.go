@@ -430,12 +430,12 @@ func newElementFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDeco
 
 func newSingleElement(storage SlabStorage, address Address, key Value, value Value) (*singleElement, error) {
 
-	ks, err := key.Storable(storage, address, maxInlineMapElementSize)
+	ks, err := key.Storable(storage, address, MaxInlineMapKeyOrValueSize)
 	if err != nil {
 		return nil, err
 	}
 
-	vs, err := value.Storable(storage, address, maxInlineMapElementSize)
+	vs, err := value.Storable(storage, address, MaxInlineMapKeyOrValueSize)
 	if err != nil {
 		return nil, err
 	}
@@ -559,7 +559,7 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 	if equal {
 		existingValue := e.value
 
-		valueStorable, err := value.Storable(storage, address, maxInlineMapElementSize)
+		valueStorable, err := value.Storable(storage, address, MaxInlineMapKeyOrValueSize)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -710,7 +710,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 	if level == 1 {
 		// Export oversized inline collision group to separete slab (external collision group)
 		// for first level collision.
-		if e.Size() > uint32(MaxInlineElementSize) {
+		if e.Size() > uint32(maxInlineMapElementSize) {
 
 			id, err := storage.GenerateStorageID(address)
 
@@ -879,7 +879,7 @@ func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b Dig
 
 // Remove returns key, value, and updated element if key is found.
 // Updated element can be modified externalCollisionGroup, or singleElement.
-// TODO: updated element can be inlineCollisionGroup if size < MaxInlineElementSize.
+// TODO: updated element can be inlineCollisionGroup if size < maxInlineMapElementSize.
 func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, level int, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, element, error) {
 
 	slab, found, err := storage.Retrieve(e.id)
@@ -907,7 +907,7 @@ func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, 
 		return nil, nil, nil, err
 	}
 
-	// TODO: if element size < MaxInlineElementSize, return inlineCollisionGroup
+	// TODO: if element size < maxInlineMapElementSize, return inlineCollisionGroup
 
 	// If there is only one single element in this group, return the single element and remove external slab from storage.
 	if dataSlab.elements.Count() == 1 {
@@ -1775,7 +1775,7 @@ func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBui
 
 			oldSize := elem.Size()
 
-			vs, err := value.Storable(storage, address, maxInlineMapElementSize)
+			vs, err := value.Storable(storage, address, MaxInlineMapKeyOrValueSize)
 			if err != nil {
 				return nil, err
 			}

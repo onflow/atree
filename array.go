@@ -1852,7 +1852,7 @@ func (a *Array) Get(i uint64) (Storable, error) {
 }
 
 func (a *Array) Set(index uint64, value Value) (Storable, error) {
-	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineElementSize)
+	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineArrayElementSize)
 	if err != nil {
 		return nil, err
 	}
@@ -1888,7 +1888,7 @@ func (a *Array) Append(value Value) error {
 }
 
 func (a *Array) Insert(index uint64, value Value) error {
-	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineElementSize)
+	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineArrayElementSize)
 	if err != nil {
 		return err
 	}
@@ -2257,7 +2257,7 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 
 		}
 
-		storable, err := value.Storable(storage, address, MaxInlineElementSize)
+		storable, err := value.Storable(storage, address, MaxInlineArrayElementSize)
 		if err != nil {
 			return nil, err
 		}

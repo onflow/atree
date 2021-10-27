@@ -270,9 +270,9 @@ func validArraySlab(
 		for _, e := range dataSlab.elements {
 
 			// Verify element size is <= inline size
-			if e.ByteSize() > uint32(MaxInlineElementSize) {
+			if e.ByteSize() > uint32(MaxInlineArrayElementSize) {
 				return 0, nil, nil, fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
-					id, e, e.ByteSize(), MaxInlineElementSize)
+					id, e, e.ByteSize(), MaxInlineArrayElementSize)
 			}
 
 			computedSize += e.ByteSize()

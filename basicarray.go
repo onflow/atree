@@ -301,7 +301,7 @@ func (a *BasicArray) Get(index uint64) (Value, error) {
 }
 
 func (a *BasicArray) Set(index uint64, v Value) error {
-	storable, err := v.Storable(a.storage, a.Address(), MaxInlineElementSize)
+	storable, err := v.Storable(a.storage, a.Address(), MaxInlineArrayElementSize)
 	if err != nil {
 		return err
 	}
@@ -314,7 +314,7 @@ func (a *BasicArray) Append(v Value) error {
 }
 
 func (a *BasicArray) Insert(index uint64, v Value) error {
-	storable, err := v.Storable(a.storage, a.Address(), MaxInlineElementSize)
+	storable, err := v.Storable(a.storage, a.Address(), MaxInlineArrayElementSize)
 	if err != nil {
 		return err
 	}

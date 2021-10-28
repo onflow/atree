@@ -151,6 +151,17 @@ func verifyMap(
 	}
 	require.NoError(t, err)
 
+	// Check storage slab tree
+	rootIDSet, err := CheckStorageHealth(storage, 1)
+	require.NoError(t, err)
+
+	rootIDs := make([]StorageID, 0, len(rootIDSet))
+	for id := range rootIDSet {
+		rootIDs = append(rootIDs, id)
+	}
+	require.Equal(t, 1, len(rootIDs))
+	require.Equal(t, m.StorageID(), rootIDs[0])
+
 	if !hasNestedArrayMapElement {
 		// Need to call Commit before calling storage.Count() for PersistentSlabStorage.
 		err = storage.Commit()
@@ -3101,9 +3112,6 @@ func TestMapNestedStorables(t *testing.T) {
 		}
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, true)
-
-		_, err = CheckStorageHealth(storage, 1)
-		require.NoError(t, err)
 	})
 
 	t.Run("Array", func(t *testing.T) {
@@ -3142,9 +3150,6 @@ func TestMapNestedStorables(t *testing.T) {
 		}
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, true)
-
-		_, err = CheckStorageHealth(storage, 1)
-		require.NoError(t, err)
 	})
 }
 

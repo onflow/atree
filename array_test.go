@@ -108,6 +108,17 @@ func verifyArray(
 	}
 	require.NoError(t, err)
 
+	// Check storage slab tree
+	rootIDSet, err := CheckStorageHealth(storage, 1)
+	require.NoError(t, err)
+
+	rootIDs := make([]StorageID, 0, len(rootIDSet))
+	for id := range rootIDSet {
+		rootIDs = append(rootIDs, id)
+	}
+	require.Equal(t, 1, len(rootIDs))
+	require.Equal(t, array.StorageID(), rootIDs[0])
+
 	if !hasNestedArrayMapElement {
 		// Need to call Commit before calling storage.Count() for PersistentSlabStorage.
 		err = storage.Commit()
@@ -2080,9 +2091,6 @@ func TestArrayNestedStorables(t *testing.T) {
 	}
 
 	verifyArray(t, storage, typeInfo, address, array, values, true)
-
-	_, err = CheckStorageHealth(storage, 1)
-	require.NoError(t, err)
 }
 
 func TestArrayMaxInlineElement(t *testing.T) {

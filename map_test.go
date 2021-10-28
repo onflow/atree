@@ -77,7 +77,7 @@ func verifyEmptyMap(
 	address Address,
 	m *OrderedMap,
 ) {
-	verifyMap(t, storage, typeInfo, address, m, nil, nil)
+	verifyMap(t, storage, typeInfo, address, m, nil, nil, false)
 }
 
 // verifyMap verifies map elements and validates serialization and in-memory slab tree.
@@ -90,6 +90,7 @@ func verifyMap(
 	m *OrderedMap,
 	keyValues map[Value]Value,
 	sortedKeys []Value,
+	hasNestedArrayMapElement bool,
 ) {
 	require.True(t, typeInfoComparator(typeInfo, m.Type()))
 	require.Equal(t, address, m.Address())
@@ -150,20 +151,22 @@ func verifyMap(
 	}
 	require.NoError(t, err)
 
-	// Need to call Commit before calling storage.Count() for PersistentSlabStorage.
-	err = storage.Commit()
-	require.NoError(t, err)
+	if !hasNestedArrayMapElement {
+		// Need to call Commit before calling storage.Count() for PersistentSlabStorage.
+		err = storage.Commit()
+		require.NoError(t, err)
 
-	stats, err := GetMapStats(m)
-	require.NoError(t, err)
-	require.Equal(t, stats.SlabCount(), uint64(storage.Count()))
+		stats, err := GetMapStats(m)
+		require.NoError(t, err)
+		require.Equal(t, stats.SlabCount(), uint64(storage.Count()))
 
-	if len(keyValues) == 0 {
-		// Verify slab count for empty map
-		require.Equal(t, uint64(1), stats.DataSlabCount)
-		require.Equal(t, uint64(0), stats.MetaDataSlabCount)
-		require.Equal(t, uint64(0), stats.StorableSlabCount)
-		require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
+		if len(keyValues) == 0 {
+			// Verify slab count for empty map
+			require.Equal(t, uint64(1), stats.DataSlabCount)
+			require.Equal(t, uint64(0), stats.MetaDataSlabCount)
+			require.Equal(t, uint64(0), stats.StorableSlabCount)
+			require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
+		}
 	}
 }
 
@@ -242,7 +245,7 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
 
 	t.Run("replicate keys", func(t *testing.T) {
@@ -292,7 +295,7 @@ func TestMapSetAndGet(t *testing.T) {
 			keyValues[k] = newValue
 		}
 
-		verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
 
 	t.Run("random key and value", func(t *testing.T) {
@@ -325,7 +328,7 @@ func TestMapSetAndGet(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
 }
 
@@ -429,7 +432,7 @@ func TestMapRemove(t *testing.T) {
 				require.Nil(t, existingStorable)
 			}
 
-			verifyMap(t, storage, typeInfo, address, m, tc.keyValues, nil)
+			verifyMap(t, storage, typeInfo, address, m, tc.keyValues, nil, false)
 
 			count := len(tc.keyValues)
 
@@ -546,7 +549,7 @@ func TestMapIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(mapSize), i)
 
-		verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys)
+		verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
 
 	t.Run("collision", func(t *testing.T) {
@@ -621,7 +624,7 @@ func TestMapIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, i, uint64(mapSize))
 
-		verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys)
+		verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
 }
 
@@ -687,7 +690,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		require.Nil(t, existingStorable)
 	}
 
-	verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
+	verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 
 	stats, err := GetMapStats(m)
 	require.NoError(t, err)
@@ -759,7 +762,7 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		require.Nil(t, existingStorable)
 	}
 
-	verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
+	verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 
 	// Remove all elements
 	for k, v := range keyValues {
@@ -929,7 +932,7 @@ func TestMapSetRemoveRandomValues(t *testing.T) {
 
 	m, keyValues := testMapSetRemoveRandomValues(t, storage, typeInfo, address)
 
-	verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
+	verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 }
 
 func TestMapEncodeDecode(t *testing.T) {
@@ -1092,7 +1095,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
 		require.NoError(t, err)
 
-		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil)
+		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil, false)
 	})
 
 	t.Run("has pointer no collision", func(t *testing.T) {
@@ -1332,7 +1335,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
 		require.NoError(t, err)
 
-		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil)
+		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil, false)
 	})
 
 	t.Run("inline collision 1 level", func(t *testing.T) {
@@ -1580,7 +1583,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
 		require.NoError(t, err)
 
-		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil)
+		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil, false)
 	})
 
 	t.Run("inline collision 2 levels", func(t *testing.T) {
@@ -1879,7 +1882,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
 		require.NoError(t, err)
 
-		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil)
+		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil, false)
 	})
 
 	t.Run("external collision", func(t *testing.T) {
@@ -2120,7 +2123,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
 		require.NoError(t, err)
 
-		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil)
+		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil, false)
 	})
 
 	t.Run("pointer", func(t *testing.T) {
@@ -2265,7 +2268,7 @@ func TestMapEncodeDecodeRandomValues(t *testing.T) {
 
 	m, keyValues := testMapSetRemoveRandomValues(t, storage, typeInfo, address)
 
-	verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
+	verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 
 	// Create a new storage with encoded data from base storage
 	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
@@ -2274,7 +2277,7 @@ func TestMapEncodeDecodeRandomValues(t *testing.T) {
 	m2, err := NewMapWithRootID(storage2, m.StorageID(), m.digesterBuilder)
 	require.NoError(t, err)
 
-	verifyMap(t, storage2, typeInfo, address, m2, keyValues, nil)
+	verifyMap(t, storage2, typeInfo, address, m2, keyValues, nil, false)
 }
 
 func TestMapStoredValue(t *testing.T) {
@@ -2308,7 +2311,7 @@ func TestMapStoredValue(t *testing.T) {
 	m2, ok := value.(*OrderedMap)
 	require.True(t, ok)
 
-	verifyMap(t, storage, typeInfo, address, m2, keyValues, nil)
+	verifyMap(t, storage, typeInfo, address, m2, keyValues, nil, false)
 }
 
 func TestMapPopIterate(t *testing.T) {
@@ -2656,7 +2659,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, copied.StorageID(), m.StorageID())
 
-		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys)
+		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
@@ -2715,7 +2718,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys)
+		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
 
 	t.Run("rebalance two data slabs", func(t *testing.T) {
@@ -2780,7 +2783,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys)
+		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
 
 	t.Run("merge two data slabs", func(t *testing.T) {
@@ -2849,7 +2852,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys)
+		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
 
 	t.Run("random", func(t *testing.T) {
@@ -2910,7 +2913,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys)
+		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
 
 	t.Run("collision", func(t *testing.T) {
@@ -2986,7 +2989,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys)
+		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
 
 	t.Run("data slab too large", func(t *testing.T) {
@@ -3064,7 +3067,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, m.StorageID(), copied.StorageID())
 
-		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys)
+		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
 }
 
@@ -3075,12 +3078,13 @@ func TestMapNestedStorables(t *testing.T) {
 		const mapSize = 4096
 
 		typeInfo := testTypeInfo{42}
-		storage := newTestBasicStorage(t)
+		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
+		keyValues := make(map[Value]Value)
 		for i := uint64(0); i < mapSize; i++ {
 
 			ks := strings.Repeat("a", int(i))
@@ -3089,54 +3093,14 @@ func TestMapNestedStorables(t *testing.T) {
 			vs := strings.Repeat("b", int(i))
 			v := SomeValue{Value: NewStringValue(vs)}
 
+			keyValues[k] = v
+
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
-		for i := uint64(0); i < mapSize; i++ {
-
-			ks := strings.Repeat("a", int(i))
-			k := SomeValue{Value: NewStringValue(ks)}
-
-			e, err := m.Get(compare, hashInputProvider, k)
-			require.NoError(t, err)
-
-			v, err := e.StoredValue(storage)
-			require.NoError(t, err)
-
-			someValue, ok := v.(SomeValue)
-			require.True(t, ok)
-
-			s, ok := someValue.Value.(StringValue)
-			require.True(t, ok)
-
-			require.Equal(t, strings.Repeat("b", int(i)), s.str)
-		}
-
-		require.True(t, typeInfoComparator(typeInfo, m.Type()))
-		require.Equal(t, address, m.Address())
-
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		err = ValidMapSerialization(
-			m,
-			storage.cborDecMode,
-			storage.cborEncMode,
-			storage.DecodeStorable,
-			storage.DecodeTypeInfo,
-			func(a, b Storable) bool {
-				return reflect.DeepEqual(a, b)
-			},
-		)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, true)
 
 		_, err = CheckStorageHealth(storage, 1)
 		require.NoError(t, err)
@@ -3147,12 +3111,13 @@ func TestMapNestedStorables(t *testing.T) {
 		const mapSize = 4096
 
 		typeInfo := testTypeInfo{42}
-		storage := newTestBasicStorage(t)
+		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
+		keyValues := make(map[Value]Value)
 		for i := uint64(0); i < mapSize; i++ {
 
 			// Create a nested array with one element
@@ -3169,64 +3134,14 @@ func TestMapNestedStorables(t *testing.T) {
 			ks := strings.Repeat("a", int(i))
 			k := SomeValue{Value: NewStringValue(ks)}
 
+			keyValues[k] = array
+
 			existingStorable, err := m.Set(compare, hashInputProvider, k, array)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
-		for i := uint64(0); i < mapSize; i++ {
-
-			ks := strings.Repeat("a", int(i))
-			k := SomeValue{Value: NewStringValue(ks)}
-
-			e, err := m.Get(compare, hashInputProvider, k)
-			require.NoError(t, err)
-
-			v, err := e.StoredValue(storage)
-			require.NoError(t, err)
-
-			array, ok := v.(*Array)
-			require.True(t, ok)
-			require.Equal(t, uint64(1), array.Count())
-
-			existingStorable, err := array.Get(0)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-
-			someValue, ok := existingValue.(SomeValue)
-			require.True(t, ok)
-
-			s, ok := someValue.Value.(StringValue)
-			require.True(t, ok)
-
-			require.Equal(t, strings.Repeat("b", int(i)), s.str)
-		}
-
-		require.True(t, typeInfoComparator(typeInfo, m.Type()))
-		require.Equal(t, address, m.Address())
-
-		err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
-
-		err = ValidMapSerialization(
-			m,
-			storage.cborDecMode,
-			storage.cborEncMode,
-			storage.DecodeStorable,
-			storage.DecodeTypeInfo,
-			func(a, b Storable) bool {
-				return reflect.DeepEqual(a, b)
-			},
-		)
-		if err != nil {
-			PrintMap(m)
-		}
-		require.NoError(t, err)
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, true)
 
 		_, err = CheckStorageHealth(storage, 1)
 		require.NoError(t, err)
@@ -3254,15 +3169,6 @@ func TestMapMaxInlineElement(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	for k, v := range keyValues {
-		existingStorable, err := m.Get(compare, hashInputProvider, k)
-		require.NoError(t, err)
-
-		existingValue, err := existingStorable.StoredValue(m.Storage)
-		require.NoError(t, err)
-		require.Equal(t, v, existingValue)
-	}
-
 	require.True(t, m.root.IsData())
 
 	// Size of root data slab with two elements (key+value pairs) of
@@ -3270,5 +3176,5 @@ func TestMapMaxInlineElement(t *testing.T) {
 	// storage id size (next storage id is omitted in root slab)
 	require.Equal(t, targetThreshold-storageIDSize, uint64(m.root.Header().size))
 
-	verifyMap(t, storage, typeInfo, address, m, keyValues, nil)
+	verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 }

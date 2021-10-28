@@ -448,11 +448,13 @@ func TestMapRemove(t *testing.T) {
 				valueEqual(t, typeInfoComparator, v, removedValue)
 
 				if id, ok := removedKeyStorable.(StorageIDStorable); ok {
-					storage.Remove(StorageID(id))
+					err = storage.Remove(StorageID(id))
+					require.NoError(t, err)
 				}
 
 				if id, ok := removedValueStorable.(StorageIDStorable); ok {
-					storage.Remove(StorageID(id))
+					err = storage.Remove(StorageID(id))
+					require.NoError(t, err)
 				}
 
 				// Remove the same key for the second time.
@@ -705,11 +707,13 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		valueEqual(t, typeInfoComparator, v, removedValue)
 
 		if id, ok := removedKeyStorable.(StorageIDStorable); ok {
-			storage.Remove(StorageID(id))
+			err = storage.Remove(StorageID(id))
+			require.NoError(t, err)
 		}
 
 		if id, ok := removedValueStorable.(StorageIDStorable); ok {
-			storage.Remove(StorageID(id))
+			err = storage.Remove(StorageID(id))
+			require.NoError(t, err)
 		}
 	}
 
@@ -771,11 +775,13 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 		valueEqual(t, typeInfoComparator, v, removedValue)
 
 		if id, ok := removedKeyStorable.(StorageIDStorable); ok {
-			storage.Remove(StorageID(id))
+			err = storage.Remove(StorageID(id))
+			require.NoError(t, err)
 		}
 
 		if id, ok := removedValueStorable.(StorageIDStorable); ok {
-			storage.Remove(StorageID(id))
+			err = storage.Remove(StorageID(id))
+			require.NoError(t, err)
 		}
 	}
 
@@ -863,7 +869,8 @@ func testMapSetRemoveRandomValues(
 				valueEqual(t, typeInfoComparator, oldv, existingValue)
 
 				if id, ok := existingStorable.(StorageIDStorable); ok {
-					storage.Remove(StorageID(id))
+					err = storage.Remove(StorageID(id))
+					require.NoError(t, err)
 				}
 			} else {
 				require.Nil(t, existingStorable)
@@ -874,8 +881,8 @@ func testMapSetRemoveRandomValues(
 			keyValues[k] = v
 
 		case MapRemoveOp:
-			kIndex := rand.Intn(len(keys))
-			k := keys[kIndex]
+			index := rand.Intn(len(keys))
+			k := keys[index]
 
 			removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
 			require.NoError(t, err)
@@ -889,15 +896,17 @@ func testMapSetRemoveRandomValues(
 			valueEqual(t, typeInfoComparator, keyValues[k], removedValue)
 
 			if id, ok := removedKeyStorable.(StorageIDStorable); ok {
-				storage.Remove(StorageID(id))
+				err := storage.Remove(StorageID(id))
+				require.NoError(t, err)
 			}
 
 			if id, ok := removedValueStorable.(StorageIDStorable); ok {
-				storage.Remove(StorageID(id))
+				err := storage.Remove(StorageID(id))
+				require.NoError(t, err)
 			}
 
 			delete(keyValues, k)
-			copy(keys[kIndex:], keys[kIndex+1:])
+			copy(keys[index:], keys[index+1:])
 			keys = keys[:len(keys)-1]
 		}
 

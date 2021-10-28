@@ -1680,6 +1680,73 @@ func TestEmptyArray(t *testing.T) {
 	// TestArrayEncodeDecode/empty tests empty array encoding and decoding
 }
 
+func TestArrayStringElement(t *testing.T) {
+
+	t.Parallel()
+
+	t.Run("inline", func(t *testing.T) {
+
+		const arraySize = 4096
+
+		stringSize := int(MaxInlineArrayElementSize - 3)
+
+		values := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			s := randStr(stringSize)
+			values[i] = NewStringValue(s)
+		}
+
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		typeInfo := testTypeInfo{42}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(values[i])
+			require.NoError(t, err)
+		}
+
+		verifyArray(t, storage, typeInfo, address, array, values)
+
+		stats, err := GetArrayStats(array)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), stats.StorableSlabCount)
+	})
+
+	t.Run("external slab", func(t *testing.T) {
+
+		const arraySize = 4096
+
+		stringSize := int(MaxInlineArrayElementSize + 512)
+
+		values := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			s := randStr(stringSize)
+			values[i] = NewStringValue(s)
+		}
+
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		typeInfo := testTypeInfo{42}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(values[i])
+			require.NoError(t, err)
+		}
+
+		verifyArray(t, storage, typeInfo, address, array, values)
+
+		stats, err := GetArrayStats(array)
+		require.NoError(t, err)
+		require.Equal(t, uint64(arraySize), stats.StorableSlabCount)
+	})
+}
+
 func TestArrayStoredValue(t *testing.T) {
 
 	const arraySize = 4096

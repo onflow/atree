@@ -51,7 +51,7 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = []StorageID{}
+		nextLevelIDs = []StorageID(nil)
 
 		for _, id := range ids {
 
@@ -83,6 +83,7 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 		}
 
 		level++
+
 	}
 
 	return ArrayStats{
@@ -106,7 +107,7 @@ func PrintArray(a *Array) {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = []StorageID{}
+		nextLevelIDs = []StorageID(nil)
 
 		for _, id := range ids {
 

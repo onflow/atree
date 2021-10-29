@@ -55,7 +55,7 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = []StorageID{}
+		nextLevelIDs = []StorageID(nil)
 
 		for _, id := range ids {
 

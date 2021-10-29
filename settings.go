@@ -18,12 +18,15 @@
 
 package atree
 
+import "fmt"
+
 // Slab invariants:
 // - each element can't take up more than half of slab size (including encoding overhead and digest)
 // - data slab must have at least 2 elements when slab size > maxThreshold
 
 const (
-	defaultSlabSize       = uint64(1024) // 1kb
+	defaultSlabSize       = uint64(1024)
+	minSlabSize           = uint64(256)
 	minElementCountInSlab = 2
 )
 
@@ -41,6 +44,10 @@ func init() {
 }
 
 func SetThreshold(threshold uint64) (uint64, uint64, uint64, uint64) {
+	if threshold < minSlabSize {
+		panic(fmt.Sprintf("Slab size %d is smaller than minSlabSize %d", threshold, minSlabSize))
+	}
+
 	targetThreshold = threshold
 	minThreshold = uint64(targetThreshold / 2)
 	maxThreshold = uint64(float64(targetThreshold) * 1.5)

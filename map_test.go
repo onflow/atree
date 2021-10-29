@@ -1351,7 +1351,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 	t.Run("inline collision 1 level", func(t *testing.T) {
 
-		SetThreshold(160)
+		SetThreshold(256)
 		defer SetThreshold(1024)
 
 		// Create and populate map in memory
@@ -1382,8 +1382,6 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint64(mapSize), m.Count())
 
 		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
 		// Expected serialized slab data with storage id
 		expected := map[StorageID][]byte{
@@ -1393,8 +1391,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// extra data
 				// version
 				0x00,
-				// flag: root + meta
-				0x89,
+				// flag: root + map data
+				0x88,
 				// extra data (CBOR encoded array of 3 elements)
 				0x83,
 				// type info: "map"
@@ -1407,27 +1405,8 @@ func TestMapEncodeDecode(t *testing.T) {
 
 				// version
 				0x00,
-				// flag: root + map meta
-				0x89,
-				// child header count
-				0x00, 0x02,
-				// child header 1 (storage id, first key, size)
-				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00, 0x00, 0x9e,
-				// child header 2
-				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
-				0x00, 0x00, 0x00, 0x9e,
-			},
-			// map data slab
-			id2: {
-				// version
-				0x00,
-				// flag: map data
-				0x08,
-				// next storage id
-				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// flag: root + map data
+				0x88,
 
 				// the following encoded data is valid CBOR
 
@@ -1437,15 +1416,19 @@ func TestMapEncodeDecode(t *testing.T) {
 				// level: 0
 				0x00,
 
-				// hkeys (byte string of length 8 * 2)
-				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+				// hkeys (byte string of length 8 * 4)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20,
 				// hkey: 0
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				// hkey: 1
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				// hkey: 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// hkey: 3
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
 
 				// elements (array of 2 elements)
-				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
 
 				// inline collision group corresponding to hkey 0
 				// (tag number CBORTagInlineCollisionGroup)
@@ -1494,34 +1477,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02,
 				// element: [uint64(5), uint64(10)]
 				0x82, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x0a,
-			},
-
-			// map data slab
-			id3: {
-				// version
-				0x00,
-				// flag: map data
-				0x08,
-				// next storage id
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-
-				// the following encoded data is valid CBOR
-
-				// elements (array of 3 elements)
-				0x83,
-
-				// level: 0
-				0x00,
-
-				// hkeys (byte string of length 8 * 2)
-				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
-				// hkey: 2
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
-				// hkey: 3
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
-
-				// elements (array of 2 elements)
-				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 
 				// inline collision group corresponding to hkey 2
 				// (tag number CBORTagInlineCollisionGroup)
@@ -1577,15 +1532,6 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
-		require.Equal(t, expected[id2], stored[id2])
-		require.Equal(t, expected[id3], stored[id3])
-
-		// Verify slab size in header is correct.
-		meta, ok := m.root.(*MapMetaDataSlab)
-		require.True(t, ok)
-		require.Equal(t, 2, len(meta.childrenHeaders))
-		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
-		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, stored)
@@ -1599,7 +1545,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 	t.Run("inline collision 2 levels", func(t *testing.T) {
 
-		SetThreshold(170)
+		SetThreshold(256)
 		defer SetThreshold(1024)
 
 		// Create and populate map in memory
@@ -1630,8 +1576,6 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint64(mapSize), m.Count())
 
 		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
 		// Expected serialized slab data with storage id
 		expected := map[StorageID][]byte{
@@ -1641,8 +1585,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// extra data
 				// version
 				0x00,
-				// flag: root + meta
-				0x89,
+				// flag: root + map data
+				0x88,
 				// extra data (CBOR encoded array of 3 elements)
 				0x83,
 				// type info: "map"
@@ -1655,28 +1599,8 @@ func TestMapEncodeDecode(t *testing.T) {
 
 				// version
 				0x00,
-				// flag: root + map meta
-				0x89,
-				// child header count
-				0x00, 0x02,
-				// child header 1 (storage id, first key, size)
-				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00, 0x00, 0xaa,
-				// child header 2
-				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
-				0x00, 0x00, 0x00, 0xaa,
-			},
-
-			// map data slab
-			id2: {
-				// version
-				0x00,
-				// flag: map data
-				0x08,
-				// next storage id
-				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// flag: root + map data
+				0x88,
 
 				// the following encoded data is valid CBOR
 
@@ -1686,15 +1610,19 @@ func TestMapEncodeDecode(t *testing.T) {
 				// level: 0
 				0x00,
 
-				// hkeys (byte string of length 8 * 2)
-				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+				// hkeys (byte string of length 8 * 4)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20,
 				// hkey: 0
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				// hkey: 1
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				// hkey: 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// hkey: 3
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
 
-				// elements (array of 2 elements)
-				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// elements (array of 4 elements)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
 
 				// inline collision group corresponding to hkey 0
 				// (tag number CBORTagInlineCollisionGroup)
@@ -1769,34 +1697,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82, 0xd8, 0xa4, 0x01, 0xd8, 0xa4, 0x02,
 				// element: [uint64(5), uint64(10)]
 				0x82, 0xd8, 0xa4, 0x05, 0xd8, 0xa4, 0x0a,
-			},
-
-			// map data slab
-			id3: {
-				// version
-				0x00,
-				// flag: map data
-				0x08,
-				// next storage id
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-
-				// the following encoded data is valid CBOR
-
-				// elements (array of 3 elements)
-				0x83,
-
-				// level: 0
-				0x00,
-
-				// hkeys (byte string of length 8 * 2)
-				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
-				// hkey: 2
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
-				// hkey: 3
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
-
-				// elements (array of 2 elements)
-				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 
 				// inline collision group corresponding to hkey 2
 				// (tag number CBORTagInlineCollisionGroup)
@@ -1876,15 +1776,6 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
-		require.Equal(t, expected[id2], stored[id2])
-		require.Equal(t, expected[id3], stored[id3])
-
-		// Verify slab size in header is correct.
-		meta, ok := m.root.(*MapMetaDataSlab)
-		require.True(t, ok)
-		require.Equal(t, 2, len(meta.childrenHeaders))
-		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
-		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, stored)
@@ -1898,7 +1789,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 	t.Run("external collision", func(t *testing.T) {
 
-		SetThreshold(160)
+		SetThreshold(256)
 		defer SetThreshold(1024)
 
 		// Create and populate map in memory

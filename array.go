@@ -149,10 +149,6 @@ func (a *Array) Address() Address {
 	return a.root.ID().Address
 }
 
-func (a *Array) Value(_ SlabStorage) (Value, error) {
-	return a, nil
-}
-
 func (a *Array) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
 	return StorageIDStorable(a.StorageID()), nil
 }
@@ -1803,9 +1799,9 @@ func (a *ArrayMetaDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIteration
 func (a *ArrayMetaDataSlab) String() string {
 	var elemsStr []string
 	for _, h := range a.childrenHeaders {
-		elemsStr = append(elemsStr, fmt.Sprintf("%+v", h))
+		elemsStr = append(elemsStr, fmt.Sprintf("{id:%s size:%d count:%d}", h.id, h.size, h.count))
 	}
-	return strings.Join(elemsStr, " ")
+	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
 func NewArray(storage SlabStorage, address Address, typeInfo TypeInfo) (*Array, error) {

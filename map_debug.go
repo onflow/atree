@@ -37,27 +37,27 @@ type MapStats struct {
 	StorableSlabCount      uint64
 }
 
+func (s *MapStats) SlabCount() uint64 {
+	return s.DataSlabCount + s.MetaDataSlabCount + s.CollisionDataSlabCount + s.StorableSlabCount
+}
+
 // GetMapStats returns stats about the map slabs.
 func GetMapStats(m *OrderedMap) (MapStats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
-	metaDataSlabSize := uint64(0)
 	dataSlabCount := uint64(0)
-	dataSlabSize := uint64(0)
 	collisionDataSlabCount := uint64(0)
 	storableDataSlabCount := uint64(0)
 
-	nextLevelIDs := list.New()
-	nextLevelIDs.PushBack(m.root.Header().id)
+	nextLevelIDs := []StorageID{m.StorageID()}
 
-	for nextLevelIDs.Len() > 0 {
+	for len(nextLevelIDs) > 0 {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = list.New()
+		nextLevelIDs = []StorageID(nil)
 
-		for e := ids.Front(); e != nil; e = e.Next() {
-			id := e.Value.(StorageID)
+		for _, id := range ids {
 
 			slab, err := getMapSlab(m.Storage, id)
 			if err != nil {
@@ -65,36 +65,58 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 			}
 
 			if slab.IsData() {
-				leaf := slab.(*MapDataSlab)
 				dataSlabCount++
-				dataSlabSize += uint64(leaf.header.size)
 
-				for i := 0; i < int(leaf.elements.Count()); i++ {
-					elem, err := leaf.elements.Element(i)
-					if err != nil {
-						return MapStats{}, err
+				leaf := slab.(*MapDataSlab)
+				elementGroups := []elements{leaf.elements}
+
+				for len(elementGroups) > 0 {
+
+					var nestedElementGroups []elements
+
+					for i := 0; i < len(elementGroups); i++ {
+
+						elems := elementGroups[i]
+
+						for j := 0; j < int(elems.Count()); j++ {
+							elem, err := elems.Element(j)
+							if err != nil {
+								return MapStats{}, err
+							}
+
+							if group, ok := elem.(elementGroup); ok {
+								if !group.Inline() {
+									collisionDataSlabCount++
+								}
+
+								nested, err := group.Elements(m.Storage)
+								if err != nil {
+									return MapStats{}, err
+								}
+								nestedElementGroups = append(nestedElementGroups, nested)
+
+							} else {
+								e := elem.(*singleElement)
+								if _, ok := e.key.(StorageIDStorable); ok {
+									storableDataSlabCount++
+								}
+								if _, ok := e.value.(StorageIDStorable); ok {
+									storableDataSlabCount++
+								}
+							}
+						}
 					}
-					if group, ok := elem.(elementGroup); ok {
-						if !group.Inline() {
-							collisionDataSlabCount++
-						}
-					} else {
-						e := elem.(*singleElement)
-						if _, ok := e.key.(*StorageIDStorable); ok {
-							storableDataSlabCount++
-						}
-						if _, ok := e.value.(*StorageIDStorable); ok {
-							storableDataSlabCount++
-						}
-					}
+					elementGroups = nestedElementGroups
 				}
 			} else {
-				meta := slab.(*MapMetaDataSlab)
 				metaDataSlabCount++
-				metaDataSlabSize += uint64(meta.header.size)
 
-				for _, h := range meta.childrenHeaders {
-					nextLevelIDs.PushBack(h.id)
+				for _, storable := range slab.ChildStorables() {
+					id, ok := storable.(StorageIDStorable)
+					if !ok {
+						return MapStats{}, fmt.Errorf("metadata slab's child storables are not of type StorageIDStorable")
+					}
+					nextLevelIDs = append(nextLevelIDs, StorageID(id))
 				}
 			}
 		}
@@ -104,6 +126,7 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 
 	return MapStats{
 		Levels:                 level,
+		ElementCount:           m.Count(),
 		MetaDataSlabCount:      metaDataSlabCount,
 		DataSlabCount:          dataSlabCount,
 		CollisionDataSlabCount: collisionDataSlabCount,
@@ -486,8 +509,6 @@ func validMapHkeyElements(
 		// Verify element size is <= inline size
 		if digestLevel == 0 {
 			if e.Size() > uint32(maxInlineMapElementSize) {
-				se := e.(*singleElement)
-				fmt.Printf("element type %T, se.key size %d, se.value size %d\n", e, se.key.ByteSize(), se.value.ByteSize())
 				return 0, 0, fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
 					id, e, e.Size(), maxInlineMapElementSize)
 			}

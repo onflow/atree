@@ -20,10 +20,8 @@ package atree
 
 import (
 	"bytes"
-	"container/list"
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -33,27 +31,29 @@ type ArrayStats struct {
 	ElementCount      uint64
 	MetaDataSlabCount uint64
 	DataSlabCount     uint64
+	StorableSlabCount uint64
+}
+
+func (s *ArrayStats) SlabCount() uint64 {
+	return s.DataSlabCount + s.MetaDataSlabCount + s.StorableSlabCount
 }
 
 // GetArrayStats returns stats about array slabs.
 func GetArrayStats(a *Array) (ArrayStats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
-	metaDataSlabSize := uint64(0)
 	dataSlabCount := uint64(0)
-	dataSlabSize := uint64(0)
+	storableSlabCount := uint64(0)
 
-	nextLevelIDs := list.New()
-	nextLevelIDs.PushBack(a.root.Header().id)
+	nextLevelIDs := []StorageID{a.StorageID()}
 
-	for nextLevelIDs.Len() > 0 {
+	for len(nextLevelIDs) > 0 {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = list.New()
+		nextLevelIDs = []StorageID(nil)
 
-		for e := ids.Front(); e != nil; e = e.Next() {
-			id := e.Value.(StorageID)
+		for _, id := range ids {
 
 			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
@@ -61,21 +61,29 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 			}
 
 			if slab.IsData() {
-				leaf := slab.(*ArrayDataSlab)
 				dataSlabCount++
-				dataSlabSize += uint64(leaf.header.size)
-			} else {
-				meta := slab.(*ArrayMetaDataSlab)
-				metaDataSlabCount++
-				metaDataSlabSize += uint64(meta.header.size)
 
-				for _, h := range meta.childrenHeaders {
-					nextLevelIDs.PushBack(h.id)
+				childStorables := slab.ChildStorables()
+				for _, s := range childStorables {
+					if _, ok := s.(StorageIDStorable); ok {
+						storableSlabCount++
+					}
+				}
+			} else {
+				metaDataSlabCount++
+
+				for _, storable := range slab.ChildStorables() {
+					id, ok := storable.(StorageIDStorable)
+					if !ok {
+						return ArrayStats{}, fmt.Errorf("metadata slab's child storables are not of type StorageIDStorable")
+					}
+					nextLevelIDs = append(nextLevelIDs, StorageID(id))
 				}
 			}
 		}
 
 		level++
+
 	}
 
 	return ArrayStats{
@@ -83,25 +91,25 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 		ElementCount:      a.Count(),
 		MetaDataSlabCount: metaDataSlabCount,
 		DataSlabCount:     dataSlabCount,
+		StorableSlabCount: storableSlabCount,
 	}, nil
 }
 
 // PrintArray prints array slab data to stdout.
 func PrintArray(a *Array) {
-	nextLevelIDs := list.New()
-	nextLevelIDs.PushBack(a.root.Header().id)
 
-	overflowIDs := list.New()
+	nextLevelIDs := []StorageID{a.StorageID()}
+
+	var overflowIDs []StorageID
 
 	level := 0
-	for nextLevelIDs.Len() > 0 {
+	for len(nextLevelIDs) > 0 {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = list.New()
+		nextLevelIDs = []StorageID(nil)
 
-		for e := ids.Front(); e != nil; e = e.Next() {
-			id := e.Value.(StorageID)
+		for _, id := range ids {
 
 			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
@@ -111,56 +119,58 @@ func PrintArray(a *Array) {
 
 			if slab.IsData() {
 				dataSlab := slab.(*ArrayDataSlab)
-				fmt.Printf("level %d, leaf (%+v next:%d): ", level+1, dataSlab.header, dataSlab.next)
+				fmt.Printf(
+					"level %d leaf (id:%s size:%d count:%d next:%s): %s\n",
+					level+1,
+					dataSlab.header.id,
+					dataSlab.header.size,
+					dataSlab.header.count,
+					dataSlab.next,
+					dataSlab)
 
-				var elements []Storable
-				if len(dataSlab.elements) <= 6 {
-					elements = dataSlab.elements
-				} else {
-					elements = append(elements, dataSlab.elements[:3]...)
-					elements = append(elements, dataSlab.elements[len(dataSlab.elements)-3:]...)
-				}
-
-				var elemsStr []string
-				for _, e := range elements {
+				childStorables := dataSlab.ChildStorables()
+				for _, e := range childStorables {
 					if id, ok := e.(StorageIDStorable); ok {
-						overflowIDs.PushBack(StorageID(id))
+						overflowIDs = append(overflowIDs, StorageID(id))
 					}
-					elemsStr = append(elemsStr, fmt.Sprint(e))
 				}
 
-				if len(dataSlab.elements) > 6 {
-					elemsStr = append(elemsStr, "")
-					copy(elemsStr[4:], elemsStr[3:])
-					elemsStr[3] = "..."
-				}
-				fmt.Printf("[%s]\n", strings.Join(elemsStr, " "))
 			} else {
 				meta := slab.(*ArrayMetaDataSlab)
-				fmt.Printf("level %d, meta (%+v) headers: [", level+1, meta.header)
-				for _, h := range meta.childrenHeaders {
-					fmt.Printf("%+v ", h)
-					nextLevelIDs.PushBack(h.id)
+				fmt.Printf(
+					"level %d meta (id:%s size:%d count:%d) children: %s\n",
+					level+1,
+					meta.header.id,
+					meta.header.size,
+					meta.header.count,
+					meta,
+				)
+
+				for _, storable := range slab.ChildStorables() {
+					id, ok := storable.(StorageIDStorable)
+					if !ok {
+						fmt.Printf("metadata slab's child storables are not of type StorageIDStorable")
+						return
+					}
+					nextLevelIDs = append(nextLevelIDs, StorageID(id))
 				}
-				fmt.Println("]")
 			}
 		}
 
 		level++
 	}
 
-	if overflowIDs.Len() > 0 {
-		for e := overflowIDs.Front(); e != nil; e = e.Next() {
-			id := e.Value.(StorageID)
-
-			// TODO: expand this to include other types
-			slab, err := getArraySlab(a.Storage, id)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-			fmt.Printf("overflow: (id %d) %s\n", id, slab.String())
+	for _, id := range overflowIDs {
+		slab, found, err := a.Storage.Retrieve(id)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
 		}
+		if !found {
+			fmt.Printf("slab %s not found\n", id)
+			return
+		}
+		fmt.Printf("overflow: (id %s) %s\n", id, slab)
 	}
 }
 

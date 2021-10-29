@@ -27,21 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
-	encMode, err := cbor.EncOptions{}.EncMode()
-	require.NoError(t, err)
-
-	decMode, err := cbor.DecOptions{}.DecMode()
-	require.NoError(t, err)
-
-	//baseStorage := NewInMemBaseStorage()
-
-	//storage := NewPersistentSlabStorage(baseStorage)
-
-	storage := NewBasicSlabStorage(encMode, decMode, decodeStorable, decodeTypeInfo)
-	return storage
-}
-
 func TestBasicArrayAppendAndGet(t *testing.T) {
 
 	const arraySize = 1024 * 16

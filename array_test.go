@@ -20,23 +20,14 @@ package atree
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"math/rand"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
-
-// Seed only once and print seed for easier debugging.
-func init() {
-	seed := time.Now().UnixNano()
-	rand.Seed(seed)
-	fmt.Printf("seed: 0x%x\n", seed)
-}
 
 func verifyEmptyArray(
 	t *testing.T,
@@ -794,6 +785,8 @@ func TestArraySetRandomValues(t *testing.T) {
 
 	const arraySize = 4096
 
+	r := newRand(t)
+
 	typeInfo := testTypeInfo{42}
 	storage := newTestPersistentStorage(t)
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -811,7 +804,7 @@ func TestArraySetRandomValues(t *testing.T) {
 
 	for i := uint64(0); i < arraySize; i++ {
 		oldValue := values[i]
-		newValue := randomValue(int(MaxInlineArrayElementSize))
+		newValue := randomValue(r, int(MaxInlineArrayElementSize))
 		values[i] = newValue
 
 		existingStorable, err := array.Set(i, newValue)
@@ -834,6 +827,8 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		const arraySize = 4096
 
+		r := newRand(t)
+
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -843,7 +838,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			v := randomValue(int(MaxInlineArrayElementSize))
+			v := randomValue(r, int(MaxInlineArrayElementSize))
 			values[arraySize-i-1] = v
 
 			err := array.Insert(0, v)
@@ -857,6 +852,8 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		const arraySize = 4096
 
+		r := newRand(t)
+
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -866,7 +863,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			v := randomValue(int(MaxInlineArrayElementSize))
+			v := randomValue(r, int(MaxInlineArrayElementSize))
 			values[i] = v
 
 			err := array.Insert(i, v)
@@ -880,6 +877,8 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		const arraySize = 4096
 
+		r := newRand(t)
+
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -889,8 +888,8 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			k := rand.Intn(int(i) + 1)
-			v := randomValue(int(MaxInlineArrayElementSize))
+			k := r.Intn(int(i) + 1)
+			v := randomValue(r, int(MaxInlineArrayElementSize))
 
 			copy(values[k+1:], values[k:])
 			values[k] = v
@@ -910,6 +909,8 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 
 	const arraySize = 4096
 
+	r := newRand(t)
+
 	typeInfo := testTypeInfo{42}
 	storage := newTestPersistentStorage(t)
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -920,7 +921,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 	values := make([]Value, arraySize)
 	// Insert n random values into array
 	for i := uint64(0); i < arraySize; i++ {
-		v := randomValue(int(MaxInlineArrayElementSize))
+		v := randomValue(r, int(MaxInlineArrayElementSize))
 		values[i] = v
 
 		err := array.Insert(i, v)
@@ -931,7 +932,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 
 	// Remove n elements at random index
 	for i := uint64(0); i < arraySize; i++ {
-		k := rand.Intn(int(array.Count()))
+		k := r.Intn(int(array.Count()))
 
 		existingStorable, err := array.Remove(uint64(k))
 		require.NoError(t, err)
@@ -954,6 +955,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 
 func testArrayAppendSetInsertRemoveRandomValues(
 	t *testing.T,
+	r *rand.Rand,
 	storage *PersistentSlabStorage,
 	typeInfo TypeInfo,
 	address Address,
@@ -976,7 +978,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 		var nextOp int
 
 		for {
-			nextOp = rand.Intn(MaxArrayOp)
+			nextOp = r.Intn(MaxArrayOp)
 
 			if array.Count() > 0 || (nextOp != ArrayRemoveOp && nextOp != ArraySetOp) {
 				break
@@ -986,15 +988,15 @@ func testArrayAppendSetInsertRemoveRandomValues(
 		switch nextOp {
 
 		case ArrayAppendOp:
-			v := randomValue(int(MaxInlineArrayElementSize))
+			v := randomValue(r, int(MaxInlineArrayElementSize))
 			values = append(values, v)
 
 			err := array.Append(v)
 			require.NoError(t, err)
 
 		case ArraySetOp:
-			k := rand.Intn(int(array.Count()))
-			v := randomValue(int(MaxInlineArrayElementSize))
+			k := r.Intn(int(array.Count()))
+			v := randomValue(r, int(MaxInlineArrayElementSize))
 
 			oldV := values[k]
 
@@ -1013,8 +1015,8 @@ func testArrayAppendSetInsertRemoveRandomValues(
 			}
 
 		case ArrayInsertOp:
-			k := rand.Intn(int(array.Count() + 1))
-			v := randomValue(int(MaxInlineArrayElementSize))
+			k := r.Intn(int(array.Count() + 1))
+			v := randomValue(r, int(MaxInlineArrayElementSize))
 
 			if k == int(array.Count()) {
 				values = append(values, v)
@@ -1028,7 +1030,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 			require.NoError(t, err)
 
 		case ArrayRemoveOp:
-			k := rand.Intn(int(array.Count()))
+			k := r.Intn(int(array.Count()))
 
 			existingStorable, err := array.Remove(uint64(k))
 			require.NoError(t, err)
@@ -1061,11 +1063,13 @@ func TestArrayAppendSetInsertRemoveRandomValues(t *testing.T) {
 
 	const opCount = 4096
 
+	r := newRand(t)
+
 	typeInfo := testTypeInfo{42}
 	storage := newTestPersistentStorage(t)
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	array, values := testArrayAppendSetInsertRemoveRandomValues(t, storage, typeInfo, address, opCount)
+	array, values := testArrayAppendSetInsertRemoveRandomValues(t, r, storage, typeInfo, address, opCount)
 	verifyArray(t, storage, typeInfo, address, array, values, false)
 }
 
@@ -1478,11 +1482,13 @@ func TestArrayEncodeDecodeRandomValues(t *testing.T) {
 
 	const opCount = 8192
 
+	r := newRand(t)
+
 	typeInfo := testTypeInfo{42}
 	storage := newTestPersistentStorage(t)
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	array, values := testArrayAppendSetInsertRemoveRandomValues(t, storage, typeInfo, address, opCount)
+	array, values := testArrayAppendSetInsertRemoveRandomValues(t, r, storage, typeInfo, address, opCount)
 
 	verifyArray(t, storage, typeInfo, address, array, values, false)
 
@@ -1560,11 +1566,13 @@ func TestArrayStringElement(t *testing.T) {
 
 		const arraySize = 4096
 
+		r := newRand(t)
+
 		stringSize := int(MaxInlineArrayElementSize - 3)
 
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			s := randStr(stringSize)
+			s := randStr(r, stringSize)
 			values[i] = NewStringValue(s)
 		}
 
@@ -1591,11 +1599,13 @@ func TestArrayStringElement(t *testing.T) {
 
 		const arraySize = 4096
 
+		r := newRand(t)
+
 		stringSize := int(MaxInlineArrayElementSize + 512)
 
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			s := randStr(stringSize)
+			s := randStr(r, stringSize)
 			values[i] = NewStringValue(s)
 		}
 
@@ -1974,6 +1984,8 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		const arraySize = 4096
 
+		r := newRand(t)
+
 		typeInfo := testTypeInfo{42}
 
 		array, err := NewArray(
@@ -1984,7 +1996,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			v := randomValue(int(MaxInlineArrayElementSize))
+			v := randomValue(r, int(MaxInlineArrayElementSize))
 			values[i] = v
 
 			err := array.Append(v)
@@ -2021,6 +2033,8 @@ func TestArrayFromBatchData(t *testing.T) {
 		SetThreshold(256)
 		defer SetThreshold(1024)
 
+		r := newRand(t)
+
 		typeInfo := testTypeInfo{42}
 		array, err := NewArray(
 			newTestPersistentStorage(t),
@@ -2031,17 +2045,17 @@ func TestArrayFromBatchData(t *testing.T) {
 		var values []Value
 		var v Value
 
-		v = NewStringValue(randStr(int(MaxInlineArrayElementSize - 2)))
+		v = NewStringValue(randStr(r, int(MaxInlineArrayElementSize-2)))
 		values = append(values, v)
 		err = array.Append(v)
 		require.NoError(t, err)
 
-		v = NewStringValue(randStr(int(MaxInlineArrayElementSize - 2)))
+		v = NewStringValue(randStr(r, int(MaxInlineArrayElementSize-2)))
 		values = append(values, v)
 		err = array.Append(v)
 		require.NoError(t, err)
 
-		v = NewStringValue(randStr(int(MaxInlineArrayElementSize - 2)))
+		v = NewStringValue(randStr(r, int(MaxInlineArrayElementSize-2)))
 		values = append(values, v)
 		err = array.Append(v)
 		require.NoError(t, err)
@@ -2096,6 +2110,8 @@ func TestArrayNestedStorables(t *testing.T) {
 func TestArrayMaxInlineElement(t *testing.T) {
 	t.Parallel()
 
+	r := newRand(t)
+
 	typeInfo := testTypeInfo{42}
 	storage := newTestPersistentStorage(t)
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -2106,7 +2122,7 @@ func TestArrayMaxInlineElement(t *testing.T) {
 	var values []Value
 	for i := 0; i < 2; i++ {
 		// String length is MaxInlineArrayElementSize - 3 to account for string encoding overhead.
-		v := NewStringValue(randStr(int(MaxInlineArrayElementSize - 3)))
+		v := NewStringValue(randStr(r, int(MaxInlineArrayElementSize-3)))
 		values = append(values, v)
 
 		err = array.Append(v)

@@ -234,10 +234,12 @@ func TestMapSetAndGet(t *testing.T) {
 			keyStringSize = 16
 		)
 
+		r := newRand(t)
+
 		keyValues := make(map[Value]Value, mapSize)
 		i := uint64(0)
 		for len(keyValues) < mapSize {
-			k := NewStringValue(randStr(keyStringSize))
+			k := NewStringValue(randStr(r, keyStringSize))
 			v := Uint64Value(i)
 			keyValues[k] = v
 			i++
@@ -268,10 +270,12 @@ func TestMapSetAndGet(t *testing.T) {
 			keyStringSize = 16
 		)
 
+		r := newRand(t)
+
 		keyValues := make(map[Value]Value, mapSize)
 		i := uint64(0)
 		for len(keyValues) < mapSize {
-			k := NewStringValue(randStr(keyStringSize))
+			k := NewStringValue(randStr(r, keyStringSize))
 			v := Uint64Value(i)
 			keyValues[k] = v
 			i++
@@ -318,11 +322,13 @@ func TestMapSetAndGet(t *testing.T) {
 			keyStringMaxSize = 1024
 		)
 
+		r := newRand(t)
+
 		keyValues := make(map[Value]Value, mapSize)
 		for len(keyValues) < mapSize {
-			slen := rand.Intn(keyStringMaxSize)
-			k := NewStringValue(randStr(slen))
-			v := randomValue(int(maxInlineMapElementSize))
+			slen := r.Intn(keyStringMaxSize)
+			k := NewStringValue(randStr(r, slen))
+			v := randomValue(r, int(maxInlineMapElementSize))
 			keyValues[k] = v
 		}
 
@@ -350,11 +356,13 @@ func TestMapHas(t *testing.T) {
 		keyStringSize = 16
 	)
 
+	r := newRand(t)
+
 	keys := make(map[Value]bool, mapSize*2)
 	keysToInsert := make([]Value, 0, mapSize)
 	keysToNotInsert := make([]Value, 0, mapSize)
 	for len(keysToInsert) < mapSize || len(keysToNotInsert) < mapSize {
-		k := NewStringValue(randStr(keyStringSize))
+		k := NewStringValue(randStr(r, keyStringSize))
 		if !keys[k] {
 			keys[k] = true
 
@@ -405,17 +413,19 @@ func TestMapRemove(t *testing.T) {
 		largeValueStringSize = 512
 	)
 
+	r := newRand(t)
+
 	smallKeyValues := make(map[Value]Value, mapSize)
 	for len(smallKeyValues) < mapSize {
-		k := NewStringValue(randStr(smallKeyStringSize))
-		v := NewStringValue(randStr(smallValueStringSize))
+		k := NewStringValue(randStr(r, smallKeyStringSize))
+		v := NewStringValue(randStr(r, smallValueStringSize))
 		smallKeyValues[k] = v
 	}
 
 	largeKeyValues := make(map[Value]Value, mapSize)
 	for len(largeKeyValues) < mapSize {
-		k := NewStringValue(randStr(largeKeyStringSize))
-		v := NewStringValue(randStr(largeValueStringSize))
+		k := NewStringValue(randStr(r, largeKeyStringSize))
+		v := NewStringValue(randStr(r, largeValueStringSize))
 		largeKeyValues[k] = v
 	}
 
@@ -490,17 +500,20 @@ func TestMapRemove(t *testing.T) {
 }
 
 func TestMapIterate(t *testing.T) {
+
 	t.Run("no collision", func(t *testing.T) {
 		const (
 			mapSize       = 2048
 			keyStringSize = 16
 		)
 
+		r := newRand(t)
+
 		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, mapSize)
 		i := uint64(0)
 		for len(keyValues) < mapSize {
-			k := NewStringValue(randStr(keyStringSize))
+			k := NewStringValue(randStr(r, keyStringSize))
 			if _, found := keyValues[k]; !found {
 				keyValues[k] = Uint64Value(i)
 				sortedKeys[i] = k
@@ -565,9 +578,12 @@ func TestMapIterate(t *testing.T) {
 
 	t.Run("collision", func(t *testing.T) {
 		const (
-			mapSize       = 1024
-			keyStringSize = 16
+			mapSize         = 1024
+			keyStringSize   = 16
+			valueStringSize = 16
 		)
+
+		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
 		typeInfo := testTypeInfo{42}
@@ -580,18 +596,18 @@ func TestMapIterate(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, 0, mapSize)
 		for len(keyValues) < mapSize {
-			k := NewStringValue(randStr(keyStringSize))
+			k := NewStringValue(randStr(r, keyStringSize))
 
 			if _, found := keyValues[k]; !found {
-				v := NewStringValue(randStr(16))
+				v := NewStringValue(randStr(r, valueStringSize))
 				sortedKeys = append(sortedKeys, k)
 				keyValues[k] = v
 
 				digests := []Digest{
-					Digest(rand.Intn(256)),
-					Digest(rand.Intn(256)),
-					Digest(rand.Intn(256)),
-					Digest(rand.Intn(256)),
+					Digest(r.Intn(256)),
+					Digest(r.Intn(256)),
+					Digest(r.Intn(256)),
+					Digest(r.Intn(256)),
 				}
 				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
@@ -639,7 +655,7 @@ func TestMapIterate(t *testing.T) {
 	})
 }
 
-func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
+func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) {
 
 	const (
 		mapSize            = 1024
@@ -654,7 +670,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	uniqueFirstLevelDigests := make(map[Digest]bool, mockDigestCount)
 	firstLevelDigests := make([]Digest, 0, mockDigestCount)
 	for len(firstLevelDigests) < mockDigestCount {
-		d := Digest(uint64(rand.Intn(256)))
+		d := Digest(uint64(r.Intn(256)))
 		if !uniqueFirstLevelDigests[d] {
 			uniqueFirstLevelDigests[d] = true
 			firstLevelDigests = append(firstLevelDigests, d)
@@ -666,7 +682,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 		digests := make([]Digest, maxDigestLevel)
 		digests[0] = firstLevelDigests[i]
 		for j := 1; j < maxDigestLevel; j++ {
-			digests[j] = Digest(uint64(rand.Intn(256)))
+			digests[j] = Digest(uint64(r.Intn(256)))
 		}
 		digestsGroup[i] = digests
 	}
@@ -676,9 +692,9 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	keyValues := make(map[Value]Value, mapSize)
 	i := 0
 	for len(keyValues) < mapSize {
-		k := NewStringValue(randStr(rand.Intn(keyStringMaxSize)))
+		k := NewStringValue(randStr(r, r.Intn(keyStringMaxSize)))
 		if _, found := keyValues[k]; !found {
-			keyValues[k] = NewStringValue(randStr(rand.Intn(valueStringMaxSize)))
+			keyValues[k] = NewStringValue(randStr(r, r.Intn(valueStringMaxSize)))
 
 			index := i % len(digestsGroup)
 			digests := digestsGroup[index]
@@ -734,7 +750,7 @@ func testMapDeterministicHashCollision(t *testing.T, maxDigestLevel int) {
 	verifyEmptyMap(t, storage, typeInfo, address, m)
 }
 
-func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
+func testMapRandomHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) {
 
 	const (
 		mapSize            = 1024
@@ -746,14 +762,14 @@ func testMapRandomHashCollision(t *testing.T, maxDigestLevel int) {
 
 	keyValues := make(map[Value]Value, mapSize)
 	for len(keyValues) < mapSize {
-		k := NewStringValue(randStr(rand.Intn(keyStringMaxSize)))
+		k := NewStringValue(randStr(r, r.Intn(keyStringMaxSize)))
 
 		if _, found := keyValues[k]; !found {
-			keyValues[k] = NewStringValue(randStr(valueStringMaxSize))
+			keyValues[k] = NewStringValue(randStr(r, valueStringMaxSize))
 
 			var digests []Digest
 			for i := 0; i < maxDigestLevel; i++ {
-				digests = append(digests, Digest(rand.Intn(256)))
+				digests = append(digests, Digest(r.Intn(256)))
 			}
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -809,23 +825,26 @@ func TestMapHashCollision(t *testing.T) {
 
 	const maxDigestLevel = 4
 
+	r := newRand(t)
+
 	for hashLevel := 1; hashLevel <= maxDigestLevel; hashLevel++ {
 		name := fmt.Sprintf("deterministic max hash level %d", hashLevel)
 		t.Run(name, func(t *testing.T) {
-			testMapDeterministicHashCollision(t, hashLevel)
+			testMapDeterministicHashCollision(t, r, hashLevel)
 		})
 	}
 
 	for hashLevel := 1; hashLevel <= maxDigestLevel; hashLevel++ {
 		name := fmt.Sprintf("random max hash level %d", hashLevel)
 		t.Run(name, func(t *testing.T) {
-			testMapRandomHashCollision(t, hashLevel)
+			testMapRandomHashCollision(t, r, hashLevel)
 		})
 	}
 }
 
 func testMapSetRemoveRandomValues(
 	t *testing.T,
+	r *rand.Rand,
 	storage *PersistentSlabStorage,
 	typeInfo TypeInfo,
 	address Address,
@@ -852,7 +871,7 @@ func testMapSetRemoveRandomValues(
 	var keys []Value
 	for i := uint64(0); i < opCount; i++ {
 
-		nextOp := rand.Intn(MapMaxOp)
+		nextOp := r.Intn(MapMaxOp)
 
 		if m.Count() == 0 {
 			nextOp = MapSetOp
@@ -862,12 +881,12 @@ func testMapSetRemoveRandomValues(
 
 		case MapSetOp:
 
-			k := randomValue(int(maxInlineMapElementSize))
-			v := randomValue(int(maxInlineMapElementSize))
+			k := randomValue(r, int(maxInlineMapElementSize))
+			v := randomValue(r, int(maxInlineMapElementSize))
 
 			var digests []Digest
 			for i := 0; i < digestMaxLevels; i++ {
-				digests = append(digests, Digest(rand.Intn(digestMaxValue)))
+				digests = append(digests, Digest(r.Intn(digestMaxValue)))
 			}
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -895,7 +914,7 @@ func testMapSetRemoveRandomValues(
 			keyValues[k] = v
 
 		case MapRemoveOp:
-			index := rand.Intn(len(keys))
+			index := r.Intn(len(keys))
 			k := keys[index]
 
 			removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
@@ -937,11 +956,13 @@ func TestMapSetRemoveRandomValues(t *testing.T) {
 	SetThreshold(256)
 	defer SetThreshold(1024)
 
+	r := newRand(t)
+
 	storage := newTestPersistentStorage(t)
 	typeInfo := testTypeInfo{42}
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	m, keyValues := testMapSetRemoveRandomValues(t, storage, typeInfo, address)
+	m, keyValues := testMapSetRemoveRandomValues(t, r, storage, typeInfo, address)
 
 	verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 }
@@ -2100,7 +2121,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, expectedNoPointer, stored[id1])
 
 		// Overwrite existing value with long string
-		vs := NewStringValue(randStr(512))
+		vs := NewStringValue(strings.Repeat("a", 512))
 		existingStorable, err = m.Set(compare, hashInputProvider, k, vs)
 		require.NoError(t, err)
 
@@ -2164,11 +2185,13 @@ func TestMapEncodeDecodeRandomValues(t *testing.T) {
 	SetThreshold(256)
 	defer SetThreshold(1024)
 
+	r := newRand(t)
+
 	typeInfo := testTypeInfo{42}
 	storage := newTestPersistentStorage(t)
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	m, keyValues := testMapSetRemoveRandomValues(t, storage, typeInfo, address)
+	m, keyValues := testMapSetRemoveRandomValues(t, r, storage, typeInfo, address)
 
 	verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 
@@ -2186,6 +2209,8 @@ func TestMapStoredValue(t *testing.T) {
 
 	const mapSize = 4096
 
+	r := newRand(t)
+
 	typeInfo := testTypeInfo{42}
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestPersistentStorage(t)
@@ -2193,7 +2218,7 @@ func TestMapStoredValue(t *testing.T) {
 	keyValues := make(map[Value]Value, mapSize)
 	i := 0
 	for len(keyValues) < mapSize {
-		k := NewStringValue(randStr(16))
+		k := NewStringValue(randStr(r, 16))
 		keyValues[k] = Uint64Value(i)
 		i++
 	}
@@ -2296,14 +2321,16 @@ func TestMapPopIterate(t *testing.T) {
 	t.Run("root-metaslab", func(t *testing.T) {
 		const mapSize = 4096
 
+		r := newRand(t)
+
 		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, mapSize)
 		i := 0
 		for len(keyValues) < mapSize {
-			k := NewStringValue(randStr(16))
+			k := NewStringValue(randStr(r, 16))
 			if _, found := keyValues[k]; !found {
 				sortedKeys[i] = k
-				keyValues[k] = NewStringValue(randStr(16))
+				keyValues[k] = NewStringValue(randStr(r, 16))
 				i++
 			}
 		}
@@ -2355,6 +2382,8 @@ func TestMapPopIterate(t *testing.T) {
 		SetThreshold(512)
 		defer SetThreshold(1024)
 
+		r := newRand(t)
+
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := &mockDigesterBuilder{}
@@ -2367,12 +2396,12 @@ func TestMapPopIterate(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		i := 0
 		for len(keyValues) < mapSize {
-			k := NewStringValue(randStr(16))
+			k := NewStringValue(randStr(r, 16))
 
 			if _, found := keyValues[k]; !found {
 
 				sortedKeys[i] = k
-				keyValues[k] = NewStringValue(randStr(16))
+				keyValues[k] = NewStringValue(randStr(r, 16))
 
 				digests := []Digest{
 					Digest(i % 100),
@@ -2763,6 +2792,8 @@ func TestMapFromBatchData(t *testing.T) {
 
 		const mapSize = 4096
 
+		r := newRand(t)
+
 		typeInfo := testTypeInfo{42}
 
 		m, err := NewMap(
@@ -2774,8 +2805,8 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 
 		for m.Count() < mapSize {
-			k := randomValue(int(maxInlineMapElementSize))
-			v := randomValue(int(maxInlineMapElementSize))
+			k := randomValue(r, int(maxInlineMapElementSize))
+			v := randomValue(r, int(maxInlineMapElementSize))
 
 			_, err = m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
@@ -2902,6 +2933,10 @@ func TestMapFromBatchData(t *testing.T) {
 		SetThreshold(256)
 		defer SetThreshold(1024)
 
+		r := newRand(t)
+
+		maxStringSize := int(MaxInlineMapKeyOrValueSize - 2)
+
 		typeInfo := testTypeInfo{42}
 
 		digesterBuilder := &mockDigesterBuilder{}
@@ -2914,16 +2949,16 @@ func TestMapFromBatchData(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		k := NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
-		v := NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
+		k := NewStringValue(randStr(r, maxStringSize))
+		v := NewStringValue(randStr(r, maxStringSize))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3881892766069237908}})
 
 		storable, err := m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
 		require.Nil(t, storable)
 
-		k = NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
-		v = NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
+		k = NewStringValue(randStr(r, maxStringSize))
+		v = NewStringValue(randStr(r, maxStringSize))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3882976639190041664}})
 
 		storable, err = m.Set(compare, hashInputProvider, k, v)
@@ -3047,6 +3082,8 @@ func TestMapNestedStorables(t *testing.T) {
 func TestMapMaxInlineElement(t *testing.T) {
 	t.Parallel()
 
+	r := newRand(t)
+	maxStringSize := int(MaxInlineMapKeyOrValueSize - 2)
 	typeInfo := testTypeInfo{42}
 	storage := newTestPersistentStorage(t)
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -3057,8 +3094,8 @@ func TestMapMaxInlineElement(t *testing.T) {
 	keyValues := make(map[Value]Value)
 	for len(keyValues) < 2 {
 		// String length is MaxInlineMapElementSize - 2 to account for string encoding overhead.
-		k := NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
-		v := NewStringValue(randStr(int(MaxInlineMapKeyOrValueSize - 2)))
+		k := NewStringValue(randStr(r, maxStringSize))
+		v := NewStringValue(randStr(r, maxStringSize))
 		keyValues[k] = v
 
 		_, err := m.Set(compare, hashInputProvider, k, v)

@@ -165,7 +165,7 @@ func BenchmarkBatchAppendArray100000Elems(b *testing.B) {
 // XXXLArray takes too long to run.
 // func BenchmarkLookupXXXLArray(b *testing.B) { benchmarkLookup(b, 100_000_000, 100) }
 
-func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, error) {
+func setupArray(r *rand.Rand, storage *PersistentSlabStorage, initialArraySize int) (*Array, error) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -177,7 +177,7 @@ func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, e
 	}
 
 	for i := 0; i < initialArraySize; i++ {
-		v := RandomValue()
+		v := RandomValue(r)
 		err := array.Append(v)
 		if err != nil {
 			return nil, err
@@ -205,9 +205,11 @@ func benchmarkGet(b *testing.B, initialArraySize, numberOfElements int) {
 
 	b.StopTimer()
 
+	r := newRand(b)
+
 	storage := newTestPersistentStorage(b)
 
-	array, err := setupArray(storage, initialArraySize)
+	array, err := setupArray(r, storage, initialArraySize)
 	require.NoError(b, err)
 
 	var storable Storable
@@ -216,7 +218,7 @@ func benchmarkGet(b *testing.B, initialArraySize, numberOfElements int) {
 
 	for i := 0; i < b.N; i++ {
 		for i := 0; i < numberOfElements; i++ {
-			index := rand.Intn(int(array.Count()))
+			index := r.Intn(int(array.Count()))
 			storable, _ = array.Get(uint64(index))
 		}
 	}
@@ -228,20 +230,22 @@ func benchmarkInsert(b *testing.B, initialArraySize, numberOfElements int) {
 
 	b.StopTimer()
 
+	r := newRand(b)
+
 	storage := newTestPersistentStorage(b)
 
 	for i := 0; i < b.N; i++ {
 
 		b.StopTimer()
 
-		array, err := setupArray(storage, initialArraySize)
+		array, err := setupArray(r, storage, initialArraySize)
 		require.NoError(b, err)
 
 		b.StartTimer()
 
 		for i := 0; i < numberOfElements; i++ {
-			index := rand.Intn(int(array.Count()))
-			v := RandomValue()
+			index := r.Intn(int(array.Count()))
+			v := RandomValue(r)
 			_ = array.Insert(uint64(index), v)
 		}
 	}
@@ -251,19 +255,21 @@ func benchmarkRemove(b *testing.B, initialArraySize, numberOfElements int) {
 
 	b.StopTimer()
 
+	r := newRand(b)
+
 	storage := newTestPersistentStorage(b)
 
 	for i := 0; i < b.N; i++ {
 
 		b.StopTimer()
 
-		array, err := setupArray(storage, initialArraySize)
+		array, err := setupArray(r, storage, initialArraySize)
 		require.NoError(b, err)
 
 		b.StartTimer()
 
 		for i := 0; i < numberOfElements; i++ {
-			index := rand.Intn(int(array.Count()))
+			index := r.Intn(int(array.Count()))
 			_, _ = array.Remove(uint64(index))
 		}
 	}
@@ -273,9 +279,11 @@ func benchmarkLoopRemove(b *testing.B, initialArraySize int) {
 
 	b.StopTimer()
 
+	r := newRand(b)
+
 	storage := newTestPersistentStorage(b)
 
-	array, err := setupArray(storage, initialArraySize)
+	array, err := setupArray(r, storage, initialArraySize)
 	require.NoError(b, err)
 
 	var storable Storable
@@ -295,9 +303,11 @@ func benchmarkPopRemove(b *testing.B, initialArraySize int) {
 
 	b.StopTimer()
 
+	r := newRand(b)
+
 	storage := newTestPersistentStorage(b)
 
-	array, err := setupArray(storage, initialArraySize)
+	array, err := setupArray(r, storage, initialArraySize)
 	require.NoError(b, err)
 
 	var storable Storable
@@ -320,9 +330,11 @@ func benchmarkLoopAppend(b *testing.B, initialArraySize int) {
 
 	b.StopTimer()
 
+	r := newRand(b)
+
 	storage := newTestPersistentStorage(b)
 
-	array, err := setupArray(storage, initialArraySize)
+	array, err := setupArray(r, storage, initialArraySize)
 	require.NoError(b, err)
 
 	b.StartTimer()
@@ -345,9 +357,11 @@ func benchmarkBatchAppend(b *testing.B, initialArraySize int) {
 
 	b.StopTimer()
 
+	r := newRand(b)
+
 	storage := newTestPersistentStorage(b)
 
-	array, err := setupArray(storage, initialArraySize)
+	array, err := setupArray(r, storage, initialArraySize)
 	require.NoError(b, err)
 
 	b.StartTimer()

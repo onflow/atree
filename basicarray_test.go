@@ -20,7 +20,6 @@ package atree
 
 import (
 	"math"
-	"math/rand"
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
@@ -287,6 +286,8 @@ func TestBasicArrayRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 	const actionCount = 1024 * 16
 
+	r := newRand(t)
+
 	storage := newTestBasicStorage(t)
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -299,20 +300,20 @@ func TestBasicArrayRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 		var v Value
 
-		switch rand.Intn(MaxType) {
+		switch r.Intn(MaxType) {
 		case Uint8Type:
-			n := rand.Intn(math.MaxUint8 + 1)
+			n := r.Intn(math.MaxUint8 + 1)
 			v = Uint8Value(n)
 		case Uint16Type:
-			n := rand.Intn(math.MaxUint16 + 1)
+			n := r.Intn(math.MaxUint16 + 1)
 			v = Uint16Value(n)
 		case Uint32Type:
-			v = Uint32Value(rand.Uint32())
+			v = Uint32Value(r.Uint32())
 		case Uint64Type:
-			v = Uint64Value(rand.Uint64())
+			v = Uint64Value(r.Uint64())
 		}
 
-		switch rand.Intn(MaxAction) {
+		switch r.Intn(MaxAction) {
 
 		case AppendAction:
 			values = append(values, v)
@@ -323,7 +324,7 @@ func TestBasicArrayRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 			if array.Count() == 0 {
 				continue
 			}
-			k := rand.Intn(int(array.Count()))
+			k := r.Intn(int(array.Count()))
 
 			values[k] = v
 
@@ -331,7 +332,7 @@ func TestBasicArrayRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 			require.NoError(t, err)
 
 		case InsertAction:
-			k := rand.Intn(int(array.Count() + 1))
+			k := r.Intn(int(array.Count() + 1))
 
 			if k == int(array.Count()) {
 				values = append(values, v)
@@ -346,7 +347,7 @@ func TestBasicArrayRandomAppendSetInsertRemoveMixedTypes(t *testing.T) {
 
 		case RemoveAction:
 			if array.Count() > 0 {
-				k := rand.Intn(int(array.Count()))
+				k := r.Intn(int(array.Count()))
 
 				v, err := array.Remove(uint64(k))
 				require.NoError(t, err)
@@ -389,23 +390,25 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 
 	array := NewBasicArray(storage, address)
 
+	r := newRand(t)
+
 	const arraySize = 1024 * 4
 	values := make([]Value, arraySize)
 	for i := uint64(0); i < arraySize; i++ {
 
 		var v Value
 
-		switch rand.Intn(MaxType) {
+		switch r.Intn(MaxType) {
 		case Uint8Type:
-			n := rand.Intn(math.MaxUint8 + 1)
+			n := r.Intn(math.MaxUint8 + 1)
 			v = Uint8Value(n)
 		case Uint16Type:
-			n := rand.Intn(math.MaxUint16 + 1)
+			n := r.Intn(math.MaxUint16 + 1)
 			v = Uint16Value(n)
 		case Uint32Type:
-			v = Uint32Value(rand.Uint32())
+			v = Uint32Value(r.Uint32())
 		case Uint64Type:
-			v = Uint64Value(rand.Uint64())
+			v = Uint64Value(r.Uint64())
 		}
 
 		values[i] = v

@@ -19,7 +19,6 @@
 package atree
 
 import (
-	"math/rand"
 	"testing"
 	"time"
 
@@ -57,9 +56,7 @@ func BenchmarkXXXLBasicArray(b *testing.B) {
 // BenchmarkBasicArray benchmarks the performance of basic array
 func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 
-	seed := time.Now().UnixNano()
-	//fmt.Printf("benchmarkBasicArray seed: 0x%x\n", seed)
-	rand.Seed(seed)
+	r := newRand(b)
 
 	storage := newTestPersistentStorage(b)
 
@@ -78,7 +75,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	// setup
 	for i := 0; i < initialArraySize; i++ {
-		v := RandomValue()
+		v := RandomValue(r)
 		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 		require.NoError(b, err)
 		totalRawDataSize += storable.ByteSize()
@@ -97,7 +94,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
-		v := RandomValue()
+		v := RandomValue(r)
 		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 		require.NoError(b, err)
 		totalRawDataSize += storable.ByteSize()
@@ -114,7 +111,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
-		ind := rand.Intn(int(array.Count()))
+		ind := r.Intn(int(array.Count()))
 		s, err := array.Remove(uint64(ind))
 		require.NoError(b, err)
 		storable, err := s.Storable(storage, array.Address(), MaxInlineArrayElementSize)
@@ -131,8 +128,8 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
-		ind := rand.Intn(int(array.Count()))
-		v := RandomValue()
+		ind := r.Intn(int(array.Count()))
+		v := RandomValue(r)
 		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 		require.NoError(b, err)
 		totalRawDataSize += storable.ByteSize()
@@ -149,7 +146,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	start = time.Now()
 	for i := 0; i < numberOfElements; i++ {
-		ind := rand.Intn(int(array.Count()))
+		ind := r.Intn(int(array.Count()))
 		_, err := array.Get(uint64(ind))
 		require.NoError(b, err)
 	}
@@ -162,7 +159,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 	array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
-	ind := rand.Intn(int(array.Count()))
+	ind := r.Intn(int(array.Count()))
 	_, err = array.Get(uint64(ind))
 	require.NoError(b, err)
 	storageOverheadRatio := float64(storage.baseStorage.Size()) / float64(totalRawDataSize)

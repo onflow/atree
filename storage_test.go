@@ -128,6 +128,7 @@ func TestPersistentStorage(t *testing.T) {
 		numberOfAccounts := 100
 		numberOfSlabsPerAccount := 10
 
+		r := newRand(t)
 		baseStorage := newAccessOrderTrackerBaseStorage()
 		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 		baseStorage2 := newAccessOrderTrackerBaseStorage()
@@ -137,8 +138,8 @@ func TestPersistentStorage(t *testing.T) {
 		// test random updates apply commit and check the order of commited values
 		for i := 0; i < numberOfAccounts; i++ {
 			for j := 0; j < numberOfSlabsPerAccount; j++ {
-				addr := generateRandomAddress()
-				slab := generateRandomSlab()
+				addr := generateRandomAddress(r)
+				slab := generateRandomSlab(r)
 
 				storageID, err := storage.GenerateStorageID(addr)
 				require.NoError(t, err)
@@ -217,13 +218,13 @@ func TestPersistentStorage(t *testing.T) {
 	})
 }
 
-func generateRandomSlab() Slab {
-	return &ArrayMetaDataSlab{childrenHeaders: []ArraySlabHeader{{size: rand.Uint32(), count: rand.Uint32()}}}
+func generateRandomSlab(r *rand.Rand) Slab {
+	return &ArrayMetaDataSlab{childrenHeaders: []ArraySlabHeader{{size: r.Uint32(), count: r.Uint32()}}}
 }
 
-func generateRandomAddress() Address {
+func generateRandomAddress(r *rand.Rand) Address {
 	address := Address{}
-	rand.Read(address[:])
+	r.Read(address[:])
 	return address
 }
 

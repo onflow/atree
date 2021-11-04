@@ -48,25 +48,25 @@ func BenchmarkXXLArray(b *testing.B) { benchmarkArray(b, 10_000_000, opCount) }
 func BenchmarkXXXLArray(b *testing.B) { benchmarkArray(b, 100_000_000, opCount) }
 
 // TODO add nested arrays as class 5
-func RandomValue() Value {
-	switch rand.Intn(4) {
+func RandomValue(r *rand.Rand) Value {
+	switch r.Intn(4) {
 	case 0:
-		return Uint8Value(rand.Intn(255))
+		return Uint8Value(r.Intn(255))
 	case 1:
-		return Uint16Value(rand.Intn(6535))
+		return Uint16Value(r.Intn(6535))
 	case 2:
-		return Uint32Value(rand.Intn(4294967295))
+		return Uint32Value(r.Intn(4294967295))
 	case 3:
-		return Uint64Value(rand.Intn(1844674407370955161))
+		return Uint64Value(r.Intn(1844674407370955161))
 	default:
-		return Uint8Value(rand.Intn(255))
+		return Uint8Value(r.Intn(255))
 	}
 }
 
 // BenchmarkArray benchmarks the performance of the atree array
 func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
-	rand.Seed(time.Now().UnixNano())
+	r := newRand(b)
 
 	storage := newTestPersistentStorage(b)
 
@@ -89,7 +89,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	// setup
 	for i := 0; i < initialArraySize; i++ {
-		v := RandomValue()
+		v := RandomValue(r)
 		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 		require.NoError(b, err)
 		totalRawDataSize += storable.ByteSize()
@@ -108,7 +108,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	// array, err := NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 	for i := 0; i < numberOfElements; i++ {
-		v := RandomValue()
+		v := RandomValue(r)
 
 		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 		require.NoError(b, err)
@@ -129,7 +129,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	require.NoError(b, err)
 
 	for i := 0; i < numberOfElements; i++ {
-		ind := rand.Intn(int(array.Count()))
+		ind := r.Intn(int(array.Count()))
 		storable, err := array.Remove(uint64(ind))
 		require.NoError(b, err)
 		totalRawDataSize -= storable.ByteSize()
@@ -145,8 +145,8 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	require.NoError(b, err)
 
 	for i := 0; i < numberOfElements; i++ {
-		ind := rand.Intn(int(array.Count()))
-		v := RandomValue()
+		ind := r.Intn(int(array.Count()))
+		v := RandomValue(r)
 
 		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 		require.NoError(b, err)
@@ -167,7 +167,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	require.NoError(b, err)
 
 	for i := 0; i < numberOfElements; i++ {
-		ind := rand.Intn(int(array.Count()))
+		ind := r.Intn(int(array.Count()))
 		_, err := array.Get(uint64(ind))
 		require.NoError(b, err)
 	}
@@ -181,7 +181,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	// array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
-	ind := rand.Intn(int(array.Count()))
+	ind := r.Intn(int(array.Count()))
 	_, err = array.Get(uint64(ind))
 	require.NoError(b, err)
 	storageOverheadRatio := float64(storage.baseStorage.Size()) / float64(totalRawDataSize)
@@ -203,7 +203,7 @@ func BenchmarkLArrayMemoryImpact(b *testing.B) { benchmarkLongTermImpactOnMemory
 // BenchmarkArray benchmarks the performance of the atree array
 func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps int) {
 
-	rand.Seed(time.Now().UnixNano())
+	r := newRand(b)
 
 	storage := newTestPersistentStorage(b)
 
@@ -219,7 +219,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 
 	// setup
 	for i := 0; i < initialArraySize; i++ {
-		v := RandomValue()
+		v := RandomValue(r)
 
 		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 		require.NoError(b, err)
@@ -233,15 +233,15 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 	b.ResetTimer()
 
 	for i := 0; i < numberOfOps; i++ {
-		ind := rand.Intn(int(array.Count()))
+		ind := r.Intn(int(array.Count()))
 		// select opt
-		switch rand.Intn(2) {
+		switch r.Intn(2) {
 		case 0: // remove
 			storable, err := array.Remove(uint64(ind))
 			require.NoError(b, err)
 			totalRawDataSize -= storable.ByteSize()
 		case 1: // insert
-			v := RandomValue()
+			v := RandomValue(r)
 
 			storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize)
 			require.NoError(b, err)

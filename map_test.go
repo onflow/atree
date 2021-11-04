@@ -1146,9 +1146,10 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		const mapSize = 8
 		keyValues := make(map[Value]Value, mapSize)
+		r := 'a'
 		for i := uint64(0); i < mapSize-1; i++ {
-			k := NewStringValue(strings.Repeat(string(letters[i]), 22))
-			v := NewStringValue(strings.Repeat(string(letters[i]), 22))
+			k := NewStringValue(strings.Repeat(string(r), 22))
+			v := NewStringValue(strings.Repeat(string(r), 22))
 			keyValues[k] = v
 
 			digests := []Digest{Digest(i), Digest(i * 2)}
@@ -1157,6 +1158,9 @@ func TestMapEncodeDecode(t *testing.T) {
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			ri := int(r)
+			r = rune(ri + 1)
 		}
 
 		// Create nested array
@@ -1168,7 +1172,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		err = nested.Append(Uint64Value(0))
 		require.NoError(t, err)
 
-		k := NewStringValue(strings.Repeat(string(letters[mapSize-1]), 22))
+		k := NewStringValue(strings.Repeat(string(r), 22))
 		v := nested
 		keyValues[k] = v
 

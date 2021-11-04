@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	letters = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+	runes = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
 )
 
 var seed = flag.Int64("seed", 0, "seed for pseudo-random source")
@@ -46,7 +46,7 @@ func newRand(tb testing.TB) *rand.Rand {
 func randStr(r *rand.Rand, length int) string {
 	b := make([]rune, length)
 	for i := 0; i < length; i++ {
-		b[i] = letters[r.Intn(len(letters))]
+		b[i] = runes[r.Intn(len(runes))]
 	}
 	return string(b)
 }

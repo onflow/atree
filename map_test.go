@@ -617,8 +617,12 @@ func TestMapIterate(t *testing.T) {
 			}
 		}
 
+		t.Log("created map of unique key value pairs")
+
 		// Sort keys by digest
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		t.Log("sorted keys by digests")
 
 		// Iterate key value pairs
 		i := uint64(0)
@@ -631,6 +635,8 @@ func TestMapIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, i, uint64(mapSize))
 
+		t.Log("iterated key value pairs")
+
 		// Iterate keys
 		i = uint64(0)
 		err = m.IterateKeys(func(k Value) (resume bool, err error) {
@@ -641,6 +647,8 @@ func TestMapIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, i, uint64(mapSize))
 
+		t.Log("iterated keys")
+
 		// Iterate values
 		i = uint64(0)
 		err = m.IterateValues(func(v Value) (resume bool, err error) {
@@ -650,6 +658,8 @@ func TestMapIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, i, uint64(mapSize))
+
+		t.Log("iterated values")
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})

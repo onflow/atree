@@ -38,7 +38,13 @@ func newRand(tb testing.TB) *rand.Rand {
 	if *seed == 0 {
 		*seed = time.Now().UnixNano()
 	}
-	tb.Logf("seed: %d\n", *seed)
+
+	// Benchmarks always log, so only log for tests which
+	// will only log with -v flag or on error.
+	if t, ok := tb.(*testing.T); ok {
+		t.Logf("seed: %d\n", *seed)
+	}
+
 	return rand.New(rand.NewSource(*seed))
 }
 

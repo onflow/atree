@@ -25,198 +25,211 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// var slabTargetSize = flag.Int("slabsize", 1024, "target slab size")
-
 var noop Storable
 
-func BenchmarkGetXSArray(b *testing.B) { benchmarkGet(b, 10, 100) }
-
-func BenchmarkGetSArray(b *testing.B) { benchmarkGet(b, 1000, 100) }
-
-func BenchmarkGetMArray(b *testing.B) { benchmarkGet(b, 10_000, 100) }
-
-func BenchmarkGetLArray(b *testing.B) { benchmarkGet(b, 100_000, 100) }
-
-func BenchmarkGetXLArray(b *testing.B) { benchmarkGet(b, 1_000_000, 100) }
-
-func BenchmarkGetXXLArray(b *testing.B) {
-	if testing.Short() {
-		b.Skip("Skipping BenchmarkGetXXLArray in short mode")
+func BenchmarkArrayGet100x(b *testing.B) {
+	benchmarks := []struct {
+		name             string
+		initialArraySize int
+		numberOfOps      int
+		long             bool
+	}{
+		{"10", 10, 100, false},
+		{"1000", 1000, 100, false},
+		{"10000", 10_000, 100, false},
+		{"100000", 100_000, 100, false},
+		{"1000000", 1_000_000, 100, false},
+		{"10000000", 10_000_000, 100, true},
 	}
-	benchmarkGet(b, 10_000_000, 100)
-}
-
-func BenchmarkInsertXSArray(b *testing.B) { benchmarkInsert(b, 10, 100) }
-
-func BenchmarkInsertSArray(b *testing.B) { benchmarkInsert(b, 1000, 100) }
-
-func BenchmarkInsertMArray(b *testing.B) { benchmarkInsert(b, 10_000, 100) }
-
-func BenchmarkInsertLArray(b *testing.B) { benchmarkInsert(b, 100_000, 100) }
-
-func BenchmarkInsertXLArray(b *testing.B) {
-	if testing.Short() {
-		b.Skip("Skipping BenchmarkInsertXLArray in short mode")
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			if bm.long && testing.Short() {
+				b.Skipf("Skipping %s in short mode", bm.name)
+			}
+			benchmarkArrayGet(b, bm.initialArraySize, bm.numberOfOps)
+		})
 	}
-	benchmarkInsert(b, 1_000_000, 100)
 }
 
-func BenchmarkInsertXXLArray(b *testing.B) {
-	if testing.Short() {
-		b.Skip("Skipping BenchmarkInsertXXLArray in short mode")
+func BenchmarkArrayInsert100x(b *testing.B) {
+	benchmarks := []struct {
+		name             string
+		initialArraySize int
+		numberOfOps      int
+		long             bool
+	}{
+		{"10", 10, 100, false},
+		{"1000", 1000, 100, false},
+		{"10000", 10_000, 100, false},
+		{"100000", 100_000, 100, false},
+		{"1000000", 1_000_000, 100, true},
+		{"10000000", 10_000_000, 100, true},
 	}
-	benchmarkInsert(b, 10_000_000, 100)
-}
-
-func BenchmarkRemoveXSArray(b *testing.B) { benchmarkRemove(b, 10, 10) }
-
-func BenchmarkRemoveSArray(b *testing.B) { benchmarkRemove(b, 1000, 100) }
-
-func BenchmarkRemoveMArray(b *testing.B) { benchmarkRemove(b, 10_000, 100) }
-
-func BenchmarkRemoveLArray(b *testing.B) { benchmarkRemove(b, 100_000, 100) }
-
-func BenchmarkRemoveXLArray(b *testing.B) {
-	if testing.Short() {
-		b.Skip("Skipping BenchmarkRemoveXLArray in short mode")
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			if bm.long && testing.Short() {
+				b.Skipf("Skipping %s in short mode", bm.name)
+			}
+			benchmarkArrayInsert(b, bm.initialArraySize, bm.numberOfOps)
+		})
 	}
-	benchmarkRemove(b, 1_000_000, 100)
 }
 
-func BenchmarkRemoveXXLArray(b *testing.B) {
-	if testing.Short() {
-		b.Skip("Skipping BenchmarkRemoveXXLArray in short mode")
+func BenchmarkArrayRemove100x(b *testing.B) {
+	benchmarks := []struct {
+		name             string
+		initialArraySize int
+		numberOfOps      int
+		long             bool
+	}{
+		{"100", 100, 100, false},
+		{"1000", 1000, 100, false},
+		{"10000", 10_000, 100, false},
+		{"100000", 100_000, 100, false},
+		{"1000000", 1_000_000, 100, true},
+		{"10000000", 10_000_000, 100, true},
 	}
-	benchmarkRemove(b, 10_000_000, 100)
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			if bm.long && testing.Short() {
+				b.Skipf("Skipping %s in short mode", bm.name)
+			}
+			benchmarkArrayRemove(b, bm.initialArraySize, bm.numberOfOps)
+		})
+	}
 }
 
-func BenchmarkBatchRemoveArray100Elems(b *testing.B) {
-	b.Run("loop", func(b *testing.B) {
-		benchmarkLoopRemove(b, 100)
-	})
-	b.Run("pop", func(b *testing.B) {
-		benchmarkPopRemove(b, 100)
-	})
+// BenchmarkArrayRemoveAll benchmarks removing all elements in a loop.
+func BenchmarkArrayRemoveAll(b *testing.B) {
+	benchmarks := []struct {
+		name             string
+		initialArraySize int
+		long             bool
+	}{
+		{"100", 100, false},
+		{"1000", 1000, false},
+		{"10000", 10_000, false},
+		{"100000", 100_000, false},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			if bm.long && testing.Short() {
+				b.Skipf("Skipping %s in short mode", bm.name)
+			}
+			benchmarkArrayRemoveAll(b, bm.initialArraySize)
+		})
+	}
 }
 
-func BenchmarkBatchRemoveArray1000Elems(b *testing.B) {
-	b.Run("loop", func(b *testing.B) {
-		benchmarkLoopRemove(b, 1000)
-	})
-	b.Run("pop", func(b *testing.B) {
-		benchmarkPopRemove(b, 1000)
-	})
+// BenchmarkArrayPopIterate benchmarks removing all elements using PopIterate.
+func BenchmarkArrayPopIterate(b *testing.B) {
+	benchmarks := []struct {
+		name             string
+		initialArraySize int
+		long             bool
+	}{
+		{"100", 100, false},
+		{"1000", 1000, false},
+		{"10000", 10_000, false},
+		{"100000", 100_000, false},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			if bm.long && testing.Short() {
+				b.Skipf("Skipping %s in short mode", bm.name)
+			}
+			benchmarkArrayPopIterate(b, bm.initialArraySize)
+		})
+	}
 }
 
-func BenchmarkBatchRemoveArray10000Elems(b *testing.B) {
-	b.Run("loop", func(b *testing.B) {
-		benchmarkLoopRemove(b, 10_000)
-	})
-	b.Run("pop", func(b *testing.B) {
-		benchmarkPopRemove(b, 10_000)
-	})
+func BenchmarkNewArrayFromAppend(b *testing.B) {
+	benchmarks := []struct {
+		name             string
+		initialArraySize int
+		long             bool
+	}{
+		{"100", 100, false},
+		{"1000", 1000, false},
+		{"10000", 10_000, false},
+		{"100000", 100_000, false},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			if bm.long && testing.Short() {
+				b.Skipf("Skipping %s in short mode", bm.name)
+			}
+			benchmarkNewArrayFromAppend(b, bm.initialArraySize)
+		})
+	}
 }
 
-func BenchmarkBatchRemoveArray100000Elems(b *testing.B) {
-	b.Run("loop", func(b *testing.B) {
-		benchmarkLoopRemove(b, 100_000)
-	})
-	b.Run("pop", func(b *testing.B) {
-		benchmarkPopRemove(b, 100_000)
-	})
+func BenchmarkNewArrayFromBatchData(b *testing.B) {
+	benchmarks := []struct {
+		name             string
+		initialArraySize int
+		long             bool
+	}{
+		{"100", 100, false},
+		{"1000", 1000, false},
+		{"10000", 10_000, false},
+		{"100000", 100_000, false},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			if bm.long && testing.Short() {
+				b.Skipf("Skipping %s in short mode", bm.name)
+			}
+			benchmarkNewArrayFromBatchData(b, bm.initialArraySize)
+		})
+	}
 }
 
-func BenchmarkBatchAppendArray100Elems(b *testing.B) {
-	b.Run("loop", func(b *testing.B) {
-		benchmarkLoopAppend(b, 100)
-	})
-	b.Run("batch", func(b *testing.B) {
-		benchmarkBatchAppend(b, 100)
-	})
-}
-
-func BenchmarkBatchAppendArray1000Elems(b *testing.B) {
-	b.Run("loop", func(b *testing.B) {
-		benchmarkLoopAppend(b, 1000)
-	})
-	b.Run("batch", func(b *testing.B) {
-		benchmarkBatchAppend(b, 1000)
-	})
-}
-
-func BenchmarkBatchAppendArray10000Elems(b *testing.B) {
-	b.Run("loop", func(b *testing.B) {
-		benchmarkLoopAppend(b, 10_000)
-	})
-	b.Run("batch", func(b *testing.B) {
-		benchmarkBatchAppend(b, 10_000)
-	})
-}
-
-func BenchmarkBatchAppendArray100000Elems(b *testing.B) {
-	b.Run("loop", func(b *testing.B) {
-		benchmarkLoopAppend(b, 100_000)
-	})
-	b.Run("batch", func(b *testing.B) {
-		benchmarkBatchAppend(b, 100_000)
-	})
-}
-
-// XXXLArray takes too long to run.
-// func BenchmarkLookupXXXLArray(b *testing.B) { benchmarkLookup(b, 100_000_000, 100) }
-
-func setupArray(storage *PersistentSlabStorage, initialArraySize int) (*Array, error) {
+func setupArray(b *testing.B, r *rand.Rand, storage *PersistentSlabStorage, initialArraySize int) *Array {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	typeInfo := testTypeInfo{42}
 
 	array, err := NewArray(storage, address, typeInfo)
-	if err != nil {
-		return nil, err
-	}
+	require.NoError(b, err)
 
 	for i := 0; i < initialArraySize; i++ {
-		v := RandomValue()
+		v := RandomValue(r)
 		err := array.Append(v)
-		if err != nil {
-			return nil, err
-		}
+		require.NoError(b, err)
 	}
 
 	err = storage.Commit()
-	if err != nil {
-		return nil, err
-	}
+	require.NoError(b, err)
 
 	arrayID := array.StorageID()
 
 	storage.DropCache()
 
 	newArray, err := NewArrayWithRootID(storage, arrayID)
-	if err != nil {
-		return nil, err
-	}
+	require.NoError(b, err)
 
-	return newArray, nil
+	return newArray
 }
 
-func benchmarkGet(b *testing.B, initialArraySize, numberOfElements int) {
+func benchmarkArrayGet(b *testing.B, initialArraySize, numberOfOps int) {
 
 	b.StopTimer()
 
+	r := newRand(b)
+
 	storage := newTestPersistentStorage(b)
 
-	array, err := setupArray(storage, initialArraySize)
-	require.NoError(b, err)
+	array := setupArray(b, r, storage, initialArraySize)
 
 	var storable Storable
 
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		for i := 0; i < numberOfElements; i++ {
-			index := rand.Intn(int(array.Count()))
+		for i := 0; i < numberOfOps; i++ {
+			index := r.Intn(int(array.Count()))
 			storable, _ = array.Get(uint64(index))
 		}
 	}
@@ -224,9 +237,11 @@ func benchmarkGet(b *testing.B, initialArraySize, numberOfElements int) {
 	noop = storable
 }
 
-func benchmarkInsert(b *testing.B, initialArraySize, numberOfElements int) {
+func benchmarkArrayInsert(b *testing.B, initialArraySize, numberOfOps int) {
 
 	b.StopTimer()
+
+	r := newRand(b)
 
 	storage := newTestPersistentStorage(b)
 
@@ -234,22 +249,23 @@ func benchmarkInsert(b *testing.B, initialArraySize, numberOfElements int) {
 
 		b.StopTimer()
 
-		array, err := setupArray(storage, initialArraySize)
-		require.NoError(b, err)
+		array := setupArray(b, r, storage, initialArraySize)
 
 		b.StartTimer()
 
-		for i := 0; i < numberOfElements; i++ {
-			index := rand.Intn(int(array.Count()))
-			v := RandomValue()
+		for i := 0; i < numberOfOps; i++ {
+			index := r.Intn(int(array.Count()))
+			v := RandomValue(r)
 			_ = array.Insert(uint64(index), v)
 		}
 	}
 }
 
-func benchmarkRemove(b *testing.B, initialArraySize, numberOfElements int) {
+func benchmarkArrayRemove(b *testing.B, initialArraySize, numberOfOps int) {
 
 	b.StopTimer()
+
+	r := newRand(b)
 
 	storage := newTestPersistentStorage(b)
 
@@ -257,32 +273,35 @@ func benchmarkRemove(b *testing.B, initialArraySize, numberOfElements int) {
 
 		b.StopTimer()
 
-		array, err := setupArray(storage, initialArraySize)
-		require.NoError(b, err)
+		array := setupArray(b, r, storage, initialArraySize)
 
 		b.StartTimer()
 
-		for i := 0; i < numberOfElements; i++ {
-			index := rand.Intn(int(array.Count()))
+		for i := 0; i < numberOfOps; i++ {
+			index := r.Intn(int(array.Count()))
 			_, _ = array.Remove(uint64(index))
 		}
 	}
 }
 
-func benchmarkLoopRemove(b *testing.B, initialArraySize int) {
+func benchmarkArrayRemoveAll(b *testing.B, initialArraySize int) {
 
 	b.StopTimer()
 
-	storage := newTestPersistentStorage(b)
+	r := newRand(b)
 
-	array, err := setupArray(storage, initialArraySize)
-	require.NoError(b, err)
+	storage := newTestPersistentStorage(b)
 
 	var storable Storable
 
-	b.StartTimer()
-
 	for i := 0; i < b.N; i++ {
+
+		b.StopTimer()
+
+		array := setupArray(b, r, storage, initialArraySize)
+
+		b.StartTimer()
+
 		for i := initialArraySize - 1; i >= 0; i-- {
 			storable, _ = array.Remove(uint64(i))
 		}
@@ -291,20 +310,24 @@ func benchmarkLoopRemove(b *testing.B, initialArraySize int) {
 	noop = storable
 }
 
-func benchmarkPopRemove(b *testing.B, initialArraySize int) {
+func benchmarkArrayPopIterate(b *testing.B, initialArraySize int) {
 
 	b.StopTimer()
 
-	storage := newTestPersistentStorage(b)
+	r := newRand(b)
 
-	array, err := setupArray(storage, initialArraySize)
-	require.NoError(b, err)
+	storage := newTestPersistentStorage(b)
 
 	var storable Storable
 
-	b.StartTimer()
-
 	for i := 0; i < b.N; i++ {
+
+		b.StopTimer()
+
+		array := setupArray(b, r, storage, initialArraySize)
+
+		b.StartTimer()
+
 		err := array.PopIterate(func(s Storable) {
 			storable = s
 		})
@@ -316,14 +339,15 @@ func benchmarkPopRemove(b *testing.B, initialArraySize int) {
 	noop = storable
 }
 
-func benchmarkLoopAppend(b *testing.B, initialArraySize int) {
+func benchmarkNewArrayFromAppend(b *testing.B, initialArraySize int) {
 
 	b.StopTimer()
 
+	r := newRand(b)
+
 	storage := newTestPersistentStorage(b)
 
-	array, err := setupArray(storage, initialArraySize)
-	require.NoError(b, err)
+	array := setupArray(b, r, storage, initialArraySize)
 
 	b.StartTimer()
 
@@ -331,7 +355,7 @@ func benchmarkLoopAppend(b *testing.B, initialArraySize int) {
 		copied, _ := NewArray(storage, array.Address(), array.Type())
 
 		_ = array.Iterate(func(value Value) (bool, error) {
-			err = copied.Append(value)
+			_ = copied.Append(value)
 			return true, nil
 		})
 
@@ -341,14 +365,15 @@ func benchmarkLoopAppend(b *testing.B, initialArraySize int) {
 	}
 }
 
-func benchmarkBatchAppend(b *testing.B, initialArraySize int) {
+func benchmarkNewArrayFromBatchData(b *testing.B, initialArraySize int) {
 
 	b.StopTimer()
 
+	r := newRand(b)
+
 	storage := newTestPersistentStorage(b)
 
-	array, err := setupArray(storage, initialArraySize)
-	require.NoError(b, err)
+	array := setupArray(b, r, storage, initialArraySize)
 
 	b.StartTimer()
 

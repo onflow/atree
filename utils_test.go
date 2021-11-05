@@ -19,48 +19,66 @@
 package atree
 
 import (
+	"flag"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
 )
 
 var (
-	letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	runes = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
 )
 
-// randStr returns random UTF-8 string of given length.
-func randStr(length int) string {
-	r := make([]rune, length)
-	for i := range r {
-		r[i] = letters[rand.Intn(len(letters))]
+var seed = flag.Int64("seed", 0, "seed for pseudo-random source")
+
+func newRand(tb testing.TB) *rand.Rand {
+	if *seed == 0 {
+		*seed = time.Now().UnixNano()
 	}
-	return string(r)
+
+	// Benchmarks always log, so only log for tests which
+	// will only log with -v flag or on error.
+	if t, ok := tb.(*testing.T); ok {
+		t.Logf("seed: %d\n", *seed)
+	}
+
+	return rand.New(rand.NewSource(*seed))
 }
 
-func randomValue(maxInlineSize int) Value {
-	switch rand.Intn(6) {
+// randStr returns random UTF-8 string of given length.
+func randStr(r *rand.Rand, length int) string {
+	b := make([]rune, length)
+	for i := 0; i < length; i++ {
+		b[i] = runes[r.Intn(len(runes))]
+	}
+	return string(b)
+}
+
+func randomValue(r *rand.Rand, maxInlineSize int) Value {
+	switch r.Intn(6) {
 
 	case 0:
-		return Uint8Value(rand.Intn(255))
+		return Uint8Value(r.Intn(255))
 
 	case 1:
-		return Uint16Value(rand.Intn(6535))
+		return Uint16Value(r.Intn(6535))
 
 	case 2:
-		return Uint32Value(rand.Intn(4294967295))
+		return Uint32Value(r.Intn(4294967295))
 
 	case 3:
-		return Uint64Value(rand.Intn(1844674407370955161))
+		return Uint64Value(r.Intn(1844674407370955161))
 
 	case 4: // small string (inlinable)
-		slen := rand.Intn(maxInlineSize)
-		return NewStringValue(randStr(slen))
+		slen := r.Intn(maxInlineSize)
+		return NewStringValue(randStr(r, slen))
 
 	case 5: // large string (external)
-		slen := rand.Intn(1024) + maxInlineSize
-		return NewStringValue(randStr(slen))
+		slen := r.Intn(1024) + maxInlineSize
+		return NewStringValue(randStr(r, slen))
 
 	default:
 		panic(NewUnreachableError())

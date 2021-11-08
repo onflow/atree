@@ -242,3 +242,15 @@ func mapEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
 		}
 	}
 }
+
+func encodeSlabs(cborEncMode cbor.EncMode, slabs map[StorageID]Slab) (map[StorageID][]byte, error) {
+	m := make(map[StorageID][]byte)
+	for id, slab := range slabs {
+		b, err := Encode(slab, cborEncMode)
+		if err != nil {
+			return nil, err
+		}
+		m[id] = b
+	}
+	return m, nil
+}

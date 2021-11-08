@@ -62,7 +62,8 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	array := NewBasicArray(storage, address)
+	array, err := NewBasicArray(storage, address)
+	require.NoError(b, err)
 
 	// TODO capture arrayID here ?
 
@@ -89,7 +90,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	// append
 	storage.DropCache()
-	array, err := NewBasicArrayWithRootID(storage, arrayID)
+	array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
 	start = time.Now()

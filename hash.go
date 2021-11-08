@@ -18,7 +18,6 @@ package atree
 
 import (
 	"encoding/binary"
-	"errors"
 	"sync"
 
 	"github.com/fxamacker/circlehash"
@@ -100,7 +99,7 @@ func (bdb *basicDigesterBuilder) SetSeed(k0 uint64, k1 uint64) {
 
 func (bdb *basicDigesterBuilder) Digest(hip HashInputProvider, value Value) (Digester, error) {
 	if bdb.k0 == 0 {
-		return nil, NewHashError(errors.New("k0 is uninitialized"))
+		return nil, NewHashSeedUninitializedError()
 	}
 
 	digester := getBasicDigester()
@@ -125,7 +124,8 @@ func (bd *basicDigester) Reset() {
 
 func (bd *basicDigester) DigestPrefix(level int) ([]Digest, error) {
 	if level > bd.Levels() {
-		return nil, errors.New("digest level out of bounds")
+		// level must be [0, bd.Levels()] (inclusive) for prefix
+		return nil, NewHashLevelErrorf("cannot get digest < level %d: level must be [0, %d]", level, bd.Levels())
 	}
 	var prefix []Digest
 	for i := 0; i < level; i++ {
@@ -140,7 +140,8 @@ func (bd *basicDigester) DigestPrefix(level int) ([]Digest, error) {
 
 func (bd *basicDigester) Digest(level int) (Digest, error) {
 	if level >= bd.Levels() {
-		return 0, errors.New("digest level out of bounds")
+		// level must be [0, bd.Levels()) (not inclusive) for digest
+		return 0, NewHashLevelErrorf("cannot get digest at level %d: level must be [0, %d)", level, bd.Levels())
 	}
 
 	switch level {

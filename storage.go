@@ -21,7 +21,6 @@ package atree
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -63,11 +62,6 @@ var (
 	StorageIDUndefined    = StorageID{}
 )
 
-var (
-	ErrStorageID    = errors.New("invalid storage id")
-	ErrStorageIndex = errors.New("invalid storage index")
-)
-
 func (index StorageIndex) Next() StorageIndex {
 	i := binary.BigEndian.Uint64(index[:])
 
@@ -83,7 +77,7 @@ func NewStorageID(address Address, index StorageIndex) StorageID {
 
 func NewStorageIDFromRawBytes(b []byte) (StorageID, error) {
 	if len(b) < storageIDSize {
-		return StorageID{}, fmt.Errorf("invalid storage id length %d", len(b))
+		return StorageID{}, NewStorageIDErrorf("incorrect storage id buffer length %d", len(b))
 	}
 
 	var address Address
@@ -97,7 +91,7 @@ func NewStorageIDFromRawBytes(b []byte) (StorageID, error) {
 
 func (id StorageID) ToRawBytes(b []byte) (int, error) {
 	if len(b) < storageIDSize {
-		return 0, fmt.Errorf("storage id raw buffer is too short")
+		return 0, NewStorageIDErrorf("incorrect storage id buffer length %d", len(b))
 	}
 	copy(b, id.Address[:])
 	copy(b[8:], id.Index[:])
@@ -106,10 +100,10 @@ func (id StorageID) ToRawBytes(b []byte) (int, error) {
 
 func (id StorageID) Valid() error {
 	if id == StorageIDUndefined {
-		return ErrStorageID
+		return NewStorageIDErrorf("undefined storage id")
 	}
 	if id.Index == StorageIndexUndefined {
-		return ErrStorageIndex
+		return NewStorageIDErrorf("undefined storage index")
 	}
 	return nil
 }
@@ -150,6 +144,8 @@ type InMemBaseStorage struct {
 	segmentsUpdated  map[StorageID]struct{}
 	segmentsTouched  map[StorageID]struct{}
 }
+
+var _ BaseStorage = &InMemBaseStorage{}
 
 func NewInMemBaseStorage() *InMemBaseStorage {
 	return NewInMemBaseStorageFromMap(
@@ -255,6 +251,8 @@ type LedgerBaseStorage struct {
 	bytesStored    int
 }
 
+var _ BaseStorage = &LedgerBaseStorage{}
+
 func NewLedgerBaseStorage(ledger Ledger) *LedgerBaseStorage {
 	return &LedgerBaseStorage{
 		ledger:         ledger,
@@ -280,7 +278,10 @@ func (s *LedgerBaseStorage) Remove(id StorageID) error {
 
 func (s *LedgerBaseStorage) GenerateStorageID(address Address) (StorageID, error) {
 	idx, err := s.ledger.AllocateStorageIndex(address[:])
-	return NewStorageID(address, idx), err
+	if err != nil {
+		return StorageID{}, err
+	}
+	return NewStorageID(address, idx), nil
 }
 
 func SlabIndexToLedgerKey(ind StorageIndex) []byte {
@@ -400,33 +401,6 @@ func (s *BasicSlabStorage) StorageIDs() []StorageID {
 		result = append(result, storageID)
 	}
 	return result
-}
-
-// Encode returns serialized slabs in storage.
-// This is currently used for testing.
-func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
-	m := make(map[StorageID][]byte)
-	for id, slab := range s.Slabs {
-		b, err := Encode(slab, s.cborEncMode)
-		if err != nil {
-			return nil, err
-		}
-		m[id] = b
-	}
-	return m, nil
-}
-
-// Load deserializes encoded slabs and stores in storage.
-// This is currently used for testing.
-func (s *BasicSlabStorage) Load(m map[StorageID][]byte) error {
-	for id, data := range m {
-		slab, err := DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
-		if err != nil {
-			return err
-		}
-		s.Slabs[id] = slab
-	}
-	return nil
 }
 
 func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
@@ -599,6 +573,8 @@ type PersistentSlabStorage struct {
 	autoCommit       bool // flag to call commit after each operation
 }
 
+var _ SlabStorage = &PersistentSlabStorage{}
+
 func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 
 	var slabs []struct {
@@ -633,7 +609,7 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 				var err error
 				slab, ok, err = s.RetrieveIgnoringDeltas(id)
 				if !ok {
-					return fmt.Errorf("missing slab: %s", id)
+					return NewSlabNotFoundErrorf(id, "slab not found during slab iteration")
 				}
 				if err != nil {
 					return err
@@ -763,7 +739,11 @@ func (s *PersistentSlabStorage) GenerateStorageID(address Address) (StorageID, e
 		binary.BigEndian.PutUint64(idx[:], s.tempStorageIndex)
 		return NewStorageID(address, idx), nil
 	}
-	return s.baseStorage.GenerateStorageID(address)
+	id, err := s.baseStorage.GenerateStorageID(address)
+	if err != nil {
+		return StorageID{}, NewStorageError(err)
+	}
+	return id, nil
 }
 
 func (s *PersistentSlabStorage) sortedOwnedDeltaKeys() []StorageID {
@@ -799,7 +779,7 @@ func (s *PersistentSlabStorage) Commit() error {
 		if slab == nil {
 			err = s.baseStorage.Remove(id)
 			if err != nil {
-				return err
+				return NewStorageError(err)
 			}
 			// Deleted slabs are removed from deltas and added to read cache so that:
 			// 1. next read is from in-memory read cache
@@ -812,13 +792,13 @@ func (s *PersistentSlabStorage) Commit() error {
 		// serialize
 		data, err := Encode(slab, s.cborEncMode)
 		if err != nil {
-			return err
+			return NewStorageError(err)
 		}
 
 		// store
 		err = s.baseStorage.Store(id, data)
 		if err != nil {
-			return err
+			return NewStorageError(err)
 		}
 
 		// add to read cache
@@ -891,7 +871,7 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		result := <-results
 		// if any error return
 		if result.err != nil {
-			return result.err
+			return NewStorageError(result.err)
 		}
 		encSlabByID[result.storageID] = result.data
 	}
@@ -906,7 +886,7 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		if data == nil {
 			err = s.baseStorage.Remove(id)
 			if err != nil {
-				return err
+				return NewStorageError(err)
 			}
 			// Deleted slabs are removed from deltas and added to read cache so that:
 			// 1. next read is from in-memory read cache
@@ -919,7 +899,7 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		// store
 		err = s.baseStorage.Store(id, data)
 		if err != nil {
-			return err
+			return NewStorageError(err)
 		}
 
 		s.cache[id] = s.deltas[id]
@@ -951,17 +931,22 @@ func (s *PersistentSlabStorage) RetrieveIgnoringDeltas(id StorageID) (Slab, bool
 
 	// fetch from base storage last
 	data, ok, err := s.baseStorage.Retrieve(id)
-	if !ok || err != nil {
-		return nil, ok, err
+	if err != nil {
+		return nil, ok, NewStorageError(err)
+	}
+	if !ok {
+		return nil, ok, nil
 	}
 
 	slab, err := DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
-	if err == nil {
-		// save decoded slab to cache
-		s.cache[id] = slab
+	if err != nil {
+		return nil, ok, NewStorageError(err)
 	}
 
-	return slab, ok, err
+	// save decoded slab to cache
+	s.cache[id] = slab
+
+	return slab, ok, nil
 }
 
 func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
@@ -977,11 +962,11 @@ func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {
 	if s.autoCommit {
 		data, err := Encode(slab, s.cborEncMode)
 		if err != nil {
-			return err
+			return NewStorageError(err)
 		}
 		err = s.baseStorage.Store(id, data)
 		if err != nil {
-			return err
+			return NewStorageError(err)
 		}
 		s.cache[id] = slab
 		return nil
@@ -996,7 +981,7 @@ func (s *PersistentSlabStorage) Remove(id StorageID) error {
 	if s.autoCommit {
 		err := s.baseStorage.Remove(id)
 		if err != nil {
-			return err
+			return NewStorageError(err)
 		}
 	}
 

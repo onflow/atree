@@ -19,8 +19,6 @@
 package atree
 
 import (
-	"errors"
-	"fmt"
 	"io"
 	"math"
 
@@ -60,8 +58,8 @@ func DecodeSlab(
 	Slab,
 	error,
 ) {
-	if len(data) < 2 {
-		return nil, errors.New("data is too short")
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short")
 	}
 
 	flag := data[1]
@@ -79,7 +77,7 @@ func DecodeSlab(
 		case slabBasicArray:
 			return newBasicArrayDataSlabFromData(id, data, decMode, decodeStorable)
 		default:
-			return nil, fmt.Errorf("data has invalid flag %x", flag)
+			return nil, NewDecodingErrorf("data has invalid flag 0x%x", flag)
 		}
 
 	case slabMap:
@@ -92,14 +90,14 @@ func DecodeSlab(
 		case slabMapCollisionGroup:
 			return newMapDataSlabFromData(id, data, decMode, decodeStorable, decodeTypeInfo)
 		default:
-			return nil, fmt.Errorf("data has invalid flag %x", flag)
+			return nil, NewDecodingErrorf("data has invalid flag 0x%x", flag)
 		}
 
 	case slabStorable:
 		cborDec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
 		storable, err := decodeStorable(cborDec, id)
 		if err != nil {
-			return nil, err
+			return nil, NewDecodingError(err)
 		}
 		return StorableSlab{
 			StorageID: id,
@@ -107,7 +105,7 @@ func DecodeSlab(
 		}, nil
 
 	default:
-		return nil, fmt.Errorf("data has invalid flag %x", flag)
+		return nil, NewDecodingErrorf("data has invalid flag 0x%x", flag)
 	}
 }
 

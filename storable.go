@@ -63,7 +63,7 @@ func (v StorageIDStorable) StoredValue(storage SlabStorage) (Value, error) {
 		return nil, err
 	}
 	if !found {
-		return nil, fmt.Errorf("slab %d not found", id)
+		return nil, NewSlabNotFoundErrorf(id, "slab not found for stored value")
 	}
 	return slab.StoredValue(storage)
 }
@@ -122,7 +122,7 @@ func DecodeStorageIDStorable(dec *cbor.StreamDecoder) (Storable, error) {
 	}
 
 	if len(b) != storageIDSize {
-		return nil, fmt.Errorf("invalid storage id buffer length %d", len(b))
+		return nil, NewStorageIDErrorf("incorrect storage id buffer length %d", len(b))
 	}
 
 	var address Address

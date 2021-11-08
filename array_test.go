@@ -1254,7 +1254,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			0x99, 0x00, 0x00,
 		}
 
-		slabData, err := storage.Encode()
+		slabData, err := encodeSlabs(storage.cborEncMode, storage.Slabs)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(slabData))
 		require.Equal(t, expectedData, slabData[array.StorageID()])
@@ -1303,7 +1303,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			0xd8, 0xa4, 0x00,
 		}
 
-		slabData, err := storage.Encode()
+		slabData, err := encodeSlabs(storage.cborEncMode, storage.Slabs)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(slabData))
 		require.Equal(t, expectedData, slabData[array.StorageID()])
@@ -1456,7 +1456,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			},
 		}
 
-		m, err := storage.Encode()
+		m, err := encodeSlabs(storage.cborEncMode, storage.Slabs)
 		require.NoError(t, err)
 		require.Equal(t, len(expected), len(m))
 		require.Equal(t, expected[id1], m[id1])

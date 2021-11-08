@@ -1032,7 +1032,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Verify encoded data
-		stored, err := storage.Encode()
+		stored, err := encodeSlabs(storage.cborEncMode, storage.Slabs)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(stored))
 		require.Equal(t, expected[id1], stored[id1])
@@ -1124,7 +1124,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Verify encoded data
-		stored, err := storage.Encode()
+		stored, err := encodeSlabs(storage.cborEncMode, storage.Slabs)
 		require.NoError(t, err)
 
 		require.Equal(t, len(expected), len(stored))
@@ -1358,7 +1358,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Verify encoded data
-		stored, err := storage.Encode()
+		stored, err := encodeSlabs(storage.cborEncMode, storage.Slabs)
 		require.NoError(t, err)
 
 		require.Equal(t, len(expected), len(stored))
@@ -1563,7 +1563,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			},
 		}
 
-		stored, err := storage.Encode()
+		stored, err := encodeSlabs(storage.cborEncMode, storage.Slabs)
 		require.NoError(t, err)
 		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
@@ -1807,7 +1807,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			},
 		}
 
-		stored, err := storage.Encode()
+		stored, err := encodeSlabs(storage.cborEncMode, storage.Slabs)
 		require.NoError(t, err)
 		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
@@ -2046,7 +2046,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			},
 		}
 
-		stored, err := storage.Encode()
+		stored, err := encodeSlabs(storage.cborEncMode, storage.Slabs)
 		require.NoError(t, err)
 		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
@@ -2129,7 +2129,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Verify encoded data
-		stored, err := storage.Encode()
+		stored, err := encodeSlabs(storage.cborEncMode, storage.Slabs)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(stored))
 		require.Equal(t, expectedNoPointer, stored[id1])
@@ -2187,7 +2187,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 		}
 
-		stored, err = storage.Encode()
+		stored, err = encodeSlabs(storage.cborEncMode, storage.Slabs)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(stored))
 		require.Equal(t, expectedHasPointer, stored[id1])

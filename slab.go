@@ -18,8 +18,6 @@
 
 package atree
 
-import "errors"
-
 type Slab interface {
 	Storable
 
@@ -34,8 +32,8 @@ type Slab interface {
 
 // TODO: make it inline.
 func IsRootOfAnObject(slabData []byte) (bool, error) {
-	if len(slabData) < 2 {
-		return false, errors.New("slab data is too short")
+	if len(slabData) < versionAndFlagSize {
+		return false, NewDecodingErrorf("data is too short")
 	}
 
 	flag := slabData[1]
@@ -45,8 +43,8 @@ func IsRootOfAnObject(slabData []byte) (bool, error) {
 
 // TODO: make it inline.
 func HasPointers(slabData []byte) (bool, error) {
-	if len(slabData) < 2 {
-		return false, errors.New("slab data is too short")
+	if len(slabData) < versionAndFlagSize {
+		return false, NewDecodingErrorf("data is too short")
 	}
 
 	flag := slabData[1]
@@ -56,8 +54,8 @@ func HasPointers(slabData []byte) (bool, error) {
 
 // TODO: make it inline.
 func HasSizeLimit(slabData []byte) (bool, error) {
-	if len(slabData) < 2 {
-		return false, errors.New("slab data is too short")
+	if len(slabData) < versionAndFlagSize {
+		return false, NewDecodingErrorf("data is too short")
 	}
 
 	flag := slabData[1]

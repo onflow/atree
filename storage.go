@@ -403,6 +403,20 @@ func (s *BasicSlabStorage) StorageIDs() []StorageID {
 	return result
 }
 
+// Encode returns serialized slabs in storage.
+// This is currently used for testing.
+func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
+	m := make(map[StorageID][]byte)
+	for id, slab := range s.Slabs {
+		b, err := Encode(slab, s.cborEncMode)
+		if err != nil {
+			return nil, err
+		}
+		m[id] = b
+	}
+	return m, nil
+}
+
 func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
 	var slabs []struct {
 		StorageID

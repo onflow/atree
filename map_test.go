@@ -585,7 +585,7 @@ func TestMapIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(mapSize), i)
 
-		verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
 
 	t.Run("collision", func(t *testing.T) {
@@ -601,12 +601,6 @@ func TestMapIterate(t *testing.T) {
 		r := rand.New(rand.NewSource(seed))
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		storage := newTestPersistentStorage(t)
-
-		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
 
 		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, 0, mapSize)
@@ -625,16 +619,27 @@ func TestMapIterate(t *testing.T) {
 					Digest(r.Intn(256)),
 				}
 				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
-
-				existingStorable, err := m.Set(compare, hashInputProvider, k, v)
-				require.NoError(t, err)
-				require.Nil(t, existingStorable)
 			}
+		}
+
+		t.Log("generated unique key value pairs")
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
 		}
 
 		t.Log(m.String())
 
-		t.Log("created map of unique key value pairs")
+		t.Log("created map")
 
 		// Sort keys by digest
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
@@ -678,10 +683,9 @@ func TestMapIterate(t *testing.T) {
 
 		t.Log("iterated values")
 
-		verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 
 		t.Log("verified map")
-
 	})
 }
 

@@ -109,6 +109,8 @@ func verifyMap(
 		valueEqual(t, typeInfoComparator, v, e)
 	}
 
+	t.Logf("verified map elements using Get")
+
 	// Verify map elements ordering
 	if len(sortedKeys) > 0 {
 		require.Equal(t, len(keyValues), len(sortedKeys))
@@ -126,6 +128,8 @@ func verifyMap(
 		})
 		require.NoError(t, err)
 		require.Equal(t, len(keyValues), i)
+
+		t.Logf("verified map elements using Iterate")
 	}
 
 	// Verify in-memory slabs
@@ -134,6 +138,8 @@ func verifyMap(
 		PrintMap(m)
 	}
 	require.NoError(t, err)
+
+	t.Logf("verified in-memory map")
 
 	// Verify slab serializations
 	err = ValidMapSerialization(
@@ -151,6 +157,8 @@ func verifyMap(
 	}
 	require.NoError(t, err)
 
+	t.Logf("verified map serialization")
+
 	// Check storage slab tree
 	rootIDSet, err := CheckStorageHealth(storage, 1)
 	require.NoError(t, err)
@@ -161,6 +169,8 @@ func verifyMap(
 	}
 	require.Equal(t, 1, len(rootIDs))
 	require.Equal(t, m.StorageID(), rootIDs[0])
+
+	t.Logf("verified storage slabs")
 
 	if !hasNestedArrayMapElement {
 		// Need to call Commit before calling storage.Count() for PersistentSlabStorage.
@@ -179,6 +189,8 @@ func verifyMap(
 			require.Equal(t, uint64(0), stats.CollisionDataSlabCount)
 		}
 	}
+
+	t.Logf("completed map verification")
 }
 
 type keysByDigest struct {
@@ -583,7 +595,10 @@ func TestMapIterate(t *testing.T) {
 			valueStringSize = 16
 		)
 
-		r := newRand(t)
+		//r := newRand(t)
+		seed := int64(1636418207241791008)
+		t.Logf("seed: %d\n", seed)
+		r := rand.New(rand.NewSource(seed))
 
 		digesterBuilder := &mockDigesterBuilder{}
 		typeInfo := testTypeInfo{42}
@@ -616,6 +631,8 @@ func TestMapIterate(t *testing.T) {
 				require.Nil(t, existingStorable)
 			}
 		}
+
+		t.Log(m.String())
 
 		t.Log("created map of unique key value pairs")
 
@@ -662,6 +679,9 @@ func TestMapIterate(t *testing.T) {
 		t.Log("iterated values")
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
+
+		t.Log("verified map")
+
 	})
 }
 

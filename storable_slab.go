@@ -18,10 +18,6 @@
 
 package atree
 
-import (
-	"errors"
-)
-
 // StorableSlab allows storing storables (CBOR encoded data) directly in a slab.
 // Eventually we will only have a dictionary at the account storage root,
 // so this won't be needed, but during the refactor we have the need to store
@@ -55,10 +51,15 @@ func (s StorableSlab) Encode(enc *Encoder) error {
 
 	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
 	if err != nil {
-		return err
+		return NewEncodingError(err)
 	}
 
-	return s.Storable.Encode(enc)
+	err = s.Storable.Encode(enc)
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	return nil
 }
 
 func (s StorableSlab) ByteSize() uint32 {
@@ -74,17 +75,17 @@ func (s StorableSlab) StoredValue(storage SlabStorage) (Value, error) {
 }
 
 func (StorableSlab) Split(_ SlabStorage) (Slab, Slab, error) {
-	return nil, nil, errors.New("not applicable")
+	return nil, nil, NewNotApplicableError("StorableSlab", "Slab", "Split")
 }
 
 func (StorableSlab) Merge(_ Slab) error {
-	return errors.New("not applicable")
+	return NewNotApplicableError("StorableSlab", "Slab", "Merge")
 }
 
 func (StorableSlab) LendToRight(_ Slab) error {
-	return errors.New("not applicable")
+	return NewNotApplicableError("StorableSlab", "Slab", "LendToRight")
 }
 
 func (StorableSlab) BorrowFromRight(_ Slab) error {
-	return errors.New("not applicable")
+	return NewNotApplicableError("StorableSlab", "Slab", "BorrowFromRight")
 }

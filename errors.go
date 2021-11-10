@@ -37,7 +37,7 @@ func (e *FatalError) Error() string {
 
 func (e *FatalError) Unwrap() error { return e.err }
 
-// IndexOutOfBoundsError is returned when an insert or delete operation is attempted on an array index which is out of bounds
+// IndexOutOfBoundsError is returned when get, insert or delete operation is attempted on an array index which is out of bounds
 type IndexOutOfBoundsError struct {
 	index uint64
 	min   uint64
@@ -50,7 +50,7 @@ func NewIndexOutOfBoundsError(index, min, max uint64) *IndexOutOfBoundsError {
 }
 
 func (e *IndexOutOfBoundsError) Error() string {
-	return fmt.Sprintf("the given index %d is not in the acceptable range (%d-%d)", e.index, e.min, e.max)
+	return fmt.Sprintf("index %d is outside required range (%d-%d)", e.index, e.min, e.max)
 }
 
 // MaxArraySizeError is returned when an insert or delete operation is attempted on an array which has reached maximum size
@@ -64,7 +64,7 @@ func NewMaxArraySizeError(maxLen uint64) *MaxArraySizeError {
 }
 
 func (e *MaxArraySizeError) Error() string {
-	return fmt.Sprintf("array has reach its maximum number of elements %d", e.maxLen)
+	return fmt.Sprintf("array reached its maximum number of elements %d", e.maxLen)
 }
 
 func (e *MaxArraySizeError) Fatal() error {
@@ -73,29 +73,16 @@ func (e *MaxArraySizeError) Fatal() error {
 
 // NotValueError is returned when we try to create Value objects from non-root slabs.
 type NotValueError struct {
+	id StorageID
 }
 
 // NewNotValueError constructs a NotValueError.
-func NewNotValueError() *NotValueError {
-	return &NotValueError{}
+func NewNotValueError(id StorageID) *NotValueError {
+	return &NotValueError{id: id}
 }
 
 func (e *NotValueError) Error() string {
-	return "non-root slabs must not be used to create Value object"
-}
-
-// NonStorableElementError is returned when we try to store a non-storable element.
-type NonStorableElementError struct {
-	element interface{}
-}
-
-// NonStorableElementError constructs a NonStorableElementError
-func NewNonStorableElementError(element interface{}) *NonStorableElementError {
-	return &NonStorableElementError{element: element}
-}
-
-func (e *NonStorableElementError) Error() string {
-	return fmt.Sprintf("a non-storable element of type %T found when storing object", e.element)
+	return fmt.Sprintf("slab (%s) cannot be used to create Value object", e.id)
 }
 
 // MaxKeySizeError is returned when a dictionary key is too large
@@ -110,7 +97,20 @@ func NewMaxKeySizeError(keyStr string, maxKeySize uint64) *MaxKeySizeError {
 }
 
 func (e *MaxKeySizeError) Error() string {
-	return fmt.Sprintf("the given key (%s) is larger than the maximum limit (%d)", e.keyStr, e.maxKeySize)
+	return fmt.Sprintf("key (%s) is larger than maximum size %d", e.keyStr, e.maxKeySize)
+}
+
+// DuplicateKeyError is returned when the duplicate key is found in the dictionary when none is expected.
+type DuplicateKeyError struct {
+	key interface{}
+}
+
+func NewDuplicateKeyError(key interface{}) error {
+	return &DuplicateKeyError{key: key}
+}
+
+func (e *DuplicateKeyError) Error() string {
+	return fmt.Sprintf("duplicate key (%s)", e.key)
 }
 
 // KeyNotFoundError is returned when the key not found in the dictionary
@@ -118,13 +118,25 @@ type KeyNotFoundError struct {
 	key interface{}
 }
 
-// NewMaxKeySizeError constructs a KeyNotFoundError
+// NewKeyNotFoundError constructs a KeyNotFoundError
 func NewKeyNotFoundError(key interface{}) *KeyNotFoundError {
 	return &KeyNotFoundError{key: key}
 }
 
 func (e *KeyNotFoundError) Error() string {
 	return fmt.Sprintf("key (%s) not found", e.key)
+}
+
+// HashSeedUninitializedError is a fatal error returned when hash seed is uninitialized.
+type HashSeedUninitializedError struct {
+}
+
+func NewHashSeedUninitializedError() error {
+	return NewFatalError(&HashSeedUninitializedError{})
+}
+
+func (e *HashSeedUninitializedError) Error() string {
+	return "uninitialized hash seed"
 }
 
 // HashError is a fatal error returned when hash calculation fails
@@ -138,11 +150,28 @@ func NewHashError(err error) error {
 }
 
 func (e *HashError) Error() string {
-	return fmt.Sprintf("atree hasher failed: %s", e.err.Error())
+	return fmt.Sprintf("atree hasher error: %s", e.err.Error())
 }
 
 // Unwrap returns the wrapped err
 func (e *HashError) Unwrap() error { return e.err }
+
+// StorageIDError is returned when storage id can't be created or it's invalid.
+type StorageIDError struct {
+	msg string
+}
+
+func NewStorageIDError(msg string) *StorageIDError {
+	return &StorageIDError{msg: msg}
+}
+
+func NewStorageIDErrorf(msg string, args ...interface{}) error {
+	return &StorageIDError{msg: fmt.Sprintf(msg, args...)}
+}
+
+func (e *StorageIDError) Error() string {
+	return fmt.Sprintf("storage id error: %s", e.msg)
+}
 
 // StorageError is always a fatal error returned when storage fails
 type StorageError struct {
@@ -155,7 +184,7 @@ func NewStorageError(err error) error {
 }
 
 func (e *StorageError) Error() string {
-	return fmt.Sprintf("storage failed: %s", e.err.Error())
+	return fmt.Sprintf("storage error: %s", e.err.Error())
 }
 
 // Unwrap returns the wrapped err
@@ -178,7 +207,7 @@ func NewSlabNotFoundErrorf(storageID StorageID, msg string, args ...interface{})
 }
 
 func (e *SlabNotFoundError) Error() string {
-	return fmt.Sprintf("slab with the given storageID (%s) not found. %s", e.storageID.String(), e.err.Error())
+	return fmt.Sprintf("slab (%s) not found: %s", e.storageID.String(), e.err.Error())
 }
 
 // Unwrap returns the wrapped err
@@ -200,7 +229,7 @@ func NewSlabSplitErrorf(msg string, args ...interface{}) error {
 }
 
 func (e *SlabSplitError) Error() string {
-	return fmt.Sprintf("slab can not split. %s", e.err.Error())
+	return fmt.Sprintf("slab failed to split: %s", e.err.Error())
 }
 
 func (e *SlabSplitError) Unwrap() error { return e.err }
@@ -221,7 +250,7 @@ func NewSlabMergeErrorf(msg string, args ...interface{}) error {
 }
 
 func (e *SlabMergeError) Error() string {
-	return fmt.Sprintf("cannot merge slabs: %s", e.err.Error())
+	return fmt.Sprintf("slabs failed to merge: %s", e.err.Error())
 }
 
 func (e *SlabMergeError) Unwrap() error { return e.err }
@@ -242,7 +271,7 @@ func NewSlabRebalanceErrorf(msg string, args ...interface{}) error {
 }
 
 func (e *SlabRebalanceError) Error() string {
-	return fmt.Sprintf("slab rebalancing error: %s", e.err.Error())
+	return fmt.Sprintf("slabs failed to rebalance: %s", e.err.Error())
 }
 
 func (e *SlabRebalanceError) Unwrap() error { return e.err }
@@ -285,7 +314,7 @@ func NewEncodingErrorf(msg string, args ...interface{}) error {
 }
 
 func (e *EncodingError) Error() string {
-	return fmt.Sprintf("Encoding has failed %s", e.err.Error())
+	return fmt.Sprintf("encoding error: %s", e.err.Error())
 }
 
 func (e *EncodingError) Unwrap() error { return e.err }
@@ -306,7 +335,7 @@ func NewDecodingErrorf(msg string, args ...interface{}) error {
 }
 
 func (e *DecodingError) Error() string {
-	return fmt.Sprintf("Decoding has failed %s", e.err.Error())
+	return fmt.Sprintf("decoding error: %s", e.err.Error())
 }
 
 func (e *DecodingError) Unwrap() error { return e.err }
@@ -326,20 +355,6 @@ func (e *NotImplementedError) Error() string {
 	return fmt.Sprintf("method (%s) is not implemented.", e.methodName)
 }
 
-// InterfaceNotImplementedError is a fatal error returned when an interface is not implemented.
-type InterfaceNotImplementedError struct {
-	interfaceName string
-}
-
-// NewInterfaceNotImplementedError constructs a InterfaceNotImplementedError
-func NewInterfaceNotImplementedError(interfaceName string) error {
-	return NewFatalError(&InterfaceNotImplementedError{interfaceName: interfaceName})
-}
-
-func (e *InterfaceNotImplementedError) Error() string {
-	return fmt.Sprintf("interface (%s) is not implemented.", e.interfaceName)
-}
-
 // HashLevelError is a fatal error returned when hash level is wrong.
 type HashLevelError struct {
 	msg string
@@ -351,36 +366,26 @@ func NewHashLevelErrorf(msg string, args ...interface{}) error {
 }
 
 func (e *HashLevelError) Error() string {
-	return fmt.Sprintf("atree hasher level failed: %s", e.msg)
+	return fmt.Sprintf("atree hash level error: %s", e.msg)
 }
 
 // NotApplicableError is a fatal error returned when a not applicable method is called
 type NotApplicableError struct {
-	methodName string
+	typeName, interfaceName, methodName string
 }
 
 // NewNotApplicableError constructs a NotImplementedError
-func NewNotApplicableError(methodName string) error {
-	return NewFatalError(&NotImplementedError{methodName: methodName})
+func NewNotApplicableError(typeName, interfaceName, methodName string) error {
+	return NewFatalError(
+		&NotApplicableError{
+			typeName:      typeName,
+			interfaceName: interfaceName,
+			methodName:    methodName,
+		})
 }
 
 func (e *NotApplicableError) Error() string {
-	return fmt.Sprintf("method (%s) is not applicable.", e.methodName)
-}
-
-// TypeAssertionError is a fatal error returned when an object can't be type asserted to an expected type.
-type TypeAssertionError struct {
-	wantType string
-	gotType  string
-}
-
-// NewTypeAssertionError constructs a TypeAssertionError.
-func NewTypeAssertionError(wantType string, gotType string) error {
-	return NewFatalError(&TypeAssertionError{wantType: wantType, gotType: gotType})
-}
-
-func (e *TypeAssertionError) Error() string {
-	return fmt.Sprintf("type assertion failed: want %s, got %s", e.wantType, e.gotType)
+	return fmt.Sprintf("%s.%s is not applicable for type %s", e.interfaceName, e.methodName, e.typeName)
 }
 
 // UnreachableError is used by panic when unreachable code is reached.

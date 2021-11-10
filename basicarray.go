@@ -20,7 +20,6 @@ package atree
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
@@ -50,19 +49,6 @@ func (a *BasicArray) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, err
 	return a.root, nil
 }
 
-func NewBasicArrayDataSlab(storage SlabStorage, address Address) *BasicArrayDataSlab {
-	sID, err := storage.GenerateStorageID(address)
-	if err != nil {
-		panic(err)
-	}
-	return &BasicArrayDataSlab{
-		header: ArraySlabHeader{
-			id:   sID,
-			size: basicArrayDataSlabPrefixSize,
-		},
-	}
-}
-
 func newBasicArrayDataSlabFromData(
 	id StorageID,
 	data []byte,
@@ -72,27 +58,31 @@ func newBasicArrayDataSlabFromData(
 	*BasicArrayDataSlab,
 	error,
 ) {
-	if len(data) < 2 {
-		return nil, errors.New("data is too short for basic array")
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short for basic array slab")
 	}
 
 	// Check flag
 	if getSlabArrayType(data[1]) != slabBasicArray {
-		return nil, fmt.Errorf("data has invalid flag 0x%x, want 0x%x", data[0], maskBasicArray)
+		return nil, NewDecodingErrorf(
+			"data has invalid flag 0x%x, want 0x%x",
+			data[0],
+			maskBasicArray,
+		)
 	}
 
 	cborDec := decMode.NewByteStreamDecoder(data[2:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
-		return nil, err
+		return nil, NewDecodingError(err)
 	}
 
 	elements := make([]Storable, elemCount)
 	for i := 0; i < int(elemCount); i++ {
 		storable, err := decodeStorable(cborDec, StorageIDUndefined)
 		if err != nil {
-			return nil, err
+			return nil, NewDecodingError(err)
 		}
 		elements[i] = storable
 	}
@@ -110,7 +100,7 @@ func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 	// Encode flag
 	_, err := enc.Write([]byte{0x0, flag})
 	if err != nil {
-		return err
+		return NewEncodingError(err)
 	}
 
 	// Encode CBOR array size for 9 bytes
@@ -119,18 +109,18 @@ func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 
 	_, err = enc.Write(enc.Scratch[:9])
 	if err != nil {
-		return err
+		return NewEncodingError(err)
 	}
 
 	for i := 0; i < len(a.elements); i++ {
 		err := a.elements[i].Encode(enc)
 		if err != nil {
-			return err
+			return NewEncodingError(err)
 		}
 	}
 	err = enc.CBOR.Flush()
 	if err != nil {
-		return err
+		return NewEncodingError(err)
 	}
 
 	return nil
@@ -144,7 +134,7 @@ func (a *BasicArrayDataSlab) ChildStorables() []Storable {
 
 func (a *BasicArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
-		return nil, fmt.Errorf("out of bounds")
+		return nil, NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
 	v := a.elements[index]
 	return v, nil
@@ -152,7 +142,7 @@ func (a *BasicArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) 
 
 func (a *BasicArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) error {
 	if index >= uint64(len(a.elements)) {
-		return fmt.Errorf("out of bounds")
+		return NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
 
 	oldElem := a.elements[index]
@@ -173,7 +163,7 @@ func (a *BasicArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) 
 
 func (a *BasicArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
 	if index > uint64(len(a.elements)) {
-		return fmt.Errorf("out of bounds")
+		return NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
 
 	if index == uint64(len(a.elements)) {
@@ -197,7 +187,7 @@ func (a *BasicArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storabl
 
 func (a *BasicArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
-		return nil, fmt.Errorf("out of bounds")
+		return nil, NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
 
 	v := a.elements[index]
@@ -244,26 +234,38 @@ func (a *BasicArrayDataSlab) String() string {
 }
 
 func (a *BasicArrayDataSlab) Split(_ SlabStorage) (Slab, Slab, error) {
-	return nil, nil, errors.New("not applicable")
+	return nil, nil, NewNotApplicableError("BasicArrayDataSlab", "Slab", "Split")
 }
 
 func (a *BasicArrayDataSlab) Merge(_ Slab) error {
-	return errors.New("not applicable")
+	return NewNotApplicableError("BasicArrayDataSlab", "Slab", "Merge")
 }
 
 func (a *BasicArrayDataSlab) LendToRight(_ Slab) error {
-	return errors.New("not applicable")
+	return NewNotApplicableError("BasicArrayDataSlab", "Slab", "LendToRight")
 }
 
 func (a *BasicArrayDataSlab) BorrowFromRight(_ Slab) error {
-	return errors.New("not applicable")
+	return NewNotApplicableError("BasicArrayDataSlab", "Slab", "BorrowFromRight")
 }
 
-func NewBasicArray(storage SlabStorage, address Address) *BasicArray {
+func NewBasicArray(storage SlabStorage, address Address) (*BasicArray, error) {
+	sID, err := storage.GenerateStorageID(address)
+	if err != nil {
+		return nil, err
+	}
+
+	root := &BasicArrayDataSlab{
+		header: ArraySlabHeader{
+			id:   sID,
+			size: basicArrayDataSlabPrefixSize,
+		},
+	}
+
 	return &BasicArray{
 		storage: storage,
-		root:    NewBasicArrayDataSlab(storage, address),
-	}
+		root:    root,
+	}, nil
 }
 
 func (a *BasicArray) StorageID() StorageID {
@@ -276,18 +278,18 @@ func (a *BasicArray) Address() Address {
 
 func NewBasicArrayWithRootID(storage SlabStorage, id StorageID) (*BasicArray, error) {
 	if id == StorageIDUndefined {
-		return nil, fmt.Errorf("invalid storage id")
+		return nil, NewStorageIDErrorf("cannot create BasicArray from undefined storage id")
 	}
 	slab, found, err := storage.Retrieve(id)
 	if err != nil {
 		return nil, err
 	}
 	if !found {
-		return nil, fmt.Errorf("slab %d not found", id)
+		return nil, NewSlabNotFoundErrorf(id, "BasicArray slab not found")
 	}
 	dataSlab, ok := slab.(*BasicArrayDataSlab)
 	if !ok {
-		return nil, fmt.Errorf("slab %d is not BasicArrayDataSlab", id)
+		return nil, NewSlabDataErrorf("slab %s isn't BasicArraySlab", id)
 	}
 	return &BasicArray{storage: storage, root: dataSlab}, nil
 }

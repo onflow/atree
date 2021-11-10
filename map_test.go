@@ -193,6 +193,34 @@ func verifyMap(
 	t.Logf("completed map verification")
 }
 
+type keysByMockDigest struct {
+	keys    []Value
+	digests [][]Digest
+}
+
+func (d keysByMockDigest) Len() int { return len(d.keys) }
+
+func (d keysByMockDigest) Swap(i, j int) {
+	d.keys[i], d.keys[j] = d.keys[j], d.keys[i]
+	d.digests[i], d.digests[j] = d.digests[j], d.digests[i]
+}
+
+func (d keysByMockDigest) Less(i, j int) bool {
+	d1 := d.digests[i]
+	d2 := d.digests[j]
+
+	if len(d1) != len(d2) {
+		panic("digests lengths are different")
+	}
+
+	for z := 0; z < len(d1); z++ {
+		if d1[z] != d2[z] {
+			return d1[z] < d2[z] // sort by hkey
+		}
+	}
+	return i < j // sort by insertion order with hash collision
+}
+
 type keysByDigest struct {
 	keys            []Value
 	digesterBuilder DigesterBuilder
@@ -604,6 +632,7 @@ func TestMapIterate(t *testing.T) {
 
 		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, 0, mapSize)
+		sortedDigests := make([][]Digest, 0, mapSize)
 		for len(keyValues) < mapSize {
 			k := NewStringValue(randStr(r, keyStringSize))
 
@@ -619,6 +648,7 @@ func TestMapIterate(t *testing.T) {
 					Digest(r.Intn(256)),
 				}
 				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+				sortedDigests = append(sortedDigests, digests)
 			}
 		}
 
@@ -642,7 +672,7 @@ func TestMapIterate(t *testing.T) {
 		t.Log("created map")
 
 		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+		sort.Stable(keysByMockDigest{sortedKeys, sortedDigests})
 
 		t.Log("sorted keys by digests")
 

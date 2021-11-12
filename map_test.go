@@ -781,6 +781,33 @@ func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLeve
 		require.Nil(t, existingStorable)
 	}
 
+	if maxDigestLevel == 2 {
+		t.Logf(m.String())
+
+		t.Logf("verifying map using Get")
+
+		require.True(t, typeInfoComparator(typeInfo, m.Type()))
+		require.Equal(t, address, m.Address())
+		require.Equal(t, uint64(len(keyValues)), m.Count())
+
+		// Verify map elements
+		i := 0
+		for k, v := range keyValues {
+			t.Logf("Getting %d element", i)
+			s, err := m.Get(compare, hashInputProvider, k)
+			require.NoError(t, err)
+
+			e, err := s.StoredValue(m.Storage)
+			require.NoError(t, err)
+
+			valueEqual(t, typeInfoComparator, v, e)
+
+			i++
+		}
+
+		t.Logf("verified map elements using Get")
+	}
+
 	verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 
 	stats, err := GetMapStats(m)

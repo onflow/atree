@@ -1639,27 +1639,37 @@ func (e *hkeyElements) PopIterate(storage SlabStorage, fn MapPopIterationFunc) e
 }
 
 func (e *hkeyElements) String() string {
+	/*
+		var s []string
+		s = append(s, fmt.Sprintf("(level %v)", e.level))
+
+		if len(e.elems) <= 6 {
+			for i := 0; i < len(e.elems); i++ {
+				s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
+			}
+			return strings.Join(s, " ")
+		}
+
+		for i := 0; i < 3; i++ {
+			s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
+		}
+
+		s = append(s, "...")
+
+		elemLength := len(e.elems)
+		for i := elemLength - 3; i < elemLength; i++ {
+			s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
+		}
+
+		return strings.Join(s, " ")
+	*/
+
 	var s []string
 	s = append(s, fmt.Sprintf("(level %v)", e.level))
 
-	if len(e.elems) <= 6 {
-		for i := 0; i < len(e.elems); i++ {
-			s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
-		}
-		return strings.Join(s, " ")
-	}
-
-	for i := 0; i < 3; i++ {
+	for i := 0; i < len(e.elems); i++ {
 		s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
 	}
-
-	s = append(s, "...")
-
-	elemLength := len(e.elems)
-	for i := elemLength - 3; i < elemLength; i++ {
-		s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
-	}
-
 	return strings.Join(s, " ")
 }
 
@@ -1942,27 +1952,36 @@ func (e *singleElements) PopIterate(storage SlabStorage, fn MapPopIterationFunc)
 }
 
 func (e *singleElements) String() string {
+	/*
+		var s []string
+		s = append(s, fmt.Sprintf("(level %v)", e.level))
+
+		if len(e.elems) <= 6 {
+			for i := 0; i < len(e.elems); i++ {
+				s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
+			}
+			return strings.Join(s, " ")
+		}
+
+		for i := 0; i < 3; i++ {
+			s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
+		}
+
+		s = append(s, "...")
+
+		elemLength := len(e.elems)
+		for i := elemLength - 3; i < elemLength; i++ {
+			s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
+		}
+
+		return strings.Join(s, " ")
+	*/
 	var s []string
 	s = append(s, fmt.Sprintf("(level %v)", e.level))
 
-	if len(e.elems) <= 6 {
-		for i := 0; i < len(e.elems); i++ {
-			s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
-		}
-		return strings.Join(s, " ")
-	}
-
-	for i := 0; i < 3; i++ {
+	for i := 0; i < len(e.elems); i++ {
 		s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
 	}
-
-	s = append(s, "...")
-
-	elemLength := len(e.elems)
-	for i := elemLength - 3; i < elemLength; i++ {
-		s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
-	}
-
 	return strings.Join(s, " ")
 }
 

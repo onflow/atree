@@ -46,7 +46,7 @@ func (h *mockDigesterBuilder) SetSeed(_ uint64, _ uint64) {
 }
 
 func (h *mockDigesterBuilder) Digest(hip HashInputProvider, value Value) (Digester, error) {
-	args := h.Called(value)
+	args := h.Called(hip, value)
 	return args.Get(0).(mockDigester), nil
 }
 
@@ -92,6 +92,8 @@ func verifyMap(
 	sortedKeys []Value,
 	hasNestedArrayMapElement bool,
 ) {
+	t.Logf("verifying map")
+
 	require.True(t, typeInfoComparator(typeInfo, m.Type()))
 	require.Equal(t, address, m.Address())
 	require.Equal(t, uint64(len(keyValues)), m.Count())
@@ -647,7 +649,7 @@ func TestMapIterate(t *testing.T) {
 					Digest(r.Intn(256)),
 					Digest(r.Intn(256)),
 				}
-				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+				digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{digests})
 				sortedDigests = append(sortedDigests, digests)
 			}
 		}
@@ -666,8 +668,6 @@ func TestMapIterate(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
-
-		t.Log(m.String())
 
 		t.Log("created map")
 
@@ -762,7 +762,7 @@ func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLeve
 
 			index := i % len(digestsGroup)
 			digests := digestsGroup[index]
-			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+			digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{digests})
 
 			i++
 		}
@@ -836,7 +836,7 @@ func testMapRandomHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) 
 				digests = append(digests, Digest(r.Intn(256)))
 			}
 
-			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+			digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{digests})
 		}
 	}
 
@@ -889,7 +889,10 @@ func TestMapHashCollision(t *testing.T) {
 
 	const maxDigestLevel = 4
 
-	r := newRand(t)
+	// r := newRand(t)
+	seed := int64(1636561600789392783)
+	t.Logf("seed: %d\n", seed)
+	r := rand.New(rand.NewSource(seed))
 
 	for hashLevel := 1; hashLevel <= maxDigestLevel; hashLevel++ {
 		name := fmt.Sprintf("deterministic max hash level %d", hashLevel)
@@ -953,7 +956,7 @@ func testMapSetRemoveRandomValues(
 				digests = append(digests, Digest(r.Intn(digestMaxValue)))
 			}
 
-			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+			digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{digests})
 
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
@@ -1122,7 +1125,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			keyValues[k] = v
 
 			digests := []Digest{Digest(i), Digest(i * 2)}
-			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+			digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{d: digests})
 
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
@@ -1217,7 +1220,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			keyValues[k] = v
 
 			digests := []Digest{Digest(i), Digest(i * 2)}
-			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+			digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{d: digests})
 
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
@@ -1241,7 +1244,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues[k] = v
 
 		digests := []Digest{Digest(mapSize - 1), Digest((mapSize - 1) * 2)}
-		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+		digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{d: digests})
 
 		// Insert nested array
 		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
@@ -1459,7 +1462,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			v := Uint64Value(i * 2)
 
 			digests := []Digest{Digest(i % 4), Digest(i)}
-			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+			digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{d: digests})
 
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
@@ -1653,7 +1656,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			v := Uint64Value(i * 2)
 
 			digests := []Digest{Digest(i % 4), Digest(i % 2)}
-			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+			digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{d: digests})
 
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
@@ -1897,7 +1900,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			v := Uint64Value(i * 2)
 
 			digests := []Digest{Digest(i % 2), Digest(i)}
-			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+			digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{d: digests})
 
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
@@ -2131,7 +2134,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		v := Uint64Value(0)
 
 		digests := []Digest{Digest(0), Digest(1)}
-		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
+		digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{d: digests})
 
 		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
@@ -2476,7 +2479,7 @@ func TestMapPopIterate(t *testing.T) {
 					Digest(i % 5),
 				}
 
-				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+				digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{digests})
 
 				existingStorable, err := m.Set(compare, hashInputProvider, k, keyValues[k])
 				require.NoError(t, err)
@@ -2948,7 +2951,7 @@ func TestMapFromBatchData(t *testing.T) {
 			}
 			digests[1] = Digest(i)
 
-			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+			digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{digests})
 
 			storable, err := m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
@@ -3019,7 +3022,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		k := NewStringValue(randStr(r, maxStringSize))
 		v := NewStringValue(randStr(r, maxStringSize))
-		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3881892766069237908}})
+		digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{d: []Digest{3881892766069237908}})
 
 		storable, err := m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
@@ -3027,7 +3030,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		k = NewStringValue(randStr(r, maxStringSize))
 		v = NewStringValue(randStr(r, maxStringSize))
-		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3882976639190041664}})
+		digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{d: []Digest{3882976639190041664}})
 
 		storable, err = m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
@@ -3035,7 +3038,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		k = NewStringValue("zFKUYYNfIfJCCakcDuIEHj")
 		v = NewStringValue("EZbaCxxjDtMnbRlXJMgfHnZ")
-		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{3883321011075439822}})
+		digesterBuilder.On("Digest", mock.Anything, k).Return(mockDigester{d: []Digest{3883321011075439822}})
 
 		storable, err = m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)

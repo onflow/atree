@@ -3386,7 +3386,14 @@ func NewMapWithRootID(storage SlabStorage, rootID StorageID, digestBuilder Diges
 
 func (m *OrderedMap) Has(comparator ValueComparator, hip HashInputProvider, key Value) (bool, error) {
 	_, err := m.Get(comparator, hip, key)
-	return err == nil, nil
+	if err != nil {
+		var knf *KeyNotFoundError
+		if errors.As(err, &knf) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func (m *OrderedMap) Get(comparator ValueComparator, hip HashInputProvider, key Value) (Storable, error) {

@@ -19,6 +19,7 @@
 package atree
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -69,6 +70,23 @@ func (d mockDigester) Levels() int {
 }
 
 func (d mockDigester) Reset() {}
+
+type errorDigesterBuilder struct {
+	err error
+}
+
+var _ DigesterBuilder = &errorDigesterBuilder{}
+
+func newErrorDigesterBuilder(err error) *errorDigesterBuilder {
+	return &errorDigesterBuilder{err: err}
+}
+
+func (h *errorDigesterBuilder) SetSeed(_ uint64, _ uint64) {
+}
+
+func (h *errorDigesterBuilder) Digest(hip HashInputProvider, value Value) (Digester, error) {
+	return nil, h.err
+}
 
 func verifyEmptyMap(
 	t *testing.T,
@@ -351,53 +369,72 @@ func TestMapSetAndGet(t *testing.T) {
 
 func TestMapHas(t *testing.T) {
 
-	const (
-		mapSize       = 2048
-		keyStringSize = 16
-	)
+	t.Run("no error", func(t *testing.T) {
+		const (
+			mapSize       = 2048
+			keyStringSize = 16
+		)
 
-	r := newRand(t)
+		r := newRand(t)
 
-	keys := make(map[Value]bool, mapSize*2)
-	keysToInsert := make([]Value, 0, mapSize)
-	keysToNotInsert := make([]Value, 0, mapSize)
-	for len(keysToInsert) < mapSize || len(keysToNotInsert) < mapSize {
-		k := NewStringValue(randStr(r, keyStringSize))
-		if !keys[k] {
-			keys[k] = true
+		keys := make(map[Value]bool, mapSize*2)
+		keysToInsert := make([]Value, 0, mapSize)
+		keysToNotInsert := make([]Value, 0, mapSize)
+		for len(keysToInsert) < mapSize || len(keysToNotInsert) < mapSize {
+			k := NewStringValue(randStr(r, keyStringSize))
+			if !keys[k] {
+				keys[k] = true
 
-			if len(keysToInsert) < mapSize {
-				keysToInsert = append(keysToInsert, k)
-			} else {
-				keysToNotInsert = append(keysToNotInsert, k)
+				if len(keysToInsert) < mapSize {
+					keysToInsert = append(keysToInsert, k)
+				} else {
+					keysToNotInsert = append(keysToNotInsert, k)
+				}
 			}
 		}
-	}
 
-	typeInfo := testTypeInfo{42}
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-	storage := newTestPersistentStorage(t)
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
 
-	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
-	require.NoError(t, err)
-
-	for i, k := range keysToInsert {
-		existingStorable, err := m.Set(compare, hashInputProvider, k, Uint64Value(i))
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
-		require.Nil(t, existingStorable)
-	}
 
-	for _, k := range keysToInsert {
-		exist, err := m.Has(compare, hashInputProvider, k)
-		require.NoError(t, err)
-		require.True(t, exist)
-	}
+		for i, k := range keysToInsert {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, Uint64Value(i))
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
 
-	for _, k := range keysToNotInsert {
-		exist, err := m.Has(compare, hashInputProvider, k)
+		for _, k := range keysToInsert {
+			exist, err := m.Has(compare, hashInputProvider, k)
+			require.NoError(t, err)
+			require.True(t, exist)
+		}
+
+		for _, k := range keysToNotInsert {
+			exist, err := m.Has(compare, hashInputProvider, k)
+			require.NoError(t, err)
+			require.False(t, exist)
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		testErr := errors.New("test")
+		digesterBuilder := newErrorDigesterBuilder(testErr)
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
+
+		exist, err := m.Has(compare, hashInputProvider, Uint64Value(0))
+		require.Equal(t, testErr, err)
 		require.False(t, exist)
-	}
+	})
 }
 
 func TestMapRemove(t *testing.T) {

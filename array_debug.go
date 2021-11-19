@@ -20,8 +20,10 @@ package atree
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -97,6 +99,16 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 
 // PrintArray prints array slab data to stdout.
 func PrintArray(a *Array) {
+	dumps, err := DumpArraySlabs(a)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(strings.Join(dumps, "\n"))
+}
+
+func DumpArraySlabs(a *Array) ([]string, error) {
+	var dumps []string
 
 	nextLevelIDs := []StorageID{a.StorageID()}
 
@@ -113,20 +125,12 @@ func PrintArray(a *Array) {
 
 			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
-				fmt.Println(err)
-				return
+				return nil, err
 			}
 
 			if slab.IsData() {
 				dataSlab := slab.(*ArrayDataSlab)
-				fmt.Printf(
-					"level %d leaf (id:%s size:%d count:%d next:%s): %s\n",
-					level+1,
-					dataSlab.header.id,
-					dataSlab.header.size,
-					dataSlab.header.count,
-					dataSlab.next,
-					dataSlab)
+				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, dataSlab))
 
 				childStorables := dataSlab.ChildStorables()
 				for _, e := range childStorables {
@@ -137,20 +141,12 @@ func PrintArray(a *Array) {
 
 			} else {
 				meta := slab.(*ArrayMetaDataSlab)
-				fmt.Printf(
-					"level %d meta (id:%s size:%d count:%d) children: %s\n",
-					level+1,
-					meta.header.id,
-					meta.header.size,
-					meta.header.count,
-					meta,
-				)
+				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, meta))
 
 				for _, storable := range slab.ChildStorables() {
 					id, ok := storable.(StorageIDStorable)
 					if !ok {
-						fmt.Printf("metadata slab's child storables are not of type StorageIDStorable")
-						return
+						return nil, errors.New("metadata slab's child storables are not of type StorageIDStorable")
 					}
 					nextLevelIDs = append(nextLevelIDs, StorageID(id))
 				}
@@ -163,15 +159,15 @@ func PrintArray(a *Array) {
 	for _, id := range overflowIDs {
 		slab, found, err := a.Storage.Retrieve(id)
 		if err != nil {
-			fmt.Println(err.Error())
-			return
+			return nil, err
 		}
 		if !found {
-			fmt.Printf("slab %s not found\n", id)
-			return
+			return nil, NewSlabNotFoundErrorf(id, "slab not found during array slab dump")
 		}
-		fmt.Printf("overflow: (id %s) %s\n", id, slab)
+		dumps = append(dumps, fmt.Sprintf("overflow: %s", slab))
 	}
+
+	return dumps, nil
 }
 
 type TypeInfoComparator func(TypeInfo, TypeInfo) bool

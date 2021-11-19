@@ -20,10 +20,11 @@ package atree
 
 import (
 	"bytes"
-	"container/list"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -135,71 +136,108 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 }
 
 func PrintMap(m *OrderedMap) {
-	nextLevelIDs := list.New()
-	nextLevelIDs.PushBack(m.root.Header().id)
+	dumps, err := DumpMapSlabs(m)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(strings.Join(dumps, "\n"))
+}
 
-	collisionSlabIDs := list.New()
+func DumpMapSlabs(m *OrderedMap) ([]string, error) {
+	var dumps []string
+
+	nextLevelIDs := []StorageID{m.StorageID()}
+
+	var overflowIDs []StorageID
+	var collisionSlabIDs []StorageID
 
 	level := 0
-	for nextLevelIDs.Len() > 0 {
+	for len(nextLevelIDs) > 0 {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = list.New()
+		nextLevelIDs = []StorageID(nil)
 
-		for e := ids.Front(); e != nil; e = e.Next() {
-			id := e.Value.(StorageID)
+		for _, id := range ids {
 
 			slab, err := getMapSlab(m.Storage, id)
 			if err != nil {
-				fmt.Println(err)
-				return
+				return nil, err
 			}
 
 			if slab.IsData() {
 				dataSlab := slab.(*MapDataSlab)
-				fmt.Printf("level %d, leaf (%+v): %s\n", level+1, dataSlab.header, dataSlab.String())
+				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, dataSlab))
 
 				for i := 0; i < int(dataSlab.elements.Count()); i++ {
 					elem, err := dataSlab.elements.Element(i)
 					if err != nil {
-						fmt.Println(err)
-						return
+						return nil, err
 					}
 					if group, ok := elem.(elementGroup); ok {
 						if !group.Inline() {
 							extSlab := group.(*externalCollisionGroup)
-							collisionSlabIDs.PushBack(extSlab.id)
+							collisionSlabIDs = append(collisionSlabIDs, extSlab.id)
 						}
+					}
+				}
+
+				childStorables := dataSlab.ChildStorables()
+				for _, e := range childStorables {
+					if id, ok := e.(StorageIDStorable); ok {
+						overflowIDs = append(overflowIDs, StorageID(id))
 					}
 				}
 
 			} else {
 				meta := slab.(*MapMetaDataSlab)
-				fmt.Printf("level %d, meta (%+v) headers: [", level+1, meta.header)
-				for _, h := range meta.childrenHeaders {
-					fmt.Printf("%+v ", h)
-					nextLevelIDs.PushBack(h.id)
+				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, meta))
+
+				for _, storable := range slab.ChildStorables() {
+					id, ok := storable.(StorageIDStorable)
+					if !ok {
+						return nil, errors.New("metadata slab's child storables are not of type StorageIDStorable")
+					}
+					nextLevelIDs = append(nextLevelIDs, StorageID(id))
 				}
-				fmt.Println("]")
 			}
 		}
 
 		level++
 	}
 
-	if collisionSlabIDs.Len() > 0 {
-		for e := collisionSlabIDs.Front(); e != nil; e = e.Next() {
-			id := e.Value.(StorageID)
-
-			slab, err := getMapSlab(m.Storage, id)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-			fmt.Printf("collision slab: (id %d) %s\n", id, slab.String())
+	for _, id := range collisionSlabIDs {
+		slab, err := getMapSlab(m.Storage, id)
+		if err != nil {
+			return nil, err
 		}
+		dumps = append(dumps, fmt.Sprintf("collision: %s", slab.String()))
 	}
+
+	// overflowIDs include collisionSlabIDs
+	for _, id := range overflowIDs {
+		found := false
+		for _, cid := range collisionSlabIDs {
+			if id == cid {
+				found = true
+				break
+			}
+		}
+		if found {
+			continue
+		}
+		slab, found, err := m.Storage.Retrieve(id)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, NewSlabNotFoundErrorf(id, "slab not found during map slab dump")
+		}
+		dumps = append(dumps, fmt.Sprintf("overflow: %s", slab))
+	}
+
+	return dumps, nil
 }
 
 func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {

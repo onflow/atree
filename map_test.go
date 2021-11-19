@@ -365,6 +365,107 @@ func TestMapSetAndGet(t *testing.T) {
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
+
+	t.Run("unique keys with hash collision", func(t *testing.T) {
+
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		const (
+			mapSize       = 1024
+			keyStringSize = 16
+		)
+
+		r := newRand(t)
+
+		digesterBuilder := &mockDigesterBuilder{}
+		keyValues := make(map[Value]Value, mapSize)
+		i := uint64(0)
+		for len(keyValues) < mapSize {
+			k := NewStringValue(randStr(r, keyStringSize))
+			v := Uint64Value(i)
+			keyValues[k] = v
+			i++
+
+			digests := []Digest{
+				Digest(i % 10),
+			}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+		}
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("replicate keys with hash collision", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		const (
+			mapSize       = 1024
+			keyStringSize = 16
+		)
+
+		r := newRand(t)
+
+		digesterBuilder := &mockDigesterBuilder{}
+		keyValues := make(map[Value]Value, mapSize)
+		i := uint64(0)
+		for len(keyValues) < mapSize {
+			k := NewStringValue(randStr(r, keyStringSize))
+			v := Uint64Value(i)
+			keyValues[k] = v
+			i++
+
+			digests := []Digest{
+				Digest(1 % 10),
+			}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+		}
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Overwrite values
+		for k, v := range keyValues {
+			oldValue := v.(Uint64Value)
+			newValue := Uint64Value(uint64(oldValue) + mapSize)
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			require.NoError(t, err)
+			require.NotNil(t, existingStorable)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			valueEqual(t, typeInfoComparator, oldValue, existingValue)
+
+			keyValues[k] = newValue
+		}
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
 }
 
 func TestMapHas(t *testing.T) {
@@ -437,6 +538,36 @@ func TestMapHas(t *testing.T) {
 	})
 }
 
+func testMapRemoveElement(t *testing.T, m *OrderedMap, k Value, expectedV Value) {
+
+	removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
+	require.NoError(t, err)
+
+	removedKey, err := removedKeyStorable.StoredValue(m.Storage)
+	require.NoError(t, err)
+	valueEqual(t, typeInfoComparator, k, removedKey)
+
+	removedValue, err := removedValueStorable.StoredValue(m.Storage)
+	require.NoError(t, err)
+	valueEqual(t, typeInfoComparator, expectedV, removedValue)
+
+	if id, ok := removedKeyStorable.(StorageIDStorable); ok {
+		err = m.Storage.Remove(StorageID(id))
+		require.NoError(t, err)
+	}
+
+	if id, ok := removedValueStorable.(StorageIDStorable); ok {
+		err = m.Storage.Remove(StorageID(id))
+		require.NoError(t, err)
+	}
+
+	// Remove the same key for the second time.
+	removedKeyStorable, removedValueStorable, err = m.Remove(compare, hashInputProvider, k)
+	require.Error(t, err, KeyNotFoundError{})
+	require.Nil(t, removedKeyStorable)
+	require.Nil(t, removedValueStorable)
+}
+
 func TestMapRemove(t *testing.T) {
 
 	SetThreshold(512)
@@ -497,32 +628,7 @@ func TestMapRemove(t *testing.T) {
 			// Remove all elements
 			for k, v := range tc.keyValues {
 
-				removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
-				require.NoError(t, err)
-
-				removedKey, err := removedKeyStorable.StoredValue(storage)
-				require.NoError(t, err)
-				valueEqual(t, typeInfoComparator, k, removedKey)
-
-				removedValue, err := removedValueStorable.StoredValue(storage)
-				require.NoError(t, err)
-				valueEqual(t, typeInfoComparator, v, removedValue)
-
-				if id, ok := removedKeyStorable.(StorageIDStorable); ok {
-					err = storage.Remove(StorageID(id))
-					require.NoError(t, err)
-				}
-
-				if id, ok := removedValueStorable.(StorageIDStorable); ok {
-					err = storage.Remove(StorageID(id))
-					require.NoError(t, err)
-				}
-
-				// Remove the same key for the second time.
-				removedKeyStorable, removedValueStorable, err = m.Remove(compare, hashInputProvider, k)
-				require.Error(t, err, KeyNotFoundError{})
-				require.Nil(t, removedKeyStorable)
-				require.Nil(t, removedValueStorable)
+				testMapRemoveElement(t, m, k, v)
 
 				count--
 
@@ -534,6 +640,187 @@ func TestMapRemove(t *testing.T) {
 			verifyEmptyMap(t, storage, typeInfo, address, m)
 		})
 	}
+
+	t.Run("collision", func(t *testing.T) {
+		// Test:
+		// - data slab refers to an external slab containing elements with hash collision
+		// - last collision element is inlined after all other collision elements are removed
+		// - data slab overflows with inlined colllision element
+		// - data slab splits
+
+		SetThreshold(512)
+		defer SetThreshold(1024)
+
+		const (
+			numOfElementsBeforeCollision = 54
+			numOfElementsWithCollision   = 10
+			numOfElementsAfterCollision  = 1
+		)
+
+		digesterBuilder := &mockDigesterBuilder{}
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		r := newRand(t)
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		nextDigest := Digest(0)
+
+		nonCollisionKeyValues := make(map[Value]Value)
+		for i := 0; i < numOfElementsBeforeCollision; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			nonCollisionKeyValues[k] = v
+
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{nextDigest}})
+			nextDigest++
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		collisionKeyValues := make(map[Value]Value)
+		for len(collisionKeyValues) < numOfElementsWithCollision {
+			k := NewStringValue(randStr(r, int(MaxInlineMapKeyOrValueSize)-2))
+			v := NewStringValue(randStr(r, int(MaxInlineMapKeyOrValueSize)-2))
+			collisionKeyValues[k] = v
+
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{nextDigest}})
+		}
+
+		for k, v := range collisionKeyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		nextDigest++
+		k := Uint64Value(nextDigest)
+		v := Uint64Value(nextDigest)
+		nonCollisionKeyValues[k] = v
+
+		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{nextDigest}})
+
+		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+
+		count := len(nonCollisionKeyValues) + len(collisionKeyValues)
+
+		// Remove all collision elements
+		for k, v := range collisionKeyValues {
+
+			testMapRemoveElement(t, m, k, v)
+
+			count--
+
+			require.True(t, typeInfoComparator(typeInfo, m.Type()))
+			require.Equal(t, address, m.Address())
+			require.Equal(t, uint64(count), m.Count())
+		}
+
+		verifyMap(t, storage, typeInfo, address, m, nonCollisionKeyValues, nil, false)
+
+		// Remove remaining elements
+		for k, v := range nonCollisionKeyValues {
+
+			testMapRemoveElement(t, m, k, v)
+
+			count--
+
+			require.True(t, typeInfoComparator(typeInfo, m.Type()))
+			require.Equal(t, address, m.Address())
+			require.Equal(t, uint64(count), m.Count())
+		}
+
+		verifyEmptyMap(t, storage, typeInfo, address, m)
+	})
+
+	t.Run("collision with data root", func(t *testing.T) {
+		// Test:
+		// - data slab refers to an external slab containing elements with hash collision
+		// - last collision element is inlined after all other collision elements are removed
+		// - data slab overflows with inlined colllision element
+		// - data slab splits
+
+		SetThreshold(512)
+		defer SetThreshold(1024)
+
+		const (
+			numOfElementsWithCollision    = 10
+			numOfElementsWithoutCollision = 35
+		)
+
+		digesterBuilder := &mockDigesterBuilder{}
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		r := newRand(t)
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		collisionKeyValues := make(map[Value]Value)
+		for len(collisionKeyValues) < numOfElementsWithCollision {
+			k := NewStringValue(randStr(r, int(MaxInlineMapKeyOrValueSize)-2))
+			v := NewStringValue(randStr(r, int(MaxInlineMapKeyOrValueSize)-2))
+			collisionKeyValues[k] = v
+
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{0}})
+		}
+
+		for k, v := range collisionKeyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		nonCollisionKeyValues := make(map[Value]Value)
+		for i := 0; i < numOfElementsWithoutCollision; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			nonCollisionKeyValues[k] = v
+
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i) + 1}})
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		count := len(nonCollisionKeyValues) + len(collisionKeyValues)
+
+		// Remove all collision elements
+		for k, v := range collisionKeyValues {
+
+			testMapRemoveElement(t, m, k, v)
+
+			count--
+
+			require.True(t, typeInfoComparator(typeInfo, m.Type()))
+			require.Equal(t, address, m.Address())
+			require.Equal(t, uint64(count), m.Count())
+		}
+
+		verifyMap(t, storage, typeInfo, address, m, nonCollisionKeyValues, nil, false)
+
+		// Remove remaining elements
+		for k, v := range nonCollisionKeyValues {
+
+			testMapRemoveElement(t, m, k, v)
+
+			count--
+
+			require.True(t, typeInfoComparator(typeInfo, m.Type()))
+			require.Equal(t, address, m.Address())
+			require.Equal(t, uint64(count), m.Count())
+		}
+
+		verifyEmptyMap(t, storage, typeInfo, address, m)
+	})
 }
 
 func TestMapIterate(t *testing.T) {
@@ -2283,13 +2570,32 @@ func TestMapStoredValue(t *testing.T) {
 		require.Nil(t, existingStorable)
 	}
 
-	value, err := m.root.StoredValue(storage)
+	rootID := m.StorageID()
+
+	slabIterator, err := storage.SlabIterator()
 	require.NoError(t, err)
 
-	m2, ok := value.(*OrderedMap)
-	require.True(t, ok)
+	for {
+		id, slab := slabIterator()
 
-	verifyMap(t, storage, typeInfo, address, m2, keyValues, nil, false)
+		if id == StorageIDUndefined {
+			break
+		}
+
+		value, err := slab.StoredValue(storage)
+
+		if id == rootID {
+			require.NoError(t, err)
+
+			m2, ok := value.(*OrderedMap)
+			require.True(t, ok)
+
+			verifyMap(t, storage, typeInfo, address, m2, keyValues, nil, false)
+		} else {
+			require.Error(t, err)
+			require.Nil(t, value)
+		}
+	}
 }
 
 func TestMapPopIterate(t *testing.T) {
@@ -3161,4 +3467,216 @@ func TestMapMaxInlineElement(t *testing.T) {
 	require.Equal(t, targetThreshold-storageIDSize, uint64(m.root.Header().size))
 
 	verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+}
+
+func TestMapString(t *testing.T) {
+
+	SetThreshold(256)
+	defer SetThreshold(1024)
+
+	t.Run("small", func(t *testing.T) {
+		const mapSize = 3
+
+		digesterBuilder := &mockDigesterBuilder{}
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		want := `[0:0 1:1 2:2]`
+		require.Equal(t, want, m.String())
+	})
+
+	t.Run("large", func(t *testing.T) {
+		const mapSize = 30
+
+		digesterBuilder := &mockDigesterBuilder{}
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		want := `[0:0 1:1 2:2 3:3 4:4 5:5 6:6 7:7 8:8 9:9 10:10 11:11 12:12 13:13 14:14 15:15 16:16 17:17 18:18 19:19 20:20 21:21 22:22 23:23 24:24 25:25 26:26 27:27 28:28 29:29]`
+		require.Equal(t, want, m.String())
+	})
+}
+
+func TestMapSlabDump(t *testing.T) {
+
+	SetThreshold(256)
+	defer SetThreshold(1024)
+
+	t.Run("small", func(t *testing.T) {
+		const mapSize = 3
+
+		digesterBuilder := &mockDigesterBuilder{}
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		want := []string{
+			"level 1, MapDataSlab id:0x102030405060708.1 size:67 firstkey:0 elements: [0:0:0 1:1:1 2:2:2]",
+		}
+		dumps, err := DumpMapSlabs(m)
+		require.NoError(t, err)
+		require.Equal(t, want, dumps)
+	})
+
+	t.Run("large", func(t *testing.T) {
+		const mapSize = 30
+
+		digesterBuilder := &mockDigesterBuilder{}
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		want := []string{
+			"level 1, MapMetaDataSlab id:0x102030405060708.1 size:60 firstKey:0 children: [{id:0x102030405060708.2 size:233 firstKey:0} {id:0x102030405060708.3 size:305 firstKey:13}]",
+			"level 2, MapDataSlab id:0x102030405060708.2 size:233 firstkey:0 elements: [0:0:0 1:1:1 2:2:2 3:3:3 4:4:4 5:5:5 6:6:6 7:7:7 8:8:8 9:9:9 10:10:10 11:11:11 12:12:12]",
+			"level 2, MapDataSlab id:0x102030405060708.3 size:305 firstkey:13 elements: [13:13:13 14:14:14 15:15:15 16:16:16 17:17:17 18:18:18 19:19:19 20:20:20 21:21:21 22:22:22 23:23:23 24:24:24 25:25:25 26:26:26 27:27:27 28:28:28 29:29:29]",
+		}
+		dumps, err := DumpMapSlabs(m)
+		require.NoError(t, err)
+		require.Equal(t, want, dumps)
+	})
+
+	t.Run("inline collision", func(t *testing.T) {
+		const mapSize = 30
+
+		digesterBuilder := &mockDigesterBuilder{}
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i % 10)}})
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		want := []string{
+			"level 1, MapMetaDataSlab id:0x102030405060708.1 size:60 firstKey:0 children: [{id:0x102030405060708.2 size:255 firstKey:0} {id:0x102030405060708.3 size:263 firstKey:5}]",
+			"level 2, MapDataSlab id:0x102030405060708.2 size:255 firstkey:0 elements: [0:inline[:0:0 :10:10 :20:20] 1:inline[:1:1 :11:11 :21:21] 2:inline[:2:2 :12:12 :22:22] 3:inline[:3:3 :13:13 :23:23] 4:inline[:4:4 :14:14 :24:24]]",
+			"level 2, MapDataSlab id:0x102030405060708.3 size:263 firstkey:5 elements: [5:inline[:5:5 :15:15 :25:25] 6:inline[:6:6 :16:16 :26:26] 7:inline[:7:7 :17:17 :27:27] 8:inline[:8:8 :18:18 :28:28] 9:inline[:9:9 :19:19 :29:29]]",
+		}
+		dumps, err := DumpMapSlabs(m)
+		require.NoError(t, err)
+		require.Equal(t, want, dumps)
+	})
+
+	t.Run("external collision", func(t *testing.T) {
+		const mapSize = 30
+
+		digesterBuilder := &mockDigesterBuilder{}
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i % 2)}})
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		want := []string{
+			"level 1, MapDataSlab id:0x102030405060708.1 size:80 firstkey:0 elements: [0:external(0x102030405060708.2) 1:external(0x102030405060708.3)]",
+			"collision: MapDataSlab id:0x102030405060708.2 size:141 firstkey:0 elements: [:0:0 :2:2 :4:4 :6:6 :8:8 :10:10 :12:12 :14:14 :16:16 :18:18 :20:20 :22:22 :24:24 :26:26 :28:28]",
+			"collision: MapDataSlab id:0x102030405060708.3 size:141 firstkey:0 elements: [:1:1 :3:3 :5:5 :7:7 :9:9 :11:11 :13:13 :15:15 :17:17 :19:19 :21:21 :23:23 :25:25 :27:27 :29:29]",
+		}
+		dumps, err := DumpMapSlabs(m)
+		require.NoError(t, err)
+		require.Equal(t, want, dumps)
+	})
+
+	t.Run("overflow", func(t *testing.T) {
+
+		digesterBuilder := &mockDigesterBuilder{}
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		k := NewStringValue(strings.Repeat("a", int(MaxInlineMapKeyOrValueSize)))
+		v := NewStringValue(strings.Repeat("b", int(MaxInlineMapKeyOrValueSize)))
+		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(0)}})
+
+		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+
+		want := []string{
+			"level 1, MapDataSlab id:0x102030405060708.1 size:69 firstkey:0 elements: [0:StorageIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]}):StorageIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 3]})]",
+			"overflow: &{0x102030405060708.2 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}",
+			"overflow: &{0x102030405060708.3 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}",
+		}
+		dumps, err := DumpMapSlabs(m)
+		require.NoError(t, err)
+		require.Equal(t, want, dumps)
+	})
 }

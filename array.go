@@ -798,25 +798,17 @@ func (a *ArrayDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc
 }
 
 func (a *ArrayDataSlab) String() string {
-	var elements []Storable
-	if len(a.elements) <= 6 {
-		elements = a.elements
-	} else {
-		elements = append(elements, a.elements[:3]...)
-		elements = append(elements, a.elements[len(a.elements)-3:]...)
-	}
-
 	var elemsStr []string
-	for _, e := range elements {
+	for _, e := range a.elements {
 		elemsStr = append(elemsStr, fmt.Sprint(e))
 	}
 
-	if len(a.elements) > 6 {
-		elemsStr = append(elemsStr, "")
-		copy(elemsStr[4:], elemsStr[3:])
-		elemsStr[3] = "..."
-	}
-	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
+	return fmt.Sprintf("ArrayDataSlab id:%s size:%d count:%d elements: [%s]",
+		a.header.id,
+		a.header.size,
+		a.header.count,
+		strings.Join(elemsStr, " "),
+	)
 }
 
 func newArrayMetaDataSlabFromData(
@@ -1793,7 +1785,13 @@ func (a *ArrayMetaDataSlab) String() string {
 	for _, h := range a.childrenHeaders {
 		elemsStr = append(elemsStr, fmt.Sprintf("{id:%s size:%d count:%d}", h.id, h.size, h.count))
 	}
-	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
+
+	return fmt.Sprintf("ArrayMetaDataSlab id:%s size:%d count:%d children: [%s]",
+		a.header.id,
+		a.header.size,
+		a.header.count,
+		strings.Join(elemsStr, " "),
+	)
 }
 
 func NewArray(storage SlabStorage, address Address, typeInfo TypeInfo) (*Array, error) {
@@ -2120,30 +2118,24 @@ func (a *Array) Type() TypeInfo {
 }
 
 func (a *Array) String() string {
-	if a.root.IsData() {
-		return a.root.String()
+	iterator, err := a.Iterator()
+	if err != nil {
+		return err.Error()
 	}
-	meta := a.root.(*ArrayMetaDataSlab)
-	return a.string(meta)
-}
 
-func (a *Array) string(meta *ArrayMetaDataSlab) string {
 	var elemsStr []string
-
-	for _, h := range meta.childrenHeaders {
-		child, err := getArraySlab(a.Storage, h.id)
+	for {
+		v, err := iterator.Next()
 		if err != nil {
 			return err.Error()
 		}
-		if child.IsData() {
-			data := child.(*ArrayDataSlab)
-			elemsStr = append(elemsStr, data.String())
-		} else {
-			meta := child.(*ArrayMetaDataSlab)
-			elemsStr = append(elemsStr, a.string(meta))
+		if v == nil {
+			break
 		}
+		elemsStr = append(elemsStr, fmt.Sprintf("%s", v))
 	}
-	return strings.Join(elemsStr, " ")
+
+	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
 func getArraySlab(storage SlabStorage, id StorageID) (ArraySlab, error) {

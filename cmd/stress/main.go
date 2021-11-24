@@ -101,7 +101,7 @@ func main() {
 		return
 	}
 
-	baseStorage := atree.NewInMemBaseStorage()
+	baseStorage := NewInMemBaseStorage()
 
 	storage := atree.NewPersistentSlabStorage(
 		baseStorage,

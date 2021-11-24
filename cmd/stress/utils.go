@@ -54,3 +54,102 @@ func randomValue() atree.Value {
 		return Uint8Value(rand.Intn(255))
 	}
 }
+
+type InMemBaseStorage struct {
+	segments         map[atree.StorageID][]byte
+	storageIndex     map[atree.Address]atree.StorageIndex
+	bytesRetrieved   int
+	bytesStored      int
+	segmentsReturned map[atree.StorageID]struct{}
+	segmentsUpdated  map[atree.StorageID]struct{}
+	segmentsTouched  map[atree.StorageID]struct{}
+}
+
+var _ atree.BaseStorage = &InMemBaseStorage{}
+
+func NewInMemBaseStorage() *InMemBaseStorage {
+	return NewInMemBaseStorageFromMap(
+		make(map[atree.StorageID][]byte),
+	)
+}
+
+func NewInMemBaseStorageFromMap(segments map[atree.StorageID][]byte) *InMemBaseStorage {
+	return &InMemBaseStorage{
+		segments:         segments,
+		storageIndex:     make(map[atree.Address]atree.StorageIndex),
+		segmentsReturned: make(map[atree.StorageID]struct{}),
+		segmentsUpdated:  make(map[atree.StorageID]struct{}),
+		segmentsTouched:  make(map[atree.StorageID]struct{}),
+	}
+}
+
+func (s *InMemBaseStorage) Retrieve(id atree.StorageID) ([]byte, bool, error) {
+	seg, ok := s.segments[id]
+	s.bytesRetrieved += len(seg)
+	s.segmentsReturned[id] = struct{}{}
+	s.segmentsTouched[id] = struct{}{}
+	return seg, ok, nil
+}
+
+func (s *InMemBaseStorage) Store(id atree.StorageID, data []byte) error {
+	s.segments[id] = data
+	s.bytesStored += len(data)
+	s.segmentsUpdated[id] = struct{}{}
+	s.segmentsTouched[id] = struct{}{}
+	return nil
+}
+
+func (s *InMemBaseStorage) Remove(id atree.StorageID) error {
+	s.segmentsUpdated[id] = struct{}{}
+	s.segmentsTouched[id] = struct{}{}
+	delete(s.segments, id)
+	return nil
+}
+
+func (s *InMemBaseStorage) GenerateStorageID(address atree.Address) (atree.StorageID, error) {
+	index := s.storageIndex[address]
+	nextIndex := index.Next()
+
+	s.storageIndex[address] = nextIndex
+	return atree.NewStorageID(address, nextIndex), nil
+}
+
+func (s *InMemBaseStorage) SegmentCounts() int {
+	return len(s.segments)
+}
+
+func (s *InMemBaseStorage) Size() int {
+	total := 0
+	for _, seg := range s.segments {
+		total += len(seg)
+	}
+	return total
+}
+
+func (s *InMemBaseStorage) BytesRetrieved() int {
+	return s.bytesRetrieved
+}
+
+func (s *InMemBaseStorage) BytesStored() int {
+	return s.bytesStored
+}
+
+func (s *InMemBaseStorage) SegmentsReturned() int {
+	return len(s.segmentsReturned)
+}
+
+func (s *InMemBaseStorage) SegmentsUpdated() int {
+	return len(s.segmentsUpdated)
+}
+
+func (s *InMemBaseStorage) SegmentsTouched() int {
+	return len(s.segmentsTouched)
+}
+
+func (s *InMemBaseStorage) ResetReporter() {
+	s.bytesStored = 0
+	s.bytesRetrieved = 0
+	s.segmentsReturned = make(map[atree.StorageID]struct{})
+	s.segmentsUpdated = make(map[atree.StorageID]struct{})
+	s.segmentsTouched = make(map[atree.StorageID]struct{})
+}

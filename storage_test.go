@@ -20,11 +20,537 @@ package atree
 
 import (
 	"math/rand"
+	"strings"
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
 )
+
+func TestStorageIndexNext(t *testing.T) {
+	index := StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}
+	want := StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}
+	require.Equal(t, want, index.Next())
+}
+
+func TestNewStorageID(t *testing.T) {
+	t.Run("temp address", func(t *testing.T) {
+		want := StorageID{Address: Address{}, Index: StorageIndex{1}}
+		require.Equal(t, want, NewStorageID(Address{}, StorageIndex{1}))
+	})
+	t.Run("perm address", func(t *testing.T) {
+		want := StorageID{Address: Address{1}, Index: StorageIndex{1}}
+		require.Equal(t, want, NewStorageID(Address{1}, StorageIndex{1}))
+	})
+}
+
+func TestNewStorageIDFromRawBytes(t *testing.T) {
+	t.Run("data length < storage id size", func(t *testing.T) {
+		id, err := NewStorageIDFromRawBytes(nil)
+		require.Equal(t, StorageIDUndefined, id)
+		require.Error(t, err, &StorageIDError{})
+
+		id, err = NewStorageIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 2})
+		require.Equal(t, StorageIDUndefined, id)
+		require.Error(t, err, &StorageIDError{})
+	})
+	t.Run("data length == storage id size", func(t *testing.T) {
+		id, err := NewStorageIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2})
+
+		want := StorageID{
+			Address: Address{0, 0, 0, 0, 0, 0, 0, 1},
+			Index:   StorageIndex{0, 0, 0, 0, 0, 0, 0, 2},
+		}
+		require.Equal(t, want, id)
+		require.NoError(t, err)
+	})
+	t.Run("data length > storage id size", func(t *testing.T) {
+		id, err := NewStorageIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 1, 2, 3, 4, 5, 6, 7, 8})
+
+		want := StorageID{
+			Address: Address{0, 0, 0, 0, 0, 0, 0, 1},
+			Index:   StorageIndex{0, 0, 0, 0, 0, 0, 0, 2},
+		}
+		require.Equal(t, want, id)
+		require.NoError(t, err)
+	})
+}
+
+func TestStorageIDToRawBytes(t *testing.T) {
+	t.Run("buffer nil", func(t *testing.T) {
+		size, err := StorageIDUndefined.ToRawBytes(nil)
+		require.Equal(t, 0, size)
+		require.Error(t, err, &StorageIDError{})
+	})
+
+	t.Run("buffer too short", func(t *testing.T) {
+		b := make([]byte, 8)
+		size, err := StorageIDUndefined.ToRawBytes(b)
+		require.Equal(t, 0, size)
+		require.Error(t, err, &StorageIDError{})
+	})
+
+	t.Run("undefined", func(t *testing.T) {
+		b := make([]byte, storageIDSize)
+		size, err := StorageIDUndefined.ToRawBytes(b)
+		require.NoError(t, err)
+
+		want := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+		require.Equal(t, want, b)
+		require.Equal(t, storageIDSize, size)
+	})
+
+	t.Run("temp address", func(t *testing.T) {
+		id := NewStorageID(Address{0, 0, 0, 0, 0, 0, 0, 0}, StorageIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		b := make([]byte, storageIDSize)
+		size, err := id.ToRawBytes(b)
+		require.NoError(t, err)
+
+		want := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+		require.Equal(t, want, b)
+		require.Equal(t, storageIDSize, size)
+	})
+
+	t.Run("temp index", func(t *testing.T) {
+		id := NewStorageID(Address{0, 0, 0, 0, 0, 0, 0, 1}, StorageIndex{0, 0, 0, 0, 0, 0, 0, 0})
+		b := make([]byte, storageIDSize)
+		size, err := id.ToRawBytes(b)
+		require.NoError(t, err)
+
+		want := []byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0}
+		require.Equal(t, want, b)
+		require.Equal(t, storageIDSize, size)
+	})
+
+	t.Run("perm", func(t *testing.T) {
+		id := NewStorageID(Address{0, 0, 0, 0, 0, 0, 0, 1}, StorageIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		b := make([]byte, storageIDSize)
+		size, err := id.ToRawBytes(b)
+		require.NoError(t, err)
+
+		want := []byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2}
+		require.Equal(t, want, b)
+		require.Equal(t, storageIDSize, size)
+	})
+}
+
+func TestStorageIDAddressAsUint64(t *testing.T) {
+	t.Run("temp", func(t *testing.T) {
+		id := NewStorageID(Address{}, StorageIndex{1})
+		require.Equal(t, uint64(0), id.AddressAsUint64())
+	})
+	t.Run("perm", func(t *testing.T) {
+		id := NewStorageID(Address{0, 0, 0, 0, 0, 0, 0, 1}, StorageIndex{1})
+		require.Equal(t, uint64(1), id.AddressAsUint64())
+	})
+}
+
+func TestStorageIDIndexAsUint64(t *testing.T) {
+	t.Run("temp", func(t *testing.T) {
+		id := NewStorageID(Address{}, StorageIndex{})
+		require.Equal(t, uint64(0), id.IndexAsUint64())
+	})
+	t.Run("perm", func(t *testing.T) {
+		id := NewStorageID(Address{}, StorageIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		require.Equal(t, uint64(1), id.IndexAsUint64())
+	})
+}
+
+func TestStorageIDValid(t *testing.T) {
+	t.Run("undefined", func(t *testing.T) {
+		id := StorageIDUndefined
+		require.Error(t, id.Valid(), &StorageIDError{})
+	})
+	t.Run("temp index", func(t *testing.T) {
+		id := StorageID{Address: Address{1}, Index: StorageIndexUndefined}
+		require.Error(t, id.Valid(), &StorageIDError{})
+	})
+	t.Run("temp address", func(t *testing.T) {
+		id := StorageID{Address: AddressUndefined, Index: StorageIndex{1}}
+		require.NoError(t, id.Valid())
+	})
+	t.Run("valid", func(t *testing.T) {
+		id := StorageID{Address: Address{1}, Index: StorageIndex{2}}
+		require.NoError(t, id.Valid())
+	})
+}
+
+func TestStorageIDCompare(t *testing.T) {
+	t.Run("same", func(t *testing.T) {
+		id1 := NewStorageID(Address{1}, StorageIndex{1})
+		id2 := NewStorageID(Address{1}, StorageIndex{1})
+		require.Equal(t, 0, id1.Compare(id2))
+		require.Equal(t, 0, id2.Compare(id1))
+	})
+
+	t.Run("different address", func(t *testing.T) {
+		id1 := NewStorageID(Address{1}, StorageIndex{1})
+		id2 := NewStorageID(Address{2}, StorageIndex{1})
+		require.Equal(t, -1, id1.Compare(id2))
+		require.Equal(t, 1, id2.Compare(id1))
+	})
+
+	t.Run("different index", func(t *testing.T) {
+		id1 := NewStorageID(Address{1}, StorageIndex{1})
+		id2 := NewStorageID(Address{1}, StorageIndex{2})
+		require.Equal(t, -1, id1.Compare(id2))
+		require.Equal(t, 1, id2.Compare(id1))
+	})
+
+	t.Run("different address and index", func(t *testing.T) {
+		id1 := NewStorageID(Address{1}, StorageIndex{1})
+		id2 := NewStorageID(Address{2}, StorageIndex{2})
+		require.Equal(t, -1, id1.Compare(id2))
+		require.Equal(t, 1, id2.Compare(id1))
+	})
+}
+
+func TestLedgerBaseStorageStore(t *testing.T) {
+	ledger := newTestLedger()
+	baseStorage := NewLedgerBaseStorage(ledger)
+
+	bytesStored := 0
+	values := map[StorageID][]byte{
+		{Address{1}, StorageIndex{1}}: {1, 2, 3},
+		{Address{1}, StorageIndex{2}}: {4, 5, 6},
+	}
+
+	// Store values
+	for id, value := range values {
+		err := baseStorage.Store(id, value)
+		bytesStored += len(value)
+		require.NoError(t, err)
+	}
+
+	// Overwrite stored values
+	for id := range values {
+		value := append(values[id], []byte{1, 2, 3}...)
+		values[id] = value
+		bytesStored += len(value)
+		err := baseStorage.Store(id, value)
+		require.NoError(t, err)
+	}
+
+	require.Equal(t, bytesStored, baseStorage.BytesStored())
+	require.Equal(t, 0, baseStorage.BytesRetrieved())
+
+	iterator := ledger.Iterator()
+
+	count := 0
+	for {
+		owner, key, value := iterator()
+		if owner == nil {
+			break
+		}
+		var id StorageID
+		copy(id.Address[:], owner)
+		copy(id.Index[:], key[1:])
+
+		require.True(t, LedgerKeyIsSlabKey(string(key)))
+		require.Equal(t, values[id], value)
+
+		count++
+	}
+	require.Equal(t, len(values), count)
+}
+
+func TestLedgerBaseStorageRetrieve(t *testing.T) {
+	ledger := newTestLedger()
+	baseStorage := NewLedgerBaseStorage(ledger)
+
+	id := StorageID{Address: Address{1}, Index: StorageIndex{1}}
+	value := []byte{1, 2, 3}
+	bytesStored := 0
+	bytesRetrieved := 0
+
+	// Retrieve value from empty storage
+	b, found, err := baseStorage.Retrieve(id)
+	require.NoError(t, err)
+	require.False(t, found)
+	require.Equal(t, 0, len(b))
+
+	bytesStored += len(value)
+	err = baseStorage.Store(id, value)
+	require.NoError(t, err)
+
+	// Retrieve stored value
+	b, found, err = baseStorage.Retrieve(id)
+	bytesRetrieved += len(b)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, value, b)
+
+	// Retrieve non-existent value
+	id = StorageID{Address: Address{1}, Index: StorageIndex{2}}
+	b, found, err = baseStorage.Retrieve(id)
+	require.NoError(t, err)
+	require.False(t, found)
+	require.Nil(t, b)
+
+	require.Equal(t, bytesStored, baseStorage.BytesStored())
+	require.Equal(t, bytesRetrieved, baseStorage.BytesRetrieved())
+}
+
+func TestLedgerBaseStorageRemove(t *testing.T) {
+	ledger := newTestLedger()
+	baseStorage := NewLedgerBaseStorage(ledger)
+
+	id := StorageID{Address: Address{1}, Index: StorageIndex{1}}
+	value := []byte{1, 2, 3}
+
+	// Remove value from empty storage
+	err := baseStorage.Remove(id)
+	require.NoError(t, err)
+
+	err = baseStorage.Store(id, value)
+	require.NoError(t, err)
+
+	// Remove stored value
+	err = baseStorage.Remove(id)
+	require.NoError(t, err)
+
+	// Remove removed value
+	err = baseStorage.Remove(id)
+	require.NoError(t, err)
+
+	// Remove non-existent value
+	err = baseStorage.Remove(StorageID{Address: id.Address, Index: id.Index.Next()})
+	require.NoError(t, err)
+
+	// Retrieve removed value
+	slab, found, err := baseStorage.Retrieve(id)
+	require.NoError(t, err)
+	require.False(t, found)
+	require.Nil(t, slab)
+
+	iterator := ledger.Iterator()
+
+	count := 0
+	for {
+		owner, key, value := iterator()
+		if owner == nil {
+			break
+		}
+		var id StorageID
+		copy(id.Address[:], owner)
+		copy(id.Index[:], key[1:])
+
+		require.True(t, LedgerKeyIsSlabKey(string(key)))
+		require.Nil(t, value)
+
+		count++
+	}
+	require.Equal(t, 2, count)
+}
+
+func TestLedgerBaseStorageGenerateStorageID(t *testing.T) {
+	ledger := newTestLedger()
+	baseStorage := NewLedgerBaseStorage(ledger)
+
+	address1 := Address{1}
+	address2 := Address{2}
+
+	id, err := baseStorage.GenerateStorageID(address1)
+	require.NoError(t, err)
+	require.Equal(t, address1, id.Address)
+	require.Equal(t, StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index)
+
+	id, err = baseStorage.GenerateStorageID(address1)
+	require.NoError(t, err)
+	require.Equal(t, address1, id.Address)
+	require.Equal(t, StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index)
+
+	id, err = baseStorage.GenerateStorageID(address2)
+	require.NoError(t, err)
+	require.Equal(t, address2, id.Address)
+	require.Equal(t, StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index)
+}
+
+func TestBasicSlabStorageStore(t *testing.T) {
+	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+
+	r := newRand(t)
+	slabs := map[StorageID]Slab{
+		{Address{1}, StorageIndex{1}}: generateRandomSlab(r),
+		{Address{1}, StorageIndex{2}}: generateRandomSlab(r),
+	}
+
+	// Store values
+	for id, slab := range slabs {
+		err := storage.Store(id, slab)
+		require.NoError(t, err)
+	}
+
+	// Overwrite stored values
+	for id := range slabs {
+		slab := generateRandomSlab(r)
+		slabs[id] = slab
+		err := storage.Store(id, slab)
+		require.NoError(t, err)
+	}
+
+	require.Equal(t, len(slabs), storage.Count())
+
+	// Retrieve slabs
+	for id, want := range slabs {
+		slab, found, err := storage.Retrieve(id)
+		require.NoError(t, err)
+		require.True(t, found)
+		require.Equal(t, want, slab)
+	}
+}
+
+func TestBasicSlabStorageRetrieve(t *testing.T) {
+	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+
+	r := newRand(t)
+	id := StorageID{Address{1}, StorageIndex{1}}
+	slab := generateRandomSlab(r)
+
+	// Retrieve value from empty storage
+	retrievedSlab, found, err := storage.Retrieve(id)
+	require.NoError(t, err)
+	require.False(t, found)
+	require.Nil(t, retrievedSlab)
+
+	err = storage.Store(id, slab)
+	require.NoError(t, err)
+
+	// Retrieve stored value
+	retrievedSlab, found, err = storage.Retrieve(id)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, slab, retrievedSlab)
+
+	// Retrieve non-existent value
+	id = StorageID{Address: Address{1}, Index: StorageIndex{2}}
+	retrievedSlab, found, err = storage.Retrieve(id)
+	require.NoError(t, err)
+	require.False(t, found)
+	require.Nil(t, retrievedSlab)
+}
+
+func TestBasicSlabStorageRemove(t *testing.T) {
+	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+
+	r := newRand(t)
+	id := StorageID{Address{1}, StorageIndex{1}}
+	slab := generateRandomSlab(r)
+
+	// Remove value from empty storage
+	err := storage.Remove(id)
+	require.NoError(t, err)
+
+	err = storage.Store(id, slab)
+	require.NoError(t, err)
+
+	// Remove stored value
+	err = storage.Remove(id)
+	require.NoError(t, err)
+
+	// Remove removed value
+	err = storage.Remove(id)
+	require.NoError(t, err)
+
+	// Remove non-existent value
+	err = storage.Remove(StorageID{Address: id.Address, Index: id.Index.Next()})
+	require.NoError(t, err)
+
+	// Retrieve removed value
+	slab, found, err := storage.Retrieve(id)
+	require.NoError(t, err)
+	require.False(t, found)
+	require.Nil(t, slab)
+
+	require.Equal(t, 0, storage.Count())
+}
+
+func TestBasicSlabStorageGenerateStorageID(t *testing.T) {
+	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+
+	address1 := Address{1}
+	address2 := Address{2}
+
+	id, err := storage.GenerateStorageID(address1)
+	require.NoError(t, err)
+	require.Equal(t, address1, id.Address)
+	require.Equal(t, StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index)
+
+	id, err = storage.GenerateStorageID(address1)
+	require.NoError(t, err)
+	require.Equal(t, address1, id.Address)
+	require.Equal(t, StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index)
+
+	id, err = storage.GenerateStorageID(address2)
+	require.NoError(t, err)
+	require.Equal(t, address2, id.Address)
+	require.Equal(t, StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index)
+}
+
+func TestBasicSlabStorageStorageIDs(t *testing.T) {
+	r := newRand(t)
+	address := Address{1}
+	index := StorageIndex{0, 0, 0, 0, 0, 0, 0, 0}
+	wantIDs := map[StorageID]bool{
+		{Address: address, Index: index.Next()}: true,
+		{Address: address, Index: index.Next()}: true,
+		{Address: address, Index: index.Next()}: true,
+	}
+
+	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+
+	// Get storage ids from empty storgae
+	ids := storage.StorageIDs()
+	require.Equal(t, 0, len(ids))
+
+	// Store values
+	for id := range wantIDs {
+		err := storage.Store(id, generateRandomSlab(r))
+		require.NoError(t, err)
+	}
+
+	// Get storage ids from non-empty storgae
+	ids = storage.StorageIDs()
+	require.Equal(t, len(wantIDs), len(ids))
+
+	for _, id := range ids {
+		require.True(t, wantIDs[id])
+	}
+}
+
+func TestBasicSlabStorageSlabIterat(t *testing.T) {
+	r := newRand(t)
+	address := Address{1}
+	index := StorageIndex{0, 0, 0, 0, 0, 0, 0, 0}
+	want := map[StorageID]Slab{
+		{Address: address, Index: index.Next()}: generateRandomSlab(r),
+		{Address: address, Index: index.Next()}: generateRandomSlab(r),
+		{Address: address, Index: index.Next()}: generateRandomSlab(r),
+	}
+
+	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+
+	// Store values
+	for id, slab := range want {
+		err := storage.Store(id, slab)
+		require.NoError(t, err)
+	}
+
+	iterator, err := storage.SlabIterator()
+	require.NoError(t, err)
+
+	count := 0
+	for {
+		id, slab := iterator()
+		if id == StorageIDUndefined {
+			break
+		}
+		require.NotNil(t, want[id])
+		require.Equal(t, want[id], slab)
+		count++
+	}
+	require.Equal(t, len(want), count)
+}
 
 func TestPersistentStorage(t *testing.T) {
 
@@ -218,6 +744,187 @@ func TestPersistentStorage(t *testing.T) {
 	})
 }
 
+func TestPersistentStorageSlabIterator(t *testing.T) {
+	t.Run("empty storage", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		iterator, err := storage.SlabIterator()
+		require.NoError(t, err)
+
+		count := 0
+		for {
+			id, _ := iterator()
+			if id == StorageIDUndefined {
+				break
+			}
+			count++
+		}
+		require.Equal(t, 0, count)
+	})
+
+	t.Run("not-empty storage", func(t *testing.T) {
+
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id4 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+
+		data := map[StorageID][]byte{
+			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:270 count:11} ]
+			id1: {
+				// extra data
+				// version
+				0x00,
+				// extra data flag
+				0x81,
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// version
+				0x00,
+				// array meta data slab flag
+				0x81,
+				// child header count
+				0x00, 0x02,
+				// child header 1 (storage id, count, size)
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0x09,
+				0x00, 0x00, 0x00, 0xe4,
+				// child header 2
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x00, 0x00, 0x00, 0x0b,
+				0x00, 0x00, 0x01, 0x0e,
+			},
+
+			// (data slab) next: 3, data: [aaaaaaaaaaaaaaaaaaaaaa ... aaaaaaaaaaaaaaaaaaaaaa]
+			id2: {
+				// version
+				0x00,
+				// array data slab flag
+				0x00,
+				// next storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x09,
+				// CBOR encoded array elements
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+			},
+
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... StorageID(...)]
+			id3: {
+				// version
+				0x00,
+				// array data slab flag
+				0x40,
+				// next storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x0b,
+				// CBOR encoded array elements
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+			},
+
+			// (data slab) next: 0, data: [0]
+			id4: {
+				// extra data
+				// version
+				0x00,
+				// extra data flag
+				0x80,
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2b,
+
+				// version
+				0x00,
+				// array data slab flag
+				0x80,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x01,
+				// CBOR encoded array elements
+				0xd8, 0xa4, 0x00,
+			},
+		}
+
+		storage := newTestPersistentStorageWithData(t, data)
+
+		_, err := NewArrayWithRootID(storage, id1)
+		require.NoError(t, err)
+
+		iterator, err := storage.SlabIterator()
+		require.NoError(t, err)
+
+		count := 0
+		for {
+			id, slab := iterator()
+			if id == StorageIDUndefined {
+				break
+			}
+
+			encodedSlab, err := Encode(slab, storage.cborEncMode)
+			require.NoError(t, err)
+
+			require.Equal(t, encodedSlab, data[id])
+			count++
+		}
+		require.Equal(t, len(data), count)
+	})
+}
+
+func TestPersistentStorageGenerateStorageID(t *testing.T) {
+	baseStorage := NewInMemBaseStorage()
+	storage := NewPersistentSlabStorage(baseStorage, nil, nil, nil, nil)
+
+	t.Run("temp address", func(t *testing.T) {
+		address := Address{}
+
+		id, err := storage.GenerateStorageID(address)
+		require.NoError(t, err)
+		require.Equal(t, address, id.Address)
+		require.Equal(t, StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index)
+
+		id, err = storage.GenerateStorageID(address)
+		require.NoError(t, err)
+		require.Equal(t, address, id.Address)
+		require.Equal(t, StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index)
+	})
+	t.Run("perm address", func(t *testing.T) {
+		address := Address{1}
+
+		id, err := storage.GenerateStorageID(address)
+		require.NoError(t, err)
+		require.Equal(t, address, id.Address)
+		require.Equal(t, StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index)
+
+		id, err = storage.GenerateStorageID(address)
+		require.NoError(t, err)
+		require.Equal(t, address, id.Address)
+		require.Equal(t, StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index)
+	})
+}
+
 func generateRandomSlab(r *rand.Rand) Slab {
 	return &ArrayMetaDataSlab{childrenHeaders: []ArraySlabHeader{{size: r.Uint32(), count: r.Uint32()}}}
 }
@@ -291,3 +998,69 @@ func (s *accessOrderTrackerBaseStorage) SegmentsUpdated() int { return 0 }
 func (s *accessOrderTrackerBaseStorage) SegmentsTouched() int { return 0 }
 
 func (s *accessOrderTrackerBaseStorage) ResetReporter() {}
+
+type testLedger struct {
+	values map[string][]byte
+	index  map[string]StorageIndex
+}
+
+var _ Ledger = &testLedger{}
+
+func newTestLedger() *testLedger {
+	return &testLedger{
+		values: make(map[string][]byte),
+		index:  make(map[string]StorageIndex),
+	}
+}
+
+func (l *testLedger) GetValue(owner, key []byte) (value []byte, err error) {
+	value = l.values[l.key(owner, key)]
+	return value, nil
+}
+
+func (l *testLedger) SetValue(owner, key, value []byte) (err error) {
+	l.values[l.key(owner, key)] = value
+	return nil
+}
+
+func (l *testLedger) ValueExists(owner, key []byte) (exists bool, err error) {
+	value := l.values[l.key(owner, key)]
+	return len(value) > 0, nil
+}
+
+func (l *testLedger) AllocateStorageIndex(owner []byte) (StorageIndex, error) {
+	index := l.index[string(owner)]
+	next := index.Next()
+	l.index[string(owner)] = next
+	return next, nil
+}
+
+func (l *testLedger) key(owner, key []byte) string {
+	return strings.Join([]string{string(owner), string(key)}, "|")
+}
+
+type ledgerIterationFunc func() (owner, key, value []byte)
+
+func (l *testLedger) Iterator() ledgerIterationFunc {
+	keys := make([]string, 0, len(l.values))
+	for k := range l.values {
+		keys = append(keys, k)
+	}
+
+	i := 0
+	return func() (owner, key, value []byte) {
+		if i >= len(keys) {
+			return nil, nil, nil
+		}
+
+		s := strings.Split(keys[i], "|")
+		owner, key = []byte(s[0]), []byte(s[1])
+		value = l.values[keys[i]]
+		i++
+		return owner, key, value
+	}
+}
+
+func (l *testLedger) Count() int {
+	return len(l.values)
+}

@@ -165,6 +165,105 @@ func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
 	)
 }
 
+type InMemBaseStorage struct {
+	segments         map[StorageID][]byte
+	storageIndex     map[Address]StorageIndex
+	bytesRetrieved   int
+	bytesStored      int
+	segmentsReturned map[StorageID]struct{}
+	segmentsUpdated  map[StorageID]struct{}
+	segmentsTouched  map[StorageID]struct{}
+}
+
+var _ BaseStorage = &InMemBaseStorage{}
+
+func NewInMemBaseStorage() *InMemBaseStorage {
+	return NewInMemBaseStorageFromMap(
+		make(map[StorageID][]byte),
+	)
+}
+
+func NewInMemBaseStorageFromMap(segments map[StorageID][]byte) *InMemBaseStorage {
+	return &InMemBaseStorage{
+		segments:         segments,
+		storageIndex:     make(map[Address]StorageIndex),
+		segmentsReturned: make(map[StorageID]struct{}),
+		segmentsUpdated:  make(map[StorageID]struct{}),
+		segmentsTouched:  make(map[StorageID]struct{}),
+	}
+}
+
+func (s *InMemBaseStorage) Retrieve(id StorageID) ([]byte, bool, error) {
+	seg, ok := s.segments[id]
+	s.bytesRetrieved += len(seg)
+	s.segmentsReturned[id] = struct{}{}
+	s.segmentsTouched[id] = struct{}{}
+	return seg, ok, nil
+}
+
+func (s *InMemBaseStorage) Store(id StorageID, data []byte) error {
+	s.segments[id] = data
+	s.bytesStored += len(data)
+	s.segmentsUpdated[id] = struct{}{}
+	s.segmentsTouched[id] = struct{}{}
+	return nil
+}
+
+func (s *InMemBaseStorage) Remove(id StorageID) error {
+	s.segmentsUpdated[id] = struct{}{}
+	s.segmentsTouched[id] = struct{}{}
+	delete(s.segments, id)
+	return nil
+}
+
+func (s *InMemBaseStorage) GenerateStorageID(address Address) (StorageID, error) {
+	index := s.storageIndex[address]
+	nextIndex := index.Next()
+
+	s.storageIndex[address] = nextIndex
+	return NewStorageID(address, nextIndex), nil
+}
+
+func (s *InMemBaseStorage) SegmentCounts() int {
+	return len(s.segments)
+}
+
+func (s *InMemBaseStorage) Size() int {
+	total := 0
+	for _, seg := range s.segments {
+		total += len(seg)
+	}
+	return total
+}
+
+func (s *InMemBaseStorage) BytesRetrieved() int {
+	return s.bytesRetrieved
+}
+
+func (s *InMemBaseStorage) BytesStored() int {
+	return s.bytesStored
+}
+
+func (s *InMemBaseStorage) SegmentsReturned() int {
+	return len(s.segmentsReturned)
+}
+
+func (s *InMemBaseStorage) SegmentsUpdated() int {
+	return len(s.segmentsUpdated)
+}
+
+func (s *InMemBaseStorage) SegmentsTouched() int {
+	return len(s.segmentsTouched)
+}
+
+func (s *InMemBaseStorage) ResetReporter() {
+	s.bytesStored = 0
+	s.bytesRetrieved = 0
+	s.segmentsReturned = make(map[StorageID]struct{})
+	s.segmentsUpdated = make(map[StorageID]struct{})
+	s.segmentsTouched = make(map[StorageID]struct{})
+}
+
 func valueEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
 	switch a.(type) {
 	case *Array:

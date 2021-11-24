@@ -489,7 +489,6 @@ type PersistentSlabStorage struct {
 	DecodeTypeInfo   TypeInfoDecoder
 	cborEncMode      cbor.EncMode
 	cborDecMode      cbor.DecMode
-	autoCommit       bool // flag to call commit after each operation
 }
 
 var _ SlabStorage = &PersistentSlabStorage{}
@@ -633,7 +632,6 @@ func NewPersistentSlabStorage(
 		cborDecMode:    cborDecMode,
 		DecodeStorable: decodeStorable,
 		DecodeTypeInfo: decodeTypeInfo,
-		autoCommit:     false,
 	}
 
 	for _, applyOption := range opts {
@@ -641,14 +639,6 @@ func NewPersistentSlabStorage(
 	}
 
 	return storage
-}
-
-// WithAutoCommit sets the autocommit functionality
-func WithAutoCommit() StorageOption {
-	return func(st *PersistentSlabStorage) *PersistentSlabStorage {
-		st.autoCommit = true
-		return st
-	}
 }
 
 func (s *PersistentSlabStorage) GenerateStorageID(address Address) (StorageID, error) {
@@ -878,32 +868,12 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 }
 
 func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {
-	if s.autoCommit {
-		data, err := Encode(slab, s.cborEncMode)
-		if err != nil {
-			return NewStorageError(err)
-		}
-		err = s.baseStorage.Store(id, data)
-		if err != nil {
-			return NewStorageError(err)
-		}
-		s.cache[id] = slab
-		return nil
-	}
-
 	// add to deltas
 	s.deltas[id] = slab
 	return nil
 }
 
 func (s *PersistentSlabStorage) Remove(id StorageID) error {
-	if s.autoCommit {
-		err := s.baseStorage.Remove(id)
-		if err != nil {
-			return NewStorageError(err)
-		}
-	}
-
 	// add to nil to deltas under that id
 	s.deltas[id] = nil
 	return nil

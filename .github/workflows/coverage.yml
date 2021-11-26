@@ -24,7 +24,7 @@ jobs:
         run: go build ./...
 
       - name: Generate coverage report
-        run: go test -race -coverprofile=coverage.txt -covermode=atomic
+        run: go test -timeout 60m -race -coverprofile=coverage.txt -covermode=atomic
 
       - name: Upload coverage report to Codecov
         uses: codecov/codecov-action@v2.1.0  # use v2.1.0, we can manually update uploader version if needed

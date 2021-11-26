@@ -1,5 +1,5 @@
 # coverage.yml  Generate and upload Go code coverage report to Codecov.
-# 2021-11-26    github.com/fxamacker    Created.
+# 2021-11-26    Created github.com/onflow/atree/.github/workflows/coverage.yml
 
 name: coverage
 on: [push, pull_request]
@@ -27,7 +27,7 @@ jobs:
 
       - name: Upload coverage report to Codecov
         uses: codecov/codecov-action@v2.1.0  # use v2.1.0, we can manually update uploader version if needed
-          with:
+        with:
             files: ./coverage.txt
             fail_ci_if_error: true # optional (default = false)
             verbose: true # optional (default = false)

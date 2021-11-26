@@ -31,4 +31,5 @@ jobs:
         with:
             files: ./coverage.txt
             fail_ci_if_error: false # we can set this to true after "Could not find a repository" upload error is fixed
+            ignore: ./cmd
             verbose: true # optional (default = false)

@@ -153,6 +153,11 @@ func TestArrayAppendAndGet(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	storable, err := array.Get(array.Count())
+	require.Nil(t, storable)
+	var indexOutOfBoundsError *IndexOutOfBoundsError
+	require.ErrorAs(t, err, &indexOutOfBoundsError)
+
 	verifyArray(t, storage, typeInfo, address, array, values, false)
 }
 
@@ -286,6 +291,36 @@ func TestArraySetAndGet(t *testing.T) {
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})
+
+	t.Run("index out of bounds", func(t *testing.T) {
+
+		const arraySize = 1024
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		values := make([]Value, 0, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			v := Uint64Value(i)
+			values = append(values, v)
+			err := array.Append(v)
+			require.NoError(t, err)
+		}
+
+		r := newRand(t)
+
+		v := NewStringValue(randStr(r, 1024))
+		storable, err := array.Set(array.Count(), v)
+		require.Nil(t, storable)
+		var indexOutOfBoundsError *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &indexOutOfBoundsError)
+
+		verifyArray(t, storage, typeInfo, address, array, values, false)
+	})
 }
 
 func TestArrayInsertAndGet(t *testing.T) {
@@ -366,6 +401,35 @@ func TestArrayInsertAndGet(t *testing.T) {
 			err := array.Insert(i, v)
 			require.NoError(t, err)
 		}
+
+		verifyArray(t, storage, typeInfo, address, array, values, false)
+	})
+
+	t.Run("index out of bounds", func(t *testing.T) {
+
+		const arraySize = 1024
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		values := make([]Value, 0, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			v := Uint64Value(i)
+			values = append(values, v)
+			err := array.Append(v)
+			require.NoError(t, err)
+		}
+
+		r := newRand(t)
+
+		v := NewStringValue(randStr(r, 1024))
+		err = array.Insert(array.Count()+1, v)
+		var indexOutOfBoundsError *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &indexOutOfBoundsError)
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})
@@ -520,6 +584,33 @@ func TestArrayRemove(t *testing.T) {
 		}
 
 		require.Equal(t, arraySize/2, len(values))
+
+		verifyArray(t, storage, typeInfo, address, array, values, false)
+	})
+
+	t.Run("index out of bounds", func(t *testing.T) {
+
+		const arraySize = 4096
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		values := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			v := Uint64Value(i)
+			values[i] = v
+			err := array.Append(v)
+			require.NoError(t, err)
+		}
+
+		storable, err := array.Remove(array.Count())
+		require.Nil(t, storable)
+		var indexOutOfBounds *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &indexOutOfBounds)
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})

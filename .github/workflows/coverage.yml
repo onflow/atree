@@ -1,0 +1,34 @@
+# coverage.yml  Generate and upload Go code coverage report to Codecov.
+# https://github.com/onflow/atree/blob/main/.github/workflows/coverage.yml
+# 2021-11-26    Created. 
+
+name: coverage
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2  # allow GitHub to use latest v2.x of checkout
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-go@v2  # allow GitHub to use latest v2.x of setup-go
+        with:
+          go-version: '1.17.x'
+
+      - name: Get dependencies
+        run: go get -v -t -d ./...
+
+      - name: Build project
+        run: go build ./...
+
+      - name: Generate coverage report
+        run: go test -timeout 60m -race -coverprofile=coverage.txt -covermode=atomic
+
+      - name: Upload coverage report to Codecov
+        uses: codecov/codecov-action@v2.1.0  # use v2.1.0, we can manually update uploader version if needed
+        with:
+            files: ./coverage.txt
+            fail_ci_if_error: false # we can set this to true after "Could not find a repository" upload error is fixed
+            verbose: true # optional (default = false)

@@ -3,8 +3,6 @@
 [![](https://github.com/onflow/atree/workflows/ci/badge.svg)](https://github.com/onflow/atree/actions?query=workflow%3Aci)
 [![](https://github.com/onflow/atree/workflows/linters/badge.svg)](https://github.com/onflow/atree/actions?query=workflow%3Alinters)
 [![CodeQL](https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml)
-[![](https://codecov.io/gh/onflow/atree/branch/main/graph/badge.svg)](https://codecov.io/gh/onflow/atree/branch/main)
-
 
 Atree provides scalable arrays and scalable ordered maps.  It is used by [Cadence](https://github.com/onflow/cadence) in the [Flow](https://github.com/onflow/flow-go) blockchain.
 
@@ -14,7 +12,7 @@ Atree's API is [documented](https://pkg.go.dev/github.com/onflow/atree#section-d
 
 ## Contributing
 
-If you would like to contribute to Cadence, have a look at the [contributing guide](https://github.com/onflow/atree/blob/main/CONTRIBUTING.md).
+If you would like to contribute to Atree, have a look at the [contributing guide](https://github.com/onflow/atree/blob/main/CONTRIBUTING.md).
 
 Additionally, all non-error code paths must be covered by tests.  And pull requests should not lower the code coverage percent.
 

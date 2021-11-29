@@ -116,8 +116,8 @@ type ArraySlab interface {
 	fmt.Stringer
 
 	Get(storage SlabStorage, index uint64) (Storable, error)
-	Set(storage SlabStorage, index uint64, v Storable) (Storable, error)
-	Insert(storage SlabStorage, index uint64, v Storable) error
+	Set(storage SlabStorage, address Address, index uint64, value Value) (Storable, error)
+	Insert(storage SlabStorage, address Address, index uint64, value Value) error
 	Remove(storage SlabStorage, index uint64) (Storable, error)
 
 	IsData() bool
@@ -460,7 +460,7 @@ func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
 	return a.elements[index], nil
 }
 
-func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) (Storable, error) {
+func (a *ArrayDataSlab) Set(storage SlabStorage, address Address, index uint64, value Value) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
 		return nil, NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
@@ -468,10 +468,15 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) (Stor
 	oldElem := a.elements[index]
 	oldSize := oldElem.ByteSize()
 
-	a.elements[index] = v
-	a.header.size = a.header.size - oldSize + v.ByteSize()
+	storable, err := value.Storable(storage, address, MaxInlineArrayElementSize)
+	if err != nil {
+		return nil, err
+	}
 
-	err := storage.Store(a.header.id, a)
+	a.elements[index] = storable
+	a.header.size = a.header.size - oldSize + storable.ByteSize()
+
+	err = storage.Store(a.header.id, a)
 	if err != nil {
 		return nil, err
 	}
@@ -479,20 +484,26 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) (Stor
 	return oldElem, nil
 }
 
-func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
+func (a *ArrayDataSlab) Insert(storage SlabStorage, address Address, index uint64, value Value) error {
 	if index > uint64(len(a.elements)) {
 		return NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
+
+	storable, err := value.Storable(storage, address, MaxInlineArrayElementSize)
+	if err != nil {
+		return err
+	}
+
 	if index == uint64(len(a.elements)) {
-		a.elements = append(a.elements, v)
+		a.elements = append(a.elements, storable)
 	} else {
 		a.elements = append(a.elements, nil)
 		copy(a.elements[index+1:], a.elements[index:])
-		a.elements[index] = v
+		a.elements[index] = storable
 	}
 
 	a.header.count++
-	a.header.size += v.ByteSize()
+	a.header.size += storable.ByteSize()
 
 	return storage.Store(a.header.id, a)
 }
@@ -1059,7 +1070,7 @@ func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, er
 	return child.Get(storage, adjustedIndex)
 }
 
-func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) (Storable, error) {
+func (a *ArrayMetaDataSlab) Set(storage SlabStorage, address Address, index uint64, value Value) (Storable, error) {
 
 	childHeaderIndex, adjustedIndex, childID, err := a.childSlabIndexInfo(index)
 	if err != nil {
@@ -1071,7 +1082,7 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) (
 		return nil, err
 	}
 
-	existingElem, err := child.Set(storage, adjustedIndex, v)
+	existingElem, err := child.Set(storage, address, adjustedIndex, value)
 	if err != nil {
 		return nil, err
 	}
@@ -1107,7 +1118,7 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) (
 // Insert inserts v into the correct child slab.
 // index must be >=0 and <= a.header.count.
 // If index == a.header.count, Insert appends v to the end of underlying slab.
-func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
+func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, address Address, index uint64, value Value) error {
 	if index > uint64(a.header.count) {
 		return NewIndexOutOfBoundsError(index, 0, uint64(a.header.count))
 	}
@@ -1133,7 +1144,7 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 		return err
 	}
 
-	err = child.Insert(storage, adjustedIndex, v)
+	err = child.Insert(storage, address, adjustedIndex, value)
 	if err != nil {
 		return err
 	}
@@ -1848,12 +1859,7 @@ func (a *Array) Get(i uint64) (Storable, error) {
 }
 
 func (a *Array) Set(index uint64, value Value) (Storable, error) {
-	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineArrayElementSize)
-	if err != nil {
-		return nil, err
-	}
-
-	existingStorable, err := a.root.Set(a.Storage, index, storable)
+	existingStorable, err := a.root.Set(a.Storage, a.Address(), index, value)
 	if err != nil {
 		return nil, err
 	}
@@ -1884,12 +1890,7 @@ func (a *Array) Append(value Value) error {
 }
 
 func (a *Array) Insert(index uint64, value Value) error {
-	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineArrayElementSize)
-	if err != nil {
-		return err
-	}
-
-	err = a.root.Insert(a.Storage, index, storable)
+	err := a.root.Insert(a.Storage, a.Address(), index, value)
 	if err != nil {
 		return err
 	}

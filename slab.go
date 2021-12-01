@@ -30,7 +30,6 @@ type Slab interface {
 	BorrowFromRight(Slab) error
 }
 
-// TODO: make it inline.
 func IsRootOfAnObject(slabData []byte) (bool, error) {
 	if len(slabData) < versionAndFlagSize {
 		return false, NewDecodingErrorf("data is too short")
@@ -41,7 +40,6 @@ func IsRootOfAnObject(slabData []byte) (bool, error) {
 	return isRoot(flag), nil
 }
 
-// TODO: make it inline.
 func HasPointers(slabData []byte) (bool, error) {
 	if len(slabData) < versionAndFlagSize {
 		return false, NewDecodingErrorf("data is too short")
@@ -52,7 +50,6 @@ func HasPointers(slabData []byte) (bool, error) {
 	return hasPointers(flag), nil
 }
 
-// TODO: make it inline.
 func HasSizeLimit(slabData []byte) (bool, error) {
 	if len(slabData) < versionAndFlagSize {
 		return false, NewDecodingErrorf("data is too short")

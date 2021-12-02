@@ -11,7 +11,7 @@
 
 *Atree* provides scalable arrays and scalable ordered maps.  It is used by [Cadence](https://github.com/onflow/cadence) in the [Flow](https://github.com/onflow/flow-go) blockchain.
 
-Inspired by common tricks used in different flavours of B+ Trees, Atree provides two types of data structures: Ordered Map Type (OMT) and Scalable Array Type (SAT).
+Inspired by common tricks used in modern flavours of B+ Trees, Atree provides two types of data structures: Ordered Map Type (OMT) and Scalable Array Type (SAT).
 
 Scalable Array Type (SAT) is a heterogeneous variable-size array, storing any type of values into a smaller ordered list of values and provides efficient functionality to lookup, insert and remove elements anywhere in the array.
 
@@ -30,7 +30,7 @@ Atree also supports nested structures using one way referencing, handles extreme
 </p>
 
 
-For more details about operations please check the documentation inside the code.
+For more details about operations please check out the documentation inside the code.
 
 ## API Reference
 

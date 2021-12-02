@@ -33,9 +33,9 @@ In order to minimize the number of bytes touched after each operation, Atree use
 
 **2** - Similarly the array metadata slab keeps the count of each child and uses that to navigate the path.
 
-**3** - Nested structures (e.g. map holding an array under a key) are handled by storing nested map or array separate and using one-way references from parent to the nested object.
+**3** - Nested structures (e.g. map holding an array under a key) are handled by storing nested map or array as separate objects and using a one-way reference from parent to the nested object.
 
-**4** - Extremely large objects are handled by storing them as an external data slab and use of pointers. This way we maintain the size requirements of slabs and preserve the performance of atree.
+**4** - Extremely large objects are handled by storing them as an external data slab and using a pointer to the external data slab. This way we maintain the size requirements of slabs and preserve the performance of atree. In the future work external data slabs can be broken into a sequence of smaller size slabs. 
 
 **5** - Atree Ordered Map uses a collision handling design that is performant and resilient against hash-flooding attacks. It uses multi-level hashing that combines a fast 64-bit non-cryptographic hash with a 256-bit cryptographic hash. For speed, the cryptographic hash is only computed if there's a collision. For smaller storage size, the digests are divided into 64-bit segments with only the minimum required being stored. Collisions that cannot be resolved by hashes will eventually use linear lookup, but that is very unlikely as it would require collisions on two different hashes (CircleHash64 + BLAKE3) from the same input.
 

@@ -26,7 +26,7 @@ In order to minimize the number of bytes touched after each operation, Atree use
 Atree also supports nested structures using one way referencing, handles extreme large values by storing them as separate segments and is resiliant against hash-flooding attacks.
 
 <p align="left">
-  <img src="https://raw.githubusercontent.com/onflow/atree/5d9967fb9c4bbed12ed35b8d5005190a097f28c2/files/nested_example.jpg" width="400"/>
+  <img src="https://raw.githubusercontent.com/onflow/atree/5d9967fb9c4bbed12ed35b8d5005190a097f28c2/files/nested_example.jpg" width="500"/>
 </p>
 
 

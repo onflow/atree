@@ -4,6 +4,11 @@
 [![](https://github.com/onflow/atree/workflows/linters/badge.svg)](https://github.com/onflow/atree/actions?query=workflow%3Alinters)
 [![CodeQL](https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml)
 
+
+<p align="left">
+  <img src="https://raw.githubusercontent.com/onflow/atree/master/files/logo.jpg" width="350"/>
+</p>
+
 Atree provides scalable arrays and scalable ordered maps.  It is used by [Cadence](https://github.com/onflow/cadence) in the [Flow](https://github.com/onflow/flow-go) blockchain.
 
 Inspired by common tricks used in different flavours of B+ Trees, Atree provides two types of data structures: Ordered Map Type (OMT) and Scalable Array Type (SAT).

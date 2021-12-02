@@ -1,6 +1,6 @@
 
 <p align="left">
-  <img src="https://raw.githubusercontent.com/onflow/atree/715a4354bb8d18d06451ee20f3e762f192e39d3c/files/logo.png" width="150"/>
+  <img src="https://raw.githubusercontent.com/onflow/atree/ec159f3a81cbc6f1338f7f594987f483ddd1e0bd/files/logo.png" width="150"/>
 </p>
 
 [![](https://github.com/onflow/atree/workflows/ci/badge.svg)](https://github.com/onflow/atree/actions?query=workflow%3Aci)

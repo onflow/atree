@@ -19,7 +19,7 @@ Ordered Map Type (OMT) is an ordered map of key-value pairs; keys can be any has
 
 Under the hood, Atree uses some new type of high-fanout B+ tree and some heuristics to balance the trade-off between latency of operations and the number of reads and writes.
 
-Each data structure holds the data as several relatively fixed-size segments of bytes (also known as slabs) forming a tree and as the size of data structures grows or shrinks, it adjusts the number of segments used. After each operation, Atree tries to keep segment size within an acceptable size range by merging segments when needed (lower than min threshold) and splitting large-size slabs (above max threshold) or moving some values to neighbouring segments (rebalancing).
+Each data structure holds the data as several relatively fixed-size segments of bytes (also known as slabs) forming a tree and as the size of data structures grows or shrinks, it adjusts the number of segments used. After each operation, Atree tries to keep segment size within an acceptable size range by merging segments when needed (lower than min threshold) and splitting large-size slabs (above max threshold) or moving some values to neighbouring segments (rebalancing). For ordered maps and arrays with small number of elements, Atree is designed to have a very minimal overhead in compare to less scalable standard array and ordermaps (using a single data segment at start). 
 
 In order to minimize the number of bytes touched after each operation, Atree uses a deterministic greedy approach ("Optimistic Encasing Algorithm") to postpone merge, split and rebalancing the tree as much as possible. in other words, It tolerates the tree to get unbalanced with the cost of keeping some space for future insertions or growing a segment a bit larger than what it should be which would minimize the number of segments (and bytes) that are touched at each operation.
 
@@ -29,7 +29,7 @@ In order to minimize the number of bytes touched after each operation, Atree use
   <img src="https://raw.githubusercontent.com/onflow/atree/e47e7e8016bd781211c01c6ec423ae9df8a34b72/files/example.jpg" width="600"/>
 </p>
 
-**1** - An ordered map metadata slab keeps the very first key hash of any children to navigate the path. it uses a combination of linear scan and binary search to find the next slab.
+**1** - An ordered map metadata slab keeps the very first key hash of any children to navigate the path. It uses a combination of linear scan and binary search to find the next slab.
 
 **2** - Similarly the array metadata slab keeps the count of each child and uses that to navigate the path.
 
@@ -37,7 +37,7 @@ In order to minimize the number of bytes touched after each operation, Atree use
 
 **4** - Extremely large objects are handled by storing them as an external data slab and use of pointers. This way we maintain the size requirements of slabs and preserve the performance of atree.
 
-**5** - Atree Ordered Map is resilient against hash-flooding attacks, by using multiple levels of hashing: starting from a fast non-cryptographic one for performance follows by cryptographic hashes when collisions happen and finally a layer of value chaining with linear lookup.
+**5** - Atree Ordered Map uses a collision handling design that is performant and resilient against hash-flooding attacks. It uses multi-level hashing that combines a fast 64-bit non-cryptographic hash with a 256-bit cryptographic hash. For speed, the cryptographic hash is only computed if there's a collision. For smaller storage size, the digests are divided into 64-bit segments with only the minimum required being stored. Collisions that cannot be resolved by hashes will eventually use linear lookup, but that is very unlikely as it would require collisions on two different hashes (CircleHash64 + BLAKE3) from the same input.
 
 **6** - Forwarding data slab pointers are used to make sequential iterations more efficient.
 

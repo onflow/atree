@@ -26,7 +26,7 @@ In order to minimize the number of bytes touched after each operation, Atree use
 ## Example 
 
 <p align="left">
-  <img src="https://raw.githubusercontent.com/onflow/atree/611f05648e08eefe10255d8299f1d744ee3ba790/files/example.jpg" width="600"/>
+  <img src="https://raw.githubusercontent.com/onflow/atree/e47e7e8016bd781211c01c6ec423ae9df8a34b72/files/example.jpg" width="600"/>
 </p>
 
 **1** - An ordered map meta data slab keeps the very first key hash of any children to navigate the path. it uses combination of linear scan and binary search to find the next slab. 

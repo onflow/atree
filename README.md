@@ -6,7 +6,7 @@
 
 
 <p align="left">
-  <img src="https://raw.githubusercontent.com/onflow/atree/master/files/logo.jpg" width="350"/>
+  <img src="https://raw.githubusercontent.com/onflow/atree/715a4354bb8d18d06451ee20f3e762f192e39d3c/files/logo.jpg" width="350"/>
 </p>
 
 Atree provides scalable arrays and scalable ordered maps.  It is used by [Cadence](https://github.com/onflow/cadence) in the [Flow](https://github.com/onflow/flow-go) blockchain.

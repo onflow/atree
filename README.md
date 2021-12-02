@@ -39,6 +39,7 @@ In order to minimize the number of bytes touched after each operation, Atree use
 
 **5** - Atree Ordered Map is resiliant against hash-flooding attacks, by using multiple levels of hashing: starting from fast noncryptographic ones for performance follows by cryptographic hashes when collisions happens and finally a layer of value chaining with linear lookup.
 
+**6** - Forwarding data slab pointers are used to make sequntial iterations more effient.
 
 Additional documentation will be added as time allows, but for more details about operations please check out the documentation inside the code.
 

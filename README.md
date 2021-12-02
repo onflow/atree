@@ -23,18 +23,28 @@ Each data structure holds the data as several relatively fixed-size segments of 
 
 In order to minimize the number of bytes touched after each operation, Atree uses a deterministic greedy approach ("Optimistic Encasing Algorithm") to postpone merge, split and rebalancing the tree as much as possible. in other words, It tolerates the tree to get unbalanced with the cost of keeping some space for future insertions or growing a segment a bit larger than what it should be which would minimize the number of segments (and bytes) that are touched at each operation.
 
-Atree also supports nested structures using one way referencing, handles extreme large values by storing them as separate segments and is resiliant against hash-flooding attacks.
+## Example 
 
 <p align="left">
-  <img src="https://raw.githubusercontent.com/onflow/atree/5d9967fb9c4bbed12ed35b8d5005190a097f28c2/files/nested_example.jpg" width="500"/>
+  <img src="https://raw.githubusercontent.com/onflow/atree/5d9967fb9c4bbed12ed35b8d5005190a097f28c2/files/example.jpg" width="500"/>
 </p>
 
+**1** - An ordered map meta data slab keeps the very first key hash of any children to navigate the path. it uses combination of linear scan and binary search to find the next slab. 
 
-For more details about operations please check out the documentation inside the code.
+**2** - Similarly a array meta data slab keeps the count of each children and uses that navigate the path. 
+
+**3** - Nested structures (e.g. map holding an array under a key) are handled by storing nested map or array separate and using one way references from parent to the nested object.
+
+**4** - Extremely large objects are handled by storing them as an external data slab and use of pointers. This way we maintain the size requirments of slabs and preserve the performance of atree.
+
+**5** - Atree Ordered Map is resiliant against hash-flooding attacks, by using multiple levels of hashing: starting from fast noncryptographic ones for performance follows by cryptographic hashes when collisions happens and finally a layer of value chaining with linear lookup.
+
+
+Additional documentation will be added as time allows, but for more details about operations please check out the documentation inside the code.
 
 ## API Reference
 
-Atree's API is [documented](https://pkg.go.dev/github.com/onflow/atree#section-documentation) with godoc at pkg.go.dev and will be updated when new versions of Atree are tagged.  Additional documentation will be added as time allows.
+Atree's API is [documented](https://pkg.go.dev/github.com/onflow/atree#section-documentation) with godoc at pkg.go.dev and will be updated when new versions of Atree are tagged.  
 
 ## Contributing
 

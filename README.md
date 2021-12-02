@@ -37,7 +37,7 @@ In order to minimize the number of bytes touched after each operation, Atree use
 
 **4** - Extremely large objects are handled by storing them as an external data slab and use of pointers. This way we maintain the size requirements of slabs and preserve the performance of atree.
 
-**5** - Atree Ordered Map is resilient against hash-flooding attacks, by using multiple levels of hashing: starting from fast noncryptographic ones for performance follows by cryptographic hashes when collisions happen and finally a layer of value chaining with linear lookup.
+**5** - Atree Ordered Map is resilient against hash-flooding attacks, by using multiple levels of hashing: starting from a fast non-cryptographic one for performance follows by cryptographic hashes when collisions happen and finally a layer of value chaining with linear lookup.
 
 **6** - Forwarding data slab pointers are used to make sequential iterations more efficient.
 

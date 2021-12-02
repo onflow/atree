@@ -23,6 +23,13 @@ Each data structure holds the data as several relatively fixed-size segments of 
 
 In order to minimize the number of bytes touched after each operation, Atree uses a deterministic greedy approach ("Optimistic Encasing Algorithm") to postpone merge, split and rebalancing the tree as much as possible. in other words, It tolerates the tree to get unbalanced with the cost of keeping some space for future insertions or growing a segment a bit larger than what it should be which would minimize the number of segments (and bytes) that are touched at each operation.
 
+Atree also supports nested structures using one way referencing, handles extreme large values by storing them as separate segments and is resiliant against hash-flooding attacks.
+
+<p align="left">
+  <img src="https://raw.githubusercontent.com/onflow/atree/5d9967fb9c4bbed12ed35b8d5005190a097f28c2/files/nested_example.jpg" width="250"/>
+</p>
+
+
 For more details about operations please check the documentation inside the code.
 
 ## API Reference

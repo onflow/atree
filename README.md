@@ -11,11 +11,11 @@
 
 *Atree* provides scalable arrays and scalable ordered maps.  It is used by [Cadence](https://github.com/onflow/cadence) in the [Flow](https://github.com/onflow/flow-go) blockchain.
 
-Inspired by common tricks used in modern flavours of B+ Trees, Atree provides two types of data structures: Ordered Map Type (OMT) and Scalable Array Type (SAT).
+Inspired by patterns used in modern variants of B+ Trees, Atree provides two types of data structures: Ordered Map Type (OMT) and Scalable Array Type (SAT).
 
 Scalable Array Type (SAT) is a heterogeneous variable-size array, storing any type of values into a smaller ordered list of values and provides efficient functionality to lookup, insert and remove elements anywhere in the array.
 
-Ordered Map Type (OMT) is an ordered map of key-value pairs; keys can be any hashable type and values can be any serializable value type. it supports heterogeneous key or value types (e.g. first key storing a boolean and second key storing a reference to another array). OMT keeps values in specific sorted order and operations are deterministic so the state of the segments after a sequence of operations are always unique.
+Ordered Map Type (OMT) is an ordered map of key-value pairs; keys can be any hashable type and values can be any serializable value type. it supports heterogeneous key or value types (e.g. first key storing a boolean and second key storing a string). OMT keeps values in specific sorted order and operations are deterministic so the state of the segments after a sequence of operations are always unique.
 
 Under the hood, Atree uses some new type of high-fanout B+ tree and some heuristics to balance the trade-off between latency of operations and the number of reads and writes.
 
@@ -46,4 +46,7 @@ Additionally, all non-error code paths must be covered by tests.  And pull reque
 
 The Atree library is licensed under the terms of the Apache license. See [LICENSE](LICENSE) for more information.
 
+Logo is based on the artwork of Raisul Hadi licensed under Creative Commons.
+
 Copyright © 2021 Dapper Labs, Inc.
+

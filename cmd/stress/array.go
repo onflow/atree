@@ -21,6 +21,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -33,6 +34,11 @@ const (
 	arraySetOp
 	arrayRemoveOp
 	maxArrayOp
+)
+
+const (
+	minArrayHeapAllocMiB = 200
+	maxArrayHeapAllocMiB = 1000
 )
 
 type arrayStatus struct {
@@ -60,8 +66,12 @@ func (status *arrayStatus) String() string {
 
 	duration := time.Since(status.startTime)
 
-	return fmt.Sprintf("duration %s, %d elements, %d appends, %d sets, %d inserts, %d removes",
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	return fmt.Sprintf("duration %s, heapAlloc %d MiB, %d elements, %d appends, %d sets, %d inserts, %d removes",
 		duration.Truncate(time.Second).String(),
+		m.Alloc/1024/1024,
 		status.count,
 		status.appendOps,
 		status.setOps,
@@ -117,12 +127,32 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 	// values contains array elements in the same order.  It is used to check data loss.
 	values := make([]atree.Value, 0, maxLength)
 
+	reduceHeapAllocs := false
+
 	opCount := uint64(0)
 
+	var m runtime.MemStats
+
 	for {
+		runtime.ReadMemStats(&m)
+		allocMiB := m.Alloc / 1024 / 1024
+
+		if !reduceHeapAllocs && allocMiB > maxArrayHeapAllocMiB {
+			fmt.Printf("HeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
+			reduceHeapAllocs = true
+		} else if reduceHeapAllocs && allocMiB < minArrayHeapAllocMiB {
+			fmt.Printf("HeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
+			reduceHeapAllocs = false
+		}
+
+		if reduceHeapAllocs && array.Count() == 0 {
+			fmt.Printf("HeapAlloc is %d MiB while array is empty, resuming random operation...\n", allocMiB)
+			reduceHeapAllocs = false
+		}
+
 		nextOp := r.Intn(maxArrayOp)
 
-		if array.Count() == maxLength {
+		if array.Count() == maxLength || reduceHeapAllocs {
 			nextOp = arrayRemoveOp
 		}
 

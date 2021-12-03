@@ -148,6 +148,31 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 		if reduceHeapAllocs && array.Count() == 0 {
 			fmt.Printf("HeapAlloc is %d MiB while array is empty, resuming random operation...\n", allocMiB)
 			reduceHeapAllocs = false
+
+			// TODO: extract to a reusable function
+			if allocMiB >= maxMapHeapAllocMiB {
+				fmt.Printf("Commit to storage and drop read/write cache to free mem\n")
+
+				// Commit slabs to storage and drop read and write to reduce mem
+				err = storage.FastCommit(runtime.NumCPU())
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to commit to storage: %s", err)
+					return
+				}
+
+				storage.DropDeltas()
+				storage.DropCache()
+
+				// Load root slab from storage and cache it in read cache
+				rootID := array.StorageID()
+				array, err = atree.NewArrayWithRootID(storage, rootID)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to create array from root id %s: %s", rootID, err)
+					return
+				}
+
+				runtime.GC()
+			}
 		}
 
 		nextOp := r.Intn(maxArrayOp)

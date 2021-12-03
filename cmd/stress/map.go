@@ -125,13 +125,13 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 				return
 			}
 
-			copiedKey, err := copyValue(storage, k)
+			copiedKey, err := copyValue(storage, atree.Address{}, k)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to copy random key %s: %s", k, err)
 				return
 			}
 
-			copiedValue, err := copyValue(storage, v)
+			copiedValue, err := copyValue(storage, atree.Address{}, v)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", k, err)
 				return

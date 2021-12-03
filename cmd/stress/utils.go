@@ -98,7 +98,7 @@ func randomValue(storage *atree.PersistentSlabStorage, address atree.Address, ne
 	return generateValue(storage, address, t, nestedLevels)
 }
 
-func copyValue(storage *atree.PersistentSlabStorage, value atree.Value) (atree.Value, error) {
+func copyValue(storage *atree.PersistentSlabStorage, address atree.Address, value atree.Value) (atree.Value, error) {
 	switch v := value.(type) {
 	case Uint8Value:
 		return Uint8Value(uint8(v)), nil
@@ -111,20 +111,20 @@ func copyValue(storage *atree.PersistentSlabStorage, value atree.Value) (atree.V
 	case StringValue:
 		return NewStringValue(v.str), nil
 	case *atree.Array:
-		return copyArray(storage, v)
+		return copyArray(storage, address, v)
 	case *atree.OrderedMap:
-		return copyMap(storage, v)
+		return copyMap(storage, address, v)
 	default:
 		return nil, fmt.Errorf("failed to copy value: value type %T isn't supported", v)
 	}
 }
 
-func copyArray(storage *atree.PersistentSlabStorage, array *atree.Array) (*atree.Array, error) {
+func copyArray(storage *atree.PersistentSlabStorage, address atree.Address, array *atree.Array) (*atree.Array, error) {
 	iterator, err := array.Iterator()
 	if err != nil {
 		return nil, err
 	}
-	return atree.NewArrayFromBatchData(storage, array.Address(), array.Type(), func() (atree.Value, error) {
+	return atree.NewArrayFromBatchData(storage, address, array.Type(), func() (atree.Value, error) {
 		v, err := iterator.Next()
 		if err != nil {
 			return nil, err
@@ -132,18 +132,18 @@ func copyArray(storage *atree.PersistentSlabStorage, array *atree.Array) (*atree
 		if v == nil {
 			return nil, nil
 		}
-		return copyValue(storage, v)
+		return copyValue(storage, address, v)
 	})
 }
 
-func copyMap(storage *atree.PersistentSlabStorage, m *atree.OrderedMap) (*atree.OrderedMap, error) {
+func copyMap(storage *atree.PersistentSlabStorage, address atree.Address, m *atree.OrderedMap) (*atree.OrderedMap, error) {
 	iterator, err := m.Iterator()
 	if err != nil {
 		return nil, err
 	}
 	return atree.NewMapFromBatchData(
 		storage,
-		m.Address(),
+		address,
 		atree.NewDefaultDigesterBuilder(),
 		m.Type(),
 		compare,
@@ -157,11 +157,11 @@ func copyMap(storage *atree.PersistentSlabStorage, m *atree.OrderedMap) (*atree.
 			if k == nil {
 				return nil, nil, nil
 			}
-			copiedKey, err := copyValue(storage, k)
+			copiedKey, err := copyValue(storage, address, k)
 			if err != nil {
 				return nil, nil, err
 			}
-			copiedValue, err := copyValue(storage, v)
+			copiedValue, err := copyValue(storage, address, v)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -244,10 +244,6 @@ func arrayEqual(a atree.Value, b atree.Value) error {
 		return fmt.Errorf("value %s type is %T, want *atree.Array", b, b)
 	}
 
-	if array1.Address() != array2.Address() {
-		return fmt.Errorf("array %s address %s != array %s address %s", array1, array1.Address(), array2, array2.Address())
-	}
-
 	if array1.Count() != array2.Count() {
 		return fmt.Errorf("array %s count %d != array %s count %d", array1, array1.Count(), array2, array2.Count())
 	}
@@ -295,10 +291,6 @@ func mapEqual(a atree.Value, b atree.Value) error {
 	m2, ok := b.(*atree.OrderedMap)
 	if !ok {
 		return fmt.Errorf("value %s type is %T, want *atree.OrderedMap", b, b)
-	}
-
-	if m1.Address() != m2.Address() {
-		return fmt.Errorf("map %s address %s != map %s address %s", m1, m1.Address(), m2, m2.Address())
 	}
 
 	if m1.Count() != m2.Count() {
@@ -360,7 +352,7 @@ func newArray(storage *atree.PersistentSlabStorage, address atree.Address, lengt
 		if err != nil {
 			return nil, err
 		}
-		copedValue, err := copyValue(storage, value)
+		copedValue, err := copyValue(storage, atree.Address{}, value)
 		if err != nil {
 			return nil, err
 		}
@@ -403,7 +395,7 @@ func newMap(storage *atree.PersistentSlabStorage, address atree.Address, length 
 			return nil, err
 		}
 
-		copiedKey, err := copyValue(storage, k)
+		copiedKey, err := copyValue(storage, atree.Address{}, k)
 		if err != nil {
 			return nil, err
 		}
@@ -413,7 +405,7 @@ func newMap(storage *atree.PersistentSlabStorage, address atree.Address, length 
 			return nil, err
 		}
 
-		copiedValue, err := copyValue(storage, v)
+		copiedValue, err := copyValue(storage, atree.Address{}, v)
 		if err != nil {
 			return nil, err
 		}

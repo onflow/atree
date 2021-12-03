@@ -135,7 +135,7 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 				return
 			}
 
-			copiedValue, err := copyValue(storage, v)
+			copiedValue, err := copyValue(storage, atree.Address{}, v)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
 				return
@@ -168,7 +168,7 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 				return
 			}
 
-			copiedValue, err := copyValue(storage, v)
+			copiedValue, err := copyValue(storage, atree.Address{}, v)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
 				return
@@ -225,7 +225,7 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 				return
 			}
 
-			copiedValue, err := copyValue(storage, v)
+			copiedValue, err := copyValue(storage, atree.Address{}, v)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
 				return

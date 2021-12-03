@@ -137,7 +137,12 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 				fmt.Printf("Commit to storage and drop read/write cache to free mem\n")
 
 				// Commit slabs to storage and drop read and write to reduce mem
-				storage.FastCommit(runtime.NumCPU())
+				err = storage.FastCommit(runtime.NumCPU())
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to commit to storage: %s", err)
+					return
+				}
+
 				storage.DropDeltas()
 				storage.DropCache()
 

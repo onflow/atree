@@ -101,6 +101,8 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 	// keys contains generated keys.  It is used to select random keys for removal.
 	keys := make([]atree.Value, 0, maxLength)
 
+	opCount := uint64(0)
+
 	for {
 		nextOp := r.Intn(maxMapOp)
 
@@ -111,6 +113,8 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 		switch nextOp {
 
 		case mapSetOp:
+			opCount++
+
 			k, err := randomKey()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to generate random key %s: %s", k, err)
@@ -199,6 +203,8 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 				continue
 			}
 
+			opCount++
+
 			index := r.Intn(len(keys))
 			k := keys[index]
 
@@ -280,6 +286,25 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 			return
 		}
 
+		if opCount >= 100 {
+			opCount = 0
+			rootIDs, err := atree.CheckStorageHealth(storage, -1)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return
+			}
+			ids := make([]atree.StorageID, 0, len(rootIDs))
+			for id := range rootIDs {
+				// filter out root ids with empty address
+				if id.Address != atree.AddressUndefined {
+					ids = append(ids, id)
+				}
+			}
+			if len(ids) != 1 || ids[0] != m.StorageID() {
+				fmt.Fprintf(os.Stderr, "root storage ids %v in storage, want %s\n", ids, m.StorageID())
+				return
+			}
+		}
 	}
 }
 

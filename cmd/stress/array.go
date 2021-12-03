@@ -117,6 +117,8 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 	// values contains array elements in the same order.  It is used to check data loss.
 	values := make([]atree.Value, 0, maxLength)
 
+	opCount := uint64(0)
+
 	for {
 		nextOp := r.Intn(maxArrayOp)
 
@@ -127,6 +129,8 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 		switch nextOp {
 
 		case arrayAppendOp:
+			opCount++
+
 			nestedLevels := r.Intn(maxNestedLevels)
 			v, err := randomValue(storage, address, nestedLevels)
 			if err != nil {
@@ -154,6 +158,8 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			status.incAppend()
 
 		case arraySetOp:
+			opCount++
+
 			if array.Count() == 0 {
 				continue
 			}
@@ -215,6 +221,8 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			status.incSet()
 
 		case arrayInsertOp:
+			opCount++
+
 			k := r.Intn(int(array.Count() + 1))
 
 			nestedLevels := r.Intn(maxNestedLevels)
@@ -253,6 +261,8 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			if array.Count() == 0 {
 				continue
 			}
+
+			opCount++
 
 			k := r.Intn(int(array.Count()))
 
@@ -305,6 +315,26 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return
+		}
+
+		if opCount >= 100 {
+			opCount = 0
+			rootIDs, err := atree.CheckStorageHealth(storage, -1)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return
+			}
+			ids := make([]atree.StorageID, 0, len(rootIDs))
+			for id := range rootIDs {
+				// filter out root ids with empty address
+				if id.Address != atree.AddressUndefined {
+					ids = append(ids, id)
+				}
+			}
+			if len(ids) != 1 || ids[0] != array.StorageID() {
+				fmt.Fprintf(os.Stderr, "root storage ids %v in storage, want %s\n", ids, array.StorageID())
+				return
+			}
 		}
 	}
 }

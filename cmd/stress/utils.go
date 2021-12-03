@@ -169,6 +169,16 @@ func copyMap(storage *atree.PersistentSlabStorage, m *atree.OrderedMap) (*atree.
 		})
 }
 
+func removeValue(storage *atree.PersistentSlabStorage, value atree.Value) error {
+	switch v := value.(type) {
+	case *atree.Array:
+		return removeStorable(storage, atree.StorageIDStorable(v.StorageID()))
+	case *atree.OrderedMap:
+		return removeStorable(storage, atree.StorageIDStorable(v.StorageID()))
+	}
+	return nil
+}
+
 func removeStorable(storage *atree.PersistentSlabStorage, storable atree.Storable) error {
 	sid, ok := storable.(atree.StorageIDStorable)
 	if !ok {
@@ -366,6 +376,13 @@ func newArray(storage *atree.PersistentSlabStorage, address atree.Address, lengt
 		return nil, err
 	}
 
+	for _, v := range values {
+		err := removeValue(storage, v)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return array, nil
 }
 
@@ -420,6 +437,17 @@ func newMap(storage *atree.PersistentSlabStorage, address atree.Address, length 
 	err = checkMapDataLoss(m, elements)
 	if err != nil {
 		return nil, err
+	}
+
+	for k, v := range elements {
+		err := removeValue(storage, k)
+		if err != nil {
+			return nil, err
+		}
+		err = removeValue(storage, v)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return m, nil

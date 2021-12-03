@@ -206,6 +206,12 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 				return
 			}
 
+			err = removeValue(storage, oldV)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove copied overwritten value %s: %s", oldV, err)
+				return
+			}
+
 			// Update status
 			status.incSet()
 
@@ -282,6 +288,12 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			err = removeStorable(storage, existingStorable)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to remove element %s: %s", existingStorable, err)
+				return
+			}
+
+			err = removeValue(storage, oldV)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove copied removed value %s: %s", oldV, err)
 				return
 			}
 

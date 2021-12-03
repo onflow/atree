@@ -184,6 +184,12 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 					fmt.Fprintf(os.Stderr, "Failed to remove map storable element %s: %s", existingStorable, err)
 					return
 				}
+
+				err = removeValue(storage, oldV)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to remove copied overwritten value %s: %s", existingValue, err)
+					return
+				}
 			}
 
 			// Update status
@@ -249,6 +255,18 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 			err = removeStorable(storage, existingValueStorable)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to remove value %s: %s", existingValueStorable, err)
+				return
+			}
+
+			err = removeValue(storage, k)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove copied key %s: %s", k, err)
+				return
+			}
+
+			err = removeValue(storage, oldV)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove copied value %s: %s", existingValue, err)
 				return
 			}
 

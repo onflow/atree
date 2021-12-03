@@ -19,9 +19,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"reflect"
+	"time"
 
 	"github.com/onflow/atree"
 )
@@ -46,54 +48,66 @@ const (
 
 var (
 	letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+	seed = flag.Int64("seed", 0, "seed for pseudo-random source")
+
+	r = newRand()
 )
 
-func randStr(n int) string {
-	r := make([]rune, n)
-	for i := range r {
-		r[i] = letters[rand.Intn(len(letters))]
+func newRand() *rand.Rand {
+	if *seed == 0 {
+		*seed = time.Now().UnixNano()
 	}
-	return string(r)
+	fmt.Printf("rand seed 0x%x\n", seed)
+	return rand.New(rand.NewSource(*seed))
+}
+
+func randStr(n int) string {
+	runes := make([]rune, n)
+	for i := range runes {
+		runes[i] = letters[r.Intn(len(letters))]
+	}
+	return string(runes)
 }
 
 func generateValue(storage *atree.PersistentSlabStorage, address atree.Address, valueType int, nestedLevels int) (atree.Value, error) {
 	switch valueType {
 	case uint8Type:
-		return Uint8Value(rand.Intn(255)), nil
+		return Uint8Value(r.Intn(255)), nil
 	case uint16Type:
-		return Uint16Value(rand.Intn(6535)), nil
+		return Uint16Value(r.Intn(6535)), nil
 	case uint32Type:
-		return Uint32Value(rand.Intn(4294967295)), nil
+		return Uint32Value(r.Intn(4294967295)), nil
 	case uint64Type:
-		return Uint64Value(rand.Intn(1844674407370955161)), nil
+		return Uint64Value(r.Intn(1844674407370955161)), nil
 	case smallStringType:
-		slen := rand.Intn(125)
+		slen := r.Intn(125)
 		return NewStringValue(randStr(slen)), nil
 	case largeStringType:
-		slen := rand.Intn(125) + 1024
+		slen := r.Intn(125) + 1024
 		return NewStringValue(randStr(slen)), nil
 	case arrayType:
-		length := rand.Intn(maxNestedArraySize)
+		length := r.Intn(maxNestedArraySize)
 		return newArray(storage, address, length, nestedLevels)
 	case mapType:
-		length := rand.Intn(maxNestedMapSize)
+		length := r.Intn(maxNestedMapSize)
 		return newMap(storage, address, length, nestedLevels)
 	default:
-		return Uint8Value(rand.Intn(255)), nil
+		return Uint8Value(r.Intn(255)), nil
 	}
 }
 
 func randomKey() (atree.Value, error) {
-	t := rand.Intn(largeStringType + 1)
+	t := r.Intn(largeStringType + 1)
 	return generateValue(nil, atree.Address{}, t, 0)
 }
 
 func randomValue(storage *atree.PersistentSlabStorage, address atree.Address, nestedLevels int) (atree.Value, error) {
 	var t int
 	if nestedLevels <= 0 {
-		t = rand.Intn(largeStringType + 1)
+		t = r.Intn(largeStringType + 1)
 	} else {
-		t = rand.Intn(maxValueType)
+		t = r.Intn(maxValueType)
 	}
 	return generateValue(storage, address, t, nestedLevels)
 }

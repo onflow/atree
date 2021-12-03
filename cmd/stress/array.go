@@ -20,7 +20,6 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -119,7 +118,7 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 	values := make([]atree.Value, 0, maxLength)
 
 	for {
-		nextOp := rand.Intn(maxArrayOp)
+		nextOp := r.Intn(maxArrayOp)
 
 		if array.Count() == maxLength {
 			nextOp = arrayRemoveOp
@@ -128,7 +127,7 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 		switch nextOp {
 
 		case arrayAppendOp:
-			nestedLevels := rand.Intn(maxNestedLevels)
+			nestedLevels := r.Intn(maxNestedLevels)
 			v, err := randomValue(storage, address, nestedLevels)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
@@ -159,9 +158,9 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 				continue
 			}
 
-			k := rand.Intn(int(array.Count()))
+			k := r.Intn(int(array.Count()))
 
-			nestedLevels := rand.Intn(maxNestedLevels)
+			nestedLevels := r.Intn(maxNestedLevels)
 			v, err := randomValue(storage, address, nestedLevels)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
@@ -216,9 +215,9 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			status.incSet()
 
 		case arrayInsertOp:
-			k := rand.Intn(int(array.Count() + 1))
+			k := r.Intn(int(array.Count() + 1))
 
-			nestedLevels := rand.Intn(maxNestedLevels)
+			nestedLevels := r.Intn(maxNestedLevels)
 			v, err := randomValue(storage, address, nestedLevels)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
@@ -255,7 +254,7 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 				continue
 			}
 
-			k := rand.Intn(int(array.Count()))
+			k := r.Intn(int(array.Count()))
 
 			oldV := values[k]
 

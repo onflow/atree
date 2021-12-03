@@ -20,7 +20,6 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -103,7 +102,7 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 	keys := make([]atree.Value, 0, maxLength)
 
 	for {
-		nextOp := rand.Intn(maxMapOp)
+		nextOp := r.Intn(maxMapOp)
 
 		if m.Count() == maxLength {
 			nextOp = mapRemoveOp
@@ -118,7 +117,7 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 				return
 			}
 
-			nestedLevels := rand.Intn(maxNestedLevels)
+			nestedLevels := r.Intn(maxNestedLevels)
 			v, err := randomValue(storage, address, nestedLevels)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
@@ -200,7 +199,7 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 				continue
 			}
 
-			index := rand.Intn(len(keys))
+			index := r.Intn(len(keys))
 			k := keys[index]
 
 			oldV := elements[k]

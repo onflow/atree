@@ -21,6 +21,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -33,12 +34,17 @@ const (
 	maxMapOp
 )
 
+const (
+	minMapHeapAllocMiB = 400
+	maxMapHeapAllocMiB = 2000
+)
+
 type mapStatus struct {
 	lock sync.RWMutex
 
 	startTime time.Time
 
-	count uint64 // number of elements in array
+	count uint64 // number of elements in map
 
 	setOps    uint64
 	removeOps uint64
@@ -56,8 +62,12 @@ func (status *mapStatus) String() string {
 
 	duration := time.Since(status.startTime)
 
-	return fmt.Sprintf("duration %s, %d elements, %d sets, %d removes",
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	return fmt.Sprintf("duration %s, heapAlloc %d MiB, %d elements, %d sets, %d removes",
 		duration.Truncate(time.Second).String(),
+		m.Alloc/1024/1024,
 		status.count,
 		status.setOps,
 		status.removeOps,
@@ -101,12 +111,32 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 	// keys contains generated keys.  It is used to select random keys for removal.
 	keys := make([]atree.Value, 0, maxLength)
 
+	reduceHeapAllocs := false
+
 	opCount := uint64(0)
 
+	var ms runtime.MemStats
+
 	for {
+		runtime.ReadMemStats(&ms)
+		allocMiB := ms.Alloc / 1024 / 1024
+
+		if !reduceHeapAllocs && allocMiB > maxMapHeapAllocMiB {
+			fmt.Printf("HeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
+			reduceHeapAllocs = true
+		} else if reduceHeapAllocs && allocMiB < minMapHeapAllocMiB {
+			fmt.Printf("HeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
+			reduceHeapAllocs = false
+		}
+
+		if reduceHeapAllocs && m.Count() == 0 {
+			fmt.Printf("HeapAlloc is %d MiB while map is empty, resuming random operation...\n", allocMiB)
+			reduceHeapAllocs = false
+		}
+
 		nextOp := r.Intn(maxMapOp)
 
-		if m.Count() == maxLength {
+		if m.Count() == maxLength || reduceHeapAllocs {
 			nextOp = mapRemoveOp
 		}
 

@@ -128,13 +128,24 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 		switch nextOp {
 
 		case arrayAppendOp:
-			v := randomValue()
+			nestedLevels := rand.Intn(maxNestedLevels)
+			v, err := randomValue(storage, address, nestedLevels)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
+				return
+			}
+
+			copiedValue, err := copyValue(storage, v)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
+				return
+			}
 
 			// Append to values
-			values = append(values, v)
+			values = append(values, copiedValue)
 
 			// Append to array
-			err := array.Append(v)
+			err = array.Append(v)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to append %s: %s", v, err)
 				return
@@ -149,12 +160,24 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			}
 
 			k := rand.Intn(int(array.Count()))
-			v := randomValue()
+
+			nestedLevels := rand.Intn(maxNestedLevels)
+			v, err := randomValue(storage, address, nestedLevels)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
+				return
+			}
+
+			copiedValue, err := copyValue(storage, v)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
+				return
+			}
 
 			oldV := values[k]
 
 			// Update values
-			values[k] = v
+			values[k] = copiedValue
 
 			// Update array
 			existingStorable, err := array.Set(uint64(k), v)
@@ -163,25 +186,24 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 				return
 			}
 
-			// Compare overwritten storable from array with overwritten value from values
-			equal, err := compare(array.Storage, oldV, existingStorable)
+			// Compare overwritten value from array with overwritten value from values
+			existingValue, err := existingStorable.StoredValue(storage)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingStorable, oldV, err)
+				fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingStorable, err)
 				return
 			}
-			if !equal {
-				fmt.Fprintf(os.Stderr, "Set() returned wrong existing value %s, want %s", existingStorable, oldV)
+
+			err = valueEqual(oldV, existingValue)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingValue, oldV, err)
 				return
 			}
 
 			// Delete overwritten element from storage
-			if sid, ok := existingStorable.(atree.StorageIDStorable); ok {
-				id := atree.StorageID(sid)
-				err = storage.Remove(id)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to remove referenced slab %d: %s", id, err)
-					return
-				}
+			err = removeStorable(storage, existingStorable)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove storable %s: %s", existingStorable, err)
+				return
 			}
 
 			// Update status
@@ -189,19 +211,31 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 
 		case arrayInsertOp:
 			k := rand.Intn(int(array.Count() + 1))
-			v := randomValue()
+
+			nestedLevels := rand.Intn(maxNestedLevels)
+			v, err := randomValue(storage, address, nestedLevels)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
+				return
+			}
+
+			copiedValue, err := copyValue(storage, v)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
+				return
+			}
 
 			// Update values
 			if k == int(array.Count()) {
-				values = append(values, v)
+				values = append(values, copiedValue)
 			} else {
 				values = append(values, nil)
 				copy(values[k+1:], values[k:])
-				values[k] = v
+				values[k] = copiedValue
 			}
 
 			// Update array
-			err := array.Insert(uint64(k), v)
+			err = array.Insert(uint64(k), v)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to insert %s into index %d: %s", v, k, err)
 				return
@@ -232,24 +266,23 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			}
 
 			// Compare removed value from array with removed value from values
-			equal, err := compare(array.Storage, oldV, existingStorable)
+			existingValue, err := existingStorable.StoredValue(storage)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingStorable, oldV, err)
+				fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingStorable, err)
 				return
 			}
-			if !equal {
-				fmt.Fprintf(os.Stderr, "Remove() returned wrong existing value %s, want %s", existingStorable, oldV)
+
+			err = valueEqual(oldV, existingValue)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingValue, oldV, err)
 				return
 			}
 
 			// Delete removed element from storage
-			if sid, ok := existingStorable.(atree.StorageIDStorable); ok {
-				id := atree.StorageID(sid)
-				err = storage.Remove(id)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to remove referenced slab %d: %s", id, err)
-					return
-				}
+			err = removeStorable(storage, existingStorable)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove element %s: %s", existingStorable, err)
+				return
 			}
 
 			// Update status
@@ -262,7 +295,6 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			fmt.Fprintln(os.Stderr, err)
 			return
 		}
-
 	}
 }
 
@@ -279,12 +311,13 @@ func checkArrayDataLoss(array *atree.Array, values []atree.Value) error {
 		if err != nil {
 			return fmt.Errorf("failed to get element at %d: %w", i, err)
 		}
-		equal, err := compare(array.Storage, v, storable)
+		convertedValue, err := storable.StoredValue(array.Storage)
 		if err != nil {
-			return fmt.Errorf("failed to compare %s and %s: %w", v, storable, err)
+			return fmt.Errorf("failed to convert storable to value at %d: %w", i, err)
 		}
-		if !equal {
-			return fmt.Errorf("Get(%d) returns %s, want %s", i, storable, v)
+		err = valueEqual(v, convertedValue)
+		if err != nil {
+			return fmt.Errorf("failed to compare %s and %s: %w", v, convertedValue, err)
 		}
 	}
 

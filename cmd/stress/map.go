@@ -132,6 +132,25 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 		if reduceHeapAllocs && m.Count() == 0 {
 			fmt.Printf("HeapAlloc is %d MiB while map is empty, resuming random operation...\n", allocMiB)
 			reduceHeapAllocs = false
+
+			if allocMiB >= maxMapHeapAllocMiB {
+				fmt.Printf("Commit to storage and drop read/write cache to free mem\n")
+
+				// Commit slabs to storage and drop read and write to reduce mem
+				storage.FastCommit(runtime.NumCPU())
+				storage.DropDeltas()
+				storage.DropCache()
+
+				// Load root slab from storage and cache it in read cache
+				rootID := m.StorageID()
+				m, err = atree.NewMapWithRootID(storage, rootID, atree.NewDefaultDigesterBuilder())
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to create map from root id %s: %s", rootID, err)
+					return
+				}
+
+				runtime.GC()
+			}
 		}
 
 		nextOp := r.Intn(maxMapOp)

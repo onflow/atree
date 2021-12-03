@@ -138,15 +138,15 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 		allocMiB := m.Alloc / 1024 / 1024
 
 		if !reduceHeapAllocs && allocMiB > maxArrayHeapAllocMiB {
-			fmt.Printf("HeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
+			fmt.Printf("\nHeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
 			reduceHeapAllocs = true
 		} else if reduceHeapAllocs && allocMiB < minArrayHeapAllocMiB {
-			fmt.Printf("HeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
+			fmt.Printf("\nHeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
 			reduceHeapAllocs = false
 		}
 
 		if reduceHeapAllocs && array.Count() == 0 {
-			fmt.Printf("HeapAlloc is %d MiB while array is empty, resuming random operation...\n", allocMiB)
+			fmt.Printf("\nHeapAlloc is %d MiB while array is empty, resuming random operation...\n", allocMiB)
 			reduceHeapAllocs = false
 
 			// TODO: extract to a reusable function

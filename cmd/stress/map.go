@@ -122,15 +122,15 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 		allocMiB := ms.Alloc / 1024 / 1024
 
 		if !reduceHeapAllocs && allocMiB > maxMapHeapAllocMiB {
-			fmt.Printf("HeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
+			fmt.Printf("\nHeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
 			reduceHeapAllocs = true
 		} else if reduceHeapAllocs && allocMiB < minMapHeapAllocMiB {
-			fmt.Printf("HeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
+			fmt.Printf("\nHeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
 			reduceHeapAllocs = false
 		}
 
 		if reduceHeapAllocs && m.Count() == 0 {
-			fmt.Printf("HeapAlloc is %d MiB while map is empty, resuming random operation...\n", allocMiB)
+			fmt.Printf("\nHeapAlloc is %d MiB while map is empty, resuming random operation...\n", allocMiB)
 			reduceHeapAllocs = false
 
 			if allocMiB >= maxMapHeapAllocMiB {

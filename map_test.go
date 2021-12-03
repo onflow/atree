@@ -468,6 +468,117 @@ func TestMapSetAndGet(t *testing.T) {
 	})
 }
 
+func TestMapGetKeyNotFound(t *testing.T) {
+	t.Run("no collision", func(t *testing.T) {
+		const mapSize = 1024
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[Value]Value, mapSize)
+		for i := 0; i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			keyValues[k] = v
+			storable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, storable)
+		}
+
+		r := newRand(t)
+
+		k := NewStringValue(randStr(r, 1024))
+		storable, err := m.Get(compare, hashInputProvider, k)
+		require.Nil(t, storable)
+		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &keyNotFoundError)
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("collision", func(t *testing.T) {
+		const mapSize = 256
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := &mockDigesterBuilder{}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[Value]Value, mapSize)
+		for i := 0; i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			keyValues[k] = v
+
+			digests := []Digest{Digest(i)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+			storable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, storable)
+		}
+
+		r := newRand(t)
+		k := NewStringValue(randStr(r, 1024))
+
+		digests := []Digest{Digest(0)}
+		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+		storable, err := m.Get(compare, hashInputProvider, k)
+		require.Nil(t, storable)
+		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &keyNotFoundError)
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("collision group", func(t *testing.T) {
+		const mapSize = 256
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := &mockDigesterBuilder{}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[Value]Value, mapSize)
+		for i := 0; i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			keyValues[k] = v
+
+			digests := []Digest{Digest(i % 10)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+			storable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, storable)
+		}
+
+		r := newRand(t)
+		k := NewStringValue(randStr(r, 1024))
+
+		digests := []Digest{Digest(0)}
+		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+		storable, err := m.Get(compare, hashInputProvider, k)
+		require.Nil(t, storable)
+		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &keyNotFoundError)
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+}
+
 func TestMapHas(t *testing.T) {
 
 	t.Run("no error", func(t *testing.T) {
@@ -820,6 +931,78 @@ func TestMapRemove(t *testing.T) {
 		}
 
 		verifyEmptyMap(t, storage, typeInfo, address, m)
+	})
+
+	t.Run("no collision key not found", func(t *testing.T) {
+		const mapSize = 1024
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[Value]Value, mapSize)
+		for i := 0; i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			keyValues[k] = v
+			storable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, storable)
+		}
+
+		r := newRand(t)
+
+		k := NewStringValue(randStr(r, 1024))
+		existingKeyStorable, existingValueStorable, err := m.Remove(compare, hashInputProvider, k)
+		require.Nil(t, existingKeyStorable)
+		require.Nil(t, existingValueStorable)
+		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &keyNotFoundError)
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("collision key not found", func(t *testing.T) {
+		const mapSize = 256
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := &mockDigesterBuilder{}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[Value]Value, mapSize)
+		for i := 0; i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			keyValues[k] = v
+
+			digests := []Digest{Digest(i % 10)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+			storable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, storable)
+		}
+
+		r := newRand(t)
+		k := NewStringValue(randStr(r, 1024))
+
+		digests := []Digest{Digest(0)}
+		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+		existingKeyStorable, existingValueStorable, err := m.Remove(compare, hashInputProvider, k)
+		require.Nil(t, existingKeyStorable)
+		require.Nil(t, existingValueStorable)
+		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &keyNotFoundError)
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
 }
 

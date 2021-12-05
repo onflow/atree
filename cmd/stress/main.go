@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -72,11 +73,24 @@ func main() {
 
 	var typ string
 	var maxLength uint64
+	var seedHex string
 
 	flag.StringVar(&typ, "type", "array", "array or map")
 	flag.Uint64Var(&maxLength, "max_len", 10_000, "max number of elements")
+	flag.StringVar(&seedHex, "seed", "", "seed for prng in hex (default is unix time nano)")
 
 	flag.Parse()
+
+	var seed int64
+	if len(seedHex) != 0 {
+		var err error
+		seed, err = strconv.ParseInt(strings.Replace(seedHex, "0x", "", -1), 16, 64)
+		if err != nil {
+			panic("Failed to parse seed flag (hex string)")
+		}
+	}
+
+	r = newRand(seed)
 
 	typ = strings.ToLower(typ)
 

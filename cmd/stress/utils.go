@@ -19,7 +19,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -49,17 +48,16 @@ const (
 var (
 	letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-	seed = flag.Int64("seed", 0, "seed for pseudo-random source")
-
-	r = newRand()
+	r *rand.Rand
 )
 
-func newRand() *rand.Rand {
-	if *seed == 0 {
-		*seed = time.Now().UnixNano()
+func newRand(seed int64) *rand.Rand {
+	if seed == 0 {
+		seed = int64(time.Now().UnixNano())
 	}
+
 	fmt.Printf("rand seed 0x%x\n", seed)
-	return rand.New(rand.NewSource(*seed))
+	return rand.New(rand.NewSource(seed))
 }
 
 func randStr(n int) string {

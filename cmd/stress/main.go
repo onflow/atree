@@ -132,6 +132,8 @@ func main() {
 	switch typ {
 
 	case "array":
+		fmt.Printf("Starting array stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB\n", minArrayHeapAllocMiB, maxArrayHeapAllocMiB)
+
 		status := newArrayStatus()
 
 		go updateStatus(sigc, status)
@@ -139,6 +141,8 @@ func main() {
 		testArray(storage, address, typeInfo, maxLength, status)
 
 	case "map":
+		fmt.Printf("Starting map stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB\n", minArrayHeapAllocMiB, maxArrayHeapAllocMiB)
+
 		status := newMapStatus()
 
 		go updateStatus(sigc, status)

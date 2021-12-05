@@ -168,6 +168,22 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			}
 
 			runtime.GC()
+
+			// Check if map is using > MaxHeapAlloc while empty.
+			runtime.ReadMemStats(&m)
+			allocMiB = m.Alloc / 1024 / 1024
+			fmt.Printf("\nHeapAlloc is %d MiB after cleanup and forced gc\n", allocMiB)
+
+			// Prevent infinite loop that doesn't do useful work.
+			if allocMiB > maxMapHeapAllocMiB {
+				// This shouldn't happen unless there's a memory leak.
+				fmt.Fprintf(
+					os.Stderr,
+					"Exiting because allocMiB %d > maxMapHeapAlloMiB %d with empty map\n",
+					allocMiB,
+					maxMapHeapAllocMiB)
+				return
+			}
 		}
 
 		nextOp := r.Intn(maxArrayOp)

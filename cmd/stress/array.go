@@ -37,7 +37,7 @@ const (
 )
 
 const (
-	minArrayHeapAllocMiB = 200
+	minArrayHeapAllocMiB = 500 // minArrayHeapAllocMiB should be half of maxArrayHeapAllocMiB
 	maxArrayHeapAllocMiB = 1000
 )
 

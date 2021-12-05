@@ -29,13 +29,15 @@ import (
 )
 
 const (
-	mapSetOp = iota
+	mapSetOp1 = iota
+	mapSetOp2
+	mapSetOp3
 	mapRemoveOp
 	maxMapOp
 )
 
 const (
-	minMapHeapAllocMiB = 400
+	minMapHeapAllocMiB = 1000 // minMapHeapAllocMiB should be half of maxMapHeapAllocMiB
 	maxMapHeapAllocMiB = 2000
 )
 
@@ -180,7 +182,7 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 
 		switch nextOp {
 
-		case mapSetOp:
+		case mapSetOp1, mapSetOp2, mapSetOp3:
 			opCount++
 
 			k, err := randomKey()

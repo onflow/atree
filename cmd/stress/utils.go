@@ -460,13 +460,10 @@ func newMap(storage *atree.PersistentSlabStorage, address atree.Address, length 
 }
 
 type InMemBaseStorage struct {
-	segments         map[atree.StorageID][]byte
-	storageIndex     map[atree.Address]atree.StorageIndex
-	bytesRetrieved   int
-	bytesStored      int
-	segmentsReturned map[atree.StorageID]struct{}
-	segmentsUpdated  map[atree.StorageID]struct{}
-	segmentsTouched  map[atree.StorageID]struct{}
+	segments       map[atree.StorageID][]byte
+	storageIndex   map[atree.Address]atree.StorageIndex
+	bytesRetrieved int
+	bytesStored    int
 }
 
 var _ atree.BaseStorage = &InMemBaseStorage{}
@@ -479,33 +476,24 @@ func NewInMemBaseStorage() *InMemBaseStorage {
 
 func NewInMemBaseStorageFromMap(segments map[atree.StorageID][]byte) *InMemBaseStorage {
 	return &InMemBaseStorage{
-		segments:         segments,
-		storageIndex:     make(map[atree.Address]atree.StorageIndex),
-		segmentsReturned: make(map[atree.StorageID]struct{}),
-		segmentsUpdated:  make(map[atree.StorageID]struct{}),
-		segmentsTouched:  make(map[atree.StorageID]struct{}),
+		segments:     segments,
+		storageIndex: make(map[atree.Address]atree.StorageIndex),
 	}
 }
 
 func (s *InMemBaseStorage) Retrieve(id atree.StorageID) ([]byte, bool, error) {
 	seg, ok := s.segments[id]
 	s.bytesRetrieved += len(seg)
-	s.segmentsReturned[id] = struct{}{}
-	s.segmentsTouched[id] = struct{}{}
 	return seg, ok, nil
 }
 
 func (s *InMemBaseStorage) Store(id atree.StorageID, data []byte) error {
 	s.segments[id] = data
 	s.bytesStored += len(data)
-	s.segmentsUpdated[id] = struct{}{}
-	s.segmentsTouched[id] = struct{}{}
 	return nil
 }
 
 func (s *InMemBaseStorage) Remove(id atree.StorageID) error {
-	s.segmentsUpdated[id] = struct{}{}
-	s.segmentsTouched[id] = struct{}{}
 	delete(s.segments, id)
 	return nil
 }
@@ -539,21 +527,20 @@ func (s *InMemBaseStorage) BytesStored() int {
 }
 
 func (s *InMemBaseStorage) SegmentsReturned() int {
-	return len(s.segmentsReturned)
+	// not needed
+	return 0
 }
 
 func (s *InMemBaseStorage) SegmentsUpdated() int {
-	return len(s.segmentsUpdated)
+	// not needed
+	return 0
 }
 
 func (s *InMemBaseStorage) SegmentsTouched() int {
-	return len(s.segmentsTouched)
+	// not needed
+	return 0
 }
 
 func (s *InMemBaseStorage) ResetReporter() {
-	s.bytesStored = 0
-	s.bytesRetrieved = 0
-	s.segmentsReturned = make(map[atree.StorageID]struct{})
-	s.segmentsUpdated = make(map[atree.StorageID]struct{})
-	s.segmentsTouched = make(map[atree.StorageID]struct{})
+	// not needed
 }

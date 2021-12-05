@@ -74,10 +74,13 @@ func main() {
 	var typ string
 	var maxLength uint64
 	var seedHex string
+	var minHeapAllocMiB, maxHeapAllocMiB uint64
 
 	flag.StringVar(&typ, "type", "array", "array or map")
 	flag.Uint64Var(&maxLength, "max_len", 10_000, "max number of elements")
 	flag.StringVar(&seedHex, "seed", "", "seed for prng in hex (default is unix time nano)")
+	flag.Uint64Var(&minHeapAllocMiB, "min_heapalloc", 1000, "min heapalloc in MiB to stop extra removal of elements")
+	flag.Uint64Var(&maxHeapAllocMiB, "max_heapalloc", 2000, "max heapalloc in MiB to trigger extra removal of elements")
 
 	flag.Parse()
 
@@ -132,22 +135,22 @@ func main() {
 	switch typ {
 
 	case "array":
-		fmt.Printf("Starting array stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB\n", minArrayHeapAllocMiB, maxArrayHeapAllocMiB)
+		fmt.Printf("Starting array stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB\n", minHeapAllocMiB, maxHeapAllocMiB)
 
 		status := newArrayStatus()
 
 		go updateStatus(sigc, status)
 
-		testArray(storage, address, typeInfo, maxLength, status)
+		testArray(storage, address, typeInfo, maxLength, status, minHeapAllocMiB, maxHeapAllocMiB)
 
 	case "map":
-		fmt.Printf("Starting map stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB\n", minArrayHeapAllocMiB, maxArrayHeapAllocMiB)
+		fmt.Printf("Starting map stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB\n", minHeapAllocMiB, maxHeapAllocMiB)
 
 		status := newMapStatus()
 
 		go updateStatus(sigc, status)
 
-		testMap(storage, address, typeInfo, maxLength, status)
+		testMap(storage, address, typeInfo, maxLength, status, minHeapAllocMiB, maxHeapAllocMiB)
 	}
 
 }

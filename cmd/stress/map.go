@@ -36,11 +36,6 @@ const (
 	maxMapOp
 )
 
-const (
-	minMapHeapAllocMiB = 1000 // minMapHeapAllocMiB should be half of maxMapHeapAllocMiB
-	maxMapHeapAllocMiB = 2000
-)
-
 type mapStatus struct {
 	lock sync.RWMutex
 
@@ -99,7 +94,15 @@ func (status *mapStatus) Write() {
 	writeStatus(status.String())
 }
 
-func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeInfo atree.TypeInfo, maxLength uint64, status *mapStatus) {
+func testMap(
+	storage *atree.PersistentSlabStorage,
+	address atree.Address,
+	typeInfo atree.TypeInfo,
+	maxLength uint64,
+	status *mapStatus,
+	minHeapAllocMiB uint64,
+	maxHeapAllocMiB uint64,
+) {
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	if err != nil {
@@ -123,10 +126,10 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 		runtime.ReadMemStats(&ms)
 		allocMiB := ms.Alloc / 1024 / 1024
 
-		if !reduceHeapAllocs && allocMiB > maxMapHeapAllocMiB {
+		if !reduceHeapAllocs && allocMiB > maxHeapAllocMiB {
 			fmt.Printf("\nHeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
 			reduceHeapAllocs = true
-		} else if reduceHeapAllocs && allocMiB < minMapHeapAllocMiB {
+		} else if reduceHeapAllocs && allocMiB < minHeapAllocMiB {
 			fmt.Printf("\nHeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
 			reduceHeapAllocs = false
 		}
@@ -163,13 +166,13 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 			fmt.Printf("\nHeapAlloc is %d MiB after cleanup and forced gc\n", allocMiB)
 
 			// Prevent infinite loop that doesn't do useful work.
-			if allocMiB > maxMapHeapAllocMiB {
+			if allocMiB > maxHeapAllocMiB {
 				// This shouldn't happen unless there's a memory leak.
 				fmt.Fprintf(
 					os.Stderr,
 					"Exiting because allocMiB %d > maxMapHeapAlloMiB %d with empty map\n",
 					allocMiB,
-					maxMapHeapAllocMiB)
+					maxHeapAllocMiB)
 				return
 			}
 		}

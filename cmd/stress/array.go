@@ -36,11 +36,6 @@ const (
 	maxArrayOp
 )
 
-const (
-	minArrayHeapAllocMiB = 500 // minArrayHeapAllocMiB should be half of maxArrayHeapAllocMiB
-	maxArrayHeapAllocMiB = 1000
-)
-
 type arrayStatus struct {
 	lock sync.RWMutex
 
@@ -115,7 +110,15 @@ func (status *arrayStatus) Write() {
 	writeStatus(status.String())
 }
 
-func testArray(storage *atree.PersistentSlabStorage, address atree.Address, typeInfo atree.TypeInfo, maxLength uint64, status *arrayStatus) {
+func testArray(
+	storage *atree.PersistentSlabStorage,
+	address atree.Address,
+	typeInfo atree.TypeInfo,
+	maxLength uint64,
+	status *arrayStatus,
+	minHeapAllocMiB uint64,
+	maxHeapAllocMiB uint64,
+) {
 
 	// Create new array
 	array, err := atree.NewArray(storage, address, typeInfo)
@@ -137,10 +140,10 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 		runtime.ReadMemStats(&m)
 		allocMiB := m.Alloc / 1024 / 1024
 
-		if !reduceHeapAllocs && allocMiB > maxArrayHeapAllocMiB {
+		if !reduceHeapAllocs && allocMiB > maxHeapAllocMiB {
 			fmt.Printf("\nHeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
 			reduceHeapAllocs = true
-		} else if reduceHeapAllocs && allocMiB < minArrayHeapAllocMiB {
+		} else if reduceHeapAllocs && allocMiB < minHeapAllocMiB {
 			fmt.Printf("\nHeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
 			reduceHeapAllocs = false
 		}
@@ -175,13 +178,13 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			fmt.Printf("\nHeapAlloc is %d MiB after cleanup and forced gc\n", allocMiB)
 
 			// Prevent infinite loop that doesn't do useful work.
-			if allocMiB > maxMapHeapAllocMiB {
+			if allocMiB > maxHeapAllocMiB {
 				// This shouldn't happen unless there's a memory leak.
 				fmt.Fprintf(
 					os.Stderr,
 					"Exiting because allocMiB %d > maxMapHeapAlloMiB %d with empty map\n",
 					allocMiB,
-					maxMapHeapAllocMiB)
+					maxHeapAllocMiB)
 				return
 			}
 		}

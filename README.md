@@ -1,11 +1,13 @@
 
-<p align="left">
+<p align="center">
   <img src="https://raw.githubusercontent.com/onflow/atree/ec159f3a81cbc6f1338f7f594987f483ddd1e0bd/files/logo.png" width="150"/>
 </p>
 
-[![](https://github.com/onflow/atree/workflows/ci/badge.svg)](https://github.com/onflow/atree/actions?query=workflow%3Aci)
-[![](https://github.com/onflow/atree/workflows/linters/badge.svg)](https://github.com/onflow/atree/actions?query=workflow%3Alinters)
-[![CodeQL](https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml)
+<p align="center">
+  <a href=https://github.com/onflow/atree/actions?query=workflow%3Aci><img src=https://github.com/onflow/atree/workflows/ci/badge.svg/></a>
+  <a href=https://github.com/onflow/atree/actions?query=workflow%3Alinters><img src=https://github.com/onflow/atree/workflows/linters/badge.svg></a>
+  <a href=https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml><img src=https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml/badge.svg></a>
+</p>
 
 # Atree 
 

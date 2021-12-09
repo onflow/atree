@@ -20,8 +20,8 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -61,8 +61,12 @@ func (status *arrayStatus) String() string {
 
 	duration := time.Since(status.startTime)
 
-	return fmt.Sprintf("duration %s, %d elements, %d appends, %d sets, %d inserts, %d removes",
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	return fmt.Sprintf("duration %s, heapAlloc %d MiB, %d elements, %d appends, %d sets, %d inserts, %d removes",
 		duration.Truncate(time.Second).String(),
+		m.Alloc/1024/1024,
 		status.count,
 		status.appendOps,
 		status.setOps,
@@ -106,7 +110,15 @@ func (status *arrayStatus) Write() {
 	writeStatus(status.String())
 }
 
-func testArray(storage *atree.PersistentSlabStorage, address atree.Address, typeInfo atree.TypeInfo, maxLength uint64, status *arrayStatus) {
+func testArray(
+	storage *atree.PersistentSlabStorage,
+	address atree.Address,
+	typeInfo atree.TypeInfo,
+	maxLength uint64,
+	status *arrayStatus,
+	minHeapAllocMiB uint64,
+	maxHeapAllocMiB uint64,
+) {
 
 	// Create new array
 	array, err := atree.NewArray(storage, address, typeInfo)
@@ -118,23 +130,94 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 	// values contains array elements in the same order.  It is used to check data loss.
 	values := make([]atree.Value, 0, maxLength)
 
-	for {
-		nextOp := rand.Intn(maxArrayOp)
+	reduceHeapAllocs := false
 
-		if array.Count() == maxLength {
+	opCount := uint64(0)
+
+	var m runtime.MemStats
+
+	for {
+		runtime.ReadMemStats(&m)
+		allocMiB := m.Alloc / 1024 / 1024
+
+		if !reduceHeapAllocs && allocMiB > maxHeapAllocMiB {
+			fmt.Printf("\nHeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
+			reduceHeapAllocs = true
+		} else if reduceHeapAllocs && allocMiB < minHeapAllocMiB {
+			fmt.Printf("\nHeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
+			reduceHeapAllocs = false
+		}
+
+		if reduceHeapAllocs && array.Count() == 0 {
+			fmt.Printf("\nHeapAlloc is %d MiB while array is empty, drop read/write cache to free mem\n", allocMiB)
+			reduceHeapAllocs = false
+
+			// Commit slabs to storage and drop read and write to reduce mem
+			err = storage.FastCommit(runtime.NumCPU())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to commit to storage: %s", err)
+				return
+			}
+
+			storage.DropDeltas()
+			storage.DropCache()
+
+			// Load root slab from storage and cache it in read cache
+			rootID := array.StorageID()
+			array, err = atree.NewArrayWithRootID(storage, rootID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to create array from root id %s: %s", rootID, err)
+				return
+			}
+
+			runtime.GC()
+
+			// Check if map is using > MaxHeapAlloc while empty.
+			runtime.ReadMemStats(&m)
+			allocMiB = m.Alloc / 1024 / 1024
+			fmt.Printf("\nHeapAlloc is %d MiB after cleanup and forced gc\n", allocMiB)
+
+			// Prevent infinite loop that doesn't do useful work.
+			if allocMiB > maxHeapAllocMiB {
+				// This shouldn't happen unless there's a memory leak.
+				fmt.Fprintf(
+					os.Stderr,
+					"Exiting because allocMiB %d > maxMapHeapAlloMiB %d with empty map\n",
+					allocMiB,
+					maxHeapAllocMiB)
+				return
+			}
+		}
+
+		nextOp := r.Intn(maxArrayOp)
+
+		if array.Count() == maxLength || reduceHeapAllocs {
 			nextOp = arrayRemoveOp
 		}
 
 		switch nextOp {
 
 		case arrayAppendOp:
-			v := randomValue()
+			opCount++
+
+			nestedLevels := r.Intn(maxNestedLevels)
+			v, err := randomValue(storage, address, nestedLevels)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
+				return
+			}
+
+			copiedValue, err := copyValue(storage, atree.Address{}, v)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
+				return
+			}
 
 			// Append to values
-			values = append(values, v)
+			values = append(values, copiedValue)
 
 			// Append to array
-			err := array.Append(v)
+			err = array.Append(v)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to append %s: %s", v, err)
 				return
@@ -144,17 +227,31 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			status.incAppend()
 
 		case arraySetOp:
+			opCount++
+
 			if array.Count() == 0 {
 				continue
 			}
 
-			k := rand.Intn(int(array.Count()))
-			v := randomValue()
+			k := r.Intn(int(array.Count()))
+
+			nestedLevels := r.Intn(maxNestedLevels)
+			v, err := randomValue(storage, address, nestedLevels)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
+				return
+			}
+
+			copiedValue, err := copyValue(storage, atree.Address{}, v)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
+				return
+			}
 
 			oldV := values[k]
 
 			// Update values
-			values[k] = v
+			values[k] = copiedValue
 
 			// Update array
 			existingStorable, err := array.Set(uint64(k), v)
@@ -163,45 +260,64 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 				return
 			}
 
-			// Compare overwritten storable from array with overwritten value from values
-			equal, err := compare(array.Storage, oldV, existingStorable)
+			// Compare overwritten value from array with overwritten value from values
+			existingValue, err := existingStorable.StoredValue(storage)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingStorable, oldV, err)
+				fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingStorable, err)
 				return
 			}
-			if !equal {
-				fmt.Fprintf(os.Stderr, "Set() returned wrong existing value %s, want %s", existingStorable, oldV)
+
+			err = valueEqual(oldV, existingValue)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingValue, oldV, err)
 				return
 			}
 
 			// Delete overwritten element from storage
-			if sid, ok := existingStorable.(atree.StorageIDStorable); ok {
-				id := atree.StorageID(sid)
-				err = storage.Remove(id)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to remove referenced slab %d: %s", id, err)
-					return
-				}
+			err = removeStorable(storage, existingStorable)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove storable %s: %s", existingStorable, err)
+				return
+			}
+
+			err = removeValue(storage, oldV)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove copied overwritten value %s: %s", oldV, err)
+				return
 			}
 
 			// Update status
 			status.incSet()
 
 		case arrayInsertOp:
-			k := rand.Intn(int(array.Count() + 1))
-			v := randomValue()
+			opCount++
+
+			k := r.Intn(int(array.Count() + 1))
+
+			nestedLevels := r.Intn(maxNestedLevels)
+			v, err := randomValue(storage, address, nestedLevels)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
+				return
+			}
+
+			copiedValue, err := copyValue(storage, atree.Address{}, v)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
+				return
+			}
 
 			// Update values
 			if k == int(array.Count()) {
-				values = append(values, v)
+				values = append(values, copiedValue)
 			} else {
 				values = append(values, nil)
 				copy(values[k+1:], values[k:])
-				values[k] = v
+				values[k] = copiedValue
 			}
 
 			// Update array
-			err := array.Insert(uint64(k), v)
+			err = array.Insert(uint64(k), v)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to insert %s into index %d: %s", v, k, err)
 				return
@@ -215,7 +331,9 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 				continue
 			}
 
-			k := rand.Intn(int(array.Count()))
+			opCount++
+
+			k := r.Intn(int(array.Count()))
 
 			oldV := values[k]
 
@@ -232,24 +350,29 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			}
 
 			// Compare removed value from array with removed value from values
-			equal, err := compare(array.Storage, oldV, existingStorable)
+			existingValue, err := existingStorable.StoredValue(storage)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingStorable, oldV, err)
+				fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingStorable, err)
 				return
 			}
-			if !equal {
-				fmt.Fprintf(os.Stderr, "Remove() returned wrong existing value %s, want %s", existingStorable, oldV)
+
+			err = valueEqual(oldV, existingValue)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingValue, oldV, err)
 				return
 			}
 
 			// Delete removed element from storage
-			if sid, ok := existingStorable.(atree.StorageIDStorable); ok {
-				id := atree.StorageID(sid)
-				err = storage.Remove(id)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to remove referenced slab %d: %s", id, err)
-					return
-				}
+			err = removeStorable(storage, existingStorable)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove element %s: %s", existingStorable, err)
+				return
+			}
+
+			err = removeValue(storage, oldV)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove copied removed value %s: %s", oldV, err)
+				return
 			}
 
 			// Update status
@@ -263,6 +386,25 @@ func testArray(storage *atree.PersistentSlabStorage, address atree.Address, type
 			return
 		}
 
+		if opCount >= 100 {
+			opCount = 0
+			rootIDs, err := atree.CheckStorageHealth(storage, -1)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return
+			}
+			ids := make([]atree.StorageID, 0, len(rootIDs))
+			for id := range rootIDs {
+				// filter out root ids with empty address
+				if id.Address != atree.AddressUndefined {
+					ids = append(ids, id)
+				}
+			}
+			if len(ids) != 1 || ids[0] != array.StorageID() {
+				fmt.Fprintf(os.Stderr, "root storage ids %v in storage, want %s\n", ids, array.StorageID())
+				return
+			}
+		}
 	}
 }
 
@@ -279,12 +421,13 @@ func checkArrayDataLoss(array *atree.Array, values []atree.Value) error {
 		if err != nil {
 			return fmt.Errorf("failed to get element at %d: %w", i, err)
 		}
-		equal, err := compare(array.Storage, v, storable)
+		convertedValue, err := storable.StoredValue(array.Storage)
 		if err != nil {
-			return fmt.Errorf("failed to compare %s and %s: %w", v, storable, err)
+			return fmt.Errorf("failed to convert storable to value at %d: %w", i, err)
 		}
-		if !equal {
-			return fmt.Errorf("Get(%d) returns %s, want %s", i, storable, v)
+		err = valueEqual(v, convertedValue)
+		if err != nil {
+			return fmt.Errorf("failed to compare %s and %s: %w", v, convertedValue, err)
 		}
 	}
 

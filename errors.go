@@ -39,51 +39,51 @@ func (e *FatalError) Unwrap() error { return e.err }
 
 // SliceOutOfBoundsError is returned when index for array slice is out of bounds.
 type SliceOutOfBoundsError struct {
-	startIndex uint64
-	endIndex   uint64
-	min        uint64
-	max        uint64
+	StartIndex uint64
+	EndIndex   uint64
+	Min        uint64
+	Max        uint64
 }
 
 // NewSliceOutOfBoundsError constructs a SliceOutOfBoundsError
 func NewSliceOutOfBoundsError(startIndex, endIndex, min, max uint64) *SliceOutOfBoundsError {
-	return &SliceOutOfBoundsError{startIndex: startIndex, endIndex: endIndex, min: min, max: max}
+	return &SliceOutOfBoundsError{StartIndex: startIndex, EndIndex: endIndex, Min: min, Max: max}
 }
 
 func (e *SliceOutOfBoundsError) Error() string {
-	return fmt.Sprintf("slice [%d:%d] is out of bounds with range %d-%d", e.startIndex, e.endIndex, e.min, e.max)
+	return fmt.Sprintf("slice [%d:%d] is out of bounds with range %d-%d", e.StartIndex, e.EndIndex, e.Min, e.Max)
 }
 
 // InvalidSliceIndexError is returned when array slice index is invalid, such as startIndex > endIndex
 // This error can be returned even when startIndex and endIndex are both within bounds.
 type InvalidSliceIndexError struct {
-	startIndex uint64
-	endIndex   uint64
+	StartIndex uint64
+	EndIndex   uint64
 }
 
 // NewInvalidSliceIndexError constructs an InvalidSliceIndexError
 func NewInvalidSliceIndexError(startIndex, endIndex uint64) *InvalidSliceIndexError {
-	return &InvalidSliceIndexError{startIndex: startIndex, endIndex: endIndex}
+	return &InvalidSliceIndexError{StartIndex: startIndex, EndIndex: endIndex}
 }
 
 func (e *InvalidSliceIndexError) Error() string {
-	return fmt.Sprintf("invalid slice index: %d > %d", e.startIndex, e.endIndex)
+	return fmt.Sprintf("invalid slice index: %d > %d", e.StartIndex, e.EndIndex)
 }
 
 // IndexOutOfBoundsError is returned when get, insert or delete operation is attempted on an array index which is out of bounds
 type IndexOutOfBoundsError struct {
-	index uint64
-	min   uint64
-	max   uint64
+	Index uint64
+	Min   uint64
+	Max   uint64
 }
 
 // NewIndexOutOfBoundsError constructs a IndexOutOfBoundsError
 func NewIndexOutOfBoundsError(index, min, max uint64) *IndexOutOfBoundsError {
-	return &IndexOutOfBoundsError{index: index, min: min, max: max}
+	return &IndexOutOfBoundsError{Index: index, Min: min, Max: max}
 }
 
 func (e *IndexOutOfBoundsError) Error() string {
-	return fmt.Sprintf("index %d is outside required range (%d-%d)", e.index, e.min, e.max)
+	return fmt.Sprintf("index %d is outside required range (%d-%d)", e.Index, e.Min, e.Max)
 }
 
 // MaxArraySizeError is returned when an insert or delete operation is attempted on an array which has reached maximum size
@@ -106,58 +106,58 @@ func (e *MaxArraySizeError) Fatal() error {
 
 // NotValueError is returned when we try to create Value objects from non-root slabs.
 type NotValueError struct {
-	id StorageID
+	Id StorageID
 }
 
 // NewNotValueError constructs a NotValueError.
 func NewNotValueError(id StorageID) *NotValueError {
-	return &NotValueError{id: id}
+	return &NotValueError{Id: id}
 }
 
 func (e *NotValueError) Error() string {
-	return fmt.Sprintf("slab (%s) cannot be used to create Value object", e.id)
+	return fmt.Sprintf("slab (%s) cannot be used to create Value object", e.Id)
 }
 
 // MaxKeySizeError is returned when a dictionary key is too large
 type MaxKeySizeError struct {
-	keyStr     string
-	maxKeySize uint64
+	KeyStr     string
+	MaxKeySize uint64
 }
 
 // NewMaxKeySizeError constructs a MaxKeySizeError
 func NewMaxKeySizeError(keyStr string, maxKeySize uint64) *MaxKeySizeError {
-	return &MaxKeySizeError{keyStr: keyStr, maxKeySize: maxKeySize}
+	return &MaxKeySizeError{KeyStr: keyStr, MaxKeySize: maxKeySize}
 }
 
 func (e *MaxKeySizeError) Error() string {
-	return fmt.Sprintf("key (%s) is larger than maximum size %d", e.keyStr, e.maxKeySize)
+	return fmt.Sprintf("key (%s) is larger than maximum size %d", e.KeyStr, e.MaxKeySize)
 }
 
 // DuplicateKeyError is returned when the duplicate key is found in the dictionary when none is expected.
 type DuplicateKeyError struct {
-	key interface{}
+	Key interface{}
 }
 
 func NewDuplicateKeyError(key interface{}) error {
-	return &DuplicateKeyError{key: key}
+	return &DuplicateKeyError{Key: key}
 }
 
 func (e *DuplicateKeyError) Error() string {
-	return fmt.Sprintf("duplicate key (%s)", e.key)
+	return fmt.Sprintf("duplicate key (%s)", e.Key)
 }
 
 // KeyNotFoundError is returned when the key not found in the dictionary
 type KeyNotFoundError struct {
-	key interface{}
+	Key interface{}
 }
 
 // NewKeyNotFoundError constructs a KeyNotFoundError
 func NewKeyNotFoundError(key interface{}) *KeyNotFoundError {
-	return &KeyNotFoundError{key: key}
+	return &KeyNotFoundError{Key: key}
 }
 
 func (e *KeyNotFoundError) Error() string {
-	return fmt.Sprintf("key (%s) not found", e.key)
+	return fmt.Sprintf("key (%s) not found", e.Key)
 }
 
 // HashSeedUninitializedError is a fatal error returned when hash seed is uninitialized.
@@ -225,13 +225,13 @@ func (e *StorageError) Unwrap() error { return e.err }
 
 // SlabNotFoundError is always a fatal error returned when an slab is not found
 type SlabNotFoundError struct {
-	storageID StorageID
+	StorageID StorageID
 	err       error
 }
 
 // NewSlabNotFoundError constructs a SlabNotFoundError
 func NewSlabNotFoundError(storageID StorageID, err error) error {
-	return NewFatalError(&SlabNotFoundError{storageID: storageID, err: err})
+	return NewFatalError(&SlabNotFoundError{StorageID: storageID, err: err})
 }
 
 // NewSlabNotFoundErrorf constructs a new SlabNotFoundError with error formating
@@ -240,7 +240,7 @@ func NewSlabNotFoundErrorf(storageID StorageID, msg string, args ...interface{})
 }
 
 func (e *SlabNotFoundError) Error() string {
-	return fmt.Sprintf("slab (%s) not found: %s", e.storageID.String(), e.err.Error())
+	return fmt.Sprintf("slab (%s) not found: %s", e.StorageID.String(), e.err.Error())
 }
 
 // Unwrap returns the wrapped err
@@ -288,7 +288,7 @@ func (e *SlabMergeError) Error() string {
 
 func (e *SlabMergeError) Unwrap() error { return e.err }
 
-// SlabRebalanceError is alwyas a fatal error returned when rebalancing a slab has failed
+// SlabRebalanceError is always a fatal error returned when rebalancing a slab has failed
 type SlabRebalanceError struct {
 	err error
 }
@@ -309,8 +309,7 @@ func (e *SlabRebalanceError) Error() string {
 
 func (e *SlabRebalanceError) Unwrap() error { return e.err }
 
-// SlabError is a always fatal error returned when something is wrong with the content or type of the slab
-// you can make this a fatal error by calling Fatal()
+// SlabDataError is always a fatal error returned when something is wrong with the content or type of the slab
 type SlabDataError struct {
 	err error
 }
@@ -320,7 +319,7 @@ func NewSlabDataError(err error) error {
 	return NewFatalError(&SlabDataError{err: err})
 }
 
-// NewSlabDataErrorf constructs a new SlabError with error formating
+// NewSlabDataErrorf constructs a new SlabError with error formatting
 func NewSlabDataErrorf(msg string, args ...interface{}) error {
 	return NewSlabDataError(fmt.Errorf(msg, args...))
 }
@@ -393,7 +392,7 @@ type HashLevelError struct {
 	msg string
 }
 
-// NewHashLevelError constructs a HashLevelError
+// NewHashLevelErrorf constructs a HashLevelError
 func NewHashLevelErrorf(msg string, args ...interface{}) error {
 	return NewFatalError(&HashLevelError{msg: fmt.Sprintf(msg, args...)})
 }

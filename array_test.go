@@ -828,6 +828,167 @@ func TestArrayIterate(t *testing.T) {
 	})
 }
 
+func testArrayIterateRange(t *testing.T, storage *PersistentSlabStorage, array *Array, values []Value) {
+	var i uint64
+	var err error
+	var sliceOutOfBoundsError *SliceOutOfBoundsError
+	var invalidSliceIndexError *InvalidSliceIndexError
+
+	count := array.Count()
+
+	// If startIndex > count, IterateRange returns SliceOutOfBoundsError
+	err = array.IterateRange(count+1, count+1, func(v Value) (bool, error) {
+		i++
+		return true, nil
+	})
+	require.ErrorAs(t, err, &sliceOutOfBoundsError)
+	require.Equal(t, uint64(0), i)
+
+	// If endIndex > count, IterateRange returns SliceOutOfBoundsError
+	err = array.IterateRange(0, count+1, func(v Value) (bool, error) {
+		i++
+		return true, nil
+	})
+	require.ErrorAs(t, err, &sliceOutOfBoundsError)
+	require.Equal(t, uint64(0), i)
+
+	// If startIndex > endIndex, IterateRange returns InvalidSliceIndexError
+	if count > 0 {
+		err = array.IterateRange(1, 0, func(v Value) (bool, error) {
+			i++
+			return true, nil
+		})
+		require.ErrorAs(t, err, &invalidSliceIndexError)
+		require.Equal(t, uint64(0), i)
+	}
+
+	// IterateRange returns no error and iteration function is called on sliced array
+	for startIndex := uint64(0); startIndex <= count; startIndex++ {
+		for endIndex := startIndex; endIndex <= count; endIndex++ {
+			i = uint64(0)
+			err = array.IterateRange(startIndex, endIndex, func(v Value) (bool, error) {
+				valueEqual(t, typeInfoComparator, v, values[int(startIndex+i)])
+				i++
+				return true, nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, endIndex-startIndex, i)
+		}
+	}
+}
+
+func TestArrayIterateRange(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	t.Run("empty", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		testArrayIterateRange(t, storage, array, []Value{})
+	})
+
+	t.Run("dataslab as root", func(t *testing.T) {
+		const arraySize = 10
+
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		values := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			value := Uint64Value(i)
+			values[i] = value
+			err := array.Append(value)
+			require.NoError(t, err)
+		}
+
+		testArrayIterateRange(t, storage, array, values)
+	})
+
+	t.Run("metadataslab as root", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		const arraySize = 1024
+
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		values := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			value := Uint64Value(i)
+			values[i] = value
+			err := array.Append(value)
+			require.NoError(t, err)
+		}
+
+		testArrayIterateRange(t, storage, array, values)
+	})
+
+	t.Run("stop", func(t *testing.T) {
+		const arraySize = 10
+
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		i := uint64(0)
+		startIndex := uint64(1)
+		endIndex := uint64(5)
+		count := endIndex - startIndex
+		err = array.IterateRange(startIndex, endIndex, func(_ Value) (bool, error) {
+			if i == count/2 {
+				return false, nil
+			}
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, count/2, i)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		const arraySize = 10
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		testErr := errors.New("test")
+
+		i := uint64(0)
+		startIndex := uint64(1)
+		endIndex := uint64(5)
+		count := endIndex - startIndex
+		err = array.IterateRange(startIndex, endIndex, func(_ Value) (bool, error) {
+			if i == count/2 {
+				return false, testErr
+			}
+			i++
+			return true, nil
+		})
+		require.Error(t, err)
+		require.Equal(t, testErr, err)
+		require.Equal(t, count/2, i)
+	})
+}
 func TestArrayRootStorageID(t *testing.T) {
 	SetThreshold(256)
 	defer SetThreshold(1024)

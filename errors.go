@@ -37,6 +37,39 @@ func (e *FatalError) Error() string {
 
 func (e *FatalError) Unwrap() error { return e.err }
 
+// SliceOutOfBoundsError is returned when index for array slice is out of bounds.
+type SliceOutOfBoundsError struct {
+	startIndex uint64
+	endIndex   uint64
+	min        uint64
+	max        uint64
+}
+
+// NewSliceOutOfBoundsError constructs a SliceOutOfBoundsError
+func NewSliceOutOfBoundsError(startIndex, endIndex, min, max uint64) *SliceOutOfBoundsError {
+	return &SliceOutOfBoundsError{startIndex: startIndex, endIndex: endIndex, min: min, max: max}
+}
+
+func (e *SliceOutOfBoundsError) Error() string {
+	return fmt.Sprintf("slice [%d:%d] is out of bounds with range %d-%d", e.startIndex, e.endIndex, e.min, e.max)
+}
+
+// InvalidSliceIndexError is returned when array slice index is invalid, such as startIndex > endIndex
+// This error can be returned even when startIndex and endIndex are both within bounds.
+type InvalidSliceIndexError struct {
+	startIndex uint64
+	endIndex   uint64
+}
+
+// NewInvalidSliceIndexError constructs an InvalidSliceIndexError
+func NewInvalidSliceIndexError(startIndex, endIndex uint64) *InvalidSliceIndexError {
+	return &InvalidSliceIndexError{startIndex: startIndex, endIndex: endIndex}
+}
+
+func (e *InvalidSliceIndexError) Error() string {
+	return fmt.Sprintf("invalid slice index: %d > %d", e.startIndex, e.endIndex)
+}
+
 // IndexOutOfBoundsError is returned when get, insert or delete operation is attempted on an array index which is out of bounds
 type IndexOutOfBoundsError struct {
 	index uint64

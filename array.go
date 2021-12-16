@@ -2019,14 +2019,21 @@ func (a *Array) promoteChildAsNewRoot(childID StorageID) error {
 	return nil
 }
 
+var emptyArrayIterator = &ArrayIterator{}
+
 type ArrayIterator struct {
-	storage  SlabStorage
-	id       StorageID
-	dataSlab *ArrayDataSlab
-	index    int
+	storage        SlabStorage
+	id             StorageID
+	dataSlab       *ArrayDataSlab
+	index          int
+	remainingCount int
 }
 
 func (i *ArrayIterator) Next() (Value, error) {
+	if i.remainingCount == 0 {
+		return nil, nil
+	}
+
 	if i.dataSlab == nil {
 		if i.id == StorageIDUndefined {
 			return nil, nil
@@ -2060,6 +2067,8 @@ func (i *ArrayIterator) Next() (Value, error) {
 		i.dataSlab = nil
 	}
 
+	i.remainingCount--
+
 	return element, nil
 }
 
@@ -2070,9 +2079,58 @@ func (a *Array) Iterator() (*ArrayIterator, error) {
 	}
 
 	return &ArrayIterator{
-		storage:  a.Storage,
-		id:       slab.ID(),
-		dataSlab: slab.(*ArrayDataSlab),
+		storage:        a.Storage,
+		id:             slab.ID(),
+		dataSlab:       slab,
+		remainingCount: int(a.Count()),
+	}, nil
+}
+
+func (a *Array) RangeIterator(startIndex uint64, endIndex uint64) (*ArrayIterator, error) {
+	count := a.Count()
+
+	if startIndex > count || endIndex > count {
+		return nil, NewSliceOutOfBoundsError(startIndex, endIndex, 0, count)
+	}
+
+	if startIndex > endIndex {
+		return nil, NewInvalidSliceIndexError(startIndex, endIndex)
+	}
+
+	numberOfElements := endIndex - startIndex
+
+	if numberOfElements == 0 {
+		return emptyArrayIterator, nil
+	}
+
+	var dataSlab *ArrayDataSlab
+	index := startIndex
+
+	if a.root.IsData() {
+		dataSlab = a.root.(*ArrayDataSlab)
+	} else if startIndex == 0 {
+		var err error
+		dataSlab, err = firstArrayDataSlab(a.Storage, a.root)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var err error
+		// getArrayDataSlabWithIndex returns data slab containing element at startIndex,
+		// getArrayDataSlabWithIndex also returns adjusted index for this element at returned data slab.
+		// Adjusted index must be used as index when creating ArrayIterator.
+		dataSlab, index, err = getArrayDataSlabWithIndex(a.Storage, a.root, startIndex)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &ArrayIterator{
+		storage:        a.Storage,
+		id:             dataSlab.ID(),
+		dataSlab:       dataSlab,
+		index:          int(index),
+		remainingCount: int(numberOfElements),
 	}, nil
 }
 
@@ -2103,6 +2161,30 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	}
 }
 
+func (a *Array) IterateRange(startIndex uint64, endIndex uint64, fn ArrayIterationFunc) error {
+
+	iterator, err := a.RangeIterator(startIndex, endIndex)
+	if err != nil {
+		return err
+	}
+
+	for {
+		value, err := iterator.Next()
+		if err != nil {
+			return err
+		}
+		if value == nil {
+			return nil
+		}
+		resume, err := fn(value)
+		if err != nil {
+			return err
+		}
+		if !resume {
+			return nil
+		}
+	}
+}
 func (a *Array) Count() uint64 {
 	return uint64(a.root.Header().count)
 }
@@ -2154,9 +2236,9 @@ func getArraySlab(storage SlabStorage, id StorageID) (ArraySlab, error) {
 	return arraySlab, nil
 }
 
-func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) {
+func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (*ArrayDataSlab, error) {
 	if slab.IsData() {
-		return slab, nil
+		return slab.(*ArrayDataSlab), nil
 	}
 	meta := slab.(*ArrayMetaDataSlab)
 	firstChildID := meta.childrenHeaders[0].id
@@ -2165,6 +2247,30 @@ func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) 
 		return nil, err
 	}
 	return firstArrayDataSlab(storage, firstChild)
+}
+
+// getArrayDataSlabWithIndex returns data slab containing element at specified index
+func getArrayDataSlabWithIndex(storage SlabStorage, slab ArraySlab, index uint64) (*ArrayDataSlab, uint64, error) {
+	if slab.IsData() {
+		dataSlab := slab.(*ArrayDataSlab)
+		if index >= uint64(len(dataSlab.elements)) {
+			return nil, 0, NewIndexOutOfBoundsError(index, 0, uint64(len(dataSlab.elements)))
+		}
+		return dataSlab, index, nil
+	}
+
+	metaSlab := slab.(*ArrayMetaDataSlab)
+	_, adjustedIndex, childID, err := metaSlab.childSlabIndexInfo(index)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	child, err := getArraySlab(storage, childID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return getArrayDataSlabWithIndex(storage, child, adjustedIndex)
 }
 
 type ArrayPopIterationFunc func(Storable)

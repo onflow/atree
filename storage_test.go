@@ -1,7 +1,7 @@
 /*
  * Atree - Scalable Arrays and Ordered Maps
  *
- * Copyright 2021 Dapper Labs, Inc.
+ * Copyright 2021-2022 Dapper Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,9 @@
 package atree
 
 import (
+	"errors"
 	"math/rand"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -742,6 +744,43 @@ func TestPersistentStorage(t *testing.T) {
 		// compare orders
 		require.Equal(t, baseStorage.SegTouchOrder(), baseStorage2.SegTouchOrder())
 	})
+
+	t.Run("commit with error", func(t *testing.T) {
+
+		baseStorage := NewInMemBaseStorage()
+		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
+
+		// Encoding slabWithNonStorable returns error.
+		slabWithNonStorable := &ArrayDataSlab{
+			header:   ArraySlabHeader{size: uint32(1), count: uint32(1)},
+			elements: []Storable{nonStorable{}},
+		}
+		// Encoding slabWithSlowStorable takes some time which delays
+		// sending encoding result to results channel.
+		slabWithSlowStorable := &ArrayDataSlab{
+			header:   ArraySlabHeader{size: uint32(3), count: uint32(1)},
+			elements: []Storable{newSlowStorable(1)},
+		}
+
+		address := Address{1}
+
+		id, err := storage.GenerateStorageID(address)
+		require.NoError(t, err)
+
+		err = storage.Store(id, slabWithNonStorable)
+		require.NoError(t, err)
+
+		for i := 0; i < 500; i++ {
+			id, err := storage.GenerateStorageID(address)
+			require.NoError(t, err)
+
+			err = storage.Store(id, slabWithSlowStorable)
+			require.NoError(t, err)
+		}
+
+		err = storage.FastCommit(2)
+		require.ErrorIs(t, err, errEncodeNonStorable)
+	})
 }
 
 func TestPersistentStorageSlabIterator(t *testing.T) {
@@ -1063,4 +1102,54 @@ func (l *testLedger) Iterator() ledgerIterationFunc {
 
 func (l *testLedger) Count() int {
 	return len(l.values)
+}
+
+var errEncodeNonStorable = errors.New("failed to encode non-storable")
+
+// nonStorable can't be encoded successfully.
+type nonStorable struct{}
+
+func (nonStorable) Encode(_ *Encoder) error {
+	return errEncodeNonStorable
+}
+
+func (nonStorable) ByteSize() uint32 {
+	return 1
+}
+
+func (v nonStorable) StoredValue(_ SlabStorage) (Value, error) {
+	return v, nil
+}
+
+func (nonStorable) ChildStorables() []Storable {
+	return nil
+}
+
+func (v nonStorable) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
+	return v, nil
+}
+
+type slowStorable struct {
+	Uint8Value
+}
+
+func newSlowStorable(i uint8) slowStorable {
+	return slowStorable{
+		Uint8Value: Uint8Value(i),
+	}
+}
+
+// slowStorable.Encode is used to reproduce a
+// panic. It needs to be slow enough
+// when called by FastCommit() compared to
+// to a non-slow Encode function returning an error.
+// See Atree issue #240.
+func (s slowStorable) Encode(encoder *Encoder) error {
+	// Use division in a loop to slow down this function
+	n := 1.0
+	for i := 0; i < 2000; i++ {
+		n = (n + float64(i)) / 3.14
+	}
+	runtime.KeepAlive(n)
+	return s.Uint8Value.Encode(encoder)
 }

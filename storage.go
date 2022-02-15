@@ -1,7 +1,7 @@
 /*
  * Atree - Scalable Arrays and Ordered Maps
  *
- * Copyright 2021 Dapper Labs, Inc.
+ * Copyright 2021-2022 Dapper Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -730,10 +731,10 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 
 	// construct job queue
 	jobs := make(chan StorageID, len(keysWithOwners))
-	defer close(jobs)
 	for _, id := range keysWithOwners {
 		jobs <- id
 	}
+	close(jobs)
 
 	type encodedSlabs struct {
 		storageID StorageID
@@ -743,12 +744,20 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 
 	// construct result queue
 	results := make(chan *encodedSlabs, len(keysWithOwners))
-	defer close(results)
 
 	// define encoders (workers) and launch them
 	// encoders encodes slabs in parallel
-	encoder := func(jobs <-chan StorageID, results chan<- *encodedSlabs) {
+	encoder := func(wg *sync.WaitGroup, done <-chan struct{}, jobs <-chan StorageID, results chan<- *encodedSlabs) {
+		defer wg.Done()
+
 		for id := range jobs {
+			// Check if goroutine is signaled to stop before proceeding.
+			select {
+			case <-done:
+				return
+			default:
+			}
+
 			slab := s.deltas[id]
 			if slab == nil {
 				results <- &encodedSlabs{
@@ -768,9 +777,24 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		}
 	}
 
+	done := make(chan struct{})
+
+	var wg sync.WaitGroup
+	wg.Add(numWorkers)
+
 	for i := 0; i < numWorkers; i++ {
-		go encoder(jobs, results)
+		go encoder(&wg, done, jobs, results)
 	}
+
+	defer func() {
+		// This ensures that all goroutines are stopped before output channel is closed.
+
+		// Wait for all goroutines to finish
+		wg.Wait()
+
+		// Close output channel
+		close(results)
+	}()
 
 	// process the results while encoders are working
 	// we need to capture them inside a map
@@ -780,6 +804,8 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		result := <-results
 		// if any error return
 		if result.err != nil {
+			// Closing done channel signals goroutines to stop.
+			close(done)
 			return NewStorageError(result.err)
 		}
 		encSlabByID[result.storageID] = result.data

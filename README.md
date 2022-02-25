@@ -17,7 +17,7 @@ Inspired by patterns used in modern variants of B+ Trees, Atree provides two typ
 
 - __Scalable Array Type (SAT)__ is a heterogeneous variable-size array, storing any type of values into a smaller ordered list of values and provides efficient functionality to lookup, insert and remove elements anywhere in the array.
 
-- __Ordered Map Type (OMT)__ is an ordered map of key-value pairs; keys can be any hashable type and values can be any serializable value type. It supports heterogeneous key or value types (e.g. first key storing a boolean and second key storing a string). OMT keeps values in specific sorted order and operations are deterministic so the state of the segments after a sequence of operations are always unique.  OMT uses [CircleHash64 with Deferred+Segmented BLAKE3 Digests](https://github.com/onflow/atree/edit/fxamacker/upgrade-circlehash/README.md#omt-uses-circlehash64-with-deferredsegmented-blake3-digests).
+- __Ordered Map Type (OMT)__ is an ordered map of key-value pairs; keys can be any hashable type and values can be any serializable value type. It supports heterogeneous key or value types (e.g. first key storing a boolean and second key storing a string). OMT keeps values in specific sorted order and operations are deterministic so the state of the segments after a sequence of operations are always unique.  OMT uses [CircleHash64 with Deferred+Segmented BLAKE3 Digests](#omt-uses-circlehash64-with-deferredsegmented-blake3-digests).
 
 ## Under the Hood
 

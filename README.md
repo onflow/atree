@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/onflow/atree/ec159f3a81cbc6f1338f7f594987f483ddd1e0bd/files/logo.png" width="150"/>
+  <img src="https://user-images.githubusercontent.com/33205765/156051157-ebcd2b1d-97ae-4a65-800a-bcca2a12b27b.png" width="150"/>
 </p>
 
 <p align="center">
@@ -81,4 +81,3 @@ The Atree library is licensed under the terms of the Apache license. See [LICENS
 Logo is based on the artwork of Raisul Hadi licensed under Creative Commons.
 
 Copyright © 2021-2022 Dapper Labs, Inc.
-

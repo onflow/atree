@@ -60,6 +60,51 @@ import (
 
 var countBLAKE3 uint64 // count calls to Hash256 (doesn't double count zeebo & luke)
 
+func TestBLAKE3Vectors(t *testing.T) {
+
+	// Official BLAKE3 test vector checks 35 digests using
+	// 35 sizes of input from the same repeating pattern
+	inputs := makeBLAKE3InputData(102400)
+
+	sizes := []int{
+		0, 1, 2, 3, 4, 5, 6, 7,
+		8, 63, 64, 65, 127, 128, 129, 1023,
+		1024, 1025, 2048, 2049, 3072, 3073, 4096, 4097,
+		5120, 5121, 6144, 6145, 7168, 7169, 8192, 8193,
+		16384, 31744, 102400,
+	}
+
+	// Use SHA-512 to hash 35 BLAKE3 digest results
+	// so we only have to compare one hardcoded value.
+	h := sha512.New()
+	want := decodeHexOrPanic("b785cc13e1ed42b2c31096c91aacf155d2898bcf2fbcfd3a02b481612423a4372a6367bd5da5ce9e1edadef81d44d77363060a4c4b6af436e4b4c189f6f72b3e")
+
+	for _, n := range sizes {
+		digest := countedAndComparedBLAKE3(t, inputs[:n])
+		_, err := h.Write(digest[:])
+		require.NoError(t, err)
+	}
+
+	got := h.Sum(nil)
+	if !bytes.Equal(got, want) {
+		t.Errorf("got 0x%064x; want 0x%064x", got, want)
+	}
+}
+
+func makeBLAKE3InputData(length int) []byte {
+	b := make([]byte, length)
+	for i := 0; i < len(b); i++ {
+		b[i] = byte(i % 251)
+	}
+	return b
+}
+
+// TestBLAKE3Regression checks 131072 BLAKE3 digests
+// for expected values using input sizes up to
+// 64KiB.  This test is designed to detect
+// malicious hash implementations when this test
+// is used with other tests for size 0 and some
+// sizes > 64KiB.
 func TestBLAKE3Regression(t *testing.T) {
 
 	// Create 64 KiB of test data from SHA-512 using the simplest
@@ -79,10 +124,11 @@ func TestBLAKE3Regression(t *testing.T) {
 		wantSHA512VaringEndPos   []byte
 	}{
 		{
-			"noseed",
+			"nokey",
 			decodeHexOrPanic("8030991ad495219d9fdd346fab027d1f453887a3d157fa4bfcd67a4b213a6817817817f43779ddd2b274a243d8a942728141b72d8bcde9d49fdfc5d9a823983f"),
 			decodeHexOrPanic("a8a7c00fce5a6adc774e8bf5ff45b40f382954c932288d0d79d589755b094f8db6fa16780e2ca9a1434b56a0716a25fb7eecb545f1c6f7599b08214fd1b59a8a"),
 		},
+		// If Atree begins to use keyed BLAKE3, add testCases here for keyed hashes
 	}
 
 	for _, tc := range testCases {
@@ -111,8 +157,6 @@ func TestBLAKE3Regression(t *testing.T) {
 			}
 		})
 	}
-
-	require.Equal(t, uint64(131072), countBLAKE3)
 }
 
 // checksumVaryingStartPosNoSeed updates cryptoHash512 with

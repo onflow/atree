@@ -34,8 +34,6 @@ package atree
 import (
 	"bytes"
 	"crypto/sha512"
-	"encoding/hex"
-	"fmt"
 	"hash"
 	"testing"
 
@@ -220,12 +218,4 @@ func countedAndComparedBLAKE3(t *testing.T, data []byte) [32]byte {
 
 	countBLAKE3++
 	return digest
-}
-
-func decodeHexOrPanic(s string) []byte {
-	b, err := hex.DecodeString(s)
-	if err != nil {
-		panic(fmt.Sprintf("bad hex string: %s", err))
-	}
-	return b
 }

@@ -60,7 +60,7 @@ Inputs hashed by OMT are typically short inputs (usually smaller than 128 bytes)
 | 192 bytes | 14.2 GB/s | 2.17 GB/s | 1.04 GB/s | 0.158 GB/s |
 | 256 bytes | 15.0 GB/s | 2.22 GB/s | 1.06 GB/s | 0.219 GB/s |
 
-- Using Go 1.17.7, darwin_amd64, i7-1068N7 CPU.
+- Using Go 1.17.7, darwin_amd64, i7-1068NG7 CPU.
 - Results are from `go test -bench=. -count=20` and `benchstat`.
 - Some hash libraries have slowdowns at some larger sizes.
 

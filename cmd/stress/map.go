@@ -20,8 +20,8 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -29,7 +29,9 @@ import (
 )
 
 const (
-	mapSetOp = iota
+	mapSetOp1 = iota
+	mapSetOp2
+	mapSetOp3
 	mapRemoveOp
 	maxMapOp
 )
@@ -39,7 +41,7 @@ type mapStatus struct {
 
 	startTime time.Time
 
-	count uint64 // number of elements in array
+	count uint64 // number of elements in map
 
 	setOps    uint64
 	removeOps uint64
@@ -57,8 +59,12 @@ func (status *mapStatus) String() string {
 
 	duration := time.Since(status.startTime)
 
-	return fmt.Sprintf("duration %s, %d elements, %d sets, %d removes",
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	return fmt.Sprintf("duration %s, heapAlloc %d MiB, %d elements, %d sets, %d removes",
 		duration.Truncate(time.Second).String(),
+		m.Alloc/1024/1024,
 		status.count,
 		status.setOps,
 		status.removeOps,
@@ -88,7 +94,15 @@ func (status *mapStatus) Write() {
 	writeStatus(status.String())
 }
 
-func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeInfo atree.TypeInfo, maxLength uint64, status *mapStatus) {
+func testMap(
+	storage *atree.PersistentSlabStorage,
+	address atree.Address,
+	typeInfo atree.TypeInfo,
+	maxLength uint64,
+	status *mapStatus,
+	minHeapAllocMiB uint64,
+	maxHeapAllocMiB uint64,
+) {
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	if err != nil {
@@ -102,28 +116,112 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 	// keys contains generated keys.  It is used to select random keys for removal.
 	keys := make([]atree.Value, 0, maxLength)
 
-	for {
-		nextOp := rand.Intn(maxMapOp)
+	reduceHeapAllocs := false
 
-		if m.Count() == maxLength {
+	opCount := uint64(0)
+
+	var ms runtime.MemStats
+
+	for {
+		runtime.ReadMemStats(&ms)
+		allocMiB := ms.Alloc / 1024 / 1024
+
+		if !reduceHeapAllocs && allocMiB > maxHeapAllocMiB {
+			fmt.Printf("\nHeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
+			reduceHeapAllocs = true
+		} else if reduceHeapAllocs && allocMiB < minHeapAllocMiB {
+			fmt.Printf("\nHeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
+			reduceHeapAllocs = false
+		}
+
+		if reduceHeapAllocs && m.Count() == 0 {
+			fmt.Printf("\nHeapAlloc is %d MiB while map is empty, dropping read/write cache to free mem\n", allocMiB)
+			reduceHeapAllocs = false
+
+			// Commit slabs to storage and drop read and write to reduce mem
+			err = storage.FastCommit(runtime.NumCPU())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to commit to storage: %s", err)
+				return
+			}
+
+			storage.DropDeltas()
+			storage.DropCache()
+
+			elements = make(map[atree.Value]atree.Value, maxLength)
+
+			// Load root slab from storage and cache it in read cache
+			rootID := m.StorageID()
+			m, err = atree.NewMapWithRootID(storage, rootID, atree.NewDefaultDigesterBuilder())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to create map from root id %s: %s", rootID, err)
+				return
+			}
+
+			runtime.GC()
+
+			// Check if map is using > MaxHeapAlloc while empty.
+			runtime.ReadMemStats(&ms)
+			allocMiB = ms.Alloc / 1024 / 1024
+			fmt.Printf("\nHeapAlloc is %d MiB after cleanup and forced gc\n", allocMiB)
+
+			// Prevent infinite loop that doesn't do useful work.
+			if allocMiB > maxHeapAllocMiB {
+				// This shouldn't happen unless there's a memory leak.
+				fmt.Fprintf(
+					os.Stderr,
+					"Exiting because allocMiB %d > maxMapHeapAlloMiB %d with empty map\n",
+					allocMiB,
+					maxHeapAllocMiB)
+				return
+			}
+		}
+
+		nextOp := r.Intn(maxMapOp)
+
+		if m.Count() == maxLength || reduceHeapAllocs {
 			nextOp = mapRemoveOp
 		}
 
 		switch nextOp {
 
-		case mapSetOp:
-			k := randomValue()
-			v := randomValue()
+		case mapSetOp1, mapSetOp2, mapSetOp3:
+			opCount++
 
-			oldV := elements[k]
+			k, err := randomKey()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to generate random key %s: %s", k, err)
+				return
+			}
+
+			nestedLevels := r.Intn(maxNestedLevels)
+			v, err := randomValue(storage, address, nestedLevels)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
+				return
+			}
+
+			copiedKey, err := copyValue(storage, atree.Address{}, k)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to copy random key %s: %s", k, err)
+				return
+			}
+
+			copiedValue, err := copyValue(storage, atree.Address{}, v)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", k, err)
+				return
+			}
+
+			oldV := elements[copiedKey]
 
 			// Update keys
 			if oldV == nil {
-				keys = append(keys, k)
+				keys = append(keys, copiedKey)
 			}
 
 			// Update elements
-			elements[k] = v
+			elements[copiedKey] = copiedValue
 
 			// Update map
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
@@ -144,24 +242,29 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 			}
 
 			if existingStorable != nil {
-				equal, err := compare(m.Storage, oldV, existingStorable)
+
+				existingValue, err := existingStorable.StoredValue(storage)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingStorable, oldV, err)
-					return
-				}
-				if !equal {
-					fmt.Fprintf(os.Stderr, "Set() returned wrong existing value %s, want %s", existingStorable, oldV)
+					fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingStorable, err)
 					return
 				}
 
-				// Delete overwritten element
-				if sid, ok := existingStorable.(atree.StorageIDStorable); ok {
-					id := atree.StorageID(sid)
-					err = storage.Remove(id)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "Failed to remove referenced slab %d: %s", id, err)
-						return
-					}
+				err = valueEqual(oldV, existingValue)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Set() returned wrong existing value %s, want %s", existingValue, oldV)
+					return
+				}
+
+				err = removeStorable(storage, existingStorable)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to remove map storable element %s: %s", existingStorable, err)
+					return
+				}
+
+				err = removeValue(storage, oldV)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to remove copied overwritten value %s: %s", existingValue, err)
+					return
 				}
 			}
 
@@ -173,7 +276,9 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 				continue
 			}
 
-			index := rand.Intn(len(keys))
+			opCount++
+
+			index := r.Intn(len(keys))
 			k := keys[index]
 
 			oldV := elements[k]
@@ -194,45 +299,53 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 			}
 
 			// Compare removed key from map with removed key from elements
-			equal, err := compare(m.Storage, k, existingKeyStorable)
+			existingKeyValue, err := existingKeyStorable.StoredValue(storage)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingKeyStorable, k, err)
+				fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingKeyStorable, err)
 				return
 			}
-			if !equal {
+
+			err = valueEqual(k, existingKeyValue)
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "Remove() returned wrong existing key %s, want %s", existingKeyStorable, k)
 				return
 			}
 
 			// Compare removed value from map with removed value from elements
-			equal, err = compare(m.Storage, oldV, existingValueStorable)
+			existingValue, err := existingValueStorable.StoredValue(storage)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingValueStorable, oldV, err)
+				fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingValueStorable, err)
 				return
 			}
-			if !equal {
+
+			err = valueEqual(oldV, existingValue)
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "Remove() returned wrong existing value %s, want %s", existingValueStorable, oldV)
 				return
 			}
 
-			// Delete removed key
-			if sid, ok := existingKeyStorable.(atree.StorageIDStorable); ok {
-				id := atree.StorageID(sid)
-				err = storage.Remove(id)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to remove referenced slab %d: %s", id, err)
-					return
-				}
+			err = removeStorable(storage, existingKeyStorable)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove key %s: %s", existingKeyStorable, err)
+				return
 			}
 
-			// Delete removed value
-			if sid, ok := existingValueStorable.(atree.StorageIDStorable); ok {
-				id := atree.StorageID(sid)
-				err = storage.Remove(id)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to remove referenced slab %d: %s", id, err)
-					return
-				}
+			err = removeStorable(storage, existingValueStorable)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove value %s: %s", existingValueStorable, err)
+				return
+			}
+
+			err = removeValue(storage, k)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove copied key %s: %s", k, err)
+				return
+			}
+
+			err = removeValue(storage, oldV)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to remove copied value %s: %s", existingValue, err)
+				return
 			}
 
 			// Update status
@@ -246,6 +359,25 @@ func testMap(storage *atree.PersistentSlabStorage, address atree.Address, typeIn
 			return
 		}
 
+		if opCount >= 100 {
+			opCount = 0
+			rootIDs, err := atree.CheckStorageHealth(storage, -1)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return
+			}
+			ids := make([]atree.StorageID, 0, len(rootIDs))
+			for id := range rootIDs {
+				// filter out root ids with empty address
+				if id.Address != atree.AddressUndefined {
+					ids = append(ids, id)
+				}
+			}
+			if len(ids) != 1 || ids[0] != m.StorageID() {
+				fmt.Fprintf(os.Stderr, "root storage ids %v in storage, want %s\n", ids, m.StorageID())
+				return
+			}
+		}
 	}
 }
 
@@ -262,12 +394,13 @@ func checkMapDataLoss(m *atree.OrderedMap, elements map[atree.Value]atree.Value)
 		if err != nil {
 			return fmt.Errorf("failed to get element with key %s: %w", k, err)
 		}
-		equal, err := compare(m.Storage, v, storable)
+		convertedValue, err := storable.StoredValue(m.Storage)
 		if err != nil {
-			return fmt.Errorf("failed to compare %s and %s: %w", v, storable, err)
+			return fmt.Errorf("failed to convert storable to value with key %s: %w", k, err)
 		}
-		if !equal {
-			return fmt.Errorf("Get(%s) returns %s, want %s", k, storable, v)
+		err = valueEqual(v, convertedValue)
+		if err != nil {
+			return fmt.Errorf("failed to compare %s and %s: %w", v, convertedValue, err)
 		}
 	}
 

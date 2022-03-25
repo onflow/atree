@@ -116,8 +116,8 @@ type ArraySlab interface {
 	fmt.Stringer
 
 	Get(storage SlabStorage, index uint64) (Storable, error)
-	Set(storage SlabStorage, index uint64, v Storable) (Storable, error)
-	Insert(storage SlabStorage, index uint64, v Storable) error
+	Set(storage SlabStorage, address Address, index uint64, value Value) (Storable, error)
+	Insert(storage SlabStorage, address Address, index uint64, value Value) error
 	Remove(storage SlabStorage, index uint64) (Storable, error)
 
 	IsData() bool
@@ -460,7 +460,7 @@ func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
 	return a.elements[index], nil
 }
 
-func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) (Storable, error) {
+func (a *ArrayDataSlab) Set(storage SlabStorage, address Address, index uint64, value Value) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
 		return nil, NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
@@ -468,10 +468,15 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) (Stor
 	oldElem := a.elements[index]
 	oldSize := oldElem.ByteSize()
 
-	a.elements[index] = v
-	a.header.size = a.header.size - oldSize + v.ByteSize()
+	storable, err := value.Storable(storage, address, MaxInlineArrayElementSize)
+	if err != nil {
+		return nil, err
+	}
 
-	err := storage.Store(a.header.id, a)
+	a.elements[index] = storable
+	a.header.size = a.header.size - oldSize + storable.ByteSize()
+
+	err = storage.Store(a.header.id, a)
 	if err != nil {
 		return nil, err
 	}
@@ -479,20 +484,26 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) (Stor
 	return oldElem, nil
 }
 
-func (a *ArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
+func (a *ArrayDataSlab) Insert(storage SlabStorage, address Address, index uint64, value Value) error {
 	if index > uint64(len(a.elements)) {
 		return NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
+
+	storable, err := value.Storable(storage, address, MaxInlineArrayElementSize)
+	if err != nil {
+		return err
+	}
+
 	if index == uint64(len(a.elements)) {
-		a.elements = append(a.elements, v)
+		a.elements = append(a.elements, storable)
 	} else {
 		a.elements = append(a.elements, nil)
 		copy(a.elements[index+1:], a.elements[index:])
-		a.elements[index] = v
+		a.elements[index] = storable
 	}
 
 	a.header.count++
-	a.header.size += v.ByteSize()
+	a.header.size += storable.ByteSize()
 
 	return storage.Store(a.header.id, a)
 }
@@ -798,25 +809,17 @@ func (a *ArrayDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc
 }
 
 func (a *ArrayDataSlab) String() string {
-	var elements []Storable
-	if len(a.elements) <= 6 {
-		elements = a.elements
-	} else {
-		elements = append(elements, a.elements[:3]...)
-		elements = append(elements, a.elements[len(a.elements)-3:]...)
-	}
-
 	var elemsStr []string
-	for _, e := range elements {
+	for _, e := range a.elements {
 		elemsStr = append(elemsStr, fmt.Sprint(e))
 	}
 
-	if len(a.elements) > 6 {
-		elemsStr = append(elemsStr, "")
-		copy(elemsStr[4:], elemsStr[3:])
-		elemsStr[3] = "..."
-	}
-	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
+	return fmt.Sprintf("ArrayDataSlab id:%s size:%d count:%d elements: [%s]",
+		a.header.id,
+		a.header.size,
+		a.header.count,
+		strings.Join(elemsStr, " "),
+	)
 }
 
 func newArrayMetaDataSlabFromData(
@@ -1067,7 +1070,7 @@ func (a *ArrayMetaDataSlab) Get(storage SlabStorage, index uint64) (Storable, er
 	return child.Get(storage, adjustedIndex)
 }
 
-func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) (Storable, error) {
+func (a *ArrayMetaDataSlab) Set(storage SlabStorage, address Address, index uint64, value Value) (Storable, error) {
 
 	childHeaderIndex, adjustedIndex, childID, err := a.childSlabIndexInfo(index)
 	if err != nil {
@@ -1079,7 +1082,7 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) (
 		return nil, err
 	}
 
-	existingElem, err := child.Set(storage, adjustedIndex, v)
+	existingElem, err := child.Set(storage, address, adjustedIndex, value)
 	if err != nil {
 		return nil, err
 	}
@@ -1115,7 +1118,7 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, index uint64, v Storable) (
 // Insert inserts v into the correct child slab.
 // index must be >=0 and <= a.header.count.
 // If index == a.header.count, Insert appends v to the end of underlying slab.
-func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
+func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, address Address, index uint64, value Value) error {
 	if index > uint64(a.header.count) {
 		return NewIndexOutOfBoundsError(index, 0, uint64(a.header.count))
 	}
@@ -1141,7 +1144,7 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, index uint64, v Storable
 		return err
 	}
 
-	err = child.Insert(storage, adjustedIndex, v)
+	err = child.Insert(storage, address, adjustedIndex, value)
 	if err != nil {
 		return err
 	}
@@ -1793,7 +1796,13 @@ func (a *ArrayMetaDataSlab) String() string {
 	for _, h := range a.childrenHeaders {
 		elemsStr = append(elemsStr, fmt.Sprintf("{id:%s size:%d count:%d}", h.id, h.size, h.count))
 	}
-	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
+
+	return fmt.Sprintf("ArrayMetaDataSlab id:%s size:%d count:%d children: [%s]",
+		a.header.id,
+		a.header.size,
+		a.header.count,
+		strings.Join(elemsStr, " "),
+	)
 }
 
 func NewArray(storage SlabStorage, address Address, typeInfo TypeInfo) (*Array, error) {
@@ -1850,12 +1859,7 @@ func (a *Array) Get(i uint64) (Storable, error) {
 }
 
 func (a *Array) Set(index uint64, value Value) (Storable, error) {
-	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineArrayElementSize)
-	if err != nil {
-		return nil, err
-	}
-
-	existingStorable, err := a.root.Set(a.Storage, index, storable)
+	existingStorable, err := a.root.Set(a.Storage, a.Address(), index, value)
 	if err != nil {
 		return nil, err
 	}
@@ -1886,12 +1890,7 @@ func (a *Array) Append(value Value) error {
 }
 
 func (a *Array) Insert(index uint64, value Value) error {
-	storable, err := value.Storable(a.Storage, a.Address(), MaxInlineArrayElementSize)
-	if err != nil {
-		return err
-	}
-
-	err = a.root.Insert(a.Storage, index, storable)
+	err := a.root.Insert(a.Storage, a.Address(), index, value)
 	if err != nil {
 		return err
 	}
@@ -2020,14 +2019,21 @@ func (a *Array) promoteChildAsNewRoot(childID StorageID) error {
 	return nil
 }
 
+var emptyArrayIterator = &ArrayIterator{}
+
 type ArrayIterator struct {
-	storage  SlabStorage
-	id       StorageID
-	dataSlab *ArrayDataSlab
-	index    int
+	storage        SlabStorage
+	id             StorageID
+	dataSlab       *ArrayDataSlab
+	index          int
+	remainingCount int
 }
 
 func (i *ArrayIterator) Next() (Value, error) {
+	if i.remainingCount == 0 {
+		return nil, nil
+	}
+
 	if i.dataSlab == nil {
 		if i.id == StorageIDUndefined {
 			return nil, nil
@@ -2061,6 +2067,8 @@ func (i *ArrayIterator) Next() (Value, error) {
 		i.dataSlab = nil
 	}
 
+	i.remainingCount--
+
 	return element, nil
 }
 
@@ -2071,9 +2079,58 @@ func (a *Array) Iterator() (*ArrayIterator, error) {
 	}
 
 	return &ArrayIterator{
-		storage:  a.Storage,
-		id:       slab.ID(),
-		dataSlab: slab.(*ArrayDataSlab),
+		storage:        a.Storage,
+		id:             slab.ID(),
+		dataSlab:       slab,
+		remainingCount: int(a.Count()),
+	}, nil
+}
+
+func (a *Array) RangeIterator(startIndex uint64, endIndex uint64) (*ArrayIterator, error) {
+	count := a.Count()
+
+	if startIndex > count || endIndex > count {
+		return nil, NewSliceOutOfBoundsError(startIndex, endIndex, 0, count)
+	}
+
+	if startIndex > endIndex {
+		return nil, NewInvalidSliceIndexError(startIndex, endIndex)
+	}
+
+	numberOfElements := endIndex - startIndex
+
+	if numberOfElements == 0 {
+		return emptyArrayIterator, nil
+	}
+
+	var dataSlab *ArrayDataSlab
+	index := startIndex
+
+	if a.root.IsData() {
+		dataSlab = a.root.(*ArrayDataSlab)
+	} else if startIndex == 0 {
+		var err error
+		dataSlab, err = firstArrayDataSlab(a.Storage, a.root)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var err error
+		// getArrayDataSlabWithIndex returns data slab containing element at startIndex,
+		// getArrayDataSlabWithIndex also returns adjusted index for this element at returned data slab.
+		// Adjusted index must be used as index when creating ArrayIterator.
+		dataSlab, index, err = getArrayDataSlabWithIndex(a.Storage, a.root, startIndex)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &ArrayIterator{
+		storage:        a.Storage,
+		id:             dataSlab.ID(),
+		dataSlab:       dataSlab,
+		index:          int(index),
+		remainingCount: int(numberOfElements),
 	}, nil
 }
 
@@ -2104,6 +2161,30 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	}
 }
 
+func (a *Array) IterateRange(startIndex uint64, endIndex uint64, fn ArrayIterationFunc) error {
+
+	iterator, err := a.RangeIterator(startIndex, endIndex)
+	if err != nil {
+		return err
+	}
+
+	for {
+		value, err := iterator.Next()
+		if err != nil {
+			return err
+		}
+		if value == nil {
+			return nil
+		}
+		resume, err := fn(value)
+		if err != nil {
+			return err
+		}
+		if !resume {
+			return nil
+		}
+	}
+}
 func (a *Array) Count() uint64 {
 	return uint64(a.root.Header().count)
 }
@@ -2120,30 +2201,24 @@ func (a *Array) Type() TypeInfo {
 }
 
 func (a *Array) String() string {
-	if a.root.IsData() {
-		return a.root.String()
+	iterator, err := a.Iterator()
+	if err != nil {
+		return err.Error()
 	}
-	meta := a.root.(*ArrayMetaDataSlab)
-	return a.string(meta)
-}
 
-func (a *Array) string(meta *ArrayMetaDataSlab) string {
 	var elemsStr []string
-
-	for _, h := range meta.childrenHeaders {
-		child, err := getArraySlab(a.Storage, h.id)
+	for {
+		v, err := iterator.Next()
 		if err != nil {
 			return err.Error()
 		}
-		if child.IsData() {
-			data := child.(*ArrayDataSlab)
-			elemsStr = append(elemsStr, data.String())
-		} else {
-			meta := child.(*ArrayMetaDataSlab)
-			elemsStr = append(elemsStr, a.string(meta))
+		if v == nil {
+			break
 		}
+		elemsStr = append(elemsStr, fmt.Sprintf("%s", v))
 	}
-	return strings.Join(elemsStr, " ")
+
+	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
 func getArraySlab(storage SlabStorage, id StorageID) (ArraySlab, error) {
@@ -2161,9 +2236,9 @@ func getArraySlab(storage SlabStorage, id StorageID) (ArraySlab, error) {
 	return arraySlab, nil
 }
 
-func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) {
+func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (*ArrayDataSlab, error) {
 	if slab.IsData() {
-		return slab, nil
+		return slab.(*ArrayDataSlab), nil
 	}
 	meta := slab.(*ArrayMetaDataSlab)
 	firstChildID := meta.childrenHeaders[0].id
@@ -2172,6 +2247,30 @@ func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (ArraySlab, error) 
 		return nil, err
 	}
 	return firstArrayDataSlab(storage, firstChild)
+}
+
+// getArrayDataSlabWithIndex returns data slab containing element at specified index
+func getArrayDataSlabWithIndex(storage SlabStorage, slab ArraySlab, index uint64) (*ArrayDataSlab, uint64, error) {
+	if slab.IsData() {
+		dataSlab := slab.(*ArrayDataSlab)
+		if index >= uint64(len(dataSlab.elements)) {
+			return nil, 0, NewIndexOutOfBoundsError(index, 0, uint64(len(dataSlab.elements)))
+		}
+		return dataSlab, index, nil
+	}
+
+	metaSlab := slab.(*ArrayMetaDataSlab)
+	_, adjustedIndex, childID, err := metaSlab.childSlabIndexInfo(index)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	child, err := getArraySlab(storage, childID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return getArrayDataSlabWithIndex(storage, child, adjustedIndex)
 }
 
 type ArrayPopIterationFunc func(Storable)

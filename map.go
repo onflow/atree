@@ -788,7 +788,7 @@ func (e *inlineCollisionGroup) PopIterate(storage SlabStorage, fn MapPopIteratio
 }
 
 func (e *inlineCollisionGroup) String() string {
-	return "inline [" + e.elements.String() + "]"
+	return "inline[" + e.elements.String() + "]"
 }
 
 func newExternalCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (*externalCollisionGroup, error) {
@@ -957,7 +957,7 @@ func (e *externalCollisionGroup) PopIterate(storage SlabStorage, fn MapPopIterat
 }
 
 func (e *externalCollisionGroup) String() string {
-	return fmt.Sprintf("external group(%d)", e.id)
+	return fmt.Sprintf("external(%s)", e.id)
 }
 
 func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (elements, error) {
@@ -1640,23 +1640,8 @@ func (e *hkeyElements) PopIterate(storage SlabStorage, fn MapPopIterationFunc) e
 
 func (e *hkeyElements) String() string {
 	var s []string
-	s = append(s, fmt.Sprintf("(level %v)", e.level))
 
-	if len(e.elems) <= 6 {
-		for i := 0; i < len(e.elems); i++ {
-			s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
-		}
-		return strings.Join(s, " ")
-	}
-
-	for i := 0; i < 3; i++ {
-		s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
-	}
-
-	s = append(s, "...")
-
-	elemLength := len(e.elems)
-	for i := elemLength - 3; i < elemLength; i++ {
+	for i := 0; i < len(e.elems); i++ {
 		s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
 	}
 
@@ -1824,65 +1809,11 @@ func (e *singleElements) Element(i int) (element, error) {
 }
 
 func (e *singleElements) Merge(elems elements) error {
-	mElems, ok := elems.(*singleElements)
-	if !ok {
-		return NewSlabMergeError(fmt.Errorf("cannot merge elements of different types (%T, %T)", e, elems))
-	}
-
-	e.elems = append(e.elems, mElems.elems...)
-	e.size += mElems.size
-
-	// Set merged elements to nil to prevent memory leak
-	for i := 0; i < len(mElems.elems); i++ {
-		mElems.elems[i] = nil
-	}
-
-	return nil
+	return NewNotApplicableError("singleElements", "elements", "Merge")
 }
 
 func (e *singleElements) Split() (elements, elements, error) {
-
-	// This computes the ceil of split to give the first slab more elements.
-	dataSize := e.Size() - singleElementsPrefixSize
-	midPoint := (dataSize + 1) >> 1
-
-	leftSize := uint32(0)
-	leftCount := 0
-	for i, elem := range e.elems {
-		elemSize := elem.Size()
-		if leftSize+elemSize >= midPoint {
-			// i is mid point element.  Place i on the small side.
-			if leftSize <= dataSize-leftSize-elemSize {
-				leftSize += elemSize
-				leftCount = i + 1
-			} else {
-				leftCount = i
-			}
-			break
-		}
-		// left slab size < midPoint
-		leftSize += elemSize
-	}
-
-	rightCount := len(e.elems) - leftCount
-
-	// Create right slab elements
-	rightElements := &singleElements{level: e.level}
-
-	rightElements.elems = make([]*singleElement, rightCount)
-	copy(rightElements.elems, e.elems[leftCount:])
-
-	rightElements.size = dataSize - leftSize + singleElementsPrefixSize
-
-	e.elems = e.elems[:leftCount]
-	e.size = leftSize + singleElementsPrefixSize
-
-	// NOTE: prevent memory leak
-	for i := leftCount; i < len(e.elems); i++ {
-		e.elems[i] = nil
-	}
-
-	return e, rightElements, nil
+	return nil, nil, NewNotApplicableError("singleElements", "elements", "Split")
 }
 
 func (e *singleElements) LendToRight(re elements) error {
@@ -1943,23 +1874,8 @@ func (e *singleElements) PopIterate(storage SlabStorage, fn MapPopIterationFunc)
 
 func (e *singleElements) String() string {
 	var s []string
-	s = append(s, fmt.Sprintf("(level %v)", e.level))
 
-	if len(e.elems) <= 6 {
-		for i := 0; i < len(e.elems); i++ {
-			s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
-		}
-		return strings.Join(s, " ")
-	}
-
-	for i := 0; i < 3; i++ {
-		s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
-	}
-
-	s = append(s, "...")
-
-	elemLength := len(e.elems)
-	for i := elemLength - 3; i < elemLength; i++ {
+	for i := 0; i < len(e.elems); i++ {
 		s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
 	}
 
@@ -2452,7 +2368,12 @@ func (m *MapDataSlab) PopIterate(storage SlabStorage, fn MapPopIterationFunc) er
 }
 
 func (m *MapDataSlab) String() string {
-	return fmt.Sprintf("{%s}", m.elements.String())
+	return fmt.Sprintf("MapDataSlab id:%s size:%d firstkey:%d elements: [%s]",
+		m.header.id,
+		m.header.size,
+		m.header.firstKey,
+		m.elements.String(),
+	)
 }
 
 func newMapMetaDataSlabFromData(
@@ -3301,11 +3222,17 @@ func (m *MapMetaDataSlab) PopIterate(storage SlabStorage, fn MapPopIterationFunc
 }
 
 func (m *MapMetaDataSlab) String() string {
-	var hStr []string
+	var elemsStr []string
 	for _, h := range m.childrenHeaders {
-		hStr = append(hStr, fmt.Sprintf("%+v", h))
+		elemsStr = append(elemsStr, fmt.Sprintf("{id:%s size:%d firstKey:%d}", h.id, h.size, h.firstKey))
 	}
-	return strings.Join(hStr, " ")
+
+	return fmt.Sprintf("MapMetaDataSlab id:%s size:%d firstKey:%d children: [%s]",
+		m.header.id,
+		m.header.size,
+		m.header.firstKey,
+		strings.Join(elemsStr, " "),
+	)
 }
 
 func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder, typeInfo TypeInfo) (*OrderedMap, error) {
@@ -3386,7 +3313,14 @@ func NewMapWithRootID(storage SlabStorage, rootID StorageID, digestBuilder Diges
 
 func (m *OrderedMap) Has(comparator ValueComparator, hip HashInputProvider, key Value) (bool, error) {
 	_, err := m.Get(comparator, hip, key)
-	return err == nil, nil
+	if err != nil {
+		var knf *KeyNotFoundError
+		if errors.As(err, &knf) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func (m *OrderedMap) Get(comparator ValueComparator, hip HashInputProvider, key Value) (Storable, error) {
@@ -3612,30 +3546,24 @@ func (m *OrderedMap) Type() TypeInfo {
 }
 
 func (m *OrderedMap) String() string {
-	if m.root.IsData() {
-		return m.root.String()
+	iterator, err := m.Iterator()
+	if err != nil {
+		return err.Error()
 	}
-	meta := m.root.(*MapMetaDataSlab)
-	return m.string(meta)
-}
 
-func (m *OrderedMap) string(meta *MapMetaDataSlab) string {
 	var elemsStr []string
-
-	for _, h := range meta.childrenHeaders {
-		child, err := getMapSlab(m.Storage, h.id)
+	for {
+		k, v, err := iterator.Next()
 		if err != nil {
 			return err.Error()
 		}
-		if child.IsData() {
-			data := child.(*MapDataSlab)
-			elemsStr = append(elemsStr, data.String())
-		} else {
-			meta := child.(*MapMetaDataSlab)
-			elemsStr = append(elemsStr, m.string(meta))
+		if k == nil {
+			break
 		}
+		elemsStr = append(elemsStr, fmt.Sprintf("%s:%s", k, v))
 	}
-	return strings.Join(elemsStr, " ")
+
+	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
 func getMapSlab(storage SlabStorage, id StorageID) (MapSlab, error) {

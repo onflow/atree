@@ -153,6 +153,11 @@ func TestArrayAppendAndGet(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	storable, err := array.Get(array.Count())
+	require.Nil(t, storable)
+	var indexOutOfBoundsError *IndexOutOfBoundsError
+	require.ErrorAs(t, err, &indexOutOfBoundsError)
+
 	verifyArray(t, storage, typeInfo, address, array, values, false)
 }
 
@@ -286,6 +291,36 @@ func TestArraySetAndGet(t *testing.T) {
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})
+
+	t.Run("index out of bounds", func(t *testing.T) {
+
+		const arraySize = 1024
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		values := make([]Value, 0, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			v := Uint64Value(i)
+			values = append(values, v)
+			err := array.Append(v)
+			require.NoError(t, err)
+		}
+
+		r := newRand(t)
+
+		v := NewStringValue(randStr(r, 1024))
+		storable, err := array.Set(array.Count(), v)
+		require.Nil(t, storable)
+		var indexOutOfBoundsError *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &indexOutOfBoundsError)
+
+		verifyArray(t, storage, typeInfo, address, array, values, false)
+	})
 }
 
 func TestArrayInsertAndGet(t *testing.T) {
@@ -366,6 +401,35 @@ func TestArrayInsertAndGet(t *testing.T) {
 			err := array.Insert(i, v)
 			require.NoError(t, err)
 		}
+
+		verifyArray(t, storage, typeInfo, address, array, values, false)
+	})
+
+	t.Run("index out of bounds", func(t *testing.T) {
+
+		const arraySize = 1024
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		values := make([]Value, 0, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			v := Uint64Value(i)
+			values = append(values, v)
+			err := array.Append(v)
+			require.NoError(t, err)
+		}
+
+		r := newRand(t)
+
+		v := NewStringValue(randStr(r, 1024))
+		err = array.Insert(array.Count()+1, v)
+		var indexOutOfBoundsError *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &indexOutOfBoundsError)
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})
@@ -520,6 +584,33 @@ func TestArrayRemove(t *testing.T) {
 		}
 
 		require.Equal(t, arraySize/2, len(values))
+
+		verifyArray(t, storage, typeInfo, address, array, values, false)
+	})
+
+	t.Run("index out of bounds", func(t *testing.T) {
+
+		const arraySize = 4096
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		values := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			v := Uint64Value(i)
+			values[i] = v
+			err := array.Append(v)
+			require.NoError(t, err)
+		}
+
+		storable, err := array.Remove(array.Count())
+		require.Nil(t, storable)
+		var indexOutOfBounds *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &indexOutOfBounds)
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})
@@ -737,6 +828,167 @@ func TestArrayIterate(t *testing.T) {
 	})
 }
 
+func testArrayIterateRange(t *testing.T, storage *PersistentSlabStorage, array *Array, values []Value) {
+	var i uint64
+	var err error
+	var sliceOutOfBoundsError *SliceOutOfBoundsError
+	var invalidSliceIndexError *InvalidSliceIndexError
+
+	count := array.Count()
+
+	// If startIndex > count, IterateRange returns SliceOutOfBoundsError
+	err = array.IterateRange(count+1, count+1, func(v Value) (bool, error) {
+		i++
+		return true, nil
+	})
+	require.ErrorAs(t, err, &sliceOutOfBoundsError)
+	require.Equal(t, uint64(0), i)
+
+	// If endIndex > count, IterateRange returns SliceOutOfBoundsError
+	err = array.IterateRange(0, count+1, func(v Value) (bool, error) {
+		i++
+		return true, nil
+	})
+	require.ErrorAs(t, err, &sliceOutOfBoundsError)
+	require.Equal(t, uint64(0), i)
+
+	// If startIndex > endIndex, IterateRange returns InvalidSliceIndexError
+	if count > 0 {
+		err = array.IterateRange(1, 0, func(v Value) (bool, error) {
+			i++
+			return true, nil
+		})
+		require.ErrorAs(t, err, &invalidSliceIndexError)
+		require.Equal(t, uint64(0), i)
+	}
+
+	// IterateRange returns no error and iteration function is called on sliced array
+	for startIndex := uint64(0); startIndex <= count; startIndex++ {
+		for endIndex := startIndex; endIndex <= count; endIndex++ {
+			i = uint64(0)
+			err = array.IterateRange(startIndex, endIndex, func(v Value) (bool, error) {
+				valueEqual(t, typeInfoComparator, v, values[int(startIndex+i)])
+				i++
+				return true, nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, endIndex-startIndex, i)
+		}
+	}
+}
+
+func TestArrayIterateRange(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	t.Run("empty", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		testArrayIterateRange(t, storage, array, []Value{})
+	})
+
+	t.Run("dataslab as root", func(t *testing.T) {
+		const arraySize = 10
+
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		values := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			value := Uint64Value(i)
+			values[i] = value
+			err := array.Append(value)
+			require.NoError(t, err)
+		}
+
+		testArrayIterateRange(t, storage, array, values)
+	})
+
+	t.Run("metadataslab as root", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		const arraySize = 1024
+
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		values := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			value := Uint64Value(i)
+			values[i] = value
+			err := array.Append(value)
+			require.NoError(t, err)
+		}
+
+		testArrayIterateRange(t, storage, array, values)
+	})
+
+	t.Run("stop", func(t *testing.T) {
+		const arraySize = 10
+
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		i := uint64(0)
+		startIndex := uint64(1)
+		endIndex := uint64(5)
+		count := endIndex - startIndex
+		err = array.IterateRange(startIndex, endIndex, func(_ Value) (bool, error) {
+			if i == count/2 {
+				return false, nil
+			}
+			i++
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, count/2, i)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		const arraySize = 10
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		testErr := errors.New("test")
+
+		i := uint64(0)
+		startIndex := uint64(1)
+		endIndex := uint64(5)
+		count := endIndex - startIndex
+		err = array.IterateRange(startIndex, endIndex, func(_ Value) (bool, error) {
+			if i == count/2 {
+				return false, testErr
+			}
+			i++
+			return true, nil
+		})
+		require.Error(t, err)
+		require.Equal(t, testErr, err)
+		require.Equal(t, count/2, i)
+	})
+}
 func TestArrayRootStorageID(t *testing.T) {
 	SetThreshold(256)
 	defer SetThreshold(1024)
@@ -2164,7 +2416,7 @@ func TestArrayString(t *testing.T) {
 	})
 
 	t.Run("large", func(t *testing.T) {
-		const arraySize = 190
+		const arraySize = 120
 
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
@@ -2178,10 +2430,83 @@ func TestArrayString(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		wantArrayString := `[0 1 2 ... 51 52 53] [54 55 56 ... 97 98 99] [100 101 102 ... 187 188 189]`
-		require.Equal(t, wantArrayString, array.String())
+		want := `[0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119]`
+		require.Equal(t, want, array.String())
+	})
+}
 
-		wantMetaDataSlabString := `[{id:0x102030405060708.2 size:213 count:54} {id:0x102030405060708.3 size:205 count:46} {id:0x102030405060708.4 size:381 count:90}]`
-		require.Equal(t, wantMetaDataSlabString, array.root.String())
+func TestArraySlabDump(t *testing.T) {
+	SetThreshold(256)
+	defer SetThreshold(1024)
+
+	t.Run("small", func(t *testing.T) {
+		const arraySize = 6
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		want := []string{
+			"level 1, ArrayDataSlab id:0x102030405060708.1 size:23 count:6 elements: [0 1 2 3 4 5]",
+		}
+		dumps, err := DumpArraySlabs(array)
+		require.NoError(t, err)
+		require.Equal(t, want, dumps)
+	})
+
+	t.Run("large", func(t *testing.T) {
+		const arraySize = 120
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		for i := uint64(0); i < arraySize; i++ {
+			err := array.Append(Uint64Value(i))
+			require.NoError(t, err)
+		}
+
+		want := []string{
+			"level 1, ArrayMetaDataSlab id:0x102030405060708.1 size:52 count:120 children: [{id:0x102030405060708.2 size:213 count:54} {id:0x102030405060708.3 size:285 count:66}]",
+			"level 2, ArrayDataSlab id:0x102030405060708.2 size:213 count:54 elements: [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53]",
+			"level 2, ArrayDataSlab id:0x102030405060708.3 size:285 count:66 elements: [54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119]",
+		}
+
+		dumps, err := DumpArraySlabs(array)
+		require.NoError(t, err)
+		require.Equal(t, want, dumps)
+	})
+
+	t.Run("overflow", func(t *testing.T) {
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		err = array.Append(NewStringValue(strings.Repeat("a", int(MaxInlineArrayElementSize))))
+		require.NoError(t, err)
+
+		want := []string{
+			"level 1, ArrayDataSlab id:0x102030405060708.1 size:24 count:1 elements: [StorageIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]})]",
+			"overflow: &{0x102030405060708.2 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}",
+		}
+
+		dumps, err := DumpArraySlabs(array)
+		require.NoError(t, err)
+		require.Equal(t, want, dumps)
 	})
 }

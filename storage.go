@@ -1,7 +1,7 @@
 /*
  * Atree - Scalable Arrays and Ordered Maps
  *
- * Copyright 2021 Dapper Labs, Inc.
+ * Copyright 2021-2022 Dapper Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -40,28 +41,16 @@ type (
 	}
 )
 
-func (id StorageID) String() string {
-	return fmt.Sprintf(
-		"0x%x.%d",
-		binary.BigEndian.Uint64(id.Address[:]),
-		binary.BigEndian.Uint64(id.Index[:]),
-	)
-}
-
-func (id StorageID) AddressAsUint64() uint64 {
-	return binary.BigEndian.Uint64(id.Address[:])
-}
-
-func (id StorageID) IndexAsUint64() uint64 {
-	return binary.BigEndian.Uint64(id.Index[:])
-}
-
 var (
 	AddressUndefined      = Address{}
 	StorageIndexUndefined = StorageIndex{}
 	StorageIDUndefined    = StorageID{}
 )
 
+// Next returns new StorageIndex with index+1 value.
+// The caller is responsible for preventing overflow
+// by checking if the index value is valid before
+// calling this function.
 func (index StorageIndex) Next() StorageIndex {
 	i := binary.BigEndian.Uint64(index[:])
 
@@ -96,6 +85,22 @@ func (id StorageID) ToRawBytes(b []byte) (int, error) {
 	copy(b, id.Address[:])
 	copy(b[8:], id.Index[:])
 	return storageIDSize, nil
+}
+
+func (id StorageID) String() string {
+	return fmt.Sprintf(
+		"0x%x.%d",
+		binary.BigEndian.Uint64(id.Address[:]),
+		binary.BigEndian.Uint64(id.Index[:]),
+	)
+}
+
+func (id StorageID) AddressAsUint64() uint64 {
+	return binary.BigEndian.Uint64(id.Address[:])
+}
+
+func (id StorageID) IndexAsUint64() uint64 {
+	return binary.BigEndian.Uint64(id.Index[:])
 }
 
 func (id StorageID) Valid() error {
@@ -133,105 +138,6 @@ type BaseStorage interface {
 	SegmentCounts() int // number of segments stored in the storage
 	Size() int          // total byte size stored
 	BaseStorageUsageReporter
-}
-
-type InMemBaseStorage struct {
-	segments         map[StorageID][]byte
-	storageIndex     map[Address]StorageIndex
-	bytesRetrieved   int
-	bytesStored      int
-	segmentsReturned map[StorageID]struct{}
-	segmentsUpdated  map[StorageID]struct{}
-	segmentsTouched  map[StorageID]struct{}
-}
-
-var _ BaseStorage = &InMemBaseStorage{}
-
-func NewInMemBaseStorage() *InMemBaseStorage {
-	return NewInMemBaseStorageFromMap(
-		make(map[StorageID][]byte),
-	)
-}
-
-func NewInMemBaseStorageFromMap(segments map[StorageID][]byte) *InMemBaseStorage {
-	return &InMemBaseStorage{
-		segments:         segments,
-		storageIndex:     make(map[Address]StorageIndex),
-		segmentsReturned: make(map[StorageID]struct{}),
-		segmentsUpdated:  make(map[StorageID]struct{}),
-		segmentsTouched:  make(map[StorageID]struct{}),
-	}
-}
-
-func (s *InMemBaseStorage) Retrieve(id StorageID) ([]byte, bool, error) {
-	seg, ok := s.segments[id]
-	s.bytesRetrieved += len(seg)
-	s.segmentsReturned[id] = struct{}{}
-	s.segmentsTouched[id] = struct{}{}
-	return seg, ok, nil
-}
-
-func (s *InMemBaseStorage) Store(id StorageID, data []byte) error {
-	s.segments[id] = data
-	s.bytesStored += len(data)
-	s.segmentsUpdated[id] = struct{}{}
-	s.segmentsTouched[id] = struct{}{}
-	return nil
-}
-
-func (s *InMemBaseStorage) Remove(id StorageID) error {
-	s.segmentsUpdated[id] = struct{}{}
-	s.segmentsTouched[id] = struct{}{}
-	delete(s.segments, id)
-	return nil
-}
-
-func (s *InMemBaseStorage) GenerateStorageID(address Address) (StorageID, error) {
-	index := s.storageIndex[address]
-	nextIndex := index.Next()
-
-	s.storageIndex[address] = nextIndex
-	return NewStorageID(address, nextIndex), nil
-}
-
-func (s *InMemBaseStorage) SegmentCounts() int {
-	return len(s.segments)
-}
-
-func (s *InMemBaseStorage) Size() int {
-	total := 0
-	for _, seg := range s.segments {
-		total += len(seg)
-	}
-	return total
-}
-
-func (s *InMemBaseStorage) BytesRetrieved() int {
-	return s.bytesRetrieved
-}
-
-func (s *InMemBaseStorage) BytesStored() int {
-	return s.bytesStored
-}
-
-func (s *InMemBaseStorage) SegmentsReturned() int {
-	return len(s.segmentsReturned)
-}
-
-func (s *InMemBaseStorage) SegmentsUpdated() int {
-	return len(s.segmentsUpdated)
-}
-
-func (s *InMemBaseStorage) SegmentsTouched() int {
-	return len(s.segmentsTouched)
-}
-
-func (s *InMemBaseStorage) ResetReporter() {
-	s.bytesStored = 0
-	s.bytesRetrieved = 0
-	s.segmentsReturned = make(map[StorageID]struct{})
-	s.segmentsUpdated = make(map[StorageID]struct{})
-	s.segmentsTouched = make(map[StorageID]struct{})
 }
 
 type Ledger interface {
@@ -584,7 +490,6 @@ type PersistentSlabStorage struct {
 	DecodeTypeInfo   TypeInfoDecoder
 	cborEncMode      cbor.EncMode
 	cborDecMode      cbor.DecMode
-	autoCommit       bool // flag to call commit after each operation
 }
 
 var _ SlabStorage = &PersistentSlabStorage{}
@@ -728,7 +633,6 @@ func NewPersistentSlabStorage(
 		cborDecMode:    cborDecMode,
 		DecodeStorable: decodeStorable,
 		DecodeTypeInfo: decodeTypeInfo,
-		autoCommit:     false,
 	}
 
 	for _, applyOption := range opts {
@@ -736,14 +640,6 @@ func NewPersistentSlabStorage(
 	}
 
 	return storage
-}
-
-// WithAutoCommit sets the autocommit functionality
-func WithAutoCommit() StorageOption {
-	return func(st *PersistentSlabStorage) *PersistentSlabStorage {
-		st.autoCommit = true
-		return st
-	}
 }
 
 func (s *PersistentSlabStorage) GenerateStorageID(address Address) (StorageID, error) {
@@ -835,10 +731,10 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 
 	// construct job queue
 	jobs := make(chan StorageID, len(keysWithOwners))
-	defer close(jobs)
 	for _, id := range keysWithOwners {
 		jobs <- id
 	}
+	close(jobs)
 
 	type encodedSlabs struct {
 		storageID StorageID
@@ -848,12 +744,20 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 
 	// construct result queue
 	results := make(chan *encodedSlabs, len(keysWithOwners))
-	defer close(results)
 
 	// define encoders (workers) and launch them
 	// encoders encodes slabs in parallel
-	encoder := func(jobs <-chan StorageID, results chan<- *encodedSlabs) {
+	encoder := func(wg *sync.WaitGroup, done <-chan struct{}, jobs <-chan StorageID, results chan<- *encodedSlabs) {
+		defer wg.Done()
+
 		for id := range jobs {
+			// Check if goroutine is signaled to stop before proceeding.
+			select {
+			case <-done:
+				return
+			default:
+			}
+
 			slab := s.deltas[id]
 			if slab == nil {
 				results <- &encodedSlabs{
@@ -873,9 +777,24 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		}
 	}
 
+	done := make(chan struct{})
+
+	var wg sync.WaitGroup
+	wg.Add(numWorkers)
+
 	for i := 0; i < numWorkers; i++ {
-		go encoder(jobs, results)
+		go encoder(&wg, done, jobs, results)
 	}
+
+	defer func() {
+		// This ensures that all goroutines are stopped before output channel is closed.
+
+		// Wait for all goroutines to finish
+		wg.Wait()
+
+		// Close output channel
+		close(results)
+	}()
 
 	// process the results while encoders are working
 	// we need to capture them inside a map
@@ -885,6 +804,8 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		result := <-results
 		// if any error return
 		if result.err != nil {
+			// Closing done channel signals goroutines to stop.
+			close(done)
 			return NewStorageError(result.err)
 		}
 		encSlabByID[result.storageID] = result.data
@@ -973,32 +894,12 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 }
 
 func (s *PersistentSlabStorage) Store(id StorageID, slab Slab) error {
-	if s.autoCommit {
-		data, err := Encode(slab, s.cborEncMode)
-		if err != nil {
-			return NewStorageError(err)
-		}
-		err = s.baseStorage.Store(id, data)
-		if err != nil {
-			return NewStorageError(err)
-		}
-		s.cache[id] = slab
-		return nil
-	}
-
 	// add to deltas
 	s.deltas[id] = slab
 	return nil
 }
 
 func (s *PersistentSlabStorage) Remove(id StorageID) error {
-	if s.autoCommit {
-		err := s.baseStorage.Remove(id)
-		if err != nil {
-			return NewStorageError(err)
-		}
-	}
-
 	// add to nil to deltas under that id
 	s.deltas[id] = nil
 	return nil

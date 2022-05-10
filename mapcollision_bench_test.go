@@ -112,9 +112,9 @@ func BenchmarkCollisionPerDigest(b *testing.B) {
 		MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
 	}()
 
-	const mapCount = 500_000
+	const mapCount = 1_000_000
 
-	collisionPerDigests := []uint32{0, 10, 255, 1_000, 5_000, 10_000}
+	collisionPerDigests := []uint32{0, 10, 255, 500, 1_000, 2_000, 5_000, 10_000}
 
 	for _, collisionPerDigest := range collisionPerDigests {
 

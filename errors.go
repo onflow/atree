@@ -434,3 +434,18 @@ func (e UnreachableError) Error() string {
 func NewUnreachableError() *UnreachableError {
 	return &UnreachableError{Stack: debug.Stack()}
 }
+
+// CollisionLimitError is a fatal error returned when a noncryptographic hash collision
+// would exceed collision limit (per digest per map) we enforce in the first level.
+type CollisionLimitError struct {
+	collisionLimitPerDigest uint32 // limit <= 255 is recommended, larger values are useful for tests
+}
+
+// NewCollisionLimitError constructs a CollisionLimitError
+func NewCollisionLimitError(collisionLimitPerDigest uint32) error {
+	return NewFatalError(&CollisionLimitError{collisionLimitPerDigest: collisionLimitPerDigest})
+}
+
+func (e *CollisionLimitError) Error() string {
+	return fmt.Sprintf("collision limit per digest %d already reached", e.collisionLimitPerDigest)
+}

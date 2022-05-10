@@ -75,6 +75,13 @@ const (
 	typicalRandomConstant = uint64(0x1BD11BDAA9FC1A22) // DO NOT MODIFY
 )
 
+// MaxCollisionLimitPerDigest is the noncryptographic hash collision limit
+// (per digest per map) we enforce in the first level. In the same map
+// for the same digest, having a non-intentional collision should be rare and
+// several collisions should be extremely rare.  The default limit should
+// be high enough to ignore accidental collisions while mitigating attacks.
+var MaxCollisionLimitPerDigest = uint32(255)
+
 type MapKey Storable
 
 type MapValue Storable
@@ -122,6 +129,8 @@ type element interface {
 	HasPointer() bool
 
 	Size() uint32
+
+	Count(storage SlabStorage) (uint32, error)
 
 	PopIterate(SlabStorage, MapPopIterationFunc) error
 }
@@ -635,6 +644,10 @@ func (e *singleElement) Size() uint32 {
 	return e.size
 }
 
+func (e *singleElement) Count(_ SlabStorage) (uint32, error) {
+	return 1, nil
+}
+
 func (e *singleElement) PopIterate(_ SlabStorage, fn MapPopIterationFunc) error {
 	fn(e.key, e.value)
 	return nil
@@ -785,6 +798,10 @@ func (e *inlineCollisionGroup) Inline() bool {
 
 func (e *inlineCollisionGroup) Elements(_ SlabStorage) (elements, error) {
 	return e.elements, nil
+}
+
+func (e *inlineCollisionGroup) Count(_ SlabStorage) (uint32, error) {
+	return e.elements.Count(), nil
 }
 
 func (e *inlineCollisionGroup) PopIterate(storage SlabStorage, fn MapPopIterationFunc) error {
@@ -944,6 +961,14 @@ func (e *externalCollisionGroup) Elements(storage SlabStorage) (elements, error)
 		return nil, NewSlabDataErrorf("slab %s isn't MapDataSlab", e.id)
 	}
 	return dataSlab.elements, nil
+}
+
+func (e *externalCollisionGroup) Count(storage SlabStorage) (uint32, error) {
+	elements, err := e.Elements(storage)
+	if err != nil {
+		return 0, err
+	}
+	return elements.Count(), nil
 }
 
 func (e *externalCollisionGroup) PopIterate(storage SlabStorage, fn MapPopIterationFunc) error {
@@ -1248,10 +1273,29 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 		}
 	}
 
-	// Has matching hkey
+	// hkey digest has collision.
 	if equalIndex != -1 {
-
 		elem := e.elems[equalIndex]
+
+		// Enforce MaxCollisionLimitPerDigest at the first level.
+		if e.level == 0 {
+			count, err := elem.Count(storage)
+			if err != nil {
+				return nil, err
+			}
+			if count-1 >= MaxCollisionLimitPerDigest {
+				// Enforce collision limit on inserts and ignore updates.
+				_, err = elem.Get(storage, digester, level, hkey, comparator, key)
+				if err != nil {
+					var knfe *KeyNotFoundError
+					if errors.As(err, &knfe) {
+						// Don't allow any more collisions for a digest that
+						// already reached MaxCollisionLimitPerDigest.
+						return nil, NewCollisionLimitError(MaxCollisionLimitPerDigest)
+					}
+				}
+			}
+		}
 
 		oldElemSize := elem.Size()
 

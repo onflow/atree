@@ -474,7 +474,7 @@ func validMapElements(
 	hip HashInputProvider,
 	id StorageID,
 	elements elements,
-	digestLevel int,
+	digestLevel uint,
 	hkeyPrefixes []Digest,
 ) (
 	elementCount uint64,
@@ -499,7 +499,7 @@ func validMapHkeyElements(
 	hip HashInputProvider,
 	id StorageID,
 	elements *hkeyElements,
-	digestLevel int,
+	digestLevel uint,
 	hkeyPrefixes []Digest,
 ) (
 	elementCount uint64,
@@ -627,7 +627,7 @@ func validMapSingleElements(
 	hip HashInputProvider,
 	id StorageID,
 	elements *singleElements,
-	digestLevel int,
+	digestLevel uint,
 	hkeyPrefixes []Digest,
 ) (
 	elementCount uint64,
@@ -683,7 +683,7 @@ func validSingleElement(
 	digests []Digest,
 ) (
 	size uint32,
-	digestMaxLevel int,
+	digestMaxLevel uint,
 	err error,
 ) {
 

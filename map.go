@@ -1279,7 +1279,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 		// elem is existing element before new element is inserted.
 		elem := e.elems[equalIndex]
 
-		// Enforce MaxCollisionLimitPerDigest at the first level (noncryptographic).
+		// Enforce MaxCollisionLimitPerDigest at the first level (noncryptographic hash).
 		if e.level == 0 {
 
 			// Before new element with colliding digest is inserted,
@@ -1290,6 +1290,9 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 			if err != nil {
 				return nil, err
 			}
+			if elementCount == 0 {
+				return nil, NewMapElementCountError("expect element count > 0, got element count == 0")
+			}
 
 			// collisionCount is elementCount-1 because:
 			// - if elem is single element, collision count is 0 (no collsion yet)
@@ -1298,7 +1301,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 			collisionCount := elementCount - 1
 
 			// Check if existing collision count reached MaxCollisionLimitPerDigest
-			if elementCount > 0 && collisionCount >= MaxCollisionLimitPerDigest {
+			if collisionCount >= MaxCollisionLimitPerDigest {
 				// Enforce collision limit on inserts and ignore updates.
 				_, err = elem.Get(storage, digester, level, hkey, comparator, key)
 				if err != nil {

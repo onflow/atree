@@ -449,3 +449,18 @@ func NewCollisionLimitError(collisionLimitPerDigest uint32) error {
 func (e *CollisionLimitError) Error() string {
 	return fmt.Sprintf("collision limit per digest %d already reached", e.collisionLimitPerDigest)
 }
+
+// MapElementCountError is a fatal error returned when element count is unexpected.
+// It is an implemtation error.
+type MapElementCountError struct {
+	msg string
+}
+
+// NewMapElementCountError constructs a MapElementCountError.
+func NewMapElementCountError(msg string) error {
+	return NewFatalError(&MapElementCountError{msg: msg})
+}
+
+func (e *MapElementCountError) Error() string {
+	return e.msg
+}

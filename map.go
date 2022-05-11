@@ -1275,15 +1275,30 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 
 	// hkey digest has collision.
 	if equalIndex != -1 {
+		// New element has the same digest as existing elem.
+		// elem is existing element before new element is inserted.
 		elem := e.elems[equalIndex]
 
-		// Enforce MaxCollisionLimitPerDigest at the first level.
+		// Enforce MaxCollisionLimitPerDigest at the first level (noncryptographic).
 		if e.level == 0 {
-			count, err := elem.Count(storage)
+
+			// Before new element with colliding digest is inserted,
+			// existing elem is a single element or a collision group.
+			// elem.Count() returns 1 for single element,
+			// and returns > 1 for collision group.
+			elementCount, err := elem.Count(storage)
 			if err != nil {
 				return nil, err
 			}
-			if count-1 >= MaxCollisionLimitPerDigest {
+
+			// collisionCount is elementCount-1 because:
+			// - if elem is single element, collision count is 0 (no collsion yet)
+			// - if elem is collision group, collision count is 1 less than number
+			//   of elements in collision group.
+			collisionCount := elementCount - 1
+
+			// Check if existing collision count reached MaxCollisionLimitPerDigest
+			if elementCount > 0 && collisionCount >= MaxCollisionLimitPerDigest {
 				// Enforce collision limit on inserts and ignore updates.
 				_, err = elem.Get(storage, digester, level, hkey, comparator, key)
 				if err != nil {

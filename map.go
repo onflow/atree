@@ -68,6 +68,10 @@ const (
 	// of a typical random value (e.g. hamming weight, number of
 	// consecutive groups of 1-bits, etc.) so it can be useful as
 	// a const part of a seed, round constant inside a permutation, etc.
+	// CAUTION: We only store 64-bit seed, so some hashes with 64-bit seed like
+	// CircleHash64f don't use this const.  However, other hashes such as
+	// CircleHash64fx and SipHash might use this const as part of their
+	// 128-bit seed (when they don't use 64-bit -> 128-bit seed expansion func).
 	typicalRandomConstant = uint64(0x1BD11BDAA9FC1A22) // DO NOT MODIFY
 )
 

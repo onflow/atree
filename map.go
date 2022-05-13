@@ -82,7 +82,7 @@ type element interface {
 	Get(
 		storage SlabStorage,
 		digester Digester,
-		level int,
+		level uint,
 		hkey Digest,
 		comparator ValueComparator,
 		key Value,
@@ -94,7 +94,7 @@ type element interface {
 		address Address,
 		b DigesterBuilder,
 		digester Digester,
-		level int,
+		level uint,
 		hkey Digest,
 		comparator ValueComparator,
 		hip HashInputProvider,
@@ -107,7 +107,7 @@ type element interface {
 	Remove(
 		storage SlabStorage,
 		digester Digester,
-		level int,
+		level uint,
 		hkey Digest,
 		comparator ValueComparator,
 		key Value,
@@ -136,9 +136,9 @@ type elementGroup interface {
 type elements interface {
 	fmt.Stringer
 
-	Get(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapValue, error)
-	Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (existingValue MapValue, err error)
-	Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error)
+	Get(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapValue, error)
+	Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level uint, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (existingValue MapValue, err error)
+	Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error)
 
 	Merge(elements) error
 	Split() (elements, elements, error)
@@ -193,7 +193,7 @@ type hkeyElements struct {
 	hkeys []Digest  // sorted list of unique hashed keys
 	elems []element // elements corresponding to hkeys
 	size  uint32    // total byte sizes
-	level int
+	level uint
 }
 
 var _ elements = &hkeyElements{}
@@ -201,7 +201,7 @@ var _ elements = &hkeyElements{}
 type singleElements struct {
 	elems []*singleElement // list of key+value pairs
 	size  uint32           // total key+value byte sizes
-	level int
+	level uint
 }
 
 var _ elements = &singleElements{}
@@ -252,9 +252,9 @@ type MapSlab interface {
 	Slab
 	fmt.Stringer
 
-	Get(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapValue, error)
-	Set(storage SlabStorage, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (existingValue MapValue, err error)
-	Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error)
+	Get(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapValue, error)
+	Set(storage SlabStorage, b DigesterBuilder, digester Digester, level uint, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (existingValue MapValue, err error)
+	Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error)
 
 	IsData() bool
 
@@ -525,7 +525,7 @@ func (e *singleElement) Encode(enc *Encoder) error {
 	return enc.CBOR.Flush()
 }
 
-func (e *singleElement) Get(storage SlabStorage, _ Digester, _ int, _ Digest, comparator ValueComparator, key Value) (MapValue, error) {
+func (e *singleElement) Get(storage SlabStorage, _ Digester, _ uint, _ Digest, comparator ValueComparator, key Value) (MapValue, error) {
 	equal, err := comparator(storage, key, e.key)
 	if err != nil {
 		return nil, err
@@ -540,7 +540,7 @@ func (e *singleElement) Get(storage SlabStorage, _ Digester, _ int, _ Digest, co
 // NOTE: Existing key needs to be rehashed because we store minimum digest for non-collision element.
 //       Rehashing only happens when we create new inlineCollisionGroup.
 //       Adding new element to existing inlineCollisionGroup doesn't require rehashing.
-func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (element, MapValue, error) {
+func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level uint, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (element, MapValue, error) {
 
 	equal, err := comparator(storage, key, e.key)
 	if err != nil {
@@ -609,7 +609,7 @@ func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuil
 }
 
 // Remove returns key, value, and nil element if key matches, otherwise returns error.
-func (e *singleElement) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, element, error) {
+func (e *singleElement) Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, element, error) {
 
 	equal, err := comparator(storage, key, e.key)
 	if err != nil {
@@ -672,7 +672,7 @@ func (e *inlineCollisionGroup) Encode(enc *Encoder) error {
 	return enc.CBOR.Flush()
 }
 
-func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level int, _ Digest, comparator ValueComparator, key Value) (MapValue, error) {
+func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level uint, _ Digest, comparator ValueComparator, key Value) (MapValue, error) {
 
 	// Adjust level and hkey for collision group
 	level++
@@ -685,7 +685,7 @@ func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level
 	return e.elements.Get(storage, digester, level, hkey, comparator, key)
 }
 
-func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (element, MapValue, error) {
+func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level uint, _ Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (element, MapValue, error) {
 
 	// Adjust level and hkey for collision group
 	level++
@@ -739,7 +739,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 
 // Remove returns key, value, and updated element if key is found.
 // Updated element can be modified inlineCollisionGroup, or singleElement.
-func (e *inlineCollisionGroup) Remove(storage SlabStorage, digester Digester, level int, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, element, error) {
+func (e *inlineCollisionGroup) Remove(storage SlabStorage, digester Digester, level uint, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, element, error) {
 
 	// Adjust level and hkey for collision group
 	level++
@@ -831,7 +831,7 @@ func (e *externalCollisionGroup) Encode(enc *Encoder) error {
 	return enc.CBOR.Flush()
 }
 
-func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, level int, _ Digest, comparator ValueComparator, key Value) (MapValue, error) {
+func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, level uint, _ Digest, comparator ValueComparator, key Value) (MapValue, error) {
 	slab, err := getMapSlab(storage, e.id)
 	if err != nil {
 		return nil, err
@@ -848,7 +848,7 @@ func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, lev
 	return slab.Get(storage, digester, level, hkey, comparator, key)
 }
 
-func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (element, MapValue, error) {
+func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level uint, _ Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (element, MapValue, error) {
 	slab, err := getMapSlab(storage, e.id)
 	if err != nil {
 		return nil, nil, err
@@ -871,7 +871,7 @@ func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b Dig
 // Remove returns key, value, and updated element if key is found.
 // Updated element can be modified externalCollisionGroup, or singleElement.
 // TODO: updated element can be inlineCollisionGroup if size < maxInlineMapElementSize.
-func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, level int, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, element, error) {
+func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, level uint, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, element, error) {
 
 	slab, found, err := storage.Retrieve(e.id)
 	if err != nil {
@@ -1019,7 +1019,7 @@ func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDec
 		// Create singleElements
 		elements := &singleElements{
 			elems: elems,
-			level: int(level),
+			level: uint(level),
 			size:  size,
 		}
 
@@ -1045,21 +1045,21 @@ func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDec
 	elements := &hkeyElements{
 		hkeys: hkeys,
 		elems: elems,
-		level: int(level),
+		level: uint(level),
 		size:  size,
 	}
 
 	return elements, nil
 }
 
-func newHkeyElements(level int) *hkeyElements {
+func newHkeyElements(level uint) *hkeyElements {
 	return &hkeyElements{
 		level: level,
 		size:  hkeyElementsPrefixSize,
 	}
 }
 
-func newHkeyElementsWithElement(level int, hkey Digest, elem element) *hkeyElements {
+func newHkeyElementsWithElement(level uint, hkey Digest, elem element) *hkeyElements {
 	return &hkeyElements{
 		hkeys: []Digest{hkey},
 		elems: []element{elem},
@@ -1133,7 +1133,7 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 	return enc.CBOR.Flush()
 }
 
-func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapValue, error) {
+func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapValue, error) {
 
 	if level >= digester.Levels() {
 		return nil, NewHashLevelErrorf("hkey elements digest level is %d, want < %d", level, digester.Levels())
@@ -1166,7 +1166,7 @@ func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level int, hk
 	return elem.Get(storage, digester, level, hkey, comparator, key)
 }
 
-func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (MapValue, error) {
+func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level uint, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (MapValue, error) {
 
 	// Check hkeys are not empty
 	if level >= digester.Levels() {
@@ -1285,7 +1285,7 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 	return nil, nil
 }
 
-func (e *hkeyElements) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
+func (e *hkeyElements) Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
 
 	// Check digest level
 	if level >= digester.Levels() {
@@ -1648,7 +1648,7 @@ func (e *hkeyElements) String() string {
 	return strings.Join(s, " ")
 }
 
-func newSingleElementsWithElement(level int, elem *singleElement) *singleElements {
+func newSingleElementsWithElement(level uint, elem *singleElement) *singleElements {
 	return &singleElements{
 		level: level,
 		size:  singleElementsPrefixSize + elem.size,
@@ -1704,7 +1704,7 @@ func (e *singleElements) Encode(enc *Encoder) error {
 	return enc.CBOR.Flush()
 }
 
-func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, _ Digest, comparator ValueComparator, key Value) (MapValue, error) {
+func (e *singleElements) Get(storage SlabStorage, digester Digester, level uint, _ Digest, comparator ValueComparator, key Value) (MapValue, error) {
 
 	if level != digester.Levels() {
 		return nil, NewHashLevelErrorf("single elements digest level is %d, want %d", level, digester.Levels())
@@ -1724,7 +1724,7 @@ func (e *singleElements) Get(storage SlabStorage, digester Digester, level int, 
 	return nil, NewKeyNotFoundError(key)
 }
 
-func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level int, _ Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (MapValue, error) {
+func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level uint, _ Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (MapValue, error) {
 
 	if level != digester.Levels() {
 		return nil, NewHashLevelErrorf("single elements digest level is %d, want %d", level, digester.Levels())
@@ -1769,7 +1769,7 @@ func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBui
 	return nil, nil
 }
 
-func (e *singleElements) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
+func (e *singleElements) Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
 
 	if level != digester.Levels() {
 		return nil, nil, NewHashLevelErrorf("single elements digest level is %d, want %d", level, digester.Levels())
@@ -2125,7 +2125,7 @@ func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	}, nil
 }
 
-func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (MapValue, error) {
+func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Digester, level uint, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (MapValue, error) {
 
 	existingValue, err := m.elements.Set(storage, m.ID().Address, b, digester, level, hkey, comparator, hip, key, value)
 	if err != nil {
@@ -2151,7 +2151,7 @@ func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Diges
 	return existingValue, nil
 }
 
-func (m *MapDataSlab) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
+func (m *MapDataSlab) Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
 
 	k, v, err := m.elements.Remove(storage, digester, level, hkey, comparator, key)
 	if err != nil {
@@ -2570,7 +2570,7 @@ func (m *MapMetaDataSlab) ChildStorables() []Storable {
 	return childIDs
 }
 
-func (m *MapMetaDataSlab) Get(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapValue, error) {
+func (m *MapMetaDataSlab) Get(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapValue, error) {
 
 	ans := -1
 	i, j := 0, len(m.childrenHeaders)
@@ -2600,7 +2600,7 @@ func (m *MapMetaDataSlab) Get(storage SlabStorage, digester Digester, level int,
 	return child.Get(storage, digester, level, hkey, comparator, key)
 }
 
-func (m *MapMetaDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Digester, level int, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (MapValue, error) {
+func (m *MapMetaDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Digester, level uint, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (MapValue, error) {
 
 	ans := 0
 	i, j := 0, len(m.childrenHeaders)
@@ -2658,7 +2658,7 @@ func (m *MapMetaDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester D
 	return existingValue, nil
 }
 
-func (m *MapMetaDataSlab) Remove(storage SlabStorage, digester Digester, level int, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
+func (m *MapMetaDataSlab) Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
 
 	ans := -1
 	i, j := 0, len(m.childrenHeaders)
@@ -3331,7 +3331,7 @@ func (m *OrderedMap) Get(comparator ValueComparator, hip HashInputProvider, key 
 	}
 	defer putDigester(keyDigest)
 
-	level := 0
+	level := uint(0)
 
 	hkey, err := keyDigest.Digest(level)
 	if err != nil {
@@ -3349,7 +3349,7 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 	}
 	defer putDigester(keyDigest)
 
-	level := 0
+	level := uint(0)
 
 	hkey, err := keyDigest.Digest(level)
 	if err != nil {
@@ -3395,7 +3395,7 @@ func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, k
 	}
 	defer putDigester(keyDigest)
 
-	level := 0
+	level := uint(0)
 
 	hkey, err := keyDigest.Digest(level)
 	if err != nil {

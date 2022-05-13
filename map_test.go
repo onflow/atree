@@ -51,22 +51,22 @@ func (h *mockDigesterBuilder) Digest(hip HashInputProvider, value Value) (Digest
 	return args.Get(0).(mockDigester), nil
 }
 
-func (d mockDigester) DigestPrefix(level int) ([]Digest, error) {
-	if level > len(d.d) {
+func (d mockDigester) DigestPrefix(level uint) ([]Digest, error) {
+	if level > uint(len(d.d)) {
 		return nil, fmt.Errorf("digest level %d out of bounds", level)
 	}
 	return d.d[:level], nil
 }
 
-func (d mockDigester) Digest(level int) (Digest, error) {
-	if level >= len(d.d) {
+func (d mockDigester) Digest(level uint) (Digest, error) {
+	if level >= uint(len(d.d)) {
 		return 0, fmt.Errorf("digest level %d out of bounds", level)
 	}
 	return d.d[level], nil
 }
 
-func (d mockDigester) Levels() int {
-	return len(d.d)
+func (d mockDigester) Levels() uint {
+	return uint(len(d.d))
 }
 
 func (d mockDigester) Reset() {}

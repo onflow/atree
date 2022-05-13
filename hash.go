@@ -36,15 +36,15 @@ type DigesterBuilder interface {
 type Digester interface {
 	// DigestPrefix returns digests before specified level.
 	// If level is 0, DigestPrefix returns nil.
-	DigestPrefix(level int) ([]Digest, error)
+	DigestPrefix(level uint) ([]Digest, error)
 
 	// Digest returns digest at specified level.
-	Digest(level int) (Digest, error)
+	Digest(level uint) (Digest, error)
 
 	// Reset data for reuse
 	Reset()
 
-	Levels() int
+	Levels() uint
 }
 
 type basicDigesterBuilder struct {
@@ -122,13 +122,13 @@ func (bd *basicDigester) Reset() {
 	bd.msg = nil
 }
 
-func (bd *basicDigester) DigestPrefix(level int) ([]Digest, error) {
+func (bd *basicDigester) DigestPrefix(level uint) ([]Digest, error) {
 	if level > bd.Levels() {
 		// level must be [0, bd.Levels()] (inclusive) for prefix
 		return nil, NewHashLevelErrorf("cannot get digest < level %d: level must be [0, %d]", level, bd.Levels())
 	}
 	var prefix []Digest
-	for i := 0; i < level; i++ {
+	for i := uint(0); i < level; i++ {
 		d, err := bd.Digest(i)
 		if err != nil {
 			return nil, err
@@ -138,7 +138,7 @@ func (bd *basicDigester) DigestPrefix(level int) ([]Digest, error) {
 	return prefix, nil
 }
 
-func (bd *basicDigester) Digest(level int) (Digest, error) {
+func (bd *basicDigester) Digest(level uint) (Digest, error) {
 	if level >= bd.Levels() {
 		// level must be [0, bd.Levels()) (not inclusive) for digest
 		return 0, NewHashLevelErrorf("cannot get digest at level %d: level must be [0, %d)", level, bd.Levels())
@@ -163,6 +163,6 @@ func (bd *basicDigester) Digest(level int) (Digest, error) {
 	}
 }
 
-func (bd *basicDigester) Levels() int {
+func (bd *basicDigester) Levels() uint {
 	return 4
 }

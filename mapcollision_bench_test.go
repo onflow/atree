@@ -75,7 +75,7 @@ type collisionDigester struct {
 var _ Digester = &collisionDigester{}
 
 func (d *collisionDigester) Digest(level uint) (Digest, error) {
-	if level < 0 || level >= d.Levels() {
+	if level >= d.Levels() {
 		return Digest(0), fmt.Errorf("invalid digest level %d", level)
 	}
 

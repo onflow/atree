@@ -74,7 +74,7 @@ type collisionDigester struct {
 
 var _ Digester = &collisionDigester{}
 
-func (d *collisionDigester) Digest(level int) (Digest, error) {
+func (d *collisionDigester) Digest(level uint) (Digest, error) {
 	if level < 0 || level >= d.Levels() {
 		return Digest(0), fmt.Errorf("invalid digest level %d", level)
 	}
@@ -94,11 +94,11 @@ func (d *collisionDigester) Digest(level int) (Digest, error) {
 	}
 }
 
-func (d *collisionDigester) DigestPrefix(level int) ([]Digest, error) {
+func (d *collisionDigester) DigestPrefix(level uint) ([]Digest, error) {
 	return nil, nil
 }
 
-func (d *collisionDigester) Levels() int {
+func (d *collisionDigester) Levels() uint {
 	return 4
 }
 

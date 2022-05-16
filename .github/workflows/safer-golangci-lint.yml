@@ -37,6 +37,9 @@
 #
 name: linters
 
+# Remove permissions from top level and grant in jobs.
+permissions: {}
+
 on:  
   pull_request:
     types: [opened, synchronize, closed]
@@ -50,22 +53,27 @@ env:
   GOLINTERS_TIMEOUT: 5m
   OPENSSL_DGST_CMD: openssl dgst -sha384 -r
   CURL_CMD: curl --proto =https --tlsv1.2 --location --silent --show-error --fail
-  
+
 jobs:
   main:
     name: Lint
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
     steps:
       - name: Checkout source
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
-        
+
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: 1.17.x
-                      
+          go-version: 1.17
+          check-latest: true
+
       - name: Install golangci-lint
         run: |
           GOLINTERS_URL_PREFIX="https://github.com/golangci/golangci-lint/releases/download/v${GOLINTERS_VERSION}/"
@@ -88,7 +96,7 @@ jobs:
           tar --no-same-owner -xzf "${GOLINTERS_TGZ}" --strip-components 1
           install golangci-lint $(go env GOPATH)/bin
         shell: bash
-          
+
       # Run required linters enabled in .golangci.yml (or default linters if yml doesn't exist)     
       - name: Run golangci-lint
         run: $(go env GOPATH)/bin/golangci-lint run --timeout="${GOLINTERS_TIMEOUT}"

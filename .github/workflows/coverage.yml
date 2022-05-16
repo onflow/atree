@@ -3,7 +3,7 @@
 
 name: coverage
 
-# Remove permissions from top level and grant inside jobs.
+# Remove permissions from top level and grant in jobs.
 permissions: {}
 
 on: [push, pull_request]

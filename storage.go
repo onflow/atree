@@ -729,6 +729,10 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 	// this part ensures the keys are sorted so commit operation is deterministic
 	keysWithOwners := s.sortedOwnedDeltaKeys()
 
+	if len(keysWithOwners) == 0 {
+		return nil
+	}
+
 	// construct job queue
 	jobs := make(chan StorageID, len(keysWithOwners))
 	for _, id := range keysWithOwners {

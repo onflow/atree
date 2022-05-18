@@ -909,3 +909,19 @@ func (s *PersistentSlabStorage) Remove(id StorageID) error {
 func (s *PersistentSlabStorage) Count() int {
 	return s.baseStorage.SegmentCounts()
 }
+
+// Deltas returns number of uncommitted slabs.
+func (s *PersistentSlabStorage) Deltas(excludeTempAddress bool) uint {
+	if !excludeTempAddress {
+		return uint(len(s.deltas))
+	}
+
+	deltas := uint(0)
+	for k := range s.deltas {
+		// exclude the ones that are not owned by accounts
+		if k.Address != AddressUndefined {
+			deltas++
+		}
+	}
+	return deltas
+}

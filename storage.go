@@ -914,12 +914,13 @@ func (s *PersistentSlabStorage) Count() int {
 	return s.baseStorage.SegmentCounts()
 }
 
-// Deltas returns number of uncommitted slabs.
-func (s *PersistentSlabStorage) Deltas(excludeTempAddress bool) uint {
-	if !excludeTempAddress {
-		return uint(len(s.deltas))
-	}
+// Deltas returns number of uncommitted slabs, including slabs with temp addresses.
+func (s *PersistentSlabStorage) Deltas() uint {
+	return uint(len(s.deltas))
+}
 
+// DeltasWithoutTempAddresses returns number of uncommitted slabs, excluding slabs with temp addresses.
+func (s *PersistentSlabStorage) DeltasWithoutTempAddresses() uint {
 	deltas := uint(0)
 	for k := range s.deltas {
 		// exclude the ones that are not owned by accounts

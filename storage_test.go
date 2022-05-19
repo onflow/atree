@@ -579,6 +579,9 @@ func TestPersistentStorage(t *testing.T) {
 		_, found, err = storage.Retrieve(permStorageID)
 		require.NoError(t, err)
 		require.False(t, found)
+
+		require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
+		require.Equal(t, uint(0), storage.Deltas())
 	})
 
 	t.Run("temp address", func(t *testing.T) {
@@ -602,8 +605,14 @@ func TestPersistentStorage(t *testing.T) {
 		err = storage.Store(permStorageID, slab2)
 		require.NoError(t, err)
 
+		require.Equal(t, uint(1), storage.DeltasWithoutTempAddresses())
+		require.Equal(t, uint(2), storage.Deltas())
+
 		err = storage.Commit()
 		require.NoError(t, err)
+
+		require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
+		require.Equal(t, uint(1), storage.Deltas())
 
 		// Slab with temp storage id is NOT persisted in base storage.
 		_, found, err := baseStorage.Retrieve(tempStorageID)
@@ -650,6 +659,9 @@ func TestPersistentStorage(t *testing.T) {
 		_, found, err = storage.Retrieve(tempStorageID)
 		require.NoError(t, err)
 		require.False(t, found)
+
+		require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
+		require.Equal(t, uint(1), storage.Deltas())
 	})
 
 	t.Run("commit", func(t *testing.T) {

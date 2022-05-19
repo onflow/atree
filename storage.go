@@ -729,6 +729,10 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 	// this part ensures the keys are sorted so commit operation is deterministic
 	keysWithOwners := s.sortedOwnedDeltaKeys()
 
+	if len(keysWithOwners) == 0 {
+		return nil
+	}
+
 	// construct job queue
 	jobs := make(chan StorageID, len(keysWithOwners))
 	for _, id := range keysWithOwners {
@@ -908,4 +912,21 @@ func (s *PersistentSlabStorage) Remove(id StorageID) error {
 // Warning Counts doesn't consider new segments in the deltas and only returns commited values
 func (s *PersistentSlabStorage) Count() int {
 	return s.baseStorage.SegmentCounts()
+}
+
+// Deltas returns number of uncommitted slabs, including slabs with temp addresses.
+func (s *PersistentSlabStorage) Deltas() uint {
+	return uint(len(s.deltas))
+}
+
+// DeltasWithoutTempAddresses returns number of uncommitted slabs, excluding slabs with temp addresses.
+func (s *PersistentSlabStorage) DeltasWithoutTempAddresses() uint {
+	deltas := uint(0)
+	for k := range s.deltas {
+		// exclude the ones that are not owned by accounts
+		if k.Address != AddressUndefined {
+			deltas++
+		}
+	}
+	return deltas
 }

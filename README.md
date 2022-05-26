@@ -17,7 +17,7 @@ Inspired by patterns used in modern variants of B+ Trees, Atree provides two typ
 
 - __Scalable Array Type (SAT)__ is a heterogeneous variable-size array, storing any type of values into a smaller ordered list of values and provides efficient functionality to lookup, insert and remove elements anywhere in the array.
 
-- __Ordered Map Type (OMT)__ is an ordered map of key-value pairs; keys can be any hashable type and values can be any serializable value type. It supports heterogeneous key or value types (e.g. first key storing a boolean and second key storing a string). OMT keeps values in specific sorted order and operations are deterministic so the state of the segments after a sequence of operations are always unique.  OMT uses [CircleHash64 with Deferred+Segmented BLAKE3 Digests](#omt-uses-circlehash64-with-deferredsegmented-blake3-digests).
+- __Ordered Map Type (OMT)__ is an ordered map of key-value pairs; keys can be any hashable type and values can be any serializable value type. It supports heterogeneous key or value types (e.g. first key storing a boolean and second key storing a string). OMT keeps values in specific sorted order and operations are deterministic so the state of the segments after a sequence of operations are always unique.  OMT uses [CircleHash64f with Deferred+Segmented BLAKE3 Digests](#omt-uses-circlehash64-with-deferredsegmented-blake3-digests).
 
 ## Under the Hood
 
@@ -41,15 +41,15 @@ In order to minimize the number of bytes touched after each operation, Atree use
 
 **4** - Extremely large objects are handled by storing them as an external data slab and using a pointer to the external data slab. This way we maintain the size requirements of slabs and preserve the performance of atree. In the future work external data slabs can be broken into a sequence of smaller size slabs. 
 
-**5** - Atree Ordered Map uses a collision handling design that is performant and resilient against hash-flooding attacks. It uses multi-level hashing that combines a fast 64-bit non-cryptographic hash with a 256-bit cryptographic hash. For speed, the cryptographic hash is only computed if there's a collision. For smaller storage size, the digests are divided into 64-bit segments with only the minimum required being stored. Collisions that cannot be resolved by hashes will eventually use linear lookup, but that is very unlikely as it would require collisions on two different hashes (CircleHash64 + BLAKE3) from the same input.
+**5** - Atree Ordered Map uses a collision handling design that is performant and resilient against hash-flooding attacks. It uses multi-level hashing that combines a fast 64-bit non-cryptographic hash with a 256-bit cryptographic hash. For speed, the cryptographic hash is only computed if there's a collision. For smaller storage size, the digests are divided into 64-bit segments with only the minimum required being stored. Collisions that cannot be resolved by hashes will eventually use linear lookup, but that is very unlikely as it would require collisions on two different hashes (CircleHash64f + BLAKE3) from the same input.
 
 **6** - Forwarding data slab pointers are used to make sequential iterations more efficient.
 
-## OMT uses CircleHash64 with Deferred+Segmented BLAKE3 Digests
+## OMT uses CircleHash64f with Deferred+Segmented BLAKE3 Digests
 
 Inputs hashed by OMT are typically short inputs (usually smaller than 128 bytes).  OMT uses state-of-the-art hash algorithms and a novel collision-handling design to balance speed, security, and storage space.
 
-|              | CircleHash64 🏅<br/>(seeded) | SipHash <br/>(seeded) | BLAKE3 🏅<br/>(crypto) | SHA3-256 <br/>(crypto) |
+|              | CircleHash64f 🏅<br/>(seeded) | SipHash <br/>(seeded) | BLAKE3 🏅<br/>(crypto) | SHA3-256 <br/>(crypto) |
 |:-------------|:---:|:---:|:---:|:---:|
 | 4 bytes | 1.34 GB/s | 0.361 GB/s | 0.027 GB/s | 0.00491 GB/s |
 | 8 bytes | 2.70 GB/s | 0.642 GB/s | 0.106 GB/s | 0.00984 GB/s |

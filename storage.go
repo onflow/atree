@@ -733,6 +733,11 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		return nil
 	}
 
+	// limit the number of workers to the number of keys
+	if numWorkers > len(keysWithOwners) {
+		numWorkers = len(keysWithOwners)
+	}
+
 	// construct job queue
 	jobs := make(chan StorageID, len(keysWithOwners))
 	for _, id := range keysWithOwners {

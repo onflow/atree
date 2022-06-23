@@ -21,6 +21,7 @@ package atree
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"reflect"
 	"sort"
@@ -368,13 +369,19 @@ func TestMapSetAndGet(t *testing.T) {
 
 	t.Run("unique keys with hash collision", func(t *testing.T) {
 
-		SetThreshold(256)
-		defer SetThreshold(1024)
-
 		const (
 			mapSize       = 1024
 			keyStringSize = 16
 		)
+
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		savedMaxCollisionLimitPerDigest := MaxCollisionLimitPerDigest
+		MaxCollisionLimitPerDigest = uint32(math.Ceil(float64(mapSize) / 10))
+		defer func() {
+			MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
+		}()
 
 		r := newRand(t)
 
@@ -410,13 +417,19 @@ func TestMapSetAndGet(t *testing.T) {
 	})
 
 	t.Run("replicate keys with hash collision", func(t *testing.T) {
-		SetThreshold(256)
-		defer SetThreshold(1024)
-
 		const (
 			mapSize       = 1024
 			keyStringSize = 16
 		)
+
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		savedMaxCollisionLimitPerDigest := MaxCollisionLimitPerDigest
+		MaxCollisionLimitPerDigest = uint32(math.Ceil(float64(mapSize) / 10))
+		defer func() {
+			MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
+		}()
 
 		r := newRand(t)
 
@@ -430,7 +443,7 @@ func TestMapSetAndGet(t *testing.T) {
 			i++
 
 			digests := []Digest{
-				Digest(1 % 10),
+				Digest(i % 10),
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 		}
@@ -3391,10 +3404,16 @@ func TestMapFromBatchData(t *testing.T) {
 
 	t.Run("collision", func(t *testing.T) {
 
+		const mapSize = 1024
+
 		SetThreshold(512)
 		defer SetThreshold(1024)
 
-		const mapSize = 1024
+		savedMaxCollisionLimitPerDigest := MaxCollisionLimitPerDigest
+		defer func() {
+			MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
+		}()
+		MaxCollisionLimitPerDigest = mapSize / 2
 
 		typeInfo := testTypeInfo{42}
 
@@ -3861,5 +3880,152 @@ func TestMapSlabDump(t *testing.T) {
 		dumps, err := DumpMapSlabs(m)
 		require.NoError(t, err)
 		require.Equal(t, want, dumps)
+	})
+}
+
+func TestMaxCollisionLimitPerDigest(t *testing.T) {
+	savedMaxCollisionLimitPerDigest := MaxCollisionLimitPerDigest
+	defer func() {
+		MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
+	}()
+
+	t.Run("collision limit 0", func(t *testing.T) {
+		const mapSize = 1024
+
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		// Set noncryptographic hash collision limit as 0,
+		// meaning no collision is allowed at first level.
+		MaxCollisionLimitPerDigest = uint32(0)
+
+		digesterBuilder := &mockDigesterBuilder{}
+		keyValues := make(map[Value]Value, mapSize)
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			keyValues[k] = v
+
+			digests := []Digest{Digest(i)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+		}
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// Insert elements within collision limits
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+
+		// Insert elements exceeding collision limits
+		collisionKeyValues := make(map[Value]Value, mapSize)
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(mapSize + i)
+			v := Uint64Value(mapSize + i)
+			collisionKeyValues[k] = v
+
+			digests := []Digest{Digest(i)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+		}
+
+		for k, v := range collisionKeyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			var collisionLimitError *CollisionLimitError
+			require.ErrorAs(t, err, &collisionLimitError)
+			require.Nil(t, existingStorable)
+		}
+
+		// Verify that no new elements exceeding collision limit inserted
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+
+		// Update elements within collision limits
+		for k := range keyValues {
+			v := Uint64Value(0)
+			keyValues[k] = v
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.NotNil(t, existingStorable)
+		}
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("collision limit > 0", func(t *testing.T) {
+		const mapSize = 1024
+
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		// Set noncryptographic hash collision limit as 7,
+		// meaning at most 8 elements in collision group per digest at first level.
+		MaxCollisionLimitPerDigest = uint32(7)
+
+		digesterBuilder := &mockDigesterBuilder{}
+		keyValues := make(map[Value]Value, mapSize)
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			keyValues[k] = v
+
+			digests := []Digest{Digest(i % 128)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+		}
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// Insert elements within collision limits
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+
+		// Insert elements exceeding collision limits
+		collisionKeyValues := make(map[Value]Value, mapSize)
+		for i := uint64(0); i < mapSize; i++ {
+			k := Uint64Value(mapSize + i)
+			v := Uint64Value(mapSize + i)
+			collisionKeyValues[k] = v
+
+			digests := []Digest{Digest(i % 128)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+		}
+
+		for k, v := range collisionKeyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			var collisionLimitError *CollisionLimitError
+			require.ErrorAs(t, err, &collisionLimitError)
+			require.Nil(t, existingStorable)
+		}
+
+		// Verify that no new elements exceeding collision limit inserted
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+
+		// Update elements within collision limits
+		for k := range keyValues {
+			v := Uint64Value(0)
+			keyValues[k] = v
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.NotNil(t, existingStorable)
+		}
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
 }

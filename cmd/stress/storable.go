@@ -55,10 +55,11 @@ func (v Uint8Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (at
 }
 
 // Encode encodes UInt8Value as
-// cbor.Tag{
-//		Number:  cborTagUInt8Value,
-//		Content: uint8(v),
-// }
+//
+//	cbor.Tag{
+//			Number:  cborTagUInt8Value,
+//			Content: uint8(v),
+//	}
 func (v Uint8Value) Encode(enc *atree.Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
@@ -183,10 +184,11 @@ func (v Uint32Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (a
 }
 
 // Encode encodes UInt32Value as
-// cbor.Tag{
-//		Number:  cborTagUInt32Value,
-//		Content: uint32(v),
-// }
+//
+//	cbor.Tag{
+//			Number:  cborTagUInt32Value,
+//			Content: uint32(v),
+//	}
 func (v Uint32Value) Encode(enc *atree.Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
@@ -259,10 +261,11 @@ func (v Uint64Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (a
 }
 
 // Encode encodes UInt64Value as
-// cbor.Tag{
-//		Number:  cborTagUInt64Value,
-//		Content: uint64(v),
-// }
+//
+//	cbor.Tag{
+//			Number:  cborTagUInt64Value,
+//			Content: uint64(v),
+//	}
 func (v Uint64Value) Encode(enc *atree.Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number

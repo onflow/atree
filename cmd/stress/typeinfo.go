@@ -19,8 +19,9 @@
 package main
 
 import (
-	"github.com/fxamacker/cbor/v2"
 	"github.com/onflow/atree"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 type testTypeInfo struct {

@@ -29,8 +29,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fxamacker/cbor/v2"
 	"github.com/onflow/atree"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 const maxStatusLength = 128

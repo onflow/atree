@@ -715,7 +715,7 @@ func (e *inlineCollisionGroup) Set(storage SlabStorage, address Address, b Diges
 	}
 
 	if level == 1 {
-		// Export oversized inline collision group to separete slab (external collision group)
+		// Export oversized inline collision group to separate slab (external collision group)
 		// for first level collision.
 		if e.Size() > uint32(maxInlineMapElementSize) {
 
@@ -2503,7 +2503,7 @@ func newMapMetaDataSlabFromData(
 		size := binary.BigEndian.Uint32(data[sizeOffset:])
 
 		childrenHeaders[i] = MapSlabHeader{
-			id:       StorageID(storageID),
+			id:       storageID,
 			size:     size,
 			firstKey: Digest(firstKey),
 		}

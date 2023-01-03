@@ -23,8 +23,9 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/fxamacker/cbor/v2"
 	"github.com/onflow/atree"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 // This file is mostly from github.com/onflow/atree/storable_test.go

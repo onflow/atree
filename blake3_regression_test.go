@@ -110,7 +110,7 @@ func TestBLAKE3Regression(t *testing.T) {
 	data := nonUniformBytes64KiB()
 
 	// Verify BLAKE3 digests produced from hashing portions of
-	// data. Input sizes vary from 1 to 64KiB bytes by varing
+	// data. Input sizes vary from 1 to 64KiB bytes by varying
 	// starting pos and ending pos.
 	// We use 64KiB because BLAKE3 implementations can have
 	// special optimizations for large data sizes and we

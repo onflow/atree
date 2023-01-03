@@ -22,8 +22,9 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/fxamacker/cbor/v2"
 	"github.com/onflow/atree"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 const cborTagUInt64Value = 164

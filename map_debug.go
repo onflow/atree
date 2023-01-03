@@ -581,7 +581,7 @@ func validMapHkeyElements(
 
 			elementSize += e.Size()
 
-			elementCount += uint64(count)
+			elementCount += count
 
 		} else {
 

@@ -246,7 +246,7 @@ func (e *SlabNotFoundError) Error() string {
 // Unwrap returns the wrapped err
 func (e *SlabNotFoundError) Unwrap() error { return e.err }
 
-// SlabSplitError is alwyas a fatal error returned when splitting an slab has failed
+// SlabSplitError is always a fatal error returned when splitting an slab has failed
 type SlabSplitError struct {
 	err error
 }
@@ -288,7 +288,7 @@ func (e *SlabMergeError) Error() string {
 
 func (e *SlabMergeError) Unwrap() error { return e.err }
 
-// SlabRebalanceError is alwyas a fatal error returned when rebalancing a slab has failed
+// SlabRebalanceError is always a fatal error returned when rebalancing a slab has failed
 type SlabRebalanceError struct {
 	err error
 }

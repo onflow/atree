@@ -29,8 +29,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fxamacker/cbor/v2"
 	"github.com/onflow/atree"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 const maxStatusLength = 128
@@ -87,7 +88,7 @@ func main() {
 	var seed int64
 	if len(seedHex) != 0 {
 		var err error
-		seed, err = strconv.ParseInt(strings.Replace(seedHex, "0x", "", -1), 16, 64)
+		seed, err = strconv.ParseInt(strings.ReplaceAll(seedHex, "0x", ""), 16, 64)
 		if err != nil {
 			panic("Failed to parse seed flag (hex string)")
 		}
@@ -98,7 +99,7 @@ func main() {
 	typ = strings.ToLower(typ)
 
 	if typ != "array" && typ != "map" {
-		fmt.Fprintf(os.Stderr, "Please specifiy type as either \"array\" or \"map\"")
+		fmt.Fprintf(os.Stderr, "Please specify type as either \"array\" or \"map\"")
 		return
 	}
 

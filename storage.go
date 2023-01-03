@@ -914,7 +914,7 @@ func (s *PersistentSlabStorage) Remove(id StorageID) error {
 	return nil
 }
 
-// Warning Counts doesn't consider new segments in the deltas and only returns commited values
+// Warning Counts doesn't consider new segments in the deltas and only returns committed values
 func (s *PersistentSlabStorage) Count() int {
 	return s.baseStorage.SegmentCounts()
 }

@@ -226,10 +226,9 @@ func TestLedgerBaseStorageStore(t *testing.T) {
 
 	// Overwrite stored values
 	for id := range values {
-		value := append(values[id], []byte{1, 2, 3}...)
-		values[id] = value
-		bytesStored += len(value)
-		err := baseStorage.Store(id, value)
+		values[id] = append(values[id], []byte{1, 2, 3}...)
+		bytesStored += len(values[id])
+		err := baseStorage.Store(id, values[id])
 		require.NoError(t, err)
 	}
 
@@ -675,7 +674,7 @@ func TestPersistentStorage(t *testing.T) {
 		storageWithFastCommit := NewPersistentSlabStorage(baseStorage2, encMode, decMode, nil, nil)
 
 		simpleMap := make(map[StorageID][]byte)
-		// test random updates apply commit and check the order of commited values
+		// test random updates apply commit and check the order of committed values
 		for i := 0; i < numberOfAccounts; i++ {
 			for j := 0; j < numberOfSlabsPerAccount; j++ {
 				addr := generateRandomAddress(r)

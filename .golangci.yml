@@ -1,0 +1,38 @@
+# .golangci.yml for github.com/onflow/atree
+
+linters:
+  disable-all: true
+  enable:
+    # enable default linters
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+
+    # enable extra linters
+    - exportloopref
+    - gocritic
+    - gofmt
+    - goimports
+    - misspell
+    - nilerr
+    - unconvert
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters-settings:
+  gocritic:
+    disabled-checks:
+      - ifElseChain        # style
+      - singleCaseSwitch   # style
+      - unslice            # false positives
+      - commentFormatting  # does not detect commented out code
+      - exitAfterDefer
+
+  goimports:
+    local-prefixes: github.com/onflow/atree

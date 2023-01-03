@@ -72,7 +72,7 @@ func TestCircleHash64Regression(t *testing.T) {
 
 	// Verify CircleHash64 digests produced from hashing portions of
 	// data using different seed values. Input sizes vary from
-	// 1 to 16384 bytes by varing starting pos and ending pos.
+	// 1 to 16384 bytes by varying starting pos and ending pos.
 
 	testCases := []struct {
 		name                     string

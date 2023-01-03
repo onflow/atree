@@ -98,7 +98,7 @@ func main() {
 	typ = strings.ToLower(typ)
 
 	if typ != "array" && typ != "map" {
-		fmt.Fprintf(os.Stderr, "Please specifiy type as either \"array\" or \"map\"")
+		fmt.Fprintf(os.Stderr, "Please specify type as either \"array\" or \"map\"")
 		return
 	}
 

@@ -87,7 +87,7 @@ func main() {
 	var seed int64
 	if len(seedHex) != 0 {
 		var err error
-		seed, err = strconv.ParseInt(strings.Replace(seedHex, "0x", "", -1), 16, 64)
+		seed, err = strconv.ParseInt(strings.ReplaceAll(seedHex, "0x", ""), 16, 64)
 		if err != nil {
 			panic("Failed to parse seed flag (hex string)")
 		}

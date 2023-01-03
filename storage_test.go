@@ -226,10 +226,9 @@ func TestLedgerBaseStorageStore(t *testing.T) {
 
 	// Overwrite stored values
 	for id := range values {
-		value := append(values[id], []byte{1, 2, 3}...)
-		values[id] = value
-		bytesStored += len(value)
-		err := baseStorage.Store(id, value)
+		values[id] = append(values[id], []byte{1, 2, 3}...)
+		bytesStored += len(values[id])
+		err := baseStorage.Store(id, values[id])
 		require.NoError(t, err)
 	}
 

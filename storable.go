@@ -69,10 +69,11 @@ func (v StorageIDStorable) StoredValue(storage SlabStorage) (Value, error) {
 }
 
 // Encode encodes StorageIDStorable as
-// cbor.Tag{
-//		Number:  cborTagStorageID,
-//		Content: byte(v),
-// }
+//
+//	cbor.Tag{
+//			Number:  cborTagStorageID,
+//			Content: byte(v),
+//	}
 func (v StorageIDStorable) Encode(enc *Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number

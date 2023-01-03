@@ -211,16 +211,15 @@ func newArrayExtraDataFromData(
 //
 // Header (2 bytes):
 //
-//     +-----------------------------+--------------------------+
-//     | extra data version (1 byte) | extra data flag (1 byte) |
-//     +-----------------------------+--------------------------+
+//	+-----------------------------+--------------------------+
+//	| extra data version (1 byte) | extra data flag (1 byte) |
+//	+-----------------------------+--------------------------+
 //
 // Content (for now):
 //
-//   CBOR encoded array of extra data: cborArray{type info}
+//	CBOR encoded array of extra data: cborArray{type info}
 //
 // Extra data flag is the same as the slab flag it prepends.
-//
 func (a *ArrayExtraData) Encode(enc *Encoder, flag byte) error {
 	// Encode version
 	enc.Scratch[0] = 0
@@ -353,17 +352,16 @@ func newArrayDataSlabFromData(
 //
 // Header (18 bytes):
 //
-//   +-------------------------------+--------------------------------+
-//   | slab version + flag (2 bytes) | next sib storage ID (16 bytes) |
-//   +-------------------------------+--------------------------------+
+//	+-------------------------------+--------------------------------+
+//	| slab version + flag (2 bytes) | next sib storage ID (16 bytes) |
+//	+-------------------------------+--------------------------------+
 //
 // Content (for now):
 //
-//   CBOR encoded array of elements
+//	CBOR encoded array of elements
 //
 // If this is root slab, extra data section is prepended to slab's encoded content.
 // See ArrayExtraData.Encode() for extra data section format.
-//
 func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	flag := maskArrayData
@@ -705,7 +703,6 @@ func (a *ArrayDataSlab) IsFull() bool {
 // IsUnderflow returns the number of bytes needed for the data slab
 // to reach the min threshold.
 // Returns true if the min threshold has not been reached yet.
-//
 func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
 	if uint32(minThreshold) > a.header.size {
 		return uint32(minThreshold) - a.header.size, true
@@ -715,7 +712,6 @@ func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
 
 // CanLendToLeft returns true if elements on the left of the slab could be removed
 // so that the slab still stores more than the min threshold.
-//
 func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 	if len(a.elements) < 2 {
 		return false
@@ -738,7 +734,6 @@ func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 
 // CanLendToRight returns true if elements on the right of the slab could be removed
 // so that the slab still stores more than the min threshold.
-//
 func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
 	if len(a.elements) < 2 {
 		return false
@@ -924,17 +919,16 @@ func newArrayMetaDataSlabFromData(
 //
 // Header (4 bytes):
 //
-//     +-----------------------+--------------------+------------------------------+
-//     | slab version (1 byte) | slab flag (1 byte) | child header count (2 bytes) |
-//     +-----------------------+--------------------+------------------------------+
+//	+-----------------------+--------------------+------------------------------+
+//	| slab version (1 byte) | slab flag (1 byte) | child header count (2 bytes) |
+//	+-----------------------+--------------------+------------------------------+
 //
 // Content (n * 16 bytes):
 //
-// 	[[count, size, storage id], ...]
+//	[[count, size, storage id], ...]
 //
 // If this is root slab, extra data section is prepended to slab's encoded content.
 // See ArrayExtraData.Encode() for extra data section format.
-//
 func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
 	flag := maskArrayMeta
@@ -1271,7 +1265,6 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 // +-----------------------+-----------------------+----------------------+-----------------------+
 // | right sib can lend    | rebalance with right  | rebalance with right | rebalance with bigger |
 // +-----------------------+-----------------------+----------------------+-----------------------+
-//
 func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 	storage SlabStorage,
 	child ArraySlab,

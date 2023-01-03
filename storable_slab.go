@@ -23,7 +23,6 @@ package atree
 // so this won't be needed, but during the refactor we have the need to store
 // other non-dictionary values (e.g. strings, integers, etc.) directly in accounts
 // (i.e. directly in slabs aka registers)
-//
 type StorableSlab struct {
 	StorageID StorageID
 	Storable  Storable

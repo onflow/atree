@@ -364,16 +364,15 @@ func newMapExtraDataFromData(
 //
 // Header (2 bytes):
 //
-//     +-----------------------------+--------------------------+
-//     | extra data version (1 byte) | extra data flag (1 byte) |
-//     +-----------------------------+--------------------------+
+//	+-----------------------------+--------------------------+
+//	| extra data version (1 byte) | extra data flag (1 byte) |
+//	+-----------------------------+--------------------------+
 //
 // Content (for now):
 //
-//   CBOR encoded array of extra data
+//	CBOR encoded array of extra data
 //
 // Extra data flag is the same as the slab flag it prepends.
-//
 func (m *MapExtraData) Encode(enc *Encoder, version byte, flag byte) error {
 
 	// Encode version
@@ -513,8 +512,7 @@ func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable Storab
 
 // Encode encodes singleElement to the given encoder.
 //
-//   CBOR encoded array of 2 elements (key, value).
-//
+//	CBOR encoded array of 2 elements (key, value).
 func (e *singleElement) Encode(enc *Encoder) error {
 
 	// Encode CBOR array head for 2 elements
@@ -551,8 +549,9 @@ func (e *singleElement) Get(storage SlabStorage, _ Digester, _ uint, _ Digest, c
 
 // Set updates value if key matches, otherwise returns inlineCollisionGroup with existing and new elements.
 // NOTE: Existing key needs to be rehashed because we store minimum digest for non-collision element.
-//       Rehashing only happens when we create new inlineCollisionGroup.
-//       Adding new element to existing inlineCollisionGroup doesn't require rehashing.
+//
+//	Rehashing only happens when we create new inlineCollisionGroup.
+//	Adding new element to existing inlineCollisionGroup doesn't require rehashing.
 func (e *singleElement) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level uint, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (element, MapValue, error) {
 
 	equal, err := comparator(storage, key, e.key)
@@ -668,8 +667,7 @@ func newInlineCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorable
 
 // Encode encodes inlineCollisionGroup to the given encoder.
 //
-//   CBOR tag (number: CBORTagInlineCollisionGroup, content: elements)
-//
+//	CBOR tag (number: CBORTagInlineCollisionGroup, content: elements)
 func (e *inlineCollisionGroup) Encode(enc *Encoder) error {
 
 	err := enc.CBOR.EncodeRawBytes([]byte{
@@ -832,8 +830,7 @@ func newExternalCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorab
 
 // Encode encodes externalCollisionGroup to the given encoder.
 //
-//   CBOR tag (number: CBORTagExternalCollisionGroup, content: storage ID)
-//
+//	CBOR tag (number: CBORTagExternalCollisionGroup, content: storage ID)
 func (e *externalCollisionGroup) Encode(enc *Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number CBORTagExternalCollisionGroup
@@ -1099,11 +1096,11 @@ func newHkeyElementsWithElement(level uint, hkey Digest, elem element) *hkeyElem
 
 // Encode encodes hkeyElements to the given encoder.
 //
-//   CBOR encoded array [
-//       0: level (uint)
-//       1: hkeys (byte string)
-//       2: elements (array)
-//   ]
+//	CBOR encoded array [
+//	    0: level (uint)
+//	    1: hkeys (byte string)
+//	    2: elements (array)
+//	]
 func (e *hkeyElements) Encode(enc *Encoder) error {
 
 	if e.level > maxDigestLevel {
@@ -1724,11 +1721,11 @@ func newSingleElementsWithElement(level uint, elem *singleElement) *singleElemen
 
 // Encode encodes singleElements to the given encoder.
 //
-//   CBOR encoded array [
-//       0: level (uint)
-//       1: hkeys (0 length byte string)
-//       2: elements (array)
-//   ]
+//	CBOR encoded array [
+//	    0: level (uint)
+//	    1: hkeys (0 length byte string)
+//	    2: elements (array)
+//	]
 func (e *singleElements) Encode(enc *Encoder) error {
 
 	if e.level > maxDigestLevel {
@@ -2048,17 +2045,16 @@ func newMapDataSlabFromData(
 //
 // Header (18 bytes):
 //
-//   +-------------------------------+--------------------------------+
-//   | slab version + flag (2 bytes) | next sib storage ID (16 bytes) |
-//   +-------------------------------+--------------------------------+
+//	+-------------------------------+--------------------------------+
+//	| slab version + flag (2 bytes) | next sib storage ID (16 bytes) |
+//	+-------------------------------+--------------------------------+
 //
 // Content (for now):
 //
-//   CBOR array of 3 elements (level, hkeys, elements)
+//	CBOR array of 3 elements (level, hkeys, elements)
 //
 // If this is root slab, extra data section is prepended to slab's encoded content.
 // See MapExtraData.Encode() for extra data section format.
-//
 func (m *MapDataSlab) Encode(enc *Encoder) error {
 
 	version := byte(0)
@@ -2356,7 +2352,6 @@ func (m *MapDataSlab) IsFull() bool {
 // IsUnderflow returns the number of bytes needed for the data slab
 // to reach the min threshold.
 // Returns true if the min threshold has not been reached yet.
-//
 func (m *MapDataSlab) IsUnderflow() (uint32, bool) {
 	if m.anySize {
 		return 0, false
@@ -2369,7 +2364,6 @@ func (m *MapDataSlab) IsUnderflow() (uint32, bool) {
 
 // CanLendToLeft returns true if elements on the left of the slab could be removed
 // so that the slab still stores more than the min threshold.
-//
 func (m *MapDataSlab) CanLendToLeft(size uint32) bool {
 	if m.anySize {
 		return false
@@ -2379,7 +2373,6 @@ func (m *MapDataSlab) CanLendToLeft(size uint32) bool {
 
 // CanLendToRight returns true if elements on the right of the slab could be removed
 // so that the slab still stores more than the min threshold.
-//
 func (m *MapDataSlab) CanLendToRight(size uint32) bool {
 	if m.anySize {
 		return false
@@ -2540,17 +2533,16 @@ func newMapMetaDataSlabFromData(
 //
 // Header (4 bytes):
 //
-//     +-----------------------+--------------------+------------------------------+
-//     | slab version (1 byte) | slab flag (1 byte) | child header count (2 bytes) |
-//     +-----------------------+--------------------+------------------------------+
+//	+-----------------------+--------------------+------------------------------+
+//	| slab version (1 byte) | slab flag (1 byte) | child header count (2 bytes) |
+//	+-----------------------+--------------------+------------------------------+
 //
 // Content (n * 28 bytes):
 //
-// 	[[storage id, first key, size], ...]
+//	[[storage id, first key, size], ...]
 //
 // If this is root slab, extra data section is prepended to slab's encoded content.
 // See MapExtraData.Encode() for extra data section format.
-//
 func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 
 	version := byte(0)

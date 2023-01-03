@@ -49,12 +49,12 @@ func SetThreshold(threshold uint64) (uint64, uint64, uint64, uint64) {
 	}
 
 	targetThreshold = threshold
-	minThreshold = uint64(targetThreshold / 2)
+	minThreshold = targetThreshold / 2
 	maxThreshold = uint64(float64(targetThreshold) * 1.5)
 
 	// Total slab size available for array elements, excluding slab encoding overhead
 	availableArrayElementsSize := targetThreshold - arrayDataSlabPrefixSize
-	MaxInlineArrayElementSize = uint64(availableArrayElementsSize / minElementCountInSlab)
+	MaxInlineArrayElementSize = availableArrayElementsSize / minElementCountInSlab
 
 	// Total slab size available for map elements, excluding slab encoding overhead
 	availableMapElementsSize := targetThreshold - mapDataSlabPrefixSize - hkeyElementsPrefixSize
@@ -63,10 +63,10 @@ func SetThreshold(threshold uint64) (uint64, uint64, uint64, uint64) {
 	mapElementOverheadSize := uint64(digestSize)
 
 	// Max inline size for a map's element
-	maxInlineMapElementSize = uint64(availableMapElementsSize/minElementCountInSlab) - mapElementOverheadSize
+	maxInlineMapElementSize = availableMapElementsSize/minElementCountInSlab - mapElementOverheadSize
 
 	// Max inline size for a map's key or value, excluding element encoding overhead
-	MaxInlineMapKeyOrValueSize = uint64((maxInlineMapElementSize - singleElementPrefixSize) / 2)
+	MaxInlineMapKeyOrValueSize = (maxInlineMapElementSize - singleElementPrefixSize) / 2
 
 	return minThreshold, maxThreshold, MaxInlineArrayElementSize, MaxInlineMapKeyOrValueSize
 }

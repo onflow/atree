@@ -892,7 +892,7 @@ func newArrayMetaDataSlabFromData(
 		totalCount += count
 
 		childrenHeaders[i] = ArraySlabHeader{
-			id:    StorageID(storageID),
+			id:    storageID,
 			count: count,
 			size:  size,
 		}

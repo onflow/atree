@@ -2503,7 +2503,7 @@ func newMapMetaDataSlabFromData(
 		size := binary.BigEndian.Uint32(data[sizeOffset:])
 
 		childrenHeaders[i] = MapSlabHeader{
-			id:       StorageID(storageID),
+			id:       storageID,
 			size:     size,
 			firstKey: Digest(firstKey),
 		}

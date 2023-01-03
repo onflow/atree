@@ -53,7 +53,7 @@ var (
 
 func newRand(seed int64) *rand.Rand {
 	if seed == 0 {
-		seed = int64(time.Now().UnixNano())
+		seed = time.Now().UnixNano()
 	}
 
 	fmt.Printf("rand seed 0x%x\n", seed)

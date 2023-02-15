@@ -409,7 +409,7 @@ func validArraySlabSerialization(
 	}
 
 	// Encode slab
-	data, err := Encode(slab, cborEncMode)
+	data, err := Encode(slab, cborEncMode, nil)
 	if err != nil {
 		return err
 	}
@@ -421,7 +421,7 @@ func validArraySlabSerialization(
 	}
 
 	// Re-encode decoded slab
-	dataFromDecodedSlab, err := Encode(decodedSlab, cborEncMode)
+	dataFromDecodedSlab, err := Encode(decodedSlab, cborEncMode, nil)
 	if err != nil {
 		return err
 	}
@@ -620,7 +620,7 @@ func getEncodedArrayExtraDataSize(extraData *ArrayExtraData, cborEncMode cbor.En
 	}
 
 	var buf bytes.Buffer
-	enc := NewEncoder(&buf, cborEncMode)
+	enc := NewEncoder(&buf, cborEncMode, nil)
 
 	// Normally the flag shouldn't be 0. But in this case we just need the encoded data size
 	// so the content of the flag doesn't matter.

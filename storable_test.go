@@ -41,6 +41,14 @@ type HashableValue interface {
 	HashInput(scratch []byte) ([]byte, error)
 }
 
+func beforeEncode(e *Encoder, v Storable) error {
+	if e.Callback == nil {
+		return nil
+	}
+
+	return e.Callback.BeforeEncode(v.ByteSize())
+}
+
 type Uint8Value uint8
 
 var _ Value = Uint8Value(0)
@@ -64,6 +72,10 @@ func (v Uint8Value) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, erro
 //			Content: uint8(v),
 //	}
 func (v Uint8Value) Encode(enc *Encoder) error {
+	if err := beforeEncode(enc, v); err != nil {
+		return err
+	}
+
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagUInt8Value,
@@ -122,6 +134,10 @@ func (v Uint16Value) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, err
 }
 
 func (v Uint16Value) Encode(enc *Encoder) error {
+	if err := beforeEncode(enc, v); err != nil {
+		return err
+	}
+
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagUInt16Value,
@@ -191,6 +207,10 @@ func (v Uint32Value) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, err
 //			Content: uint32(v),
 //	}
 func (v Uint32Value) Encode(enc *Encoder) error {
+	if err := beforeEncode(enc, v); err != nil {
+		return err
+	}
+
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagUInt32Value,
@@ -267,6 +287,10 @@ func (v Uint64Value) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, err
 //			Content: uint64(v),
 //	}
 func (v Uint64Value) Encode(enc *Encoder) error {
+	if err := beforeEncode(enc, v); err != nil {
+		return err
+	}
+
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagUInt64Value,
@@ -373,6 +397,10 @@ func (v StringValue) Storable(storage SlabStorage, address Address, maxInlineSiz
 }
 
 func (v StringValue) Encode(enc *Encoder) error {
+	if err := beforeEncode(enc, v); err != nil {
+		return err
+	}
+
 	return enc.CBOR.EncodeString(v.str)
 }
 
@@ -643,6 +671,10 @@ func (v SomeStorable) ByteSize() uint32 {
 }
 
 func (v SomeStorable) Encode(enc *Encoder) error {
+	if err := beforeEncode(enc, v); err != nil {
+		return err
+	}
+
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagSomeValue,

@@ -99,9 +99,9 @@ func (v StorageIDStorable) String() string {
 }
 
 // Encode is a wrapper for Storable.Encode()
-func Encode(storable Storable, encMode cbor.EncMode) ([]byte, error) {
+func Encode(storable Storable, encMode cbor.EncMode, callback Callback) ([]byte, error) {
 	var buf bytes.Buffer
-	enc := NewEncoder(&buf, encMode)
+	enc := NewEncoder(&buf, encMode, callback)
 
 	err := storable.Encode(enc)
 	if err != nil {

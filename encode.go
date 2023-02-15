@@ -28,15 +28,23 @@ import (
 // Encoder writes atree slabs to io.Writer.
 type Encoder struct {
 	io.Writer
+	Callback
 	CBOR    *cbor.StreamEncoder
 	Scratch [64]byte
 }
 
-func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
+// Callback is a wrapper with callback functions to be called during encoding.
+// Implementations of this interface must be concurrency-safe.
+type Callback interface {
+	BeforeEncode(size uint32) error
+}
+
+func NewEncoder(w io.Writer, encMode cbor.EncMode, callback Callback) *Encoder {
 	streamEncoder := encMode.NewStreamEncoder(w)
 	return &Encoder{
-		Writer: w,
-		CBOR:   streamEncoder,
+		Writer:   w,
+		CBOR:     streamEncoder,
+		Callback: callback,
 	}
 }
 

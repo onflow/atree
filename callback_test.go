@@ -35,7 +35,7 @@ type testCallback struct {
 	beforeEncode func(uint32) error
 }
 
-func (t testCallback) BeforeEncode(size uint32) error {
+func (t testCallback) BeforeEncodeSlab(size uint32) error {
 	return t.beforeEncode(size)
 }
 
@@ -54,10 +54,8 @@ func TestCallbackOnEncode(t *testing.T) {
 		require.NoError(t, err)
 
 		const arraySize = 20
-		values := make([]Value, arraySize)
 		for i := 0; i < arraySize; i++ {
 			v := NewStringValue(strings.Repeat("a", 22))
-			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
 		}
@@ -74,8 +72,47 @@ func TestCallbackOnEncode(t *testing.T) {
 
 		_, err = storage.Encode(callback)
 		require.NoError(t, err)
-		assert.Equal(t, arraySize, int(count))
-		assert.Equal(t, 460, int(totalBytes))
+		assert.Equal(t, 1, int(count))
+		assert.Equal(t, 465, int(totalBytes))
+	})
+
+	t.Run("nested arrays", func(t *testing.T) {
+		t.Parallel()
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestBasicStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		const arraySize = 20
+		for i := 0; i < arraySize; i++ {
+			innerArray, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			v := NewStringValue(strings.Repeat("a", 22))
+			err = innerArray.Append(v)
+			require.NoError(t, err)
+
+			err = array.Append(innerArray)
+			require.NoError(t, err)
+		}
+
+		var count, totalBytes uint32 = 0, 0
+
+		callback := &testCallback{
+			beforeEncode: func(size uint32) error {
+				atomic.AddUint32(&count, 1)
+				atomic.AddUint32(&totalBytes, size)
+				return nil
+			},
+		}
+
+		_, err = storage.Encode(callback)
+		require.NoError(t, err)
+		assert.Equal(t, arraySize+1, int(count))
+		assert.Equal(t, 945, int(totalBytes))
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -89,24 +126,28 @@ func TestCallbackOnEncode(t *testing.T) {
 		require.NoError(t, err)
 
 		const arraySize = 20
-		values := make([]Value, arraySize)
 		for i := 0; i < arraySize; i++ {
+			innerArray, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
 			v := NewStringValue(strings.Repeat("a", 22))
-			values[i] = v
-			err := array.Append(v)
+			err = innerArray.Append(v)
+			require.NoError(t, err)
+
+			err = array.Append(innerArray)
 			require.NoError(t, err)
 		}
 
-		var count, totalBytes uint32 = 0, 0
-		const terminateAt uint32 = 12
+		var totalBytes uint32 = 0
+		const bytesCap uint32 = 300
 
 		callback := &testCallback{
 			beforeEncode: func(size uint32) error {
-				atomic.AddUint32(&count, 1)
-				atomic.AddUint32(&totalBytes, size)
-				if atomic.LoadUint32(&count) >= terminateAt {
+				if atomic.LoadUint32(&totalBytes)+size > bytesCap {
 					return fmt.Errorf("array too large")
 				}
+
+				atomic.AddUint32(&totalBytes, size)
 				return nil
 			},
 		}
@@ -114,7 +155,9 @@ func TestCallbackOnEncode(t *testing.T) {
 		_, err = storage.Encode(callback)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "array too large")
-		assert.Equal(t, terminateAt, count)
-		assert.Equal(t, 276, int(totalBytes))
+
+		// Since encoding happens in parallel, `totalBytes` can vary.
+		// But it always has to be less than or equal to the `bytesCap`.
+		assert.LessOrEqual(t, totalBytes, bytesCap)
 	})
 }

@@ -792,7 +792,7 @@ func validMapSlabSerialization(
 	}
 
 	// Encode slab
-	data, err := Encode(slab, cborEncMode, nil)
+	data, err := EncodeSlab(slab, cborEncMode, nil)
 	if err != nil {
 		return err
 	}
@@ -804,7 +804,7 @@ func validMapSlabSerialization(
 	}
 
 	// Re-encode decoded slab
-	dataFromDecodedSlab, err := Encode(decodedSlab, cborEncMode, nil)
+	dataFromDecodedSlab, err := EncodeSlab(decodedSlab, cborEncMode, nil)
 	if err != nil {
 		return err
 	}
@@ -1317,7 +1317,7 @@ func getEncodedMapExtraDataSize(extraData *MapExtraData, cborEncMode cbor.EncMod
 	}
 
 	var buf bytes.Buffer
-	enc := NewEncoder(&buf, cborEncMode, nil)
+	enc := NewEncoder(&buf, cborEncMode)
 
 	err := extraData.Encode(enc, byte(0), byte(0))
 	if err != nil {

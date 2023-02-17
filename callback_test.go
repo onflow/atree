@@ -73,7 +73,12 @@ func TestCallbackOnEncode(t *testing.T) {
 		_, err = storage.Encode(callback)
 		require.NoError(t, err)
 		assert.Equal(t, 1, int(count))
-		assert.Equal(t, 465, int(totalBytes))
+
+		var computedTotalBytes uint32
+		for _, slab := range storage.Slabs {
+			computedTotalBytes += slab.ByteSize()
+		}
+		assert.Equal(t, computedTotalBytes, totalBytes)
 	})
 
 	t.Run("nested arrays", func(t *testing.T) {
@@ -112,7 +117,12 @@ func TestCallbackOnEncode(t *testing.T) {
 		_, err = storage.Encode(callback)
 		require.NoError(t, err)
 		assert.Equal(t, arraySize+1, int(count))
-		assert.Equal(t, 945, int(totalBytes))
+
+		var computedTotalBytes uint32
+		for _, slab := range storage.Slabs {
+			computedTotalBytes += slab.ByteSize()
+		}
+		assert.Equal(t, computedTotalBytes, totalBytes)
 	})
 
 	t.Run("error", func(t *testing.T) {

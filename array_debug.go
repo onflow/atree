@@ -409,7 +409,7 @@ func validArraySlabSerialization(
 	}
 
 	// Encode slab
-	data, err := Encode(slab, cborEncMode)
+	data, err := EncodeSlab(slab, cborEncMode, nil)
 	if err != nil {
 		return err
 	}
@@ -421,7 +421,7 @@ func validArraySlabSerialization(
 	}
 
 	// Re-encode decoded slab
-	dataFromDecodedSlab, err := Encode(decodedSlab, cborEncMode)
+	dataFromDecodedSlab, err := EncodeSlab(decodedSlab, cborEncMode, nil)
 	if err != nil {
 		return err
 	}

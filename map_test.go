@@ -183,7 +183,7 @@ func verifyMap(
 
 	if !hasNestedArrayMapElement {
 		// Need to call Commit before calling storage.Count() for PersistentSlabStorage.
-		err = storage.Commit()
+		err = storage.Commit(nil)
 		require.NoError(t, err)
 
 		stats, err := GetMapStats(m)
@@ -1552,7 +1552,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Verify encoded data
-		stored, err := storage.Encode()
+		stored, err := storage.Encode(nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(stored))
 		require.Equal(t, expected[id1], stored[id1])
@@ -1644,7 +1644,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Verify encoded data
-		stored, err := storage.Encode()
+		stored, err := storage.Encode(nil)
 		require.NoError(t, err)
 
 		require.Equal(t, len(expected), len(stored))
@@ -1877,7 +1877,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Verify encoded data
-		stored, err := storage.Encode()
+		stored, err := storage.Encode(nil)
 		require.NoError(t, err)
 
 		require.Equal(t, len(expected), len(stored))
@@ -2081,7 +2081,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			},
 		}
 
-		stored, err := storage.Encode()
+		stored, err := storage.Encode(nil)
 		require.NoError(t, err)
 		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
@@ -2324,7 +2324,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			},
 		}
 
-		stored, err := storage.Encode()
+		stored, err := storage.Encode(nil)
 		require.NoError(t, err)
 		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
@@ -2562,7 +2562,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			},
 		}
 
-		stored, err := storage.Encode()
+		stored, err := storage.Encode(nil)
 		require.NoError(t, err)
 		require.Equal(t, len(expected), len(stored))
 		require.Equal(t, expected[id1], stored[id1])
@@ -2644,7 +2644,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Verify encoded data
-		stored, err := storage.Encode()
+		stored, err := storage.Encode(nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(stored))
 		require.Equal(t, expectedNoPointer, stored[id1])
@@ -2701,7 +2701,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 		}
 
-		stored, err = storage.Encode()
+		stored, err = storage.Encode(nil)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(stored))
 		require.Equal(t, expectedHasPointer, stored[id1])
@@ -2799,7 +2799,7 @@ func TestMapPopIterate(t *testing.T) {
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		err = storage.Commit()
+		err = storage.Commit(nil)
 		require.NoError(t, err)
 
 		require.Equal(t, 1, storage.Count())
@@ -2839,7 +2839,7 @@ func TestMapPopIterate(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		err = storage.Commit()
+		err = storage.Commit(nil)
 		require.NoError(t, err)
 
 		require.Equal(t, 1, storage.Count())
@@ -2896,7 +2896,7 @@ func TestMapPopIterate(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = storage.Commit()
+		err = storage.Commit(nil)
 		require.NoError(t, err)
 
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
@@ -2967,7 +2967,7 @@ func TestMapPopIterate(t *testing.T) {
 
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
-		err = storage.Commit()
+		err = storage.Commit(nil)
 		require.NoError(t, err)
 
 		// Iterate key value pairs

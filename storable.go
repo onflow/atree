@@ -98,12 +98,19 @@ func (v StorageIDStorable) String() string {
 	return fmt.Sprintf("StorageIDStorable(%d)", v)
 }
 
-// Encode is a wrapper for Storable.Encode()
-func Encode(storable Storable, encMode cbor.EncMode) ([]byte, error) {
+// EncodeSlab is a wrapper for Storable.Encode()
+func EncodeSlab(slab Slab, encMode cbor.EncMode, callback Callback) ([]byte, error) {
+	if callback != nil {
+		err := callback.BeforeEncodeSlab(slab.ByteSize())
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var buf bytes.Buffer
 	enc := NewEncoder(&buf, encMode)
 
-	err := storable.Encode(enc)
+	err := slab.Encode(enc)
 	if err != nil {
 		return nil, err
 	}

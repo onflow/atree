@@ -607,7 +607,7 @@ func TestPersistentStorage(t *testing.T) {
 		require.Equal(t, uint(1), storage.DeltasWithoutTempAddresses())
 		require.Equal(t, uint(2), storage.Deltas())
 
-		err = storage.Commit()
+		err = storage.Commit(nil)
 		require.NoError(t, err)
 
 		require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
@@ -641,7 +641,7 @@ func TestPersistentStorage(t *testing.T) {
 		err = storage.Remove(tempStorageID)
 		require.NoError(t, err)
 
-		err = storage.Commit()
+		err = storage.Commit(nil)
 		require.NoError(t, err)
 
 		// Slab with perm storage id is removed from base storage.
@@ -691,15 +691,15 @@ func TestPersistentStorage(t *testing.T) {
 				require.NoError(t, err)
 
 				// capture data for accuracy testing
-				simpleMap[storageID], err = Encode(slab, encMode)
+				simpleMap[storageID], err = EncodeSlab(slab, encMode, nil)
 				require.NoError(t, err)
 			}
 		}
 
-		err = storage.Commit()
+		err = storage.Commit(nil)
 		require.NoError(t, err)
 
-		err = storageWithFastCommit.FastCommit(10)
+		err = storageWithFastCommit.FastCommit(10, nil)
 		require.NoError(t, err)
 
 		require.Equal(t, len(simpleMap), storage.Count())
@@ -730,10 +730,10 @@ func TestPersistentStorage(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		err = storage.Commit()
+		err = storage.Commit(nil)
 		require.NoError(t, err)
 
-		err = storageWithFastCommit.FastCommit(10)
+		err = storageWithFastCommit.FastCommit(10, nil)
 		require.NoError(t, err)
 
 		require.Equal(t, 0, storage.Count())
@@ -789,7 +789,7 @@ func TestPersistentStorage(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		err = storage.FastCommit(2)
+		err = storage.FastCommit(2, nil)
 		require.ErrorIs(t, err, errEncodeNonStorable)
 	})
 }
@@ -933,7 +933,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 				break
 			}
 
-			encodedSlab, err := Encode(slab, storage.cborEncMode)
+			encodedSlab, err := EncodeSlab(slab, storage.cborEncMode, nil)
 			require.NoError(t, err)
 
 			require.Equal(t, encodedSlab, data[id])

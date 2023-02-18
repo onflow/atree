@@ -85,7 +85,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 		err = array.Append(v)
 		require.NoError(b, err)
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.Commit(nil))
 	b.ResetTimer()
 
 	arrayID := array.StorageID()
@@ -104,7 +104,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 		err = array.Append(v)
 		require.NoError(b, err)
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.Commit(nil))
 	totalAppendTime = time.Since(start)
 
 	// remove
@@ -121,7 +121,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 		require.NoError(b, err)
 		totalRawDataSize -= storable.ByteSize()
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.Commit(nil))
 	totalRemoveTime = time.Since(start)
 
 	// insert
@@ -139,7 +139,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 		err = array.Insert(uint64(ind), v)
 		require.NoError(b, err)
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.Commit(nil))
 	totalInsertTime = time.Since(start)
 
 	// lookup
@@ -153,7 +153,7 @@ func benchmarkBasicArray(b *testing.B, initialArraySize, numberOfElements int) {
 		_, err := array.Get(uint64(ind))
 		require.NoError(b, err)
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.Commit(nil))
 	totalLookupTime = time.Since(start)
 
 	// random lookup

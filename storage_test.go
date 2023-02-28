@@ -371,9 +371,10 @@ func TestBasicSlabStorageStore(t *testing.T) {
 	storage := NewBasicSlabStorage(nil, nil, nil, nil)
 
 	r := newRand(t)
+	address := Address{1}
 	slabs := map[StorageID]Slab{
-		{Address{1}, StorageIndex{1}}: generateRandomSlab(r),
-		{Address{1}, StorageIndex{2}}: generateRandomSlab(r),
+		{address, StorageIndex{1}}: generateRandomSlab(address, r),
+		{address, StorageIndex{2}}: generateRandomSlab(address, r),
 	}
 
 	// Store values
@@ -384,7 +385,7 @@ func TestBasicSlabStorageStore(t *testing.T) {
 
 	// Overwrite stored values
 	for id := range slabs {
-		slab := generateRandomSlab(r)
+		slab := generateRandomSlab(id.Address, r)
 		slabs[id] = slab
 		err := storage.Store(id, slab)
 		require.NoError(t, err)
@@ -406,7 +407,7 @@ func TestBasicSlabStorageRetrieve(t *testing.T) {
 
 	r := newRand(t)
 	id := StorageID{Address{1}, StorageIndex{1}}
-	slab := generateRandomSlab(r)
+	slab := generateRandomSlab(id.Address, r)
 
 	// Retrieve value from empty storage
 	retrievedSlab, found, err := storage.Retrieve(id)
@@ -436,7 +437,7 @@ func TestBasicSlabStorageRemove(t *testing.T) {
 
 	r := newRand(t)
 	id := StorageID{Address{1}, StorageIndex{1}}
-	slab := generateRandomSlab(r)
+	slab := generateRandomSlab(id.Address, r)
 
 	// Remove value from empty storage
 	err := storage.Remove(id)
@@ -506,7 +507,7 @@ func TestBasicSlabStorageStorageIDs(t *testing.T) {
 
 	// Store values
 	for id := range wantIDs {
-		err := storage.Store(id, generateRandomSlab(r))
+		err := storage.Store(id, generateRandomSlab(id.Address, r))
 		require.NoError(t, err)
 	}
 
@@ -523,10 +524,15 @@ func TestBasicSlabStorageSlabIterat(t *testing.T) {
 	r := newRand(t)
 	address := Address{1}
 	index := StorageIndex{0, 0, 0, 0, 0, 0, 0, 0}
+
+	id1 := StorageID{Address: address, Index: index.Next()}
+	id2 := StorageID{Address: address, Index: index.Next()}
+	id3 := StorageID{Address: address, Index: index.Next()}
+
 	want := map[StorageID]Slab{
-		{Address: address, Index: index.Next()}: generateRandomSlab(r),
-		{Address: address, Index: index.Next()}: generateRandomSlab(r),
-		{Address: address, Index: index.Next()}: generateRandomSlab(r),
+		id1: generateRandomSlab(id1.Address, r),
+		id2: generateRandomSlab(id2.Address, r),
+		id3: generateRandomSlab(id3.Address, r),
 	}
 
 	storage := NewBasicSlabStorage(nil, nil, nil, nil)
@@ -581,9 +587,12 @@ func TestPersistentStorage(t *testing.T) {
 
 		require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
 		require.Equal(t, uint(0), storage.Deltas())
+		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
 	})
 
 	t.Run("temp address", func(t *testing.T) {
+
+		r := newRand(t)
 
 		baseStorage := NewInMemBaseStorage()
 		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
@@ -594,24 +603,28 @@ func TestPersistentStorage(t *testing.T) {
 		permStorageID, err := NewStorageIDFromRawBytes([]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
 		require.NoError(t, err)
 
-		slab1 := &ArrayMetaDataSlab{childrenHeaders: []ArraySlabHeader{{size: uint32(100), count: uint32(1)}}}
-		slab2 := &ArrayMetaDataSlab{childrenHeaders: []ArraySlabHeader{{size: uint32(100), count: uint32(2)}}}
+		slab1 := generateRandomSlab(tempStorageID.Address, r)
+		slab2 := generateRandomSlab(permStorageID.Address, r)
 
 		// no temp ids should be in the base storage
 		err = storage.Store(tempStorageID, slab1)
 		require.NoError(t, err)
+		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
 
 		err = storage.Store(permStorageID, slab2)
 		require.NoError(t, err)
 
 		require.Equal(t, uint(1), storage.DeltasWithoutTempAddresses())
 		require.Equal(t, uint(2), storage.Deltas())
+		require.True(t, storage.DeltasSizeWithoutTempAddresses() > 0)
+		require.Equal(t, uint64(slab2.ByteSize()), storage.DeltasSizeWithoutTempAddresses())
 
 		err = storage.Commit()
 		require.NoError(t, err)
 
 		require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
 		require.Equal(t, uint(1), storage.Deltas())
+		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
 
 		// Slab with temp storage id is NOT persisted in base storage.
 		_, found, err := baseStorage.Retrieve(tempStorageID)
@@ -641,6 +654,9 @@ func TestPersistentStorage(t *testing.T) {
 		err = storage.Remove(tempStorageID)
 		require.NoError(t, err)
 
+		require.Equal(t, uint(1), storage.DeltasWithoutTempAddresses())
+		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
+
 		err = storage.Commit()
 		require.NoError(t, err)
 
@@ -661,6 +677,7 @@ func TestPersistentStorage(t *testing.T) {
 
 		require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
 		require.Equal(t, uint(1), storage.Deltas())
+		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
 	})
 
 	t.Run("commit", func(t *testing.T) {
@@ -674,11 +691,13 @@ func TestPersistentStorage(t *testing.T) {
 		storageWithFastCommit := NewPersistentSlabStorage(baseStorage2, encMode, decMode, nil, nil)
 
 		simpleMap := make(map[StorageID][]byte)
+		slabSize := uint64(0)
 		// test random updates apply commit and check the order of committed values
 		for i := 0; i < numberOfAccounts; i++ {
 			for j := 0; j < numberOfSlabsPerAccount; j++ {
 				addr := generateRandomAddress(r)
-				slab := generateRandomSlab(r)
+				slab := generateRandomSlab(addr, r)
+				slabSize += uint64(slab.ByteSize())
 
 				storageID, err := storage.GenerateStorageID(addr)
 				require.NoError(t, err)
@@ -696,11 +715,18 @@ func TestPersistentStorage(t *testing.T) {
 			}
 		}
 
+		require.True(t, storage.DeltasSizeWithoutTempAddresses() > 0)
+		require.Equal(t, slabSize, storage.DeltasSizeWithoutTempAddresses())
+		require.True(t, storageWithFastCommit.DeltasSizeWithoutTempAddresses() > 0)
+		require.Equal(t, slabSize, storageWithFastCommit.DeltasSizeWithoutTempAddresses())
+
 		err = storage.Commit()
 		require.NoError(t, err)
+		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
 
 		err = storageWithFastCommit.FastCommit(10)
 		require.NoError(t, err)
+		require.Equal(t, uint64(0), storageWithFastCommit.DeltasSizeWithoutTempAddresses())
 
 		require.Equal(t, len(simpleMap), storage.Count())
 		require.Equal(t, len(simpleMap), storageWithFastCommit.Count())
@@ -725,10 +751,15 @@ func TestPersistentStorage(t *testing.T) {
 		for sid := range simpleMap {
 			err = storage.Remove(sid)
 			require.NoError(t, err)
+			require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
 
 			err = storageWithFastCommit.Remove(sid)
 			require.NoError(t, err)
+			require.Equal(t, uint64(0), storageWithFastCommit.DeltasSizeWithoutTempAddresses())
 		}
+
+		require.Equal(t, uint(len(simpleMap)), storage.DeltasWithoutTempAddresses())
+		require.Equal(t, uint(len(simpleMap)), storageWithFastCommit.DeltasWithoutTempAddresses())
 
 		err = storage.Commit()
 		require.NoError(t, err)
@@ -738,6 +769,8 @@ func TestPersistentStorage(t *testing.T) {
 
 		require.Equal(t, 0, storage.Count())
 		require.Equal(t, 0, storageWithFastCommit.Count())
+		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
+		require.Equal(t, uint64(0), storageWithFastCommit.DeltasSizeWithoutTempAddresses())
 
 		// check remove functionality
 		for sid := range simpleMap {
@@ -975,8 +1008,17 @@ func TestPersistentStorageGenerateStorageID(t *testing.T) {
 	})
 }
 
-func generateRandomSlab(r *rand.Rand) Slab {
-	return &ArrayMetaDataSlab{childrenHeaders: []ArraySlabHeader{{size: r.Uint32(), count: r.Uint32()}}}
+func generateRandomSlab(address Address, r *rand.Rand) Slab {
+	storable := Uint64Value(r.Uint64())
+
+	return &ArrayDataSlab{
+		header: ArraySlabHeader{
+			id:    NewStorageID(address, StorageIndex{1}),
+			size:  arrayRootDataSlabPrefixSize + storable.ByteSize(),
+			count: 1,
+		},
+		elements: []Storable{storable},
+	}
 }
 
 func generateRandomAddress(r *rand.Rand) Address {

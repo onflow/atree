@@ -935,3 +935,17 @@ func (s *PersistentSlabStorage) DeltasWithoutTempAddresses() uint {
 	}
 	return deltas
 }
+
+// DeltasSizeWithoutTempAddresses returns total size of uncommitted slabs (in bytes), excluding slabs with temp addresses.
+func (s *PersistentSlabStorage) DeltasSizeWithoutTempAddresses() uint64 {
+	size := uint64(0)
+	for k, slab := range s.deltas {
+		// Exclude slabs that are not owned by accounts.
+		if k.Address != AddressUndefined {
+			if slab != nil {
+				size += uint64(slab.ByteSize())
+			}
+		}
+	}
+	return size
+}

@@ -112,8 +112,8 @@ func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 		return NewEncodingError(err)
 	}
 
-	for _, e := range a.elements {
-		err := e.Encode(enc)
+	for i := 0; i < len(a.elements); i++ {
+		err := a.elements[i].Encode(enc)
 		if err != nil {
 			return NewEncodingError(err)
 		}

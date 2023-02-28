@@ -153,7 +153,7 @@ func testArray(
 			reduceHeapAllocs = false
 
 			// Commit slabs to storage and drop read and write to reduce mem
-			err = storage.FastCommit(runtime.NumCPU(), nil)
+			err = storage.FastCommit(runtime.NumCPU())
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to commit to storage: %s", err)
 				return

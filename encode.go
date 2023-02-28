@@ -32,12 +32,6 @@ type Encoder struct {
 	Scratch [64]byte
 }
 
-// Callback is a wrapper with callback functions to be called during encoding.
-// Implementations of this interface must be concurrency-safe.
-type Callback interface {
-	BeforeEncodeSlab(size uint32) error
-}
-
 func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
 	streamEncoder := encMode.NewStreamEncoder(w)
 	return &Encoder{

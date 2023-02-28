@@ -792,7 +792,7 @@ func validMapSlabSerialization(
 	}
 
 	// Encode slab
-	data, err := EncodeSlab(slab, cborEncMode, nil)
+	data, err := Encode(slab, cborEncMode)
 	if err != nil {
 		return err
 	}
@@ -804,7 +804,7 @@ func validMapSlabSerialization(
 	}
 
 	// Re-encode decoded slab
-	dataFromDecodedSlab, err := EncodeSlab(decodedSlab, cborEncMode, nil)
+	dataFromDecodedSlab, err := Encode(decodedSlab, cborEncMode)
 	if err != nil {
 		return err
 	}

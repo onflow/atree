@@ -941,9 +941,7 @@ func (s *PersistentSlabStorage) DeltasSizeWithoutTempAddresses() uint64 {
 	size := uint64(0)
 	for k, slab := range s.deltas {
 		// Exclude slabs that are not owned by accounts.
-		if k.Address == AddressUndefined ||
-			slab == nil {
-			
+		if k.Address == AddressUndefined || slab == nil {
 			continue
 		}
 

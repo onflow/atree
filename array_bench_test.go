@@ -200,7 +200,7 @@ func setupArray(b *testing.B, r *rand.Rand, storage *PersistentSlabStorage, init
 		require.NoError(b, err)
 	}
 
-	err = storage.Commit(nil)
+	err = storage.Commit()
 	require.NoError(b, err)
 
 	arrayID := array.StorageID()

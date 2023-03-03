@@ -311,10 +311,10 @@ func (s *BasicSlabStorage) StorageIDs() []StorageID {
 
 // Encode returns serialized slabs in storage.
 // This is currently used for testing.
-func (s *BasicSlabStorage) Encode(callback Callback) (map[StorageID][]byte, error) {
+func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
 	m := make(map[StorageID][]byte)
 	for id, slab := range s.Slabs {
-		b, err := EncodeSlab(slab, s.cborEncMode, callback)
+		b, err := Encode(slab, s.cborEncMode)
 		if err != nil {
 			return nil, err
 		}
@@ -676,7 +676,7 @@ func (s *PersistentSlabStorage) sortedOwnedDeltaKeys() []StorageID {
 	return keysWithOwners
 }
 
-func (s *PersistentSlabStorage) Commit(callback Callback) error {
+func (s *PersistentSlabStorage) Commit() error {
 	var err error
 
 	// this part ensures the keys are sorted so commit operation is deterministic
@@ -700,7 +700,7 @@ func (s *PersistentSlabStorage) Commit(callback Callback) error {
 		}
 
 		// serialize
-		data, err := EncodeSlab(slab, s.cborEncMode, callback)
+		data, err := Encode(slab, s.cborEncMode)
 		if err != nil {
 			return NewStorageError(err)
 		}
@@ -724,7 +724,7 @@ func (s *PersistentSlabStorage) Commit(callback Callback) error {
 	return nil
 }
 
-func (s *PersistentSlabStorage) FastCommit(numWorkers int, callback Callback) error {
+func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 
 	// this part ensures the keys are sorted so commit operation is deterministic
 	keysWithOwners := s.sortedOwnedDeltaKeys()
@@ -777,7 +777,7 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int, callback Callback) er
 				continue
 			}
 			// serialize
-			data, err := EncodeSlab(slab, s.cborEncMode, callback)
+			data, err := Encode(slab, s.cborEncMode)
 			results <- &encodedSlabs{
 				storageID: id,
 				data:      data,

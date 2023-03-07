@@ -59,6 +59,7 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 
 			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by getArraySlab().
 				return ArrayStats{}, err
 			}
 
@@ -77,7 +78,7 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 				for _, storable := range slab.ChildStorables() {
 					id, ok := storable.(StorageIDStorable)
 					if !ok {
-						return ArrayStats{}, fmt.Errorf("metadata slab's child storables are not of type StorageIDStorable")
+						return ArrayStats{}, NewFatalError(fmt.Errorf("metadata slab's child storables are not of type StorageIDStorable"))
 					}
 					nextLevelIDs = append(nextLevelIDs, StorageID(id))
 				}
@@ -125,6 +126,7 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 
 			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by getArraySlab().
 				return nil, err
 			}
 
@@ -146,7 +148,7 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 				for _, storable := range slab.ChildStorables() {
 					id, ok := storable.(StorageIDStorable)
 					if !ok {
-						return nil, errors.New("metadata slab's child storables are not of type StorageIDStorable")
+						return nil, NewFatalError(errors.New("metadata slab's child storables are not of type StorageIDStorable"))
 					}
 					nextLevelIDs = append(nextLevelIDs, StorageID(id))
 				}
@@ -159,7 +161,8 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 	for _, id := range overflowIDs {
 		slab, found, err := a.Storage.Retrieve(id)
 		if err != nil {
-			return nil, err
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", id))
 		}
 		if !found {
 			return nil, NewSlabNotFoundErrorf(id, "slab not found during array slab dump")
@@ -176,34 +179,35 @@ func ValidArray(a *Array, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInp
 
 	extraData := a.root.ExtraData()
 	if extraData == nil {
-		return fmt.Errorf("root slab %d doesn't have extra data", a.root.ID())
+		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", a.root.ID()))
 	}
 
 	// Verify that extra data has correct type information
 	if typeInfo != nil && !tic(extraData.TypeInfo, typeInfo) {
-		return fmt.Errorf(
+		return NewFatalError(fmt.Errorf(
 			"root slab %d type information %v is wrong, want %v",
 			a.root.ID(),
 			extraData.TypeInfo,
 			typeInfo,
-		)
+		))
 	}
 
 	computedCount, dataSlabIDs, nextDataSlabIDs, err :=
 		validArraySlab(tic, hip, a.Storage, a.root.Header().id, 0, nil, []StorageID{}, []StorageID{})
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 		return err
 	}
 
 	// Verify array count
 	if computedCount != uint32(a.Count()) {
-		return fmt.Errorf("root slab %d count %d is wrong, want %d", a.root.ID(), a.Count(), computedCount)
+		return NewFatalError(fmt.Errorf("root slab %d count %d is wrong, want %d", a.root.ID(), a.Count(), computedCount))
 	}
 
 	// Verify next data slab ids
 	if !reflect.DeepEqual(dataSlabIDs[1:], nextDataSlabIDs) {
-		return fmt.Errorf("chained next data slab ids %v are wrong, want %v",
-			nextDataSlabIDs, dataSlabIDs[1:])
+		return NewFatalError(fmt.Errorf("chained next data slab ids %v are wrong, want %v",
+			nextDataSlabIDs, dataSlabIDs[1:]))
 	}
 
 	return nil
@@ -227,45 +231,46 @@ func validArraySlab(
 
 	slab, err := getArraySlab(storage, id)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by getArraySlab().
 		return 0, nil, nil, err
 	}
 
 	if level > 0 {
 		// Verify that non-root slab doesn't have extra data
 		if slab.ExtraData() != nil {
-			return 0, nil, nil, fmt.Errorf("non-root slab %d has extra data", id)
+			return 0, nil, nil, NewFatalError(fmt.Errorf("non-root slab %d has extra data", id))
 		}
 
 		// Verify that non-root slab doesn't underflow
 		if underflowSize, underflow := slab.IsUnderflow(); underflow {
-			return 0, nil, nil, fmt.Errorf("slab %d underflows by %d bytes", id, underflowSize)
+			return 0, nil, nil, NewFatalError(fmt.Errorf("slab %d underflows by %d bytes", id, underflowSize))
 		}
 
 	}
 
 	// Verify that slab doesn't overflow
 	if slab.IsFull() {
-		return 0, nil, nil, fmt.Errorf("slab %d overflows", id)
+		return 0, nil, nil, NewFatalError(fmt.Errorf("slab %d overflows", id))
 	}
 
 	// Verify that header is in sync with header from parent slab
 	if headerFromParentSlab != nil {
 		if !reflect.DeepEqual(*headerFromParentSlab, slab.Header()) {
-			return 0, nil, nil, fmt.Errorf("slab %d header %+v is different from header %+v from parent slab",
-				id, slab.Header(), headerFromParentSlab)
+			return 0, nil, nil, NewFatalError(fmt.Errorf("slab %d header %+v is different from header %+v from parent slab",
+				id, slab.Header(), headerFromParentSlab))
 		}
 	}
 
 	if slab.IsData() {
 		dataSlab, ok := slab.(*ArrayDataSlab)
 		if !ok {
-			return 0, nil, nil, fmt.Errorf("slab %d is not ArrayDataSlab", id)
+			return 0, nil, nil, NewFatalError(fmt.Errorf("slab %d is not ArrayDataSlab", id))
 		}
 
 		// Verify that element count is the same as header.count
 		if uint32(len(dataSlab.elements)) != dataSlab.header.count {
-			return 0, nil, nil, fmt.Errorf("data slab %d header count %d is wrong, want %d",
-				id, dataSlab.header.count, len(dataSlab.elements))
+			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %d header count %d is wrong, want %d",
+				id, dataSlab.header.count, len(dataSlab.elements)))
 		}
 
 		// Verify that aggregated element size + slab prefix is the same as header.size
@@ -277,16 +282,16 @@ func validArraySlab(
 
 			// Verify element size is <= inline size
 			if e.ByteSize() > uint32(MaxInlineArrayElementSize) {
-				return 0, nil, nil, fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
-					id, e, e.ByteSize(), MaxInlineArrayElementSize)
+				return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
+					id, e, e.ByteSize(), MaxInlineArrayElementSize))
 			}
 
 			computedSize += e.ByteSize()
 		}
 
 		if computedSize != dataSlab.header.size {
-			return 0, nil, nil, fmt.Errorf("data slab %d header size %d is wrong, want %d",
-				id, dataSlab.header.size, computedSize)
+			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %d header size %d is wrong, want %d",
+				id, dataSlab.header.size, computedSize))
 		}
 
 		dataSlabIDs = append(dataSlabIDs, id)
@@ -299,13 +304,16 @@ func validArraySlab(
 		for _, e := range dataSlab.elements {
 			v, err := e.StoredValue(storage)
 			if err != nil {
-				return 0, nil, nil, fmt.Errorf(
-					"data slab %d element %s can't be converted to value: %w",
-					id, e, err,
-				)
+				// Wrap err as external error (if needed) because err is returned by Storable interface.
+				return 0, nil, nil, wrapErrorfAsExternalErrorIfNeeded(err,
+					fmt.Sprintf(
+						"data slab %s element %s can't be converted to value",
+						id, e,
+					))
 			}
 			err = ValidValue(v, nil, tic, hip)
 			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by ValidValue().
 				return 0, nil, nil, fmt.Errorf(
 					"data slab %d element %s isn't valid: %w",
 					id, e, err,
@@ -318,21 +326,21 @@ func validArraySlab(
 
 	meta, ok := slab.(*ArrayMetaDataSlab)
 	if !ok {
-		return 0, nil, nil, fmt.Errorf("slab %d is not ArrayMetaDataSlab", id)
+		return 0, nil, nil, NewFatalError(fmt.Errorf("slab %d is not ArrayMetaDataSlab", id))
 	}
 
 	if level == 0 {
 		// Verify that root slab has more than one child slabs
 		if len(meta.childrenHeaders) < 2 {
-			return 0, nil, nil, fmt.Errorf("root metadata slab %d has %d children, want at least 2 children ",
-				id, len(meta.childrenHeaders))
+			return 0, nil, nil, NewFatalError(fmt.Errorf("root metadata slab %d has %d children, want at least 2 children ",
+				id, len(meta.childrenHeaders)))
 		}
 	}
 
 	// Verify childrenCountSum
 	if len(meta.childrenCountSum) != len(meta.childrenHeaders) {
-		return 0, nil, nil, fmt.Errorf("metadata slab %d has %d childrenCountSum, want %d",
-			id, len(meta.childrenCountSum), len(meta.childrenHeaders))
+		return 0, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d has %d childrenCountSum, want %d",
+			id, len(meta.childrenCountSum), len(meta.childrenHeaders)))
 	}
 
 	computedCount := uint32(0)
@@ -342,6 +350,7 @@ func validArraySlab(
 		count, dataSlabIDs, nextDataSlabIDs, err =
 			validArraySlab(tic, hip, storage, h.id, level+1, &h, dataSlabIDs, nextDataSlabIDs)
 		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 			return 0, nil, nil, err
 		}
 
@@ -349,22 +358,22 @@ func validArraySlab(
 
 		// Verify childrenCountSum
 		if meta.childrenCountSum[i] != computedCount {
-			return 0, nil, nil, fmt.Errorf("metadata slab %d childrenCountSum[%d] is %d, want %d",
-				id, i, meta.childrenCountSum[i], computedCount)
+			return 0, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d childrenCountSum[%d] is %d, want %d",
+				id, i, meta.childrenCountSum[i], computedCount))
 		}
 	}
 
 	// Verify that aggregated element count is the same as header.count
 	if computedCount != meta.header.count {
-		return 0, nil, nil, fmt.Errorf("metadata slab %d header count %d is wrong, want %d",
-			id, meta.header.count, computedCount)
+		return 0, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d header count %d is wrong, want %d",
+			id, meta.header.count, computedCount))
 	}
 
 	// Verify that aggregated header size + slab prefix is the same as header.size
 	computedSize := uint32(len(meta.childrenHeaders)*arraySlabHeaderSize) + arrayMetaDataSlabPrefixSize
 	if computedSize != meta.header.size {
-		return 0, nil, nil, fmt.Errorf("metadata slab %d header size %d is wrong, want %d",
-			id, meta.header.size, computedSize)
+		return 0, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d header size %d is wrong, want %d",
+			id, meta.header.size, computedSize))
 	}
 
 	return meta.header.count, dataSlabIDs, nextDataSlabIDs, nil
@@ -405,55 +414,60 @@ func validArraySlabSerialization(
 
 	slab, err := getArraySlab(storage, id)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by getArraySlab().
 		return err
 	}
 
 	// Encode slab
 	data, err := Encode(slab, cborEncMode)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err
 	}
 
 	// Decode encoded slab
 	decodedSlab, err := DecodeSlab(id, data, cborDecMode, decodeStorable, decodeTypeInfo)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by DecodeSlab().
 		return err
 	}
 
 	// Re-encode decoded slab
 	dataFromDecodedSlab, err := Encode(decodedSlab, cborEncMode)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err
 	}
 
 	// Extra check: encoded data size == header.size
 	encodedExtraDataSize, err := getEncodedArrayExtraDataSize(slab.ExtraData(), cborEncMode)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by getEncodedArrayExtraDataSize().
 		return err
 	}
 
 	// Need to exclude extra data size from encoded data size.
 	encodedSlabSize := uint32(len(data) - encodedExtraDataSize)
 	if slab.Header().size != encodedSlabSize {
-		return fmt.Errorf("slab %d encoded size %d != header.size %d (encoded extra data size %d)",
-			id, encodedSlabSize, slab.Header().size, encodedExtraDataSize)
+		return NewFatalError(fmt.Errorf("slab %d encoded size %d != header.size %d (encoded extra data size %d)",
+			id, encodedSlabSize, slab.Header().size, encodedExtraDataSize))
 	}
 
 	// Compare encoded data of original slab with encoded data of decoded slab
 	if !bytes.Equal(data, dataFromDecodedSlab) {
-		return fmt.Errorf("slab %d encoded data is different from decoded slab's encoded data, got %v, want %v",
-			id, dataFromDecodedSlab, data)
+		return NewFatalError(fmt.Errorf("slab %d encoded data is different from decoded slab's encoded data, got %v, want %v",
+			id, dataFromDecodedSlab, data))
 	}
 
 	if slab.IsData() {
 		dataSlab, ok := slab.(*ArrayDataSlab)
 		if !ok {
-			return fmt.Errorf("slab %d is not ArrayDataSlab", id)
+			return NewFatalError(fmt.Errorf("slab %d is not ArrayDataSlab", id))
 		}
 
 		decodedDataSlab, ok := decodedSlab.(*ArrayDataSlab)
 		if !ok {
-			return fmt.Errorf("decoded slab %d is not ArrayDataSlab", id)
+			return NewFatalError(fmt.Errorf("decoded slab %d is not ArrayDataSlab", id))
 		}
 
 		// Compare slabs
@@ -468,6 +482,7 @@ func validArraySlabSerialization(
 			compare,
 		)
 		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by arrayDataSlabEqual().
 			return fmt.Errorf("data slab %d round-trip serialization failed: %w", id, err)
 		}
 
@@ -476,17 +491,18 @@ func validArraySlabSerialization(
 
 	metaSlab, ok := slab.(*ArrayMetaDataSlab)
 	if !ok {
-		return fmt.Errorf("slab %d is not ArrayMetaDataSlab", id)
+		return NewFatalError(fmt.Errorf("slab %d is not ArrayMetaDataSlab", id))
 	}
 
 	decodedMetaSlab, ok := decodedSlab.(*ArrayMetaDataSlab)
 	if !ok {
-		return fmt.Errorf("decoded slab %d is not ArrayMetaDataSlab", id)
+		return NewFatalError(fmt.Errorf("decoded slab %d is not ArrayMetaDataSlab", id))
 	}
 
 	// Compare slabs
 	err = arrayMetaDataSlabEqual(metaSlab, decodedMetaSlab)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by arrayMetaDataSlabEqual().
 		return fmt.Errorf("metadata slab %d round-trip serialization failed: %w", id, err)
 	}
 
@@ -502,6 +518,7 @@ func validArraySlabSerialization(
 			compare,
 		)
 		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by validArraySlabSerialization().
 			return err
 		}
 	}
@@ -523,22 +540,23 @@ func arrayDataSlabEqual(
 	// Compare extra data
 	err := arrayExtraDataEqual(expected.extraData, actual.extraData)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by arrayExtraDataEqual().
 		return err
 	}
 
 	// Compare next
 	if expected.next != actual.next {
-		return fmt.Errorf("next %d is wrong, want %d", actual.next, expected.next)
+		return NewFatalError(fmt.Errorf("next %d is wrong, want %d", actual.next, expected.next))
 	}
 
 	// Compare header
 	if !reflect.DeepEqual(expected.header, actual.header) {
-		return fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header)
+		return NewFatalError(fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header))
 	}
 
 	// Compare elements length
 	if len(expected.elements) != len(actual.elements) {
-		return fmt.Errorf("elements len %d is wrong, want %d", len(actual.elements), len(expected.elements))
+		return NewFatalError(fmt.Errorf("elements len %d is wrong, want %d", len(actual.elements), len(expected.elements)))
 	}
 
 	// Compare element
@@ -546,7 +564,7 @@ func arrayDataSlabEqual(
 		ee := expected.elements[i]
 		ae := actual.elements[i]
 		if !compare(ee, ae) {
-			return fmt.Errorf("element %d %+v is wrong, want %+v", i, ae, ee)
+			return NewFatalError(fmt.Errorf("element %d %+v is wrong, want %+v", i, ae, ee))
 		}
 
 		// Compare nested element
@@ -554,6 +572,7 @@ func arrayDataSlabEqual(
 
 			ev, err := idStorable.StoredValue(storage)
 			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by StorageIDStorable.StoredValue().
 				return err
 			}
 
@@ -576,22 +595,23 @@ func arrayMetaDataSlabEqual(expected, actual *ArrayMetaDataSlab) error {
 	// Compare extra data
 	err := arrayExtraDataEqual(expected.extraData, actual.extraData)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by arrayExtraDataEqual().
 		return err
 	}
 
 	// Compare header
 	if !reflect.DeepEqual(expected.header, actual.header) {
-		return fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header)
+		return NewFatalError(fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header))
 	}
 
 	// Compare childrenHeaders
 	if !reflect.DeepEqual(expected.childrenHeaders, actual.childrenHeaders) {
-		return fmt.Errorf("childrenHeaders %+v is wrong, want %+v", actual.childrenHeaders, expected.childrenHeaders)
+		return NewFatalError(fmt.Errorf("childrenHeaders %+v is wrong, want %+v", actual.childrenHeaders, expected.childrenHeaders))
 	}
 
 	// Compare childrenCountSum
 	if !reflect.DeepEqual(expected.childrenCountSum, actual.childrenCountSum) {
-		return fmt.Errorf("childrenCountSum %+v is wrong, want %+v", actual.childrenCountSum, expected.childrenCountSum)
+		return NewFatalError(fmt.Errorf("childrenCountSum %+v is wrong, want %+v", actual.childrenCountSum, expected.childrenCountSum))
 	}
 
 	return nil
@@ -604,11 +624,11 @@ func arrayExtraDataEqual(expected, actual *ArrayExtraData) error {
 	}
 
 	if (expected == nil) != (actual == nil) {
-		return fmt.Errorf("has extra data is %t, want %t", actual == nil, expected == nil)
+		return NewFatalError(fmt.Errorf("has extra data is %t, want %t", actual == nil, expected == nil))
 	}
 
 	if !reflect.DeepEqual(*expected, *actual) {
-		return fmt.Errorf("extra data %+v is wrong, want %+v", *actual, *expected)
+		return NewFatalError(fmt.Errorf("extra data %+v is wrong, want %+v", *actual, *expected))
 	}
 
 	return nil
@@ -626,6 +646,7 @@ func getEncodedArrayExtraDataSize(extraData *ArrayExtraData, cborEncMode cbor.En
 	// so the content of the flag doesn't matter.
 	err := extraData.Encode(enc, byte(0))
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by ArrayExtraData.Encode().
 		return 0, err
 	}
 

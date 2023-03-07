@@ -55,7 +55,8 @@ func (s StorableSlab) Encode(enc *Encoder) error {
 
 	err = s.Storable.Encode(enc)
 	if err != nil {
-		return NewEncodingError(err)
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable")
 	}
 
 	return nil
@@ -70,7 +71,12 @@ func (s StorableSlab) ID() StorageID {
 }
 
 func (s StorableSlab) StoredValue(storage SlabStorage) (Value, error) {
-	return s.Storable.StoredValue(storage)
+	value, err := s.Storable.StoredValue(storage)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
+	}
+	return value, nil
 }
 
 func (StorableSlab) Split(_ SlabStorage) (Slab, Slab, error) {

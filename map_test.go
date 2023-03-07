@@ -657,7 +657,11 @@ func TestMapHas(t *testing.T) {
 		require.NoError(t, err)
 
 		exist, err := m.Has(compare, hashInputProvider, Uint64Value(0))
-		require.Equal(t, testErr, err)
+		// err is testErr wrapped in ExternalError.
+		require.Error(t, err)
+		var externalError *ExternalError
+		require.ErrorAs(t, err, &externalError)
+		require.Equal(t, testErr, externalError.Unwrap())
 		require.False(t, exist)
 	})
 }

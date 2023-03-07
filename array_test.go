@@ -822,8 +822,11 @@ func TestArrayIterate(t *testing.T) {
 			i++
 			return true, nil
 		})
+		// err is testErr wrapped in ExternalError.
 		require.Error(t, err)
-		require.Equal(t, testErr, err)
+		var externalError *ExternalError
+		require.ErrorAs(t, err, &externalError)
+		require.Equal(t, testErr, externalError.Unwrap())
 		require.Equal(t, count/2, i)
 	})
 }
@@ -984,8 +987,11 @@ func TestArrayIterateRange(t *testing.T) {
 			i++
 			return true, nil
 		})
+		// err is testErr wrapped in ExternalError.
 		require.Error(t, err)
-		require.Equal(t, testErr, err)
+		var externalError *ExternalError
+		require.ErrorAs(t, err, &externalError)
+		require.Equal(t, testErr, externalError.Unwrap())
 		require.Equal(t, count/2, i)
 	})
 }

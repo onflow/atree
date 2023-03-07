@@ -82,7 +82,8 @@ func newBasicArrayDataSlabFromData(
 	for i := 0; i < int(elemCount); i++ {
 		storable, err := decodeStorable(cborDec, StorageIDUndefined)
 		if err != nil {
-			return nil, NewDecodingError(err)
+			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode array element")
 		}
 		elements[i] = storable
 	}
@@ -115,7 +116,8 @@ func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 	for i := 0; i < len(a.elements); i++ {
 		err := a.elements[i].Encode(enc)
 		if err != nil {
-			return NewEncodingError(err)
+			// Wrap err as external error (if needed) because err is returned by Storable interface.
+			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode array element")
 		}
 	}
 	err = enc.CBOR.Flush()
@@ -155,7 +157,8 @@ func (a *BasicArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) 
 
 	err := storage.Store(a.header.id, a)
 	if err != nil {
-		return err
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.id))
 	}
 
 	return nil
@@ -179,7 +182,8 @@ func (a *BasicArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storabl
 
 	err := storage.Store(a.header.id, a)
 	if err != nil {
-		return err
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.id))
 	}
 
 	return nil
@@ -207,7 +211,8 @@ func (a *BasicArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable
 
 	err := storage.Store(a.header.id, a)
 	if err != nil {
-		return nil, err
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.id))
 	}
 
 	return v, nil
@@ -252,7 +257,8 @@ func (a *BasicArrayDataSlab) BorrowFromRight(_ Slab) error {
 func NewBasicArray(storage SlabStorage, address Address) (*BasicArray, error) {
 	sID, err := storage.GenerateStorageID(address)
 	if err != nil {
-		return nil, err
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate storage ID for address 0x%x", address))
 	}
 
 	root := &BasicArrayDataSlab{
@@ -282,7 +288,8 @@ func NewBasicArrayWithRootID(storage SlabStorage, id StorageID) (*BasicArray, er
 	}
 	slab, found, err := storage.Retrieve(id)
 	if err != nil {
-		return nil, err
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", id))
 	}
 	if !found {
 		return nil, NewSlabNotFoundErrorf(id, "BasicArray slab not found")
@@ -297,38 +304,55 @@ func NewBasicArrayWithRootID(storage SlabStorage, id StorageID) (*BasicArray, er
 func (a *BasicArray) Get(index uint64) (Value, error) {
 	storable, err := a.root.Get(a.storage, index)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by BasicArrayDataSlab.Get().
 		return nil, err
 	}
-	return storable.StoredValue(a.storage)
+	value, err := storable.StoredValue(a.storage)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
+	}
+	return value, nil
 }
 
 func (a *BasicArray) Set(index uint64, v Value) error {
 	storable, err := v.Storable(a.storage, a.Address(), MaxInlineArrayElementSize)
 	if err != nil {
-		return err
+		// Wrap err as external error (if needed) because err is returned by Value interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
 	}
+	// Don't need to wrap error as external error because err is already categorized by BasicArrayDataSlab.Set().
 	return a.root.Set(a.storage, index, storable)
 }
 
 func (a *BasicArray) Append(v Value) error {
 	index := uint64(a.root.header.count)
+	// Don't need to wrap error as external error because err is already categorized by BasicArray.Insert().
 	return a.Insert(index, v)
 }
 
 func (a *BasicArray) Insert(index uint64, v Value) error {
 	storable, err := v.Storable(a.storage, a.Address(), MaxInlineArrayElementSize)
 	if err != nil {
-		return err
+		// Wrap err as external error (if needed) because err is returned by Value interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
 	}
+	// Don't need to wrap error as external error because err is already categorized by BasicArrayDataSlab.Insert().
 	return a.root.Insert(a.storage, index, storable)
 }
 
 func (a *BasicArray) Remove(index uint64) (Value, error) {
 	storable, err := a.root.Remove(a.storage, index)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by BasicArrayDataSlab.Remove().
 		return nil, err
 	}
-	return storable.StoredValue(a.storage)
+	value, err := storable.StoredValue(a.storage)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
+	}
+	return value, nil
 }
 
 func (a *BasicArray) Count() uint64 {

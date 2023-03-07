@@ -105,10 +105,10 @@ func (id StorageID) IndexAsUint64() uint64 {
 
 func (id StorageID) Valid() error {
 	if id == StorageIDUndefined {
-		return NewStorageIDErrorf("undefined storage id")
+		return NewStorageIDError("undefined storage id")
 	}
 	if id.Index == StorageIndexUndefined {
-		return NewStorageIDErrorf("undefined storage index")
+		return NewStorageIDError("undefined storage index")
 	}
 	return nil
 }
@@ -170,23 +170,50 @@ func NewLedgerBaseStorage(ledger Ledger) *LedgerBaseStorage {
 func (s *LedgerBaseStorage) Retrieve(id StorageID) ([]byte, bool, error) {
 	v, err := s.ledger.GetValue(id.Address[:], SlabIndexToLedgerKey(id.Index))
 	s.bytesRetrieved += len(v)
-	return v, len(v) > 0, err
+
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by Ledger interface.
+		return nil, false, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", id))
+	}
+
+	return v, len(v) > 0, nil
 }
 
 func (s *LedgerBaseStorage) Store(id StorageID, data []byte) error {
 	s.bytesStored += len(data)
-	return s.ledger.SetValue(id.Address[:], SlabIndexToLedgerKey(id.Index), data)
+	err := s.ledger.SetValue(id.Address[:], SlabIndexToLedgerKey(id.Index), data)
+
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by Ledger interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
+	}
+
+	return nil
 }
 
 func (s *LedgerBaseStorage) Remove(id StorageID) error {
-	return s.ledger.SetValue(id.Address[:], SlabIndexToLedgerKey(id.Index), nil)
+	err := s.ledger.SetValue(id.Address[:], SlabIndexToLedgerKey(id.Index), nil)
+
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by Ledger interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", id))
+	}
+
+	return nil
 }
 
 func (s *LedgerBaseStorage) GenerateStorageID(address Address) (StorageID, error) {
 	idx, err := s.ledger.AllocateStorageIndex(address[:])
+
 	if err != nil {
-		return StorageID{}, err
+		// Wrap err as external error (if needed) because err is returned by Ledger interface.
+		return StorageID{},
+			wrapErrorfAsExternalErrorIfNeeded(
+				err,
+				fmt.Sprintf("failed to generate storage ID with address 0x%x", address),
+			)
 	}
+
 	return NewStorageID(address, idx), nil
 }
 
@@ -316,6 +343,7 @@ func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
 	for id, slab := range s.Slabs {
 		b, err := Encode(slab, s.cborEncMode)
 		if err != nil {
+			// err is already categorized by Encode().
 			return nil, err
 		}
 		m[id] = b
@@ -363,7 +391,8 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map
 
 	slabIterator, err := storage.SlabIterator()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create slab iterator: %w", err)
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to create slab iterator")
 	}
 
 	slabs := map[StorageID]Slab{}
@@ -375,7 +404,7 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map
 		}
 
 		if _, ok := slabs[id]; ok {
-			return nil, fmt.Errorf("duplicate slab: %s", id)
+			return nil, NewFatalError(fmt.Errorf("duplicate slab %s", id))
 		}
 		slabs[id] = slab
 
@@ -391,7 +420,7 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map
 				if sids, ok := s.(StorageIDStorable); ok {
 					sid := StorageID(sids)
 					if _, found := parentOf[sid]; found {
-						return nil, fmt.Errorf("two parents are captured for the slab %s", sid)
+						return nil, NewFatalError(fmt.Errorf("two parents are captured for the slab %s", sid))
 					}
 					parentOf[sid] = id
 					atLeastOneExternalSlab = true
@@ -414,7 +443,7 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map
 	for _, leaf := range leaves {
 		id = leaf
 		if _, ok := visited[id]; ok {
-			return nil, fmt.Errorf("atleast two references found to the leaf slab %s", id)
+			return nil, NewFatalError(fmt.Errorf("at least two references found to the leaf slab %s", id))
 		}
 		visited[id] = struct{}{}
 		for {
@@ -427,24 +456,33 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map
 			visited[parentID] = struct{}{}
 
 			childSlab, ok, err := storage.Retrieve(id)
-			if !ok || err != nil {
-				return nil, fmt.Errorf("failed to get child slab: %w", err)
+			if !ok {
+				return nil, NewSlabNotFoundErrorf(id, "failed to get child slab")
+			}
+			if err != nil {
+				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+				return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve child slab %s", id))
 			}
 
 			parentSlab, ok, err := storage.Retrieve(parentID)
-			if !ok || err != nil {
-				return nil, fmt.Errorf("failed to get parent slab: %w", err)
+			if !ok {
+				return nil, NewSlabNotFoundErrorf(id, "failed to get parent slab")
+			}
+			if err != nil {
+				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+				return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve parent slab %s", parentID))
 			}
 
 			childOwner := childSlab.ID().Address
 			parentOwner := parentSlab.ID().Address
 
 			if childOwner != parentOwner {
-				return nil, fmt.Errorf(
-					"parent and child are not owned by the same account: child.owner: %s, parent.owner: %s",
-					childOwner,
-					parentOwner,
-				)
+				return nil, NewFatalError(
+					fmt.Errorf(
+						"parent and child are not owned by the same account: child.owner %s, parent.owner %s",
+						childOwner,
+						parentOwner,
+					))
 			}
 			id = parentID
 		}
@@ -463,19 +501,21 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map
 			}
 		}
 
-		return nil, fmt.Errorf(
-			"slab was not reachable from leaves: %s: %s",
-			unreachableID,
-			unreachableSlab,
-		)
+		return nil, NewFatalError(
+			fmt.Errorf(
+				"slab was not reachable from leaves: %s: %s",
+				unreachableID,
+				unreachableSlab,
+			))
 	}
 
 	if (expectedNumberOfRootSlabs >= 0) && (len(rootsMap) != expectedNumberOfRootSlabs) {
-		return nil, fmt.Errorf(
-			"number of root slabs doesn't match: expected %d, got %d",
-			expectedNumberOfRootSlabs,
-			len(rootsMap),
-		)
+		return nil, NewFatalError(
+			fmt.Errorf(
+				"number of root slabs doesn't match: expected %d, got %d",
+				expectedNumberOfRootSlabs,
+				len(rootsMap),
+			))
 	}
 
 	return rootsMap, nil
@@ -531,7 +571,7 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 					return NewSlabNotFoundErrorf(id, "slab not found during slab iteration")
 				}
 				if err != nil {
-					return err
+					return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", id))
 				}
 
 				slabs = append(slabs, struct {
@@ -614,8 +654,6 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 	}, nil
 }
 
-var _ SlabStorage = &PersistentSlabStorage{}
-
 type StorageOption func(st *PersistentSlabStorage) *PersistentSlabStorage
 
 func NewPersistentSlabStorage(
@@ -651,7 +689,8 @@ func (s *PersistentSlabStorage) GenerateStorageID(address Address) (StorageID, e
 	}
 	id, err := s.baseStorage.GenerateStorageID(address)
 	if err != nil {
-		return StorageID{}, NewStorageError(err)
+		// Wrap err as external error (if needed) because err is returned by BaseStorage interface.
+		return StorageID{}, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate storage ID for address 0x%x", address))
 	}
 	return id, nil
 }
@@ -689,7 +728,8 @@ func (s *PersistentSlabStorage) Commit() error {
 		if slab == nil {
 			err = s.baseStorage.Remove(id)
 			if err != nil {
-				return NewStorageError(err)
+				// Wrap err as external error (if needed) because err is returned by BaseStorage interface.
+				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", id))
 			}
 			// Deleted slabs are removed from deltas and added to read cache so that:
 			// 1. next read is from in-memory read cache
@@ -702,13 +742,15 @@ func (s *PersistentSlabStorage) Commit() error {
 		// serialize
 		data, err := Encode(slab, s.cborEncMode)
 		if err != nil {
-			return NewStorageError(err)
+			// err is categorized already by Encode()
+			return err
 		}
 
 		// store
 		err = s.baseStorage.Store(id, data)
 		if err != nil {
-			return NewStorageError(err)
+			// Wrap err as external error (if needed) because err is returned by BaseStorage interface.
+			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
 		}
 
 		// add to read cache
@@ -815,7 +857,8 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		if result.err != nil {
 			// Closing done channel signals goroutines to stop.
 			close(done)
-			return NewStorageError(result.err)
+			// result.err is already categorized by Encode().
+			return result.err
 		}
 		encSlabByID[result.storageID] = result.data
 	}
@@ -830,7 +873,8 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		if data == nil {
 			err = s.baseStorage.Remove(id)
 			if err != nil {
-				return NewStorageError(err)
+				// Wrap err as external error (if needed) because err is returned by BaseStorage interface.
+				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", id))
 			}
 			// Deleted slabs are removed from deltas and added to read cache so that:
 			// 1. next read is from in-memory read cache
@@ -843,7 +887,8 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		// store
 		err = s.baseStorage.Store(id, data)
 		if err != nil {
-			return NewStorageError(err)
+			// Wrap err as external error (if needed) because err is returned by BaseStorage interface.
+			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
 		}
 
 		s.cache[id] = s.deltas[id]
@@ -876,7 +921,8 @@ func (s *PersistentSlabStorage) RetrieveIgnoringDeltas(id StorageID) (Slab, bool
 	// fetch from base storage last
 	data, ok, err := s.baseStorage.Retrieve(id)
 	if err != nil {
-		return nil, ok, NewStorageError(err)
+		// Wrap err as external error (if needed) because err is returned by BaseStorage interface.
+		return nil, ok, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", id))
 	}
 	if !ok {
 		return nil, ok, nil
@@ -884,7 +930,8 @@ func (s *PersistentSlabStorage) RetrieveIgnoringDeltas(id StorageID) (Slab, bool
 
 	slab, err := DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
 	if err != nil {
-		return nil, ok, NewStorageError(err)
+		// err is already categorized by DecodeSlab().
+		return nil, ok, err
 	}
 
 	// save decoded slab to cache
@@ -899,6 +946,7 @@ func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
 		return slab, slab != nil, nil
 	}
 
+	// Don't need to wrap error as external error because err is already categorized by PersistentSlabStorage.RetrieveIgnoringDeltas().
 	return s.RetrieveIgnoringDeltas(id)
 }
 

@@ -155,8 +155,13 @@ func TestArrayAppendAndGet(t *testing.T) {
 
 	storable, err := array.Get(array.Count())
 	require.Nil(t, storable)
+	require.Equal(t, 1, errorCategorizationCount(err))
+
+	var userError *UserError
 	var indexOutOfBoundsError *IndexOutOfBoundsError
+	require.ErrorAs(t, err, &userError)
 	require.ErrorAs(t, err, &indexOutOfBoundsError)
+	require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
 
 	verifyArray(t, storage, typeInfo, address, array, values, false)
 }
@@ -316,8 +321,13 @@ func TestArraySetAndGet(t *testing.T) {
 		v := NewStringValue(randStr(r, 1024))
 		storable, err := array.Set(array.Count(), v)
 		require.Nil(t, storable)
+		require.Equal(t, 1, errorCategorizationCount(err))
+
+		var userError *UserError
 		var indexOutOfBoundsError *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &indexOutOfBoundsError)
+		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})
@@ -428,8 +438,13 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 		v := NewStringValue(randStr(r, 1024))
 		err = array.Insert(array.Count()+1, v)
+		require.Equal(t, 1, errorCategorizationCount(err))
+
+		var userError *UserError
 		var indexOutOfBoundsError *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &indexOutOfBoundsError)
+		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})
@@ -609,8 +624,13 @@ func TestArrayRemove(t *testing.T) {
 
 		storable, err := array.Remove(array.Count())
 		require.Nil(t, storable)
+		require.Equal(t, 1, errorCategorizationCount(err))
+
+		var userError *UserError
 		var indexOutOfBounds *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &indexOutOfBounds)
+		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBounds)
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})
@@ -823,10 +843,11 @@ func TestArrayIterate(t *testing.T) {
 			return true, nil
 		})
 		// err is testErr wrapped in ExternalError.
-		require.Error(t, err)
+		require.Equal(t, 1, errorCategorizationCount(err))
 		var externalError *ExternalError
 		require.ErrorAs(t, err, &externalError)
 		require.Equal(t, testErr, externalError.Unwrap())
+
 		require.Equal(t, count/2, i)
 	})
 }
@@ -844,7 +865,12 @@ func testArrayIterateRange(t *testing.T, storage *PersistentSlabStorage, array *
 		i++
 		return true, nil
 	})
+	require.Equal(t, 1, errorCategorizationCount(err))
+
+	var userError *UserError
+	require.ErrorAs(t, err, &userError)
 	require.ErrorAs(t, err, &sliceOutOfBoundsError)
+	require.ErrorAs(t, userError.Unwrap(), &sliceOutOfBoundsError)
 	require.Equal(t, uint64(0), i)
 
 	// If endIndex > count, IterateRange returns SliceOutOfBoundsError
@@ -852,7 +878,10 @@ func testArrayIterateRange(t *testing.T, storage *PersistentSlabStorage, array *
 		i++
 		return true, nil
 	})
+	require.Equal(t, 1, errorCategorizationCount(err))
+	require.ErrorAs(t, err, &userError)
 	require.ErrorAs(t, err, &sliceOutOfBoundsError)
+	require.ErrorAs(t, userError.Unwrap(), &sliceOutOfBoundsError)
 	require.Equal(t, uint64(0), i)
 
 	// If startIndex > endIndex, IterateRange returns InvalidSliceIndexError
@@ -861,7 +890,10 @@ func testArrayIterateRange(t *testing.T, storage *PersistentSlabStorage, array *
 			i++
 			return true, nil
 		})
+		require.Equal(t, 1, errorCategorizationCount(err))
+		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &invalidSliceIndexError)
+		require.ErrorAs(t, userError.Unwrap(), &invalidSliceIndexError)
 		require.Equal(t, uint64(0), i)
 	}
 
@@ -988,13 +1020,14 @@ func TestArrayIterateRange(t *testing.T) {
 			return true, nil
 		})
 		// err is testErr wrapped in ExternalError.
-		require.Error(t, err)
+		require.Equal(t, 1, errorCategorizationCount(err))
 		var externalError *ExternalError
 		require.ErrorAs(t, err, &externalError)
 		require.Equal(t, testErr, externalError.Unwrap())
 		require.Equal(t, count/2, i)
 	})
 }
+
 func TestArrayRootStorageID(t *testing.T) {
 	SetThreshold(256)
 	defer SetThreshold(1024)
@@ -1773,24 +1806,44 @@ func TestEmptyArray(t *testing.T) {
 
 	t.Run("get", func(t *testing.T) {
 		s, err := array.Get(0)
-		require.Error(t, err, IndexOutOfBoundsError{})
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var userError *UserError
+		var indexOutOfBoundsError *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &userError)
+		require.ErrorAs(t, err, &indexOutOfBoundsError)
+		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
 		require.Nil(t, s)
 	})
 
 	t.Run("set", func(t *testing.T) {
 		s, err := array.Set(0, Uint64Value(0))
-		require.Error(t, err, IndexOutOfBoundsError{})
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var userError *UserError
+		var indexOutOfBoundsError *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &userError)
+		require.ErrorAs(t, err, &indexOutOfBoundsError)
+		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
 		require.Nil(t, s)
 	})
 
 	t.Run("insert", func(t *testing.T) {
 		err := array.Insert(1, Uint64Value(0))
-		require.Error(t, err, IndexOutOfBoundsError{})
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var userError *UserError
+		var indexOutOfBoundsError *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &userError)
+		require.ErrorAs(t, err, &indexOutOfBoundsError)
+		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
 	})
 
 	t.Run("remove", func(t *testing.T) {
 		s, err := array.Remove(0)
-		require.Error(t, err, IndexOutOfBoundsError{})
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var userError *UserError
+		var indexOutOfBoundsError *IndexOutOfBoundsError
+		require.ErrorAs(t, err, &userError)
+		require.ErrorAs(t, err, &indexOutOfBoundsError)
+		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
 		require.Nil(t, s)
 	})
 
@@ -1928,7 +1981,12 @@ func TestArrayStoredValue(t *testing.T) {
 
 			verifyArray(t, storage, typeInfo, address, array2, values, false)
 		} else {
-			require.Error(t, err)
+			require.Equal(t, 1, errorCategorizationCount(err))
+			var fatalError *FatalError
+			var notValueError *NotValueError
+			require.ErrorAs(t, err, &fatalError)
+			require.ErrorAs(t, err, &notValueError)
+			require.ErrorAs(t, fatalError.Unwrap(), &notValueError)
 			require.Nil(t, value)
 		}
 	}
@@ -2515,4 +2573,22 @@ func TestArraySlabDump(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, want, dumps)
 	})
+}
+
+func errorCategorizationCount(err error) int {
+	var fatalError *FatalError
+	var userError *UserError
+	var externalError *ExternalError
+
+	count := 0
+	if errors.As(err, &fatalError) {
+		count++
+	}
+	if errors.As(err, &userError) {
+		count++
+	}
+	if errors.As(err, &externalError) {
+		count++
+	}
+	return count
 }

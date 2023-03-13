@@ -172,7 +172,7 @@ func newArrayExtraDataFromData(
 	// Check flag
 	flag := data[1]
 	if !isRoot(flag) {
-		return nil, data, NewDecodingError(fmt.Errorf("array extra data has invalid flag 0x%x, want root flag", flag))
+		return nil, data, NewDecodingErrorf("array extra data has invalid flag 0x%x, want root flag", flag)
 	}
 
 	// Decode extra data

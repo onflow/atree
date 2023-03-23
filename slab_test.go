@@ -60,21 +60,21 @@ func TestIsRootOfAnObject(t *testing.T) {
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
-		require.ErrorAs(t, fatalError.Unwrap(), &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		isRoot, err = IsRootOfAnObject([]byte{})
 		require.False(t, isRoot)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
-		require.ErrorAs(t, fatalError.Unwrap(), &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		isRoot, err = IsRootOfAnObject([]byte{0x00})
 		require.False(t, isRoot)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
-		require.ErrorAs(t, fatalError.Unwrap(), &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 	})
 }
 
@@ -114,21 +114,21 @@ func TestHasPointers(t *testing.T) {
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
-		require.ErrorAs(t, fatalError.Unwrap(), &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		hasPointers, err = HasPointers([]byte{})
 		require.False(t, hasPointers)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
-		require.ErrorAs(t, fatalError.Unwrap(), &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		hasPointers, err = HasPointers([]byte{0x00})
 		require.False(t, hasPointers)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
-		require.ErrorAs(t, fatalError.Unwrap(), &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 	})
 }
 
@@ -168,20 +168,20 @@ func TestHasSizeLimit(t *testing.T) {
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
-		require.ErrorAs(t, fatalError.Unwrap(), &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		hasSizeLimit, err = HasSizeLimit([]byte{})
 		require.False(t, hasSizeLimit)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
-		require.ErrorAs(t, fatalError.Unwrap(), &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		hasSizeLimit, err = HasSizeLimit([]byte{0x00})
 		require.False(t, hasSizeLimit)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
-		require.ErrorAs(t, fatalError.Unwrap(), &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 	})
 }

@@ -56,14 +56,14 @@ func TestNewStorageIDFromRawBytes(t *testing.T) {
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &storageIDError)
-		require.ErrorAs(t, fatalError.Unwrap(), &storageIDError)
+		require.ErrorAs(t, fatalError, &storageIDError)
 
 		id, err = NewStorageIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 2})
 		require.Equal(t, StorageIDUndefined, id)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &storageIDError)
-		require.ErrorAs(t, fatalError.Unwrap(), &storageIDError)
+		require.ErrorAs(t, fatalError, &storageIDError)
 	})
 
 	t.Run("data length == storage id size", func(t *testing.T) {
@@ -98,7 +98,7 @@ func TestStorageIDToRawBytes(t *testing.T) {
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &storageIDError)
-		require.ErrorAs(t, fatalError.Unwrap(), &storageIDError)
+		require.ErrorAs(t, fatalError, &storageIDError)
 	})
 
 	t.Run("buffer too short", func(t *testing.T) {
@@ -111,7 +111,7 @@ func TestStorageIDToRawBytes(t *testing.T) {
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &storageIDError)
-		require.ErrorAs(t, fatalError.Unwrap(), &storageIDError)
+		require.ErrorAs(t, fatalError, &storageIDError)
 	})
 
 	t.Run("undefined", func(t *testing.T) {
@@ -190,7 +190,7 @@ func TestStorageIDValid(t *testing.T) {
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &storageIDError)
-		require.ErrorAs(t, fatalError.Unwrap(), &storageIDError)
+		require.ErrorAs(t, fatalError, &storageIDError)
 	})
 	t.Run("temp index", func(t *testing.T) {
 		id := StorageID{Address: Address{1}, Index: StorageIndexUndefined}
@@ -201,7 +201,7 @@ func TestStorageIDValid(t *testing.T) {
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &storageIDError)
-		require.ErrorAs(t, fatalError.Unwrap(), &storageIDError)
+		require.ErrorAs(t, fatalError, &storageIDError)
 	})
 	t.Run("temp address", func(t *testing.T) {
 		id := StorageID{Address: AddressUndefined, Index: StorageIndex{1}}

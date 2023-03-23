@@ -161,7 +161,7 @@ func TestArrayAppendAndGet(t *testing.T) {
 	var indexOutOfBoundsError *IndexOutOfBoundsError
 	require.ErrorAs(t, err, &userError)
 	require.ErrorAs(t, err, &indexOutOfBoundsError)
-	require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
+	require.ErrorAs(t, userError, &indexOutOfBoundsError)
 
 	verifyArray(t, storage, typeInfo, address, array, values, false)
 }
@@ -327,7 +327,7 @@ func TestArraySetAndGet(t *testing.T) {
 		var indexOutOfBoundsError *IndexOutOfBoundsError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &indexOutOfBoundsError)
-		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
+		require.ErrorAs(t, userError, &indexOutOfBoundsError)
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})
@@ -444,7 +444,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 		var indexOutOfBoundsError *IndexOutOfBoundsError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &indexOutOfBoundsError)
-		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
+		require.ErrorAs(t, userError, &indexOutOfBoundsError)
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})
@@ -630,7 +630,7 @@ func TestArrayRemove(t *testing.T) {
 		var indexOutOfBounds *IndexOutOfBoundsError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &indexOutOfBounds)
-		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBounds)
+		require.ErrorAs(t, userError, &indexOutOfBounds)
 
 		verifyArray(t, storage, typeInfo, address, array, values, false)
 	})
@@ -870,7 +870,7 @@ func testArrayIterateRange(t *testing.T, storage *PersistentSlabStorage, array *
 	var userError *UserError
 	require.ErrorAs(t, err, &userError)
 	require.ErrorAs(t, err, &sliceOutOfBoundsError)
-	require.ErrorAs(t, userError.Unwrap(), &sliceOutOfBoundsError)
+	require.ErrorAs(t, userError, &sliceOutOfBoundsError)
 	require.Equal(t, uint64(0), i)
 
 	// If endIndex > count, IterateRange returns SliceOutOfBoundsError
@@ -881,7 +881,7 @@ func testArrayIterateRange(t *testing.T, storage *PersistentSlabStorage, array *
 	require.Equal(t, 1, errorCategorizationCount(err))
 	require.ErrorAs(t, err, &userError)
 	require.ErrorAs(t, err, &sliceOutOfBoundsError)
-	require.ErrorAs(t, userError.Unwrap(), &sliceOutOfBoundsError)
+	require.ErrorAs(t, userError, &sliceOutOfBoundsError)
 	require.Equal(t, uint64(0), i)
 
 	// If startIndex > endIndex, IterateRange returns InvalidSliceIndexError
@@ -893,7 +893,7 @@ func testArrayIterateRange(t *testing.T, storage *PersistentSlabStorage, array *
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &invalidSliceIndexError)
-		require.ErrorAs(t, userError.Unwrap(), &invalidSliceIndexError)
+		require.ErrorAs(t, userError, &invalidSliceIndexError)
 		require.Equal(t, uint64(0), i)
 	}
 
@@ -1811,7 +1811,7 @@ func TestEmptyArray(t *testing.T) {
 		var indexOutOfBoundsError *IndexOutOfBoundsError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &indexOutOfBoundsError)
-		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
+		require.ErrorAs(t, userError, &indexOutOfBoundsError)
 		require.Nil(t, s)
 	})
 
@@ -1822,7 +1822,7 @@ func TestEmptyArray(t *testing.T) {
 		var indexOutOfBoundsError *IndexOutOfBoundsError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &indexOutOfBoundsError)
-		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
+		require.ErrorAs(t, userError, &indexOutOfBoundsError)
 		require.Nil(t, s)
 	})
 
@@ -1833,7 +1833,7 @@ func TestEmptyArray(t *testing.T) {
 		var indexOutOfBoundsError *IndexOutOfBoundsError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &indexOutOfBoundsError)
-		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
+		require.ErrorAs(t, userError, &indexOutOfBoundsError)
 	})
 
 	t.Run("remove", func(t *testing.T) {
@@ -1843,7 +1843,7 @@ func TestEmptyArray(t *testing.T) {
 		var indexOutOfBoundsError *IndexOutOfBoundsError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &indexOutOfBoundsError)
-		require.ErrorAs(t, userError.Unwrap(), &indexOutOfBoundsError)
+		require.ErrorAs(t, userError, &indexOutOfBoundsError)
 		require.Nil(t, s)
 	})
 
@@ -1986,7 +1986,7 @@ func TestArrayStoredValue(t *testing.T) {
 			var notValueError *NotValueError
 			require.ErrorAs(t, err, &fatalError)
 			require.ErrorAs(t, err, &notValueError)
-			require.ErrorAs(t, fatalError.Unwrap(), &notValueError)
+			require.ErrorAs(t, fatalError, &notValueError)
 			require.Nil(t, value)
 		}
 	}

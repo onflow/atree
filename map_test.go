@@ -512,7 +512,7 @@ func TestMapGetKeyNotFound(t *testing.T) {
 		var keyNotFoundError *KeyNotFoundError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
-		require.ErrorAs(t, userError.Unwrap(), &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -555,7 +555,7 @@ func TestMapGetKeyNotFound(t *testing.T) {
 		var keyNotFoundError *KeyNotFoundError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
-		require.ErrorAs(t, userError.Unwrap(), &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -598,7 +598,7 @@ func TestMapGetKeyNotFound(t *testing.T) {
 		var keyNotFoundError *KeyNotFoundError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
-		require.ErrorAs(t, userError.Unwrap(), &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -708,7 +708,7 @@ func testMapRemoveElement(t *testing.T, m *OrderedMap, k Value, expectedV Value)
 	var keyNotFoundError *KeyNotFoundError
 	require.ErrorAs(t, err, &userError)
 	require.ErrorAs(t, err, &keyNotFoundError)
-	require.ErrorAs(t, userError.Unwrap(), &keyNotFoundError)
+	require.ErrorAs(t, userError, &keyNotFoundError)
 	require.Nil(t, removedKeyStorable)
 	require.Nil(t, removedValueStorable)
 }
@@ -998,7 +998,7 @@ func TestMapRemove(t *testing.T) {
 		var keyNotFoundError *KeyNotFoundError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
-		require.ErrorAs(t, userError.Unwrap(), &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -1042,7 +1042,7 @@ func TestMapRemove(t *testing.T) {
 		var keyNotFoundError *KeyNotFoundError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
-		require.ErrorAs(t, userError.Unwrap(), &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -2816,7 +2816,7 @@ func TestMapStoredValue(t *testing.T) {
 			var notValueError *NotValueError
 			require.ErrorAs(t, err, &fatalError)
 			require.ErrorAs(t, err, &notValueError)
-			require.ErrorAs(t, fatalError.Unwrap(), &notValueError)
+			require.ErrorAs(t, fatalError, &notValueError)
 			require.Nil(t, value)
 		}
 	}
@@ -3043,7 +3043,7 @@ func TestEmptyMap(t *testing.T) {
 		var keyNotFoundError *KeyNotFoundError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
-		require.ErrorAs(t, userError.Unwrap(), &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 		require.Nil(t, s)
 	})
 
@@ -3054,7 +3054,7 @@ func TestEmptyMap(t *testing.T) {
 		var keyNotFoundError *KeyNotFoundError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
-		require.ErrorAs(t, userError.Unwrap(), &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 		require.Nil(t, existingKey)
 		require.Nil(t, existingValue)
 	})
@@ -3982,7 +3982,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 			var collisionLimitError *CollisionLimitError
 			require.ErrorAs(t, err, &fatalError)
 			require.ErrorAs(t, err, &collisionLimitError)
-			require.ErrorAs(t, fatalError.Unwrap(), &collisionLimitError)
+			require.ErrorAs(t, fatalError, &collisionLimitError)
 			require.Nil(t, existingStorable)
 		}
 
@@ -4056,7 +4056,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 			var collisionLimitError *CollisionLimitError
 			require.ErrorAs(t, err, &fatalError)
 			require.ErrorAs(t, err, &collisionLimitError)
-			require.ErrorAs(t, fatalError.Unwrap(), &collisionLimitError)
+			require.ErrorAs(t, fatalError, &collisionLimitError)
 			require.Nil(t, existingStorable)
 		}
 

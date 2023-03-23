@@ -353,7 +353,7 @@ func (v StringValue) Storable(storage atree.SlabStorage, address atree.Address, 
 		// Create StorableSlab
 		id, err := storage.GenerateStorageID(address)
 		if err != nil {
-			return nil, atree.NewStorageError(err)
+			return nil, err
 		}
 
 		slab := &atree.StorableSlab{

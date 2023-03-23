@@ -50,21 +50,31 @@ func TestIsRootOfAnObject(t *testing.T) {
 	}
 
 	t.Run("data too short", func(t *testing.T) {
+		var fatalError *FatalError
 		var decodingError *DecodingError
 		var isRoot bool
 		var err error
 
 		isRoot, err = IsRootOfAnObject(nil)
 		require.False(t, isRoot)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		isRoot, err = IsRootOfAnObject([]byte{})
 		require.False(t, isRoot)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		isRoot, err = IsRootOfAnObject([]byte{0x00})
 		require.False(t, isRoot)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 	})
 }
 
@@ -94,21 +104,31 @@ func TestHasPointers(t *testing.T) {
 	}
 
 	t.Run("data too short", func(t *testing.T) {
+		var fatalError *FatalError
 		var decodingError *DecodingError
 		var hasPointers bool
 		var err error
 
 		hasPointers, err = HasPointers(nil)
 		require.False(t, hasPointers)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		hasPointers, err = HasPointers([]byte{})
 		require.False(t, hasPointers)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		hasPointers, err = HasPointers([]byte{0x00})
 		require.False(t, hasPointers)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 	})
 }
 
@@ -138,20 +158,30 @@ func TestHasSizeLimit(t *testing.T) {
 	}
 
 	t.Run("data too short", func(t *testing.T) {
+		var fatalError *FatalError
 		var decodingError *DecodingError
 		var hasSizeLimit bool
 		var err error
 
 		hasSizeLimit, err = HasSizeLimit(nil)
 		require.False(t, hasSizeLimit)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		hasSizeLimit, err = HasSizeLimit([]byte{})
 		require.False(t, hasSizeLimit)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 
 		hasSizeLimit, err = HasSizeLimit([]byte{0x00})
 		require.False(t, hasSizeLimit)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
+		require.ErrorAs(t, fatalError, &decodingError)
 	})
 }

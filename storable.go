@@ -55,17 +55,24 @@ func (v StorageIDStorable) ChildStorables() []Storable {
 func (v StorageIDStorable) StoredValue(storage SlabStorage) (Value, error) {
 	id := StorageID(v)
 	if err := id.Valid(); err != nil {
+		// Don't need to wrap error as external error because err is already categorized by StorageID.Valid().
 		return nil, err
 	}
 
 	slab, found, err := storage.Retrieve(id)
 	if err != nil {
-		return nil, err
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", id))
 	}
 	if !found {
 		return nil, NewSlabNotFoundErrorf(id, "slab not found for stored value")
 	}
-	return slab.StoredValue(storage)
+	value, err := slab.StoredValue(storage)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
+	}
+	return value, nil
 }
 
 // Encode encodes StorageIDStorable as
@@ -80,13 +87,18 @@ func (v StorageIDStorable) Encode(enc *Encoder) error {
 		0xd8, CBORTagStorageID,
 	})
 	if err != nil {
-		return err
+		return NewEncodingError(err)
 	}
 
 	copy(enc.Scratch[:], v.Address[:])
 	copy(enc.Scratch[8:], v.Index[:])
 
-	return enc.CBOR.EncodeBytes(enc.Scratch[:storageIDSize])
+	err = enc.CBOR.EncodeBytes(enc.Scratch[:storageIDSize])
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	return nil
 }
 
 func (v StorageIDStorable) ByteSize() uint32 {
@@ -105,12 +117,13 @@ func Encode(storable Storable, encMode cbor.EncMode) ([]byte, error) {
 
 	err := storable.Encode(enc)
 	if err != nil {
-		return nil, err
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable")
 	}
 
 	err = enc.CBOR.Flush()
 	if err != nil {
-		return nil, err
+		return nil, NewEncodingError(err)
 	}
 
 	return buf.Bytes(), nil
@@ -119,19 +132,14 @@ func Encode(storable Storable, encMode cbor.EncMode) ([]byte, error) {
 func DecodeStorageIDStorable(dec *cbor.StreamDecoder) (Storable, error) {
 	b, err := dec.DecodeBytes()
 	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	id, err := NewStorageIDFromRawBytes(b)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by NewStorageIDFromRawBytes().
 		return nil, err
 	}
 
-	if len(b) != storageIDSize {
-		return nil, NewStorageIDErrorf("incorrect storage id buffer length %d", len(b))
-	}
-
-	var address Address
-	copy(address[:], b)
-
-	var index StorageIndex
-	copy(index[:], b[8:])
-
-	id := NewStorageID(address, index)
 	return StorageIDStorable(id), nil
 }

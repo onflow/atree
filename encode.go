@@ -97,7 +97,8 @@ func DecodeSlab(
 		cborDec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
 		storable, err := decodeStorable(cborDec, id)
 		if err != nil {
-			return nil, NewDecodingError(err)
+			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode slab storable")
 		}
 		return StorableSlab{
 			StorageID: id,

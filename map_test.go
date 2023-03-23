@@ -507,8 +507,12 @@ func TestMapGetKeyNotFound(t *testing.T) {
 		k := NewStringValue(randStr(r, 1024))
 		storable, err := m.Get(compare, hashInputProvider, k)
 		require.Nil(t, storable)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var userError *UserError
 		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -546,8 +550,12 @@ func TestMapGetKeyNotFound(t *testing.T) {
 
 		storable, err := m.Get(compare, hashInputProvider, k)
 		require.Nil(t, storable)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var userError *UserError
 		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -585,8 +593,12 @@ func TestMapGetKeyNotFound(t *testing.T) {
 
 		storable, err := m.Get(compare, hashInputProvider, k)
 		require.Nil(t, storable)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var userError *UserError
 		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -657,7 +669,11 @@ func TestMapHas(t *testing.T) {
 		require.NoError(t, err)
 
 		exist, err := m.Has(compare, hashInputProvider, Uint64Value(0))
-		require.Equal(t, testErr, err)
+		// err is testErr wrapped in ExternalError.
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var externalError *ExternalError
+		require.ErrorAs(t, err, &externalError)
+		require.Equal(t, testErr, externalError.Unwrap())
 		require.False(t, exist)
 	})
 }
@@ -687,7 +703,12 @@ func testMapRemoveElement(t *testing.T, m *OrderedMap, k Value, expectedV Value)
 
 	// Remove the same key for the second time.
 	removedKeyStorable, removedValueStorable, err = m.Remove(compare, hashInputProvider, k)
-	require.Error(t, err, KeyNotFoundError{})
+	require.Equal(t, 1, errorCategorizationCount(err))
+	var userError *UserError
+	var keyNotFoundError *KeyNotFoundError
+	require.ErrorAs(t, err, &userError)
+	require.ErrorAs(t, err, &keyNotFoundError)
+	require.ErrorAs(t, userError, &keyNotFoundError)
 	require.Nil(t, removedKeyStorable)
 	require.Nil(t, removedValueStorable)
 }
@@ -972,8 +993,12 @@ func TestMapRemove(t *testing.T) {
 		existingKeyStorable, existingValueStorable, err := m.Remove(compare, hashInputProvider, k)
 		require.Nil(t, existingKeyStorable)
 		require.Nil(t, existingValueStorable)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var userError *UserError
 		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -1012,8 +1037,12 @@ func TestMapRemove(t *testing.T) {
 		existingKeyStorable, existingValueStorable, err := m.Remove(compare, hashInputProvider, k)
 		require.Nil(t, existingKeyStorable)
 		require.Nil(t, existingValueStorable)
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var userError *UserError
 		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -2782,7 +2811,12 @@ func TestMapStoredValue(t *testing.T) {
 
 			verifyMap(t, storage, typeInfo, address, m2, keyValues, nil, false)
 		} else {
-			require.Error(t, err)
+			require.Equal(t, 1, errorCategorizationCount(err))
+			var fatalError *FatalError
+			var notValueError *NotValueError
+			require.ErrorAs(t, err, &fatalError)
+			require.ErrorAs(t, err, &notValueError)
+			require.ErrorAs(t, fatalError, &notValueError)
 			require.Nil(t, value)
 		}
 	}
@@ -3004,13 +3038,23 @@ func TestEmptyMap(t *testing.T) {
 
 	t.Run("get", func(t *testing.T) {
 		s, err := m.Get(compare, hashInputProvider, Uint64Value(0))
-		require.Error(t, err, KeyNotFoundError{})
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var userError *UserError
+		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &userError)
+		require.ErrorAs(t, err, &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 		require.Nil(t, s)
 	})
 
 	t.Run("remove", func(t *testing.T) {
 		existingKey, existingValue, err := m.Remove(compare, hashInputProvider, Uint64Value(0))
-		require.Error(t, err, KeyNotFoundError{})
+		require.Equal(t, 1, errorCategorizationCount(err))
+		var userError *UserError
+		var keyNotFoundError *KeyNotFoundError
+		require.ErrorAs(t, err, &userError)
+		require.ErrorAs(t, err, &keyNotFoundError)
+		require.ErrorAs(t, userError, &keyNotFoundError)
 		require.Nil(t, existingKey)
 		require.Nil(t, existingValue)
 	})
@@ -3933,8 +3977,12 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		for k, v := range collisionKeyValues {
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.Equal(t, 1, errorCategorizationCount(err))
+			var fatalError *FatalError
 			var collisionLimitError *CollisionLimitError
+			require.ErrorAs(t, err, &fatalError)
 			require.ErrorAs(t, err, &collisionLimitError)
+			require.ErrorAs(t, fatalError, &collisionLimitError)
 			require.Nil(t, existingStorable)
 		}
 
@@ -4003,8 +4051,12 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		for k, v := range collisionKeyValues {
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.Equal(t, 1, errorCategorizationCount(err))
+			var fatalError *FatalError
 			var collisionLimitError *CollisionLimitError
+			require.ErrorAs(t, err, &fatalError)
 			require.ErrorAs(t, err, &collisionLimitError)
+			require.ErrorAs(t, fatalError, &collisionLimitError)
 			require.Nil(t, existingStorable)
 		}
 

@@ -107,7 +107,8 @@ func (bdb *basicDigesterBuilder) Digest(hip HashInputProvider, value Value) (Dig
 	msg, err := hip(value, digester.scratch[:])
 	if err != nil {
 		putDigester(digester)
-		return nil, err
+		// Wrap err as external error (if needed) because err is returned by HashInputProvider callback.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to generate hash input")
 	}
 
 	digester.msg = msg
@@ -131,6 +132,7 @@ func (bd *basicDigester) DigestPrefix(level uint) ([]Digest, error) {
 	for i := uint(0); i < level; i++ {
 		d, err := bd.Digest(i)
 		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by basicDigester.Digest().
 			return nil, err
 		}
 		prefix = append(prefix, d)

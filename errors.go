@@ -19,9 +19,46 @@
 package atree
 
 import (
+	"errors"
 	"fmt"
 	"runtime/debug"
 )
+
+type ExternalError struct {
+	msg string
+	err error
+}
+
+func NewExternalError(err error, msg string) error {
+	return &ExternalError{msg: msg, err: err}
+}
+
+func (e *ExternalError) Error() string {
+	if e.msg == "" {
+		return e.err.Error()
+	}
+	return fmt.Sprintf("%s: %s", e.msg, e.err.Error())
+}
+
+func (e *ExternalError) Unwrap() error {
+	return e.err
+}
+
+type UserError struct {
+	err error
+}
+
+func NewUserError(err error) error {
+	return &UserError{err: err}
+}
+
+func (e *UserError) Error() string {
+	return e.err.Error()
+}
+
+func (e *UserError) Unwrap() error {
+	return e.err
+}
 
 type FatalError struct {
 	err error
@@ -32,10 +69,12 @@ func NewFatalError(err error) error {
 }
 
 func (e *FatalError) Error() string {
-	return fmt.Sprintf("fatal error: %s", e.err.Error())
+	return e.err.Error()
 }
 
-func (e *FatalError) Unwrap() error { return e.err }
+func (e *FatalError) Unwrap() error {
+	return e.err
+}
 
 // SliceOutOfBoundsError is returned when index for array slice is out of bounds.
 type SliceOutOfBoundsError struct {
@@ -45,9 +84,16 @@ type SliceOutOfBoundsError struct {
 	max        uint64
 }
 
-// NewSliceOutOfBoundsError constructs a SliceOutOfBoundsError
-func NewSliceOutOfBoundsError(startIndex, endIndex, min, max uint64) *SliceOutOfBoundsError {
-	return &SliceOutOfBoundsError{startIndex: startIndex, endIndex: endIndex, min: min, max: max}
+// NewSliceOutOfBoundsError constructs a SliceOutOfBoundsError.
+func NewSliceOutOfBoundsError(startIndex, endIndex, min, max uint64) error {
+	return NewUserError(
+		&SliceOutOfBoundsError{
+			startIndex: startIndex,
+			endIndex:   endIndex,
+			min:        min,
+			max:        max,
+		},
+	)
 }
 
 func (e *SliceOutOfBoundsError) Error() string {
@@ -62,8 +108,13 @@ type InvalidSliceIndexError struct {
 }
 
 // NewInvalidSliceIndexError constructs an InvalidSliceIndexError
-func NewInvalidSliceIndexError(startIndex, endIndex uint64) *InvalidSliceIndexError {
-	return &InvalidSliceIndexError{startIndex: startIndex, endIndex: endIndex}
+func NewInvalidSliceIndexError(startIndex, endIndex uint64) error {
+	return NewUserError(
+		&InvalidSliceIndexError{
+			startIndex: startIndex,
+			endIndex:   endIndex,
+		},
+	)
 }
 
 func (e *InvalidSliceIndexError) Error() string {
@@ -78,30 +129,18 @@ type IndexOutOfBoundsError struct {
 }
 
 // NewIndexOutOfBoundsError constructs a IndexOutOfBoundsError
-func NewIndexOutOfBoundsError(index, min, max uint64) *IndexOutOfBoundsError {
-	return &IndexOutOfBoundsError{index: index, min: min, max: max}
+func NewIndexOutOfBoundsError(index, min, max uint64) error {
+	return NewUserError(
+		&IndexOutOfBoundsError{
+			index: index,
+			min:   min,
+			max:   max,
+		},
+	)
 }
 
 func (e *IndexOutOfBoundsError) Error() string {
 	return fmt.Sprintf("index %d is outside required range (%d-%d)", e.index, e.min, e.max)
-}
-
-// MaxArraySizeError is returned when an insert or delete operation is attempted on an array which has reached maximum size
-type MaxArraySizeError struct {
-	maxLen uint64
-}
-
-// NewMaxArraySizeError constructs a MaxArraySizeError
-func NewMaxArraySizeError(maxLen uint64) *MaxArraySizeError {
-	return &MaxArraySizeError{maxLen: maxLen}
-}
-
-func (e *MaxArraySizeError) Error() string {
-	return fmt.Sprintf("array reached its maximum number of elements %d", e.maxLen)
-}
-
-func (e *MaxArraySizeError) Fatal() error {
-	return NewFatalError(e)
 }
 
 // NotValueError is returned when we try to create Value objects from non-root slabs.
@@ -110,27 +149,12 @@ type NotValueError struct {
 }
 
 // NewNotValueError constructs a NotValueError.
-func NewNotValueError(id StorageID) *NotValueError {
-	return &NotValueError{id: id}
+func NewNotValueError(id StorageID) error {
+	return NewFatalError(&NotValueError{id: id})
 }
 
 func (e *NotValueError) Error() string {
 	return fmt.Sprintf("slab (%s) cannot be used to create Value object", e.id)
-}
-
-// MaxKeySizeError is returned when a dictionary key is too large
-type MaxKeySizeError struct {
-	keyStr     string
-	maxKeySize uint64
-}
-
-// NewMaxKeySizeError constructs a MaxKeySizeError
-func NewMaxKeySizeError(keyStr string, maxKeySize uint64) *MaxKeySizeError {
-	return &MaxKeySizeError{keyStr: keyStr, maxKeySize: maxKeySize}
-}
-
-func (e *MaxKeySizeError) Error() string {
-	return fmt.Sprintf("key (%s) is larger than maximum size %d", e.keyStr, e.maxKeySize)
 }
 
 // DuplicateKeyError is returned when the duplicate key is found in the dictionary when none is expected.
@@ -139,7 +163,7 @@ type DuplicateKeyError struct {
 }
 
 func NewDuplicateKeyError(key interface{}) error {
-	return &DuplicateKeyError{key: key}
+	return NewFatalError(&DuplicateKeyError{key: key})
 }
 
 func (e *DuplicateKeyError) Error() string {
@@ -152,8 +176,8 @@ type KeyNotFoundError struct {
 }
 
 // NewKeyNotFoundError constructs a KeyNotFoundError
-func NewKeyNotFoundError(key interface{}) *KeyNotFoundError {
-	return &KeyNotFoundError{key: key}
+func NewKeyNotFoundError(key interface{}) error {
+	return NewUserError(&KeyNotFoundError{key: key})
 }
 
 func (e *KeyNotFoundError) Error() string {
@@ -183,45 +207,27 @@ func NewHashError(err error) error {
 }
 
 func (e *HashError) Error() string {
-	return fmt.Sprintf("atree hasher error: %s", e.err.Error())
+	return fmt.Sprintf("hasher error: %s", e.err.Error())
 }
-
-// Unwrap returns the wrapped err
-func (e *HashError) Unwrap() error { return e.err }
 
 // StorageIDError is returned when storage id can't be created or it's invalid.
 type StorageIDError struct {
 	msg string
 }
 
-func NewStorageIDError(msg string) *StorageIDError {
-	return &StorageIDError{msg: msg}
+// NewStorageIDError constructs a fatal error of StorageIDError.
+func NewStorageIDError(msg string) error {
+	return NewFatalError(&StorageIDError{msg: msg})
 }
 
+// NewStorageIDErrorf constructs a fatal error of StorageIDError.
 func NewStorageIDErrorf(msg string, args ...interface{}) error {
-	return &StorageIDError{msg: fmt.Sprintf(msg, args...)}
+	return NewStorageIDError(fmt.Sprintf(msg, args...))
 }
 
 func (e *StorageIDError) Error() string {
 	return fmt.Sprintf("storage id error: %s", e.msg)
 }
-
-// StorageError is always a fatal error returned when storage fails
-type StorageError struct {
-	err error
-}
-
-// NewStorageError constructs a StorageError
-func NewStorageError(err error) error {
-	return NewFatalError(&StorageError{err: err})
-}
-
-func (e *StorageError) Error() string {
-	return fmt.Sprintf("storage error: %s", e.err.Error())
-}
-
-// Unwrap returns the wrapped err
-func (e *StorageError) Unwrap() error { return e.err }
 
 // SlabNotFoundError is always a fatal error returned when an slab is not found
 type SlabNotFoundError struct {
@@ -243,9 +249,6 @@ func (e *SlabNotFoundError) Error() string {
 	return fmt.Sprintf("slab (%s) not found: %s", e.storageID.String(), e.err.Error())
 }
 
-// Unwrap returns the wrapped err
-func (e *SlabNotFoundError) Unwrap() error { return e.err }
-
 // SlabSplitError is always a fatal error returned when splitting an slab has failed
 type SlabSplitError struct {
 	err error
@@ -264,8 +267,6 @@ func NewSlabSplitErrorf(msg string, args ...interface{}) error {
 func (e *SlabSplitError) Error() string {
 	return fmt.Sprintf("slab failed to split: %s", e.err.Error())
 }
-
-func (e *SlabSplitError) Unwrap() error { return e.err }
 
 // SlabMergeError is always a fatal error returned when merging two slabs fails
 type SlabMergeError struct {
@@ -286,8 +287,6 @@ func (e *SlabMergeError) Error() string {
 	return fmt.Sprintf("slabs failed to merge: %s", e.err.Error())
 }
 
-func (e *SlabMergeError) Unwrap() error { return e.err }
-
 // SlabRebalanceError is always a fatal error returned when rebalancing a slab has failed
 type SlabRebalanceError struct {
 	err error
@@ -306,8 +305,6 @@ func NewSlabRebalanceErrorf(msg string, args ...interface{}) error {
 func (e *SlabRebalanceError) Error() string {
 	return fmt.Sprintf("slabs failed to rebalance: %s", e.err.Error())
 }
-
-func (e *SlabRebalanceError) Unwrap() error { return e.err }
 
 // SlabError is a always fatal error returned when something is wrong with the content or type of the slab
 // you can make this a fatal error by calling Fatal()
@@ -329,8 +326,6 @@ func (e *SlabDataError) Error() string {
 	return fmt.Sprintf("slab data error: %s", e.err.Error())
 }
 
-func (e *SlabDataError) Unwrap() error { return e.err }
-
 // EncodingError is a fatal error returned when a encoding operation fails
 type EncodingError struct {
 	err error
@@ -350,8 +345,6 @@ func (e *EncodingError) Error() string {
 	return fmt.Sprintf("encoding error: %s", e.err.Error())
 }
 
-func (e *EncodingError) Unwrap() error { return e.err }
-
 // DecodingError is a fatal error returned when a decoding operation fails
 type DecodingError struct {
 	err error
@@ -370,8 +363,6 @@ func NewDecodingErrorf(msg string, args ...interface{}) error {
 func (e *DecodingError) Error() string {
 	return fmt.Sprintf("decoding error: %s", e.err.Error())
 }
-
-func (e *DecodingError) Unwrap() error { return e.err }
 
 // NotImplementedError is a fatal error returned when a method is called which is not yet implemented
 // this is a temporary error
@@ -427,12 +418,12 @@ type UnreachableError struct {
 	Stack []byte
 }
 
-func (e UnreachableError) Error() string {
-	return fmt.Sprintf("unreachable\n%s", e.Stack)
+func NewUnreachableError() error {
+	return NewFatalError(&UnreachableError{Stack: debug.Stack()})
 }
 
-func NewUnreachableError() *UnreachableError {
-	return &UnreachableError{Stack: debug.Stack()}
+func (e UnreachableError) Error() string {
+	return fmt.Sprintf("unreachable\n%s", e.Stack)
 }
 
 // CollisionLimitError is a fatal error returned when a noncryptographic hash collision
@@ -463,4 +454,28 @@ func NewMapElementCountError(msg string) error {
 
 func (e *MapElementCountError) Error() string {
 	return e.msg
+}
+
+func wrapErrorAsExternalErrorIfNeeded(err error) error {
+	return wrapErrorfAsExternalErrorIfNeeded(err, "")
+}
+
+func wrapErrorfAsExternalErrorIfNeeded(err error, msg string) error {
+	if err == nil {
+		return nil
+	}
+
+	var userError *UserError
+	var fatalError *FatalError
+	var externalError *ExternalError
+
+	if errors.As(err, &userError) ||
+		errors.As(err, &fatalError) ||
+		errors.As(err, &externalError) {
+		// No-op if err is already categorized.
+		return err
+	}
+
+	// Create new external error wrapping err with context.
+	return NewExternalError(err, msg)
 }

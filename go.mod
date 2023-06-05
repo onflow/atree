@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/fxamacker/cbor/v2 v2.4.1-0.20220515183430-ad2eae63303f
 	github.com/fxamacker/circlehash v0.3.0
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.8.4
 	github.com/zeebo/blake3 v0.2.3
 	lukechampine.com/blake3 v1.1.7
 )

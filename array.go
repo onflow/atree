@@ -2709,3 +2709,157 @@ func nextLevelArraySlabs(storage SlabStorage, address Address, slabs []ArraySlab
 
 	return slabs[:nextLevelSlabsIndex], nil
 }
+
+type arrayLoadedElementIterator struct {
+	storage SlabStorage
+	slab    *ArrayDataSlab
+	index   int
+}
+
+func (i *arrayLoadedElementIterator) next() (Value, error) {
+	// Iterate loaded elements in data slab.
+	for i.index < len(i.slab.elements) {
+		element := i.slab.elements[i.index]
+		i.index++
+
+		v, err := getLoadedValue(i.storage, element)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by getLoadedValue.
+			return nil, err
+		}
+		if v == nil {
+			// Skip this element because it references unloaded slab.
+			// Try next element.
+			continue
+		}
+
+		return v, nil
+	}
+
+	// Reach end of elements
+	return nil, nil
+}
+
+// ArrayLoadedValueIterator is used to iterate over loaded array elements.
+type ArrayLoadedValueIterator struct {
+	storage      SlabStorage
+	dataSlabs    []*ArrayDataSlab
+	dataIterator *arrayLoadedElementIterator
+	index        int
+}
+
+// Next iterates and returns next loaded element.
+// It returns nil Value at end of loaded elements.
+func (i *ArrayLoadedValueIterator) Next() (Value, error) {
+	// Iterate loaded array data slabs.
+	for i.index < len(i.dataSlabs) {
+		if i.dataIterator == nil {
+			i.dataIterator = &arrayLoadedElementIterator{
+				storage: i.storage,
+				slab:    i.dataSlabs[i.index],
+			}
+		}
+
+		element, err := i.dataIterator.next()
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by arrayLoadedElementIterator.next().
+			return nil, err
+		}
+		if element != nil {
+			return element, nil
+		}
+
+		// Reach end of element in current data slab.
+		// Try next data slab.
+		i.index++
+		i.dataIterator = nil
+	}
+
+	// Reach end of loaded array data slabs.
+	return nil, nil
+}
+
+// LoadedValueIterator returns iterator to iterate loaded array elements.
+func (a *Array) LoadedValueIterator() (*ArrayLoadedValueIterator, error) {
+	dataSlabs, err := a.getLoadedDataSlabs()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by Array.getLoadedDataSlabs().
+		return nil, err
+	}
+
+	return &ArrayLoadedValueIterator{
+		storage:   a.Storage,
+		dataSlabs: dataSlabs,
+	}, nil
+}
+
+// IterateLoadedValues iterates loaded array values.
+func (a *Array) IterateLoadedValues(fn ArrayIterationFunc) error {
+	iterator, err := a.LoadedValueIterator()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by Array.LoadedValueIterator().
+		return err
+	}
+
+	for {
+		value, err := iterator.Next()
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by ArrayLoadedValueIterator.Next().
+			return err
+		}
+		if value == nil {
+			return nil
+		}
+		resume, err := fn(value)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by ArrayIterationFunc callback.
+			return wrapErrorAsExternalErrorIfNeeded(err)
+		}
+		if !resume {
+			return nil
+		}
+	}
+}
+
+func (a *Array) getLoadedDataSlabs() ([]*ArrayDataSlab, error) {
+	// Return early if root slab is data slab (root is always loaded).
+	if dataSlab, ok := a.root.(*ArrayDataSlab); ok {
+		return []*ArrayDataSlab{dataSlab}, nil
+	}
+
+	// Find all loaded data slabs using BFS.
+
+	var loadedDataSlabs []*ArrayDataSlab
+
+	nextLevelMetaDataSlabs := []*ArrayMetaDataSlab{a.root.(*ArrayMetaDataSlab)}
+
+	for len(nextLevelMetaDataSlabs) > 0 {
+
+		metaDataSlabs := nextLevelMetaDataSlabs
+
+		nextLevelMetaDataSlabs = make([]*ArrayMetaDataSlab, 0, len(metaDataSlabs))
+
+		for _, slab := range metaDataSlabs {
+
+			for _, childHeader := range slab.childrenHeaders {
+
+				childSlab := a.Storage.RetrieveIfLoaded(childHeader.id)
+				if childSlab == nil {
+					// Skip unloaded child slab.
+					continue
+				}
+
+				switch slab := childSlab.(type) {
+				case *ArrayMetaDataSlab:
+					nextLevelMetaDataSlabs = append(nextLevelMetaDataSlabs, slab)
+				case *ArrayDataSlab:
+					loadedDataSlabs = append(loadedDataSlabs, slab)
+				default:
+					return nil, NewSlabDataErrorf("slab %s isn't ArraySlab", slab.ID())
+				}
+			}
+		}
+	}
+
+	return loadedDataSlabs, nil
+}

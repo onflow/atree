@@ -143,3 +143,31 @@ func DecodeStorageIDStorable(dec *cbor.StreamDecoder) (Storable, error) {
 
 	return StorageIDStorable(id), nil
 }
+
+func getLoadedValue(storage SlabStorage, storable Storable) (Value, error) {
+	switch storable := storable.(type) {
+	case StorageIDStorable:
+		slab := storage.RetrieveIfLoaded(StorageID(storable))
+		if slab == nil {
+			// Skip because it references unloaded slab.
+			return nil, nil
+		}
+
+		v, err := slab.StoredValue(storage)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by Storable interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
+		}
+
+		return v, nil
+
+	default:
+		v, err := storable.StoredValue(storage)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by Storable interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
+		}
+
+		return v, nil
+	}
+}

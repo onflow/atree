@@ -4075,3 +4075,1626 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
 }
+
+func TestMapLoadedValueIterator(t *testing.T) {
+
+	SetThreshold(256)
+	defer SetThreshold(1024)
+
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	t.Run("empty", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		digesterBuilder := &mockDigesterBuilder{}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// parent map: 1 root data slab
+		require.Equal(t, 1, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, nil)
+	})
+
+	t.Run("root data slab with simple values", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 3
+		m, values := createMapWithSimpleValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map: 1 root data slab
+		require.Equal(t, 1, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+	})
+
+	t.Run("root data slab with composite values", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 3
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map: 1 root data slab
+		// composite elements: 1 root data slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+	})
+
+	t.Run("root data slab with composite values in collision group", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map with 3 collision groups, 2 elements in each group.
+		const mapSize = 6
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i / 2), Digest(i)} },
+		)
+
+		// parent map: 1 root data slab
+		// composite elements: 1 root data slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+	})
+
+	t.Run("root data slab with composite values in external collision group", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map with 3 external collision group, 3 elements in the group.
+		const mapSize = 9
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i / 3), Digest(i)} },
+		)
+
+		// parent map: 1 root data slab, 3 external collision group
+		// composite elements: 1 root data slab for each
+		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+	})
+
+	t.Run("root data slab with composite values, unload value from front to back", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 3
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map: 1 root data slab
+		// composite elements: 1 root data slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite element from front to back.
+		for i := 0; i < len(values); i++ {
+			v := values[i][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+
+			expectedValues := values[i+1:]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root data slab with long string keys, unload key from front to back", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 3
+		m, values := createMapWithLongStringKey(t, storage, address, typeInfo, mapSize)
+
+		// parent map: 1 root data slab
+		// long string keys: 1 storable slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload external key from front to back.
+		for i := 0; i < len(values); i++ {
+			k := values[i][0]
+
+			s, ok := k.(StringValue)
+			require.True(t, ok)
+
+			// Find storage id for StringValue s.
+			var keyID StorageID
+			for id, slab := range storage.deltas {
+				if sslab, ok := slab.(*StorableSlab); ok {
+					if other, ok := sslab.Storable.(StringValue); ok {
+						if s.str == other.str {
+							keyID = id
+							break
+						}
+					}
+				}
+			}
+
+			require.NoError(t, keyID.Valid())
+
+			err := storage.Remove(keyID)
+			require.NoError(t, err)
+
+			expectedValues := values[i+1:]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root data slab with composite values in collision group, unload value from front to back", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map with 3 collision groups, 2 elements in each group.
+		const mapSize = 6
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i / 2), Digest(i)} },
+		)
+
+		// parent map: 1 root data slab
+		// composite elements: 1 root data slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite element from front to back.
+		for i := 0; i < len(values); i++ {
+			v := values[i][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+
+			expectedValues := values[i+1:]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root data slab with composite values in external collision group, unload value from front to back", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map with 3 external collision groups, 3 elements in the group.
+		const mapSize = 9
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i / 3), Digest(i)} },
+		)
+
+		// parent map: 1 root data slab, 3 external collision group
+		// composite elements: 1 root data slab for each
+		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite element from front to back
+		for i := 0; i < len(values); i++ {
+			v := values[i][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+
+			expectedValues := values[i+1:]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root data slab with composite values in external collision group, unload external slab from front to back", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map with 3 external collision groups, 3 elements in the group.
+		const mapSize = 9
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i / 3), Digest(i)} },
+		)
+
+		// parent map: 1 root data slab, 3 external collision group
+		// composite elements: 1 root data slab for each
+		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload external collision group slab from front to back
+
+		var externalCollisionSlabIDs []StorageID
+		for id, slab := range storage.deltas {
+			if dataSlab, ok := slab.(*MapDataSlab); ok {
+				if dataSlab.collisionGroup {
+					externalCollisionSlabIDs = append(externalCollisionSlabIDs, id)
+				}
+			}
+		}
+		require.Equal(t, 3, len(externalCollisionSlabIDs))
+
+		sort.Slice(externalCollisionSlabIDs, func(i, j int) bool {
+			a := externalCollisionSlabIDs[i]
+			b := externalCollisionSlabIDs[j]
+			if a.Address == b.Address {
+				return a.IndexAsUint64() < b.IndexAsUint64()
+			}
+			return a.AddressAsUint64() < b.AddressAsUint64()
+		})
+
+		for i, id := range externalCollisionSlabIDs {
+			err := storage.Remove(id)
+			require.NoError(t, err)
+
+			expectedValues := values[i*3+3:]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root data slab with composite values, unload composite value from back to front", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 3
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map: 1 root data slab
+		// composite elements: 1 root data slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite element from back to front.
+		for i := len(values) - 1; i >= 0; i-- {
+			v := values[i][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+
+			expectedValues := values[:i]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root data slab with long string key, unload key from back to front", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 3
+		m, values := createMapWithLongStringKey(t, storage, address, typeInfo, mapSize)
+
+		// parent map: 1 root data slab
+		// long string keys: 1 storable slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite element from front to back.
+		for i := len(values) - 1; i >= 0; i-- {
+			k := values[i][0]
+
+			s, ok := k.(StringValue)
+			require.True(t, ok)
+
+			// Find storage id for StringValue s.
+			var keyID StorageID
+			for id, slab := range storage.deltas {
+				if sslab, ok := slab.(*StorableSlab); ok {
+					if other, ok := sslab.Storable.(StringValue); ok {
+						if s.str == other.str {
+							keyID = id
+							break
+						}
+					}
+				}
+			}
+
+			require.NoError(t, keyID.Valid())
+
+			err := storage.Remove(keyID)
+			require.NoError(t, err)
+
+			expectedValues := values[:i]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root data slab with composite values in collision group, unload value from back to front", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map with 3 collision groups, 2 elements in each group.
+		const mapSize = 6
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i / 2), Digest(i)} },
+		)
+
+		// parent map: 1 root data slab
+		// composite elements: 1 root data slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite element from back to front
+		for i := len(values) - 1; i >= 0; i-- {
+			v := values[i][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+
+			expectedValues := values[:i]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root data slab with composite values in external collision group, unload value from back to front", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map with 3 external collision groups, 3 elements in the group.
+		const mapSize = 9
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i / 3), Digest(i)} },
+		)
+
+		// parent map: 1 root data slab, 3 external collision group
+		// composite elements: 1 root data slab for each
+		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite element from back to front
+		for i := len(values) - 1; i >= 0; i-- {
+			v := values[i][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+
+			expectedValues := values[:i]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root data slab with composite values in external collision group, unload external slab from back to front", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map with 3 external collision groups, 3 elements in the group.
+		const mapSize = 9
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i / 3), Digest(i)} },
+		)
+
+		// parent map: 1 root data slab, 3 external collision group
+		// composite elements: 1 root data slab for each
+		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload external slabs from back to front
+		var externalCollisionSlabIDs []StorageID
+		for id, slab := range storage.deltas {
+			if dataSlab, ok := slab.(*MapDataSlab); ok {
+				if dataSlab.collisionGroup {
+					externalCollisionSlabIDs = append(externalCollisionSlabIDs, id)
+				}
+			}
+		}
+		require.Equal(t, 3, len(externalCollisionSlabIDs))
+
+		sort.Slice(externalCollisionSlabIDs, func(i, j int) bool {
+			a := externalCollisionSlabIDs[i]
+			b := externalCollisionSlabIDs[j]
+			if a.Address == b.Address {
+				return a.IndexAsUint64() < b.IndexAsUint64()
+			}
+			return a.AddressAsUint64() < b.AddressAsUint64()
+		})
+
+		for i := len(externalCollisionSlabIDs) - 1; i >= 0; i-- {
+			err := storage.Remove(externalCollisionSlabIDs[i])
+			require.NoError(t, err)
+
+			expectedValues := values[:i*3]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root data slab with composite values, unload value in the middle", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 3
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map: 1 root data slab
+		// nested composite elements: 1 root data slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload value in the middle
+		unloadValueIndex := 1
+
+		v := values[unloadValueIndex][1]
+
+		nestedArray, ok := v.(*Array)
+		require.True(t, ok)
+
+		err := storage.Remove(nestedArray.StorageID())
+		require.NoError(t, err)
+
+		copy(values[unloadValueIndex:], values[unloadValueIndex+1:])
+		values = values[:len(values)-1]
+
+		verifyMapLoadedElements(t, m, values)
+	})
+
+	t.Run("root data slab with long string key, unload key in the middle", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 3
+		m, values := createMapWithLongStringKey(t, storage, address, typeInfo, mapSize)
+
+		// parent map: 1 root data slab
+		// nested composite elements: 1 root data slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload key in the middle.
+		unloadValueIndex := 1
+
+		k := values[unloadValueIndex][0]
+
+		s, ok := k.(StringValue)
+		require.True(t, ok)
+
+		// Find storage id for StringValue s.
+		var keyID StorageID
+		for id, slab := range storage.deltas {
+			if sslab, ok := slab.(*StorableSlab); ok {
+				if other, ok := sslab.Storable.(StringValue); ok {
+					if s.str == other.str {
+						keyID = id
+						break
+					}
+				}
+			}
+		}
+
+		require.NoError(t, keyID.Valid())
+
+		err := storage.Remove(keyID)
+		require.NoError(t, err)
+
+		copy(values[unloadValueIndex:], values[unloadValueIndex+1:])
+		values = values[:len(values)-1]
+
+		verifyMapLoadedElements(t, m, values)
+	})
+
+	t.Run("root data slab with composite values in collision group, unload value in the middle", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map with 3 collision groups, 2 elements in each group.
+		const mapSize = 6
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i / 2), Digest(i)} },
+		)
+
+		// parent map: 1 root data slab
+		// nested composite elements: 1 root data slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite element in the middle
+		for _, unloadValueIndex := range []int{1, 3, 5} {
+			v := values[unloadValueIndex][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+		}
+
+		expectedValues := [][2]Value{
+			values[0],
+			values[2],
+			values[4],
+		}
+		verifyMapLoadedElements(t, m, expectedValues)
+	})
+
+	t.Run("root data slab with composite values in external collision group, unload value in the middle", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map with 3 external collision groups, 3 elements in the group.
+		const mapSize = 9
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i / 3), Digest(i)} },
+		)
+
+		// parent map: 1 root data slab, 3 external collision group
+		// nested composite elements: 1 root data slab for each
+		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite value in the middle.
+		for _, unloadValueIndex := range []int{1, 3, 5, 7} {
+			v := values[unloadValueIndex][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+		}
+
+		expectedValues := [][2]Value{
+			values[0],
+			values[2],
+			values[4],
+			values[6],
+			values[8],
+		}
+		verifyMapLoadedElements(t, m, expectedValues)
+	})
+
+	t.Run("root data slab with composite values in external collision group, unload external slab in the middle", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map with 3 external collision groups, 3 elements in the group.
+		const mapSize = 9
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i / 3), Digest(i)} },
+		)
+
+		// parent map: 1 root data slab, 3 external collision group
+		// nested composite elements: 1 root data slab for each
+		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload external slabs in the middle.
+		var externalCollisionSlabIDs []StorageID
+		for id, slab := range storage.deltas {
+			if dataSlab, ok := slab.(*MapDataSlab); ok {
+				if dataSlab.collisionGroup {
+					externalCollisionSlabIDs = append(externalCollisionSlabIDs, id)
+				}
+			}
+		}
+		require.Equal(t, 3, len(externalCollisionSlabIDs))
+
+		sort.Slice(externalCollisionSlabIDs, func(i, j int) bool {
+			a := externalCollisionSlabIDs[i]
+			b := externalCollisionSlabIDs[j]
+			if a.Address == b.Address {
+				return a.IndexAsUint64() < b.IndexAsUint64()
+			}
+			return a.AddressAsUint64() < b.AddressAsUint64()
+		})
+
+		id := externalCollisionSlabIDs[1]
+		err := storage.Remove(id)
+		require.NoError(t, err)
+
+		copy(values[3:], values[6:])
+		values = values[:6]
+
+		verifyMapLoadedElements(t, m, values)
+	})
+
+	t.Run("root data slab with simple and composite values, unloading composite value", func(t *testing.T) {
+		const mapSize = 3
+
+		// Create a map with nested composite value at specified index
+		for nestedCompositeIndex := 0; nestedCompositeIndex < mapSize; nestedCompositeIndex++ {
+			storage := newTestPersistentStorage(t)
+
+			m, values := createMapWithSimpleAndCompositeValues(
+				t,
+				storage,
+				address,
+				typeInfo,
+				mapSize,
+				nestedCompositeIndex,
+				func(i int) []Digest { return []Digest{Digest(i)} },
+			)
+
+			// parent map: 1 root data slab
+			// composite element: 1 root data slab
+			require.Equal(t, 2, len(storage.deltas))
+			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+			verifyMapLoadedElements(t, m, values)
+
+			// Unload composite value
+			v := values[nestedCompositeIndex][1].(*Array)
+
+			err := storage.Remove(v.StorageID())
+			require.NoError(t, err)
+
+			copy(values[nestedCompositeIndex:], values[nestedCompositeIndex+1:])
+			values = values[:len(values)-1]
+
+			verifyMapLoadedElements(t, m, values)
+		}
+	})
+
+	t.Run("root metadata slab with simple values", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 20
+		m, values := createMapWithSimpleValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (2 levels): 1 root metadata slab, 3 data slabs
+		require.Equal(t, 4, len(storage.deltas))
+		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+	})
+
+	t.Run("root metadata slab with composite values", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 20
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (2 levels): 1 root metadata slab, 3 data slabs
+		// composite values: 1 root data slab for each
+		require.Equal(t, 4+mapSize, len(storage.deltas))
+		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+	})
+
+	t.Run("root metadata slab with composite values, unload value from front to back", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 20
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (2 levels): 1 root metadata slab, 3 data slabs
+		// composite values : 1 root data slab for each
+		require.Equal(t, 4+mapSize, len(storage.deltas))
+		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite element from front to back
+		for i := 0; i < len(values); i++ {
+			v := values[i][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+
+			expectedValues := values[i+1:]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root metadata slab with composite values, unload values from back to front", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 20
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (2 levels): 1 root metadata slab, 3 data slabs
+		// composite values: 1 root data slab for each
+		require.Equal(t, 4+mapSize, len(storage.deltas))
+		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite element from back to front
+		for i := len(values) - 1; i >= 0; i-- {
+			v := values[i][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+
+			expectedValues := values[:i]
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root metadata slab with composite values, unload value in the middle", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 20
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (2 levels): 1 root metadata slab, 3 data slabs
+		// composite values: 1 root data slab for each
+		require.Equal(t, 4+mapSize, len(storage.deltas))
+		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		// Unload composite element in the middle
+		for _, index := range []int{4, 14} {
+
+			v := values[index][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+
+			copy(values[index:], values[index+1:])
+			values = values[:len(values)-1]
+
+			verifyMapLoadedElements(t, m, values)
+		}
+	})
+
+	t.Run("root metadata slab with simple and composite values, unload composite value", func(t *testing.T) {
+		const mapSize = 20
+
+		// Create a map with nested composite value at specified index
+		for nestedCompositeIndex := 0; nestedCompositeIndex < mapSize; nestedCompositeIndex++ {
+			storage := newTestPersistentStorage(t)
+
+			m, values := createMapWithSimpleAndCompositeValues(
+				t,
+				storage,
+				address,
+				typeInfo,
+				mapSize,
+				nestedCompositeIndex,
+				func(i int) []Digest { return []Digest{Digest(i)} },
+			)
+
+			// parent map (2 levels): 1 root metadata slab, 3 data slabs
+			// composite values: 1 root data slab for each
+			require.Equal(t, 5, len(storage.deltas))
+			require.Equal(t, 1, getMapMetaDataSlabCount(storage))
+
+			verifyMapLoadedElements(t, m, values)
+
+			v := values[nestedCompositeIndex][1].(*Array)
+
+			err := storage.Remove(v.StorageID())
+			require.NoError(t, err)
+
+			copy(values[nestedCompositeIndex:], values[nestedCompositeIndex+1:])
+			values = values[:len(values)-1]
+
+			verifyMapLoadedElements(t, m, values)
+		}
+	})
+
+	t.Run("root metadata slab, unload data slab from front to back", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 20
+
+		m, values := createMapWithSimpleValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (2 levels): 1 root metadata slab, 3 data slabs
+		require.Equal(t, 4, len(storage.deltas))
+		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		rootMetaDataSlab, ok := m.root.(*MapMetaDataSlab)
+		require.True(t, ok)
+
+		// Unload data slabs from front to back
+		for i := 0; i < len(rootMetaDataSlab.childrenHeaders); i++ {
+
+			childHeader := rootMetaDataSlab.childrenHeaders[i]
+
+			// Get data slab element count before unload it from storage.
+			// Element count isn't in the header.
+			mapDataSlab, ok := storage.deltas[childHeader.id].(*MapDataSlab)
+			require.True(t, ok)
+
+			count := mapDataSlab.elements.Count()
+
+			err := storage.Remove(childHeader.id)
+			require.NoError(t, err)
+
+			values = values[count:]
+
+			verifyMapLoadedElements(t, m, values)
+		}
+	})
+
+	t.Run("root metadata slab, unload data slab from back to front", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 20
+
+		m, values := createMapWithSimpleValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (2 levels): 1 root metadata slab, 3 data slabs
+		require.Equal(t, 4, len(storage.deltas))
+		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		rootMetaDataSlab, ok := m.root.(*MapMetaDataSlab)
+		require.True(t, ok)
+
+		// Unload data slabs from back to front
+		for i := len(rootMetaDataSlab.childrenHeaders) - 1; i >= 0; i-- {
+
+			childHeader := rootMetaDataSlab.childrenHeaders[i]
+
+			// Get data slab element count before unload it from storage
+			// Element count isn't in the header.
+			mapDataSlab, ok := storage.deltas[childHeader.id].(*MapDataSlab)
+			require.True(t, ok)
+
+			count := mapDataSlab.elements.Count()
+
+			err := storage.Remove(childHeader.id)
+			require.NoError(t, err)
+
+			values = values[:len(values)-int(count)]
+
+			verifyMapLoadedElements(t, m, values)
+		}
+	})
+
+	t.Run("root metadata slab, unload data slab in the middle", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 20
+
+		m, values := createMapWithSimpleValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (2 levels): 1 root metadata slab, 3 data slabs
+		require.Equal(t, 4, len(storage.deltas))
+		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		rootMetaDataSlab, ok := m.root.(*MapMetaDataSlab)
+		require.True(t, ok)
+
+		require.True(t, len(rootMetaDataSlab.childrenHeaders) > 2)
+
+		index := 1
+		childHeader := rootMetaDataSlab.childrenHeaders[index]
+
+		// Get element count from previous data slab
+		mapDataSlab, ok := storage.deltas[rootMetaDataSlab.childrenHeaders[0].id].(*MapDataSlab)
+		require.True(t, ok)
+
+		countAtIndex0 := mapDataSlab.elements.Count()
+
+		// Get element count from slab to be unloaded
+		mapDataSlab, ok = storage.deltas[rootMetaDataSlab.childrenHeaders[index].id].(*MapDataSlab)
+		require.True(t, ok)
+
+		countAtIndex1 := mapDataSlab.elements.Count()
+
+		err := storage.Remove(childHeader.id)
+		require.NoError(t, err)
+
+		copy(values[countAtIndex0:], values[countAtIndex0+countAtIndex1:])
+		values = values[:m.Count()-uint64(countAtIndex1)]
+
+		verifyMapLoadedElements(t, m, values)
+	})
+
+	t.Run("root metadata slab, unload non-root metadata slab from front to back", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 130
+
+		m, values := createMapWithSimpleValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (3 levels): 1 root metadata slab, 3 child metadata slabs, n data slabs
+		require.Equal(t, 4, getMapMetaDataSlabCount(storage))
+
+		rootMetaDataSlab, ok := m.root.(*MapMetaDataSlab)
+		require.True(t, ok)
+
+		// Unload non-root metadata slabs from front to back.
+		for i := 0; i < len(rootMetaDataSlab.childrenHeaders); i++ {
+
+			childHeader := rootMetaDataSlab.childrenHeaders[i]
+
+			err := storage.Remove(childHeader.id)
+			require.NoError(t, err)
+
+			// Use firstKey to deduce number of elements in slab.
+			var expectedValues [][2]Value
+			if i < len(rootMetaDataSlab.childrenHeaders)-1 {
+				nextChildHeader := rootMetaDataSlab.childrenHeaders[i+1]
+				expectedValues = values[int(nextChildHeader.firstKey):]
+			}
+
+			verifyMapLoadedElements(t, m, expectedValues)
+		}
+	})
+
+	t.Run("root metadata slab, unload non-root metadata slab from back to front", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 130
+
+		m, values := createMapWithSimpleValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (3 levels): 1 root metadata slab, 3 child metadata slabs, n data slabs
+		require.Equal(t, 4, getMapMetaDataSlabCount(storage))
+
+		rootMetaDataSlab, ok := m.root.(*MapMetaDataSlab)
+		require.True(t, ok)
+
+		// Unload non-root metadata slabs from back to front.
+		for i := len(rootMetaDataSlab.childrenHeaders) - 1; i >= 0; i-- {
+
+			childHeader := rootMetaDataSlab.childrenHeaders[i]
+
+			err := storage.Remove(childHeader.id)
+			require.NoError(t, err)
+
+			// Use firstKey to deduce number of elements in slabs.
+			values = values[:childHeader.firstKey]
+
+			verifyMapLoadedElements(t, m, values)
+		}
+	})
+
+	t.Run("root metadata slab with composite values, unload composite value at random index", func(t *testing.T) {
+
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 500
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
+		// nested composite elements: 1 root data slab for each
+		require.True(t, len(storage.deltas) > 1+mapSize)
+		require.True(t, getMapMetaDataSlabCount(storage) > 1)
+
+		verifyMapLoadedElements(t, m, values)
+
+		r := newRand(t)
+
+		// Unload composite element in random position
+		for len(values) > 0 {
+
+			i := r.Intn(len(values))
+
+			v := values[i][1]
+
+			nestedArray, ok := v.(*Array)
+			require.True(t, ok)
+
+			err := storage.Remove(nestedArray.StorageID())
+			require.NoError(t, err)
+
+			copy(values[i:], values[i+1:])
+			values = values[:len(values)-1]
+
+			verifyMapLoadedElements(t, m, values)
+		}
+	})
+
+	t.Run("root metadata slab with composite values, unload random data slab", func(t *testing.T) {
+
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 500
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
+		// composite values: 1 root data slab for each
+		require.True(t, len(storage.deltas) > 1+mapSize)
+		require.True(t, getMapMetaDataSlabCount(storage) > 1)
+
+		verifyMapLoadedElements(t, m, values)
+
+		rootMetaDataSlab, ok := m.root.(*MapMetaDataSlab)
+		require.True(t, ok)
+
+		type slabInfo struct {
+			id         StorageID
+			startIndex int
+			count      int
+		}
+
+		var dataSlabInfos []*slabInfo
+		for _, mheader := range rootMetaDataSlab.childrenHeaders {
+
+			nonRootMetaDataSlab, ok := storage.deltas[mheader.id].(*MapMetaDataSlab)
+			require.True(t, ok)
+
+			for i := 0; i < len(nonRootMetaDataSlab.childrenHeaders); i++ {
+				h := nonRootMetaDataSlab.childrenHeaders[i]
+
+				if len(dataSlabInfos) > 0 {
+					// Update previous slabInfo.count
+					dataSlabInfos[len(dataSlabInfos)-1].count = int(h.firstKey) - dataSlabInfos[len(dataSlabInfos)-1].startIndex
+				}
+
+				dataSlabInfos = append(dataSlabInfos, &slabInfo{id: h.id, startIndex: int(h.firstKey)})
+			}
+		}
+
+		r := newRand(t)
+
+		for len(dataSlabInfos) > 0 {
+			index := r.Intn(len(dataSlabInfos))
+
+			slabToBeRemoved := dataSlabInfos[index]
+
+			// Update startIndex for all subsequence data slabs
+			for i := index + 1; i < len(dataSlabInfos); i++ {
+				dataSlabInfos[i].startIndex -= slabToBeRemoved.count
+			}
+
+			err := storage.Remove(slabToBeRemoved.id)
+			require.NoError(t, err)
+
+			if index == len(dataSlabInfos)-1 {
+				values = values[:slabToBeRemoved.startIndex]
+			} else {
+				copy(values[slabToBeRemoved.startIndex:], values[slabToBeRemoved.startIndex+slabToBeRemoved.count:])
+				values = values[:len(values)-slabToBeRemoved.count]
+			}
+
+			copy(dataSlabInfos[index:], dataSlabInfos[index+1:])
+			dataSlabInfos = dataSlabInfos[:len(dataSlabInfos)-1]
+
+			verifyMapLoadedElements(t, m, values)
+		}
+
+		require.Equal(t, 0, len(values))
+	})
+
+	t.Run("root metadata slab with composite values, unload random slab", func(t *testing.T) {
+
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 500
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
+		// composite values: 1 root data slab for each
+		require.True(t, len(storage.deltas) > 1+mapSize)
+		require.True(t, getMapMetaDataSlabCount(storage) > 1)
+
+		verifyMapLoadedElements(t, m, values)
+
+		type slabInfo struct {
+			id         StorageID
+			startIndex int
+			count      int
+			children   []*slabInfo
+		}
+
+		rootMetaDataSlab, ok := m.root.(*MapMetaDataSlab)
+		require.True(t, ok)
+
+		metadataSlabInfos := make([]*slabInfo, len(rootMetaDataSlab.childrenHeaders))
+		for i, mheader := range rootMetaDataSlab.childrenHeaders {
+
+			if i > 0 {
+				prevMetaDataSlabInfo := metadataSlabInfos[i-1]
+				prevDataSlabInfo := prevMetaDataSlabInfo.children[len(prevMetaDataSlabInfo.children)-1]
+
+				// Update previous metadata slab count
+				prevMetaDataSlabInfo.count = int(mheader.firstKey) - prevMetaDataSlabInfo.startIndex
+
+				// Update previous data slab count
+				prevDataSlabInfo.count = int(mheader.firstKey) - prevDataSlabInfo.startIndex
+			}
+
+			metadataSlabInfo := &slabInfo{
+				id:         mheader.id,
+				startIndex: int(mheader.firstKey),
+			}
+
+			nonRootMetadataSlab, ok := storage.deltas[mheader.id].(*MapMetaDataSlab)
+			require.True(t, ok)
+
+			children := make([]*slabInfo, len(nonRootMetadataSlab.childrenHeaders))
+			for i, h := range nonRootMetadataSlab.childrenHeaders {
+				children[i] = &slabInfo{
+					id:         h.id,
+					startIndex: int(h.firstKey),
+				}
+				if i > 0 {
+					children[i-1].count = int(h.firstKey) - children[i-1].startIndex
+				}
+			}
+
+			metadataSlabInfo.children = children
+			metadataSlabInfos[i] = metadataSlabInfo
+		}
+
+		const (
+			metadataSlabType int = iota
+			dataSlabType
+			maxSlabType
+		)
+
+		r := newRand(t)
+
+		for len(metadataSlabInfos) > 0 {
+
+			var slabInfoToBeRemoved *slabInfo
+			var isLastSlab bool
+
+			switch r.Intn(maxSlabType) {
+
+			case metadataSlabType:
+
+				metadataSlabIndex := r.Intn(len(metadataSlabInfos))
+
+				isLastSlab = metadataSlabIndex == len(metadataSlabInfos)-1
+
+				slabInfoToBeRemoved = metadataSlabInfos[metadataSlabIndex]
+
+				count := slabInfoToBeRemoved.count
+
+				// Update startIndex for subsequence metadata slabs
+				for i := metadataSlabIndex + 1; i < len(metadataSlabInfos); i++ {
+					metadataSlabInfos[i].startIndex -= count
+
+					for j := 0; j < len(metadataSlabInfos[i].children); j++ {
+						metadataSlabInfos[i].children[j].startIndex -= count
+					}
+				}
+
+				copy(metadataSlabInfos[metadataSlabIndex:], metadataSlabInfos[metadataSlabIndex+1:])
+				metadataSlabInfos = metadataSlabInfos[:len(metadataSlabInfos)-1]
+
+			case dataSlabType:
+
+				metadataSlabIndex := r.Intn(len(metadataSlabInfos))
+
+				metadataSlabInfo := metadataSlabInfos[metadataSlabIndex]
+
+				dataSlabIndex := r.Intn(len(metadataSlabInfo.children))
+
+				isLastSlab = (metadataSlabIndex == len(metadataSlabInfos)-1) &&
+					(dataSlabIndex == len(metadataSlabInfo.children)-1)
+
+				slabInfoToBeRemoved = metadataSlabInfo.children[dataSlabIndex]
+
+				count := slabInfoToBeRemoved.count
+
+				// Update startIndex for all subsequence data slabs in this metadata slab info
+				for i := dataSlabIndex + 1; i < len(metadataSlabInfo.children); i++ {
+					metadataSlabInfo.children[i].startIndex -= count
+				}
+
+				copy(metadataSlabInfo.children[dataSlabIndex:], metadataSlabInfo.children[dataSlabIndex+1:])
+				metadataSlabInfo.children = metadataSlabInfo.children[:len(metadataSlabInfo.children)-1]
+
+				metadataSlabInfo.count -= count
+
+				// Update startIndex for all subsequence metadata slabs.
+				for i := metadataSlabIndex + 1; i < len(metadataSlabInfos); i++ {
+					metadataSlabInfos[i].startIndex -= count
+
+					for j := 0; j < len(metadataSlabInfos[i].children); j++ {
+						metadataSlabInfos[i].children[j].startIndex -= count
+					}
+				}
+
+				if len(metadataSlabInfo.children) == 0 {
+					copy(metadataSlabInfos[metadataSlabIndex:], metadataSlabInfos[metadataSlabIndex+1:])
+					metadataSlabInfos = metadataSlabInfos[:len(metadataSlabInfos)-1]
+				}
+			}
+
+			err := storage.Remove(slabInfoToBeRemoved.id)
+			require.NoError(t, err)
+
+			if isLastSlab {
+				values = values[:slabInfoToBeRemoved.startIndex]
+			} else {
+				copy(values[slabInfoToBeRemoved.startIndex:], values[slabInfoToBeRemoved.startIndex+slabInfoToBeRemoved.count:])
+				values = values[:len(values)-slabInfoToBeRemoved.count]
+			}
+
+			verifyMapLoadedElements(t, m, values)
+		}
+
+		require.Equal(t, 0, len(values))
+	})
+}
+
+func createMapWithLongStringKey(
+	t *testing.T,
+	storage SlabStorage,
+	address Address,
+	typeInfo TypeInfo,
+	size int,
+) (*OrderedMap, [][2]Value) {
+
+	digesterBuilder := &mockDigesterBuilder{}
+
+	// Create parent map.
+	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+	require.NoError(t, err)
+
+	expectedValues := make([][2]Value, size)
+	r := 'a'
+	for i := 0; i < size; i++ {
+		s := strings.Repeat(string(r), int(maxInlineMapElementSize))
+
+		k := NewStringValue(s)
+		v := Uint64Value(i)
+
+		expectedValues[i] = [2]Value{k, v}
+
+		digests := []Digest{Digest(i)}
+		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+
+		r++
+	}
+
+	return m, expectedValues
+}
+
+func createMapWithSimpleValues(
+	t *testing.T,
+	storage SlabStorage,
+	address Address,
+	typeInfo TypeInfo,
+	size int,
+	newDigests func(i int) []Digest,
+) (*OrderedMap, [][2]Value) {
+
+	digesterBuilder := &mockDigesterBuilder{}
+
+	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+	require.NoError(t, err)
+
+	expectedValues := make([][2]Value, size)
+	r := rune('a')
+	for i := 0; i < size; i++ {
+		k := Uint64Value(i)
+		v := NewStringValue(strings.Repeat(string(r), 20))
+
+		digests := newDigests(i)
+		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+		expectedValues[i] = [2]Value{k, v}
+
+		existingStorable, err := m.Set(compare, hashInputProvider, expectedValues[i][0], expectedValues[i][1])
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+	}
+
+	return m, expectedValues
+}
+
+func createMapWithCompositeValues(
+	t *testing.T,
+	storage SlabStorage,
+	address Address,
+	typeInfo TypeInfo,
+	size int,
+	newDigests func(i int) []Digest,
+) (*OrderedMap, [][2]Value) {
+
+	// Use mockDigesterBuilder to guarantee element order.
+	digesterBuilder := &mockDigesterBuilder{}
+
+	// Create parent map
+	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+	require.NoError(t, err)
+
+	expectedValues := make([][2]Value, size)
+	for i := 0; i < size; i++ {
+		// Create nested array
+		nested, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		err = nested.Append(Uint64Value(i))
+		require.NoError(t, err)
+
+		k := Uint64Value(i)
+		v := nested
+
+		expectedValues[i] = [2]Value{k, v}
+
+		//digests := []Digest{Digest(i)}
+		digests := newDigests(i)
+		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+		// Set nested array to parent
+		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+	}
+
+	return m, expectedValues
+}
+
+func createMapWithSimpleAndCompositeValues(
+	t *testing.T,
+	storage SlabStorage,
+	address Address,
+	typeInfo TypeInfo,
+	size int,
+	compositeValueIndex int,
+	newDigests func(i int) []Digest,
+) (*OrderedMap, [][2]Value) {
+
+	digesterBuilder := &mockDigesterBuilder{}
+
+	// Create parent map
+	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+	require.NoError(t, err)
+
+	values := make([][2]Value, size)
+	r := 'a'
+	for i := 0; i < size; i++ {
+
+		k := Uint64Value(i)
+
+		digests := newDigests(i)
+		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+		if compositeValueIndex == i {
+			// Create nested array with one element
+			a, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			err = a.Append(Uint64Value(i))
+			require.NoError(t, err)
+
+			values[i] = [2]Value{k, a}
+		} else {
+			values[i] = [2]Value{k, NewStringValue(strings.Repeat(string(r), 18))}
+		}
+
+		existingStorable, err := m.Set(compare, hashInputProvider, values[i][0], values[i][1])
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+	}
+
+	return m, values
+}
+
+func verifyMapLoadedElements(t *testing.T, m *OrderedMap, expectedValues [][2]Value) {
+	i := 0
+	err := m.IterateLoadedValues(func(k Value, v Value) (bool, error) {
+		require.True(t, i < len(expectedValues))
+		valueEqual(t, typeInfoComparator, expectedValues[i][0], k)
+		valueEqual(t, typeInfoComparator, expectedValues[i][1], v)
+		i++
+		return true, nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, len(expectedValues), i)
+}
+
+func getMapMetaDataSlabCount(storage *PersistentSlabStorage) int {
+	var counter int
+	for _, slab := range storage.deltas {
+		if _, ok := slab.(*MapMetaDataSlab); ok {
+			counter++
+		}
+	}
+	return counter
+}

@@ -268,6 +268,7 @@ type SlabIterator func() (StorageID, Slab)
 type SlabStorage interface {
 	Store(StorageID, Slab) error
 	Retrieve(StorageID) (Slab, bool, error)
+	RetrieveIfLoaded(StorageID) Slab
 	Remove(StorageID) error
 	GenerateStorageID(address Address) (StorageID, error)
 	Count() int
@@ -307,6 +308,10 @@ func (s *BasicSlabStorage) GenerateStorageID(address Address) (StorageID, error)
 
 	s.storageIndex[address] = nextIndex
 	return NewStorageID(address, nextIndex), nil
+}
+
+func (s *BasicSlabStorage) RetrieveIfLoaded(id StorageID) Slab {
+	return s.Slabs[id]
 }
 
 func (s *BasicSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {
@@ -938,6 +943,21 @@ func (s *PersistentSlabStorage) RetrieveIgnoringDeltas(id StorageID) (Slab, bool
 	s.cache[id] = slab
 
 	return slab, ok, nil
+}
+
+func (s *PersistentSlabStorage) RetrieveIfLoaded(id StorageID) Slab {
+	// check deltas first.
+	if slab, ok := s.deltas[id]; ok {
+		return slab
+	}
+
+	// check the read cache next.
+	if slab, ok := s.cache[id]; ok {
+		return slab
+	}
+
+	// Don't fetch from base storage.
+	return nil
 }
 
 func (s *PersistentSlabStorage) Retrieve(id StorageID) (Slab, bool, error) {

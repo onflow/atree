@@ -829,8 +829,8 @@ func TestMapRemove(t *testing.T) {
 
 		collisionKeyValues := make(map[Value]Value)
 		for len(collisionKeyValues) < numOfElementsWithCollision {
-			k := NewStringValue(randStr(r, int(MaxInlineMapKeyOrValueSize)-2))
-			v := NewStringValue(randStr(r, int(MaxInlineMapKeyOrValueSize)-2))
+			k := NewStringValue(randStr(r, int(maxInlineMapKeySize)-2))
+			v := NewStringValue(randStr(r, int(maxInlineMapKeySize)-2))
 			collisionKeyValues[k] = v
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{nextDigest}})
@@ -910,8 +910,8 @@ func TestMapRemove(t *testing.T) {
 
 		collisionKeyValues := make(map[Value]Value)
 		for len(collisionKeyValues) < numOfElementsWithCollision {
-			k := NewStringValue(randStr(r, int(MaxInlineMapKeyOrValueSize)-2))
-			v := NewStringValue(randStr(r, int(MaxInlineMapKeyOrValueSize)-2))
+			k := NewStringValue(randStr(r, int(maxInlineMapKeySize)-2))
+			v := NewStringValue(randStr(r, int(maxInlineMapKeySize)-2))
 			collisionKeyValues[k] = v
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{0}})
@@ -3532,7 +3532,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		r := newRand(t)
 
-		maxStringSize := int(MaxInlineMapKeyOrValueSize - 2)
+		maxStringSize := int(maxInlineMapKeySize - 2)
 
 		typeInfo := testTypeInfo{42}
 
@@ -3680,7 +3680,7 @@ func TestMapMaxInlineElement(t *testing.T) {
 	t.Parallel()
 
 	r := newRand(t)
-	maxStringSize := int(MaxInlineMapKeyOrValueSize - 2)
+	maxStringSize := int(maxInlineMapKeySize - 2)
 	typeInfo := testTypeInfo{42}
 	storage := newTestPersistentStorage(t)
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -3690,7 +3690,7 @@ func TestMapMaxInlineElement(t *testing.T) {
 
 	keyValues := make(map[Value]Value)
 	for len(keyValues) < 2 {
-		// String length is MaxInlineMapElementSize - 2 to account for string encoding overhead.
+		// String length is maxInlineMapKeySize - 2 to account for string encoding overhead.
 		k := NewStringValue(randStr(r, maxStringSize))
 		v := NewStringValue(randStr(r, maxStringSize))
 		keyValues[k] = v
@@ -3892,7 +3892,7 @@ func TestMapSlabDump(t *testing.T) {
 		require.Equal(t, want, dumps)
 	})
 
-	t.Run("overflow", func(t *testing.T) {
+	t.Run("key overflow", func(t *testing.T) {
 
 		digesterBuilder := &mockDigesterBuilder{}
 		typeInfo := testTypeInfo{42}
@@ -3902,8 +3902,8 @@ func TestMapSlabDump(t *testing.T) {
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		k := NewStringValue(strings.Repeat("a", int(MaxInlineMapKeyOrValueSize)))
-		v := NewStringValue(strings.Repeat("b", int(MaxInlineMapKeyOrValueSize)))
+		k := NewStringValue(strings.Repeat("a", int(maxInlineMapKeySize)))
+		v := NewStringValue(strings.Repeat("b", int(maxInlineMapKeySize)))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(0)}})
 
 		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
@@ -3911,9 +3911,35 @@ func TestMapSlabDump(t *testing.T) {
 		require.Nil(t, existingStorable)
 
 		want := []string{
-			"level 1, MapDataSlab id:0x102030405060708.1 size:69 firstkey:0 elements: [0:StorageIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]}):StorageIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 3]})]",
+			"level 1, MapDataSlab id:0x102030405060708.1 size:102 firstkey:0 elements: [0:StorageIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]}):bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]",
 			"overflow: &{0x102030405060708.2 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}",
-			"overflow: &{0x102030405060708.3 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}",
+		}
+		dumps, err := DumpMapSlabs(m)
+		require.NoError(t, err)
+		require.Equal(t, want, dumps)
+	})
+
+	t.Run("value overflow", func(t *testing.T) {
+
+		digesterBuilder := &mockDigesterBuilder{}
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		k := NewStringValue(strings.Repeat("a", int(maxInlineMapKeySize-2)))
+		v := NewStringValue(strings.Repeat("b", int(maxInlineMapElementSize)))
+		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(0)}})
+
+		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+
+		want := []string{
+			"level 1, MapDataSlab id:0x102030405060708.1 size:100 firstkey:0 elements: [0:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:StorageIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]})]",
+			"overflow: &{0x102030405060708.2 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}",
 		}
 		dumps, err := DumpMapSlabs(m)
 		require.NoError(t, err)
@@ -4071,6 +4097,125 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 		}
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+}
+
+func TestMaxInlineMapValueSize(t *testing.T) {
+
+	t.Run("small key", func(t *testing.T) {
+		// Value has larger max inline size when key is less than max map key size.
+
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		mapSize := 2
+		keyStringSize := 16                               // Key size is less than max map key size.
+		valueStringSize := maxInlineMapElementSize/2 + 10 // Value size is more than half of max map element size.
+
+		r := newRand(t)
+
+		keyValues := make(map[Value]Value, mapSize)
+		for len(keyValues) < mapSize {
+			k := NewStringValue(randStr(r, keyStringSize))
+			v := NewStringValue(randStr(r, int(valueStringSize)))
+			keyValues[k] = v
+		}
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Both key and value are stored in map slab.
+		require.Equal(t, 1, len(storage.deltas))
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("max size key", func(t *testing.T) {
+		// Value max size is about half of max map element size when key is exactly max map key size.
+
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		mapSize := 1
+		keyStringSize := maxInlineMapKeySize - 2         // Key size is exactly max map key size (2 bytes is string encoding overhead).
+		valueStringSize := maxInlineMapElementSize/2 + 2 // Value size is more than half of max map element size (add 2 bytes to make it more than half).
+
+		r := newRand(t)
+
+		keyValues := make(map[Value]Value, mapSize)
+		for len(keyValues) < mapSize {
+			k := NewStringValue(randStr(r, int(keyStringSize)))
+			v := NewStringValue(randStr(r, int(valueStringSize)))
+			keyValues[k] = v
+		}
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Key is stored in map slab, while value is stored separately in storable slab.
+		require.Equal(t, 2, len(storage.deltas))
+
+		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("large key", func(t *testing.T) {
+		// Value has larger max inline size when key is more than max map key size because
+		// when key size exceeds max map key size, it is stored in a separate storable slab,
+		// and StorageIDStorable is stored as key in the map, which is 19 bytes.
+
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		mapSize := 1
+		keyStringSize := maxInlineMapKeySize + 10         // key size is more than max map key size
+		valueStringSize := maxInlineMapElementSize/2 + 10 // value size is more than half of max map element size
+
+		r := newRand(t)
+
+		keyValues := make(map[Value]Value, mapSize)
+		for len(keyValues) < mapSize {
+			k := NewStringValue(randStr(r, int(keyStringSize)))
+			v := NewStringValue(randStr(r, int(valueStringSize)))
+			keyValues[k] = v
+		}
+
+		typeInfo := testTypeInfo{42}
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Key is stored in separate storable slabs, while value is stored in map slab.
+		require.Equal(t, 2, len(storage.deltas))
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})

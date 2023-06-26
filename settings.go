@@ -31,12 +31,12 @@ const (
 )
 
 var (
-	targetThreshold            uint64
-	minThreshold               uint64
-	maxThreshold               uint64
-	MaxInlineArrayElementSize  uint64
-	maxInlineMapElementSize    uint64
-	MaxInlineMapKeyOrValueSize uint64
+	targetThreshold           uint64
+	minThreshold              uint64
+	maxThreshold              uint64
+	maxInlineArrayElementSize uint64
+	maxInlineMapElementSize   uint64
+	maxInlineMapKeySize       uint64
 )
 
 func init() {
@@ -54,7 +54,7 @@ func SetThreshold(threshold uint64) (uint64, uint64, uint64, uint64) {
 
 	// Total slab size available for array elements, excluding slab encoding overhead
 	availableArrayElementsSize := targetThreshold - arrayDataSlabPrefixSize
-	MaxInlineArrayElementSize = availableArrayElementsSize / minElementCountInSlab
+	maxInlineArrayElementSize = availableArrayElementsSize / minElementCountInSlab
 
 	// Total slab size available for map elements, excluding slab encoding overhead
 	availableMapElementsSize := targetThreshold - mapDataSlabPrefixSize - hkeyElementsPrefixSize
@@ -65,8 +65,20 @@ func SetThreshold(threshold uint64) (uint64, uint64, uint64, uint64) {
 	// Max inline size for a map's element
 	maxInlineMapElementSize = availableMapElementsSize/minElementCountInSlab - mapElementOverheadSize
 
-	// Max inline size for a map's key or value, excluding element encoding overhead
-	MaxInlineMapKeyOrValueSize = (maxInlineMapElementSize - singleElementPrefixSize) / 2
+	// Max inline size for a map's key, excluding element overhead
+	maxInlineMapKeySize = (maxInlineMapElementSize - singleElementPrefixSize) / 2
 
-	return minThreshold, maxThreshold, MaxInlineArrayElementSize, MaxInlineMapKeyOrValueSize
+	return minThreshold, maxThreshold, maxInlineArrayElementSize, maxInlineMapKeySize
+}
+
+func MaxInlineArrayElementSize() uint64 {
+	return maxInlineArrayElementSize
+}
+
+func MaxInlineMapKeySize() uint64 {
+	return maxInlineMapKeySize
+}
+
+func maxInlineMapValueSize(keySize uint64) uint64 {
+	return maxInlineMapElementSize - keySize - singleElementPrefixSize
 }

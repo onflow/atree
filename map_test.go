@@ -119,10 +119,7 @@ func verifyMap(
 
 	// Verify map elements
 	for k, v := range keyValues {
-		s, err := m.Get(compare, hashInputProvider, k)
-		require.NoError(t, err)
-
-		e, err := s.StoredValue(m.Storage)
+		e, err := m.Get(compare, hashInputProvider, k)
 		require.NoError(t, err)
 
 		valueEqual(t, typeInfoComparator, v, e)

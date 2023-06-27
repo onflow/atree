@@ -3606,7 +3606,7 @@ func NewMapWithRootID(storage SlabStorage, rootID StorageID, digestBuilder Diges
 }
 
 func (m *OrderedMap) Has(comparator ValueComparator, hip HashInputProvider, key Value) (bool, error) {
-	_, err := m.Get(comparator, hip, key)
+	_, err := m.get(comparator, hip, key)
 	if err != nil {
 		var knf *KeyNotFoundError
 		if errors.As(err, &knf) {
@@ -3618,7 +3618,23 @@ func (m *OrderedMap) Has(comparator ValueComparator, hip HashInputProvider, key 
 	return true, nil
 }
 
-func (m *OrderedMap) Get(comparator ValueComparator, hip HashInputProvider, key Value) (Storable, error) {
+func (m *OrderedMap) Get(comparator ValueComparator, hip HashInputProvider, key Value) (Value, error) {
+
+	storable, err := m.get(comparator, hip, key)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by MapSlab.Get().
+		return nil, err
+	}
+
+	v, err := storable.StoredValue(m.Storage)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
+	}
+	return v, nil
+}
+
+func (m *OrderedMap) get(comparator ValueComparator, hip HashInputProvider, key Value) (Storable, error) {
 
 	keyDigest, err := m.digesterBuilder.Digest(hip, key)
 	if err != nil {

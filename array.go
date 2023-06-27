@@ -1995,9 +1995,18 @@ func NewArrayWithRootID(storage SlabStorage, rootID StorageID) (*Array, error) {
 	}, nil
 }
 
-func (a *Array) Get(i uint64) (Storable, error) {
-	// Don't need to wrap error as external error because err is already categorized by ArraySlab.Get().
-	return a.root.Get(a.Storage, i)
+func (a *Array) Get(i uint64) (Value, error) {
+	storable, err := a.root.Get(a.Storage, i)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Get().
+		return nil, err
+	}
+	v, err := storable.StoredValue(a.Storage)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
+	}
+	return v, nil
 }
 
 func (a *Array) Set(index uint64, value Value) (Storable, error) {

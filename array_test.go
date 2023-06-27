@@ -57,10 +57,7 @@ func verifyArray(
 
 	// Verify array elements
 	for i, v := range values {
-		s, err := array.Get(uint64(i))
-		require.NoError(t, err)
-
-		e, err := s.StoredValue(array.Storage)
+		e, err := array.Get(uint64(i))
 		require.NoError(t, err)
 
 		valueEqual(t, typeInfoComparator, v, e)
@@ -153,8 +150,8 @@ func TestArrayAppendAndGet(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	storable, err := array.Get(array.Count())
-	require.Nil(t, storable)
+	e, err := array.Get(array.Count())
+	require.Nil(t, e)
 	require.Equal(t, 1, errorCategorizationCount(err))
 
 	var userError *UserError

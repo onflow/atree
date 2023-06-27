@@ -344,7 +344,9 @@ func validArraySlab(
 	}
 
 	computedCount := uint32(0)
-	for i, h := range meta.childrenHeaders {
+	for i := 0; i < len(meta.childrenHeaders); i++ {
+		h := meta.childrenHeaders[i]
+
 		// Verify child slabs
 		var count uint32
 		count, dataSlabIDs, nextDataSlabIDs, err =

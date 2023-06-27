@@ -852,7 +852,7 @@ func TestArrayIterate(t *testing.T) {
 	})
 }
 
-func testArrayIterateRange(t *testing.T, storage *PersistentSlabStorage, array *Array, values []Value) {
+func testArrayIterateRange(t *testing.T, array *Array, values []Value) {
 	var i uint64
 	var err error
 	var sliceOutOfBoundsError *SliceOutOfBoundsError
@@ -922,7 +922,7 @@ func TestArrayIterateRange(t *testing.T) {
 		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		testArrayIterateRange(t, storage, array, []Value{})
+		testArrayIterateRange(t, array, []Value{})
 	})
 
 	t.Run("dataslab as root", func(t *testing.T) {
@@ -941,7 +941,7 @@ func TestArrayIterateRange(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		testArrayIterateRange(t, storage, array, values)
+		testArrayIterateRange(t, array, values)
 	})
 
 	t.Run("metadataslab as root", func(t *testing.T) {
@@ -963,7 +963,7 @@ func TestArrayIterateRange(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		testArrayIterateRange(t, storage, array, values)
+		testArrayIterateRange(t, array, values)
 	})
 
 	t.Run("stop", func(t *testing.T) {

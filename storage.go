@@ -31,6 +31,8 @@ import (
 
 const LedgerBaseStorageSlabPrefix = "$"
 
+type ID [16]byte
+
 type (
 	Address      [8]byte
 	StorageIndex [8]byte

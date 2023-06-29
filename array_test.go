@@ -2589,3 +2589,18 @@ func errorCategorizationCount(err error) int {
 	}
 	return count
 }
+
+func TestArrayID(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	storage := newTestPersistentStorage(t)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	sid := array.StorageID()
+	id := array.ID()
+
+	require.Equal(t, sid.Address[:], id[:8])
+	require.Equal(t, sid.Index[:], id[8:])
+}

@@ -3862,6 +3862,16 @@ func (m *OrderedMap) StorageID() StorageID {
 	return m.root.Header().id
 }
 
+func (m *OrderedMap) ID() ID {
+	sid := m.StorageID()
+
+	var id ID
+	copy(id[:], sid.Address[:])
+	copy(id[8:], sid.Index[:])
+
+	return id
+}
+
 func (m *OrderedMap) StoredValue(_ SlabStorage) (Value, error) {
 	return m, nil
 }

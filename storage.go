@@ -357,7 +357,11 @@ func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
 		Slab
 	}
 
-	slabs := make([]slabEntry, 0, len(s.Slabs))
+	var slabs []slabEntry
+
+	if len(s.Slabs) > 0 {
+		slabs = make([]slabEntry, 0, len(s.Slabs))
+	}
 
 	for id, slab := range s.Slabs {
 		slabs = append(slabs, slabEntry{

@@ -4718,26 +4718,81 @@ func (i *mapLoadedElementIterator) next() (key Value, value Value, err error) {
 	return nil, nil, nil
 }
 
+type mapLoadedSlabIterator struct {
+	storage SlabStorage
+	slab    *MapMetaDataSlab
+	index   int
+}
+
+func (i *mapLoadedSlabIterator) next() Slab {
+	// Iterate loaded slabs in meta data slab.
+	for i.index < len(i.slab.childrenHeaders) {
+		header := i.slab.childrenHeaders[i.index]
+		i.index++
+
+		childSlab := i.storage.RetrieveIfLoaded(header.id)
+		if childSlab == nil {
+			// Skip this child because it references unloaded slab.
+			// Try next child.
+			continue
+		}
+
+		return childSlab
+	}
+
+	// Reach end of children.
+	return nil
+}
+
 // MapLoadedValueIterator is used to iterate loaded map elements.
 type MapLoadedValueIterator struct {
 	storage      SlabStorage
-	dataSlabs    []*MapDataSlab
+	parents      []*mapLoadedSlabIterator // LIFO stack for parents of dataIterator
 	dataIterator *mapLoadedElementIterator
-	index        int
+}
+
+func (i *MapLoadedValueIterator) nextDataIterator() (*mapLoadedElementIterator, error) {
+
+	// Iterate parents (LIFO) to find next loaded map data slab.
+	for len(i.parents) > 0 {
+		lastParent := i.parents[len(i.parents)-1]
+
+		nextChildSlab := lastParent.next()
+
+		switch slab := nextChildSlab.(type) {
+		case *MapDataSlab:
+			// Create data iterator
+			return &mapLoadedElementIterator{
+				storage:  i.storage,
+				elements: slab.elements,
+			}, nil
+
+		case *MapMetaDataSlab:
+			// Push new parent to parents queue
+			newParent := &mapLoadedSlabIterator{
+				storage: i.storage,
+				slab:    slab,
+			}
+			i.parents = append(i.parents, newParent)
+
+		case nil:
+			// Reach end of last parent.
+			// Pop last parent from parents stack.
+			i.parents = i.parents[:len(i.parents)-1]
+
+		default:
+			return nil, NewSlabDataErrorf("slab %s isn't MapSlab", nextChildSlab.ID())
+		}
+	}
+
+	// Reach end of parents stack.
+	return nil, nil
 }
 
 // Next iterates and returns next loaded element.
 // It returns nil Value at end of loaded elements.
 func (i *MapLoadedValueIterator) Next() (Value, Value, error) {
-	// Iterate loaded map data slabs.
-	for i.index < len(i.dataSlabs) {
-		if i.dataIterator == nil {
-			i.dataIterator = &mapLoadedElementIterator{
-				storage:  i.storage,
-				elements: i.dataSlabs[i.index].elements,
-			}
-		}
-
+	if i.dataIterator != nil {
 		key, value, err := i.dataIterator.next()
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by mapLoadedElementIterator.next().
@@ -4748,26 +4803,61 @@ func (i *MapLoadedValueIterator) Next() (Value, Value, error) {
 		}
 
 		// Reach end of element in current data slab.
-		// Try next data slab.
-		i.index++
 		i.dataIterator = nil
 	}
 
+	// Get next data iterator.
+	var err error
+	i.dataIterator, err = i.nextDataIterator()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by MapLoadedValueIterator.nextDataIterator().
+		return nil, nil, err
+	}
+	if i.dataIterator != nil {
+		return i.Next()
+	}
+
+	// Reach end of loaded value iterator
 	return nil, nil, nil
 }
 
 // LoadedValueIterator returns iterator to iterate loaded map elements.
 func (m *OrderedMap) LoadedValueIterator() (*MapLoadedValueIterator, error) {
-	dataSlabs, err := m.getLoadedDataSlabs()
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by OrderedMap.getLoadedDataSlabs().
-		return nil, err
-	}
+	switch slab := m.root.(type) {
 
-	return &MapLoadedValueIterator{
-		storage:   m.Storage,
-		dataSlabs: dataSlabs,
-	}, nil
+	case *MapDataSlab:
+		// Create a data iterator from root slab.
+		dataIterator := &mapLoadedElementIterator{
+			storage:  m.Storage,
+			elements: slab.elements,
+		}
+
+		// Create iterator with data iterator (no parents).
+		iterator := &MapLoadedValueIterator{
+			storage:      m.Storage,
+			dataIterator: dataIterator,
+		}
+
+		return iterator, nil
+
+	case *MapMetaDataSlab:
+		// Create a slab iterator from root slab.
+		slabIterator := &mapLoadedSlabIterator{
+			storage: m.Storage,
+			slab:    slab,
+		}
+
+		// Create iterator with parent (data iterater is uninitialized).
+		iterator := &MapLoadedValueIterator{
+			storage: m.Storage,
+			parents: []*mapLoadedSlabIterator{slabIterator},
+		}
+
+		return iterator, nil
+
+	default:
+		return nil, NewSlabDataErrorf("slab %s isn't MapSlab", slab.ID())
+	}
 }
 
 // IterateLoadedValues iterates loaded map values.
@@ -4797,47 +4887,4 @@ func (m *OrderedMap) IterateLoadedValues(fn MapEntryIterationFunc) error {
 			return nil
 		}
 	}
-}
-
-func (m *OrderedMap) getLoadedDataSlabs() ([]*MapDataSlab, error) {
-	// Return early if root slab is data slab (root is always loaded).
-	if dataSlab, ok := m.root.(*MapDataSlab); ok {
-		return []*MapDataSlab{dataSlab}, nil
-	}
-
-	// Find all loaded data slabs using BFS.
-
-	var loadedDataSlabs []*MapDataSlab
-
-	nextLevelMetaDataSlabs := []*MapMetaDataSlab{m.root.(*MapMetaDataSlab)}
-
-	for len(nextLevelMetaDataSlabs) > 0 {
-
-		metaDataSlabs := nextLevelMetaDataSlabs
-
-		nextLevelMetaDataSlabs = make([]*MapMetaDataSlab, 0, len(metaDataSlabs))
-
-		for _, slab := range metaDataSlabs {
-
-			for _, childHeader := range slab.childrenHeaders {
-
-				childSlab := m.Storage.RetrieveIfLoaded(childHeader.id)
-				if childSlab == nil {
-					// Skip unloaded child slab.
-					continue
-				}
-
-				switch slab := childSlab.(type) {
-				case *MapMetaDataSlab:
-					nextLevelMetaDataSlabs = append(nextLevelMetaDataSlabs, slab)
-				case *MapDataSlab:
-					loadedDataSlabs = append(loadedDataSlabs, slab)
-				default:
-					return nil, NewSlabDataErrorf("slab %s isn't MapSlab", slab.ID())
-				}
-			}
-		}
-	}
-
-	return loadedDataSlabs, nil
 }

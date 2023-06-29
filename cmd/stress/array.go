@@ -417,13 +417,9 @@ func checkArrayDataLoss(array *atree.Array, values []atree.Value) error {
 
 	// Check every element
 	for i, v := range values {
-		storable, err := array.Get(uint64(i))
+		convertedValue, err := array.Get(uint64(i))
 		if err != nil {
 			return fmt.Errorf("failed to get element at %d: %w", i, err)
-		}
-		convertedValue, err := storable.StoredValue(array.Storage)
-		if err != nil {
-			return fmt.Errorf("failed to convert storable to value at %d: %w", i, err)
 		}
 		err = valueEqual(v, convertedValue)
 		if err != nil {

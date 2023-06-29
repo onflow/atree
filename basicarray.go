@@ -316,7 +316,7 @@ func (a *BasicArray) Get(index uint64) (Value, error) {
 }
 
 func (a *BasicArray) Set(index uint64, v Value) error {
-	storable, err := v.Storable(a.storage, a.Address(), MaxInlineArrayElementSize)
+	storable, err := v.Storable(a.storage, a.Address(), maxInlineArrayElementSize)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Value interface.
 		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
@@ -332,7 +332,7 @@ func (a *BasicArray) Append(v Value) error {
 }
 
 func (a *BasicArray) Insert(index uint64, v Value) error {
-	storable, err := v.Storable(a.storage, a.Address(), MaxInlineArrayElementSize)
+	storable, err := v.Storable(a.storage, a.Address(), maxInlineArrayElementSize)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Value interface.
 		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")

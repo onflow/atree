@@ -480,7 +480,7 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, address Address, index uint64, 
 	oldElem := a.elements[index]
 	oldSize := oldElem.ByteSize()
 
-	storable, err := value.Storable(storage, address, MaxInlineArrayElementSize)
+	storable, err := value.Storable(storage, address, maxInlineArrayElementSize)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Value interface.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
@@ -503,7 +503,7 @@ func (a *ArrayDataSlab) Insert(storage SlabStorage, address Address, index uint6
 		return NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
 	}
 
-	storable, err := value.Storable(storage, address, MaxInlineArrayElementSize)
+	storable, err := value.Storable(storage, address, maxInlineArrayElementSize)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Value interface.
 		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
@@ -2554,7 +2554,7 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 
 		}
 
-		storable, err := value.Storable(storage, address, MaxInlineArrayElementSize)
+		storable, err := value.Storable(storage, address, maxInlineArrayElementSize)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Value interface.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")

@@ -25,7 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var noop Storable
+var noopValue Value
+var noopStorable Storable
 
 func BenchmarkArrayGet100x(b *testing.B) {
 	benchmarks := []struct {
@@ -223,18 +224,18 @@ func benchmarkArrayGet(b *testing.B, initialArraySize, numberOfOps int) {
 
 	array := setupArray(b, r, storage, initialArraySize)
 
-	var storable Storable
+	var value Value
 
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
 		for i := 0; i < numberOfOps; i++ {
 			index := r.Intn(int(array.Count()))
-			storable, _ = array.Get(uint64(index))
+			value, _ = array.Get(uint64(index))
 		}
 	}
 
-	noop = storable
+	noopValue = value
 }
 
 func benchmarkArrayInsert(b *testing.B, initialArraySize, numberOfOps int) {
@@ -307,7 +308,7 @@ func benchmarkArrayRemoveAll(b *testing.B, initialArraySize int) {
 		}
 	}
 
-	noop = storable
+	noopStorable = storable
 }
 
 func benchmarkArrayPopIterate(b *testing.B, initialArraySize int) {
@@ -336,7 +337,7 @@ func benchmarkArrayPopIterate(b *testing.B, initialArraySize int) {
 		}
 	}
 
-	noop = storable
+	noopStorable = storable
 }
 
 func benchmarkNewArrayFromAppend(b *testing.B, initialArraySize int) {

@@ -71,13 +71,13 @@ func (status *mapStatus) String() string {
 	)
 }
 
-func (status *mapStatus) incSet(new bool) {
+func (status *mapStatus) incSet(newValue bool) {
 	status.lock.Lock()
 	defer status.lock.Unlock()
 
 	status.setOps++
 
-	if new {
+	if newValue {
 		status.count++
 	}
 }

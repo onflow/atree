@@ -47,7 +47,7 @@ var _ Digester = &mockDigester{}
 func (h *mockDigesterBuilder) SetSeed(_ uint64, _ uint64) {
 }
 
-func (h *mockDigesterBuilder) Digest(hip HashInputProvider, value Value) (Digester, error) {
+func (h *mockDigesterBuilder) Digest(_ HashInputProvider, value Value) (Digester, error) {
 	args := h.Called(value)
 	return args.Get(0).(mockDigester), nil
 }
@@ -85,7 +85,7 @@ func newErrorDigesterBuilder(err error) *errorDigesterBuilder {
 func (h *errorDigesterBuilder) SetSeed(_ uint64, _ uint64) {
 }
 
-func (h *errorDigesterBuilder) Digest(hip HashInputProvider, value Value) (Digester, error) {
+func (h *errorDigesterBuilder) Digest(_ HashInputProvider, _ Value) (Digester, error) {
 	return nil, h.err
 }
 

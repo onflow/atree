@@ -352,16 +352,19 @@ func (s *BasicSlabStorage) Encode() (map[StorageID][]byte, error) {
 }
 
 func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
-	var slabs []struct {
+	type slabEntry struct {
 		StorageID
 		Slab
 	}
 
+	var slabs []slabEntry
+
+	if len(s.Slabs) > 0 {
+		slabs = make([]slabEntry, 0, len(s.Slabs))
+	}
+
 	for id, slab := range s.Slabs {
-		slabs = append(slabs, struct {
-			StorageID
-			Slab
-		}{
+		slabs = append(slabs, slabEntry{
 			StorageID: id,
 			Slab:      slab,
 		})
@@ -620,7 +623,7 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 	// Create a temporary copy of all the cached IDs,
 	// as s.cache will get mutated inside the for-loop
 
-	var cached []StorageID
+	cached := make([]StorageID, 0, len(s.cache))
 	for id := range s.cache {
 		cached = append(cached, id)
 	}

@@ -441,7 +441,9 @@ func validMapSlab(
 	}
 
 	elementCount = 0
-	for _, h := range meta.childrenHeaders {
+	for i := 0; i < len(meta.childrenHeaders); i++ {
+		h := meta.childrenHeaders[i]
+
 		// Verify child slabs
 		count := uint64(0)
 		count, dataSlabIDs, nextDataSlabIDs, firstKeys, err =

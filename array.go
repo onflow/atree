@@ -819,7 +819,7 @@ func (a *ArrayDataSlab) SetExtraData(extraData *ArrayExtraData) {
 	a.extraData = extraData
 }
 
-func (a *ArrayDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc) error {
+func (a *ArrayDataSlab) PopIterate(_ SlabStorage, fn ArrayPopIterationFunc) error {
 
 	// Iterate and reset elements backwards
 	for i := len(a.elements) - 1; i >= 0; i-- {
@@ -835,9 +835,9 @@ func (a *ArrayDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIterationFunc
 }
 
 func (a *ArrayDataSlab) String() string {
-	var elemsStr []string
-	for _, e := range a.elements {
-		elemsStr = append(elemsStr, fmt.Sprint(e))
+	elemsStr := make([]string, len(a.elements))
+	for i, e := range a.elements {
+		elemsStr[i] = fmt.Sprint(e)
 	}
 
 	return fmt.Sprintf("ArrayDataSlab id:%s size:%d count:%d elements: [%s]",
@@ -1928,9 +1928,9 @@ func (a *ArrayMetaDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIteration
 }
 
 func (a *ArrayMetaDataSlab) String() string {
-	var elemsStr []string
-	for _, h := range a.childrenHeaders {
-		elemsStr = append(elemsStr, fmt.Sprintf("{id:%s size:%d count:%d}", h.id, h.size, h.count))
+	elemsStr := make([]string, len(a.childrenHeaders))
+	for i, h := range a.childrenHeaders {
+		elemsStr[i] = fmt.Sprintf("{id:%s size:%d count:%d}", h.id, h.size, h.count)
 	}
 
 	return fmt.Sprintf("ArrayMetaDataSlab id:%s size:%d count:%d children: [%s]",

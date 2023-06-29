@@ -662,7 +662,7 @@ func (e *singleElement) Set(
 }
 
 // Remove returns key, value, and nil element if key matches, otherwise returns error.
-func (e *singleElement) Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, element, error) {
+func (e *singleElement) Remove(storage SlabStorage, _ Digester, _ uint, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, element, error) {
 
 	equal, err := comparator(storage, key, e.key)
 	if err != nil {
@@ -944,7 +944,7 @@ func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, lev
 	return slab.Get(storage, digester, level, hkey, comparator, key)
 }
 
-func (e *externalCollisionGroup) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level uint, _ Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (element, MapValue, error) {
+func (e *externalCollisionGroup) Set(storage SlabStorage, _ Address, b DigesterBuilder, digester Digester, level uint, _ Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (element, MapValue, error) {
 	slab, err := getMapSlab(storage, e.id)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by getMapSlab().
@@ -1904,7 +1904,7 @@ func (e *singleElements) Get(storage SlabStorage, digester Digester, level uint,
 	return nil, NewKeyNotFoundError(key)
 }
 
-func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBuilder, digester Digester, level uint, _ Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (MapValue, error) {
+func (e *singleElements) Set(storage SlabStorage, address Address, _ DigesterBuilder, digester Digester, level uint, _ Digest, comparator ValueComparator, _ HashInputProvider, key Value, value Value) (MapValue, error) {
 
 	if level != digester.Levels() {
 		return nil, NewHashLevelErrorf("single elements digest level is %d, want %d", level, digester.Levels())
@@ -1952,7 +1952,7 @@ func (e *singleElements) Set(storage SlabStorage, address Address, b DigesterBui
 	return nil, nil
 }
 
-func (e *singleElements) Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
+func (e *singleElements) Remove(storage SlabStorage, digester Digester, level uint, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
 
 	if level != digester.Levels() {
 		return nil, nil, NewHashLevelErrorf("single elements digest level is %d, want %d", level, digester.Levels())
@@ -1992,7 +1992,7 @@ func (e *singleElements) Element(i int) (element, error) {
 	return e.elems[i], nil
 }
 
-func (e *singleElements) Merge(elems elements) error {
+func (e *singleElements) Merge(_ elements) error {
 	return NewNotApplicableError("singleElements", "elements", "Merge")
 }
 
@@ -2000,19 +2000,19 @@ func (e *singleElements) Split() (elements, elements, error) {
 	return nil, nil, NewNotApplicableError("singleElements", "elements", "Split")
 }
 
-func (e *singleElements) LendToRight(re elements) error {
+func (e *singleElements) LendToRight(_ elements) error {
 	return NewNotApplicableError("singleElements", "elements", "LendToRight")
 }
 
-func (e *singleElements) BorrowFromRight(re elements) error {
+func (e *singleElements) BorrowFromRight(_ elements) error {
 	return NewNotApplicableError("singleElements", "elements", "BorrowFromRight")
 }
 
-func (e *singleElements) CanLendToLeft(size uint32) bool {
+func (e *singleElements) CanLendToLeft(_ uint32) bool {
 	return false
 }
 
-func (e *singleElements) CanLendToRight(size uint32) bool {
+func (e *singleElements) CanLendToRight(_ uint32) bool {
 	return false
 }
 
@@ -3513,9 +3513,9 @@ func (m *MapMetaDataSlab) PopIterate(storage SlabStorage, fn MapPopIterationFunc
 }
 
 func (m *MapMetaDataSlab) String() string {
-	var elemsStr []string
-	for _, h := range m.childrenHeaders {
-		elemsStr = append(elemsStr, fmt.Sprintf("{id:%s size:%d firstKey:%d}", h.id, h.size, h.firstKey))
+	elemsStr := make([]string, len(m.childrenHeaders))
+	for i, h := range m.childrenHeaders {
+		elemsStr[i] = fmt.Sprintf("{id:%s size:%d firstKey:%d}", h.id, h.size, h.firstKey)
 	}
 
 	return fmt.Sprintf("MapMetaDataSlab id:%s size:%d firstKey:%d children: [%s]",

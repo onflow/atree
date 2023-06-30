@@ -2808,8 +2808,10 @@ func (i *ArrayLoadedValueIterator) nextDataIterator() (*arrayLoadedElementIterat
 
 		case nil:
 			// Reach end of last parent.
-			// Pop last parent from parents stack.
-			i.parents = i.parents[:len(i.parents)-1]
+			// Reset last parent to nil and pop last parent from parents stack.
+			lastParentIndex := len(i.parents) - 1
+			i.parents[lastParentIndex] = nil
+			i.parents = i.parents[:lastParentIndex]
 
 		default:
 			return nil, NewSlabDataErrorf("slab %s isn't ArraySlab", nextChildSlab.ID())

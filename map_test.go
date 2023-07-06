@@ -4217,3 +4217,18 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
 }
+
+func TestMapID(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	storage := newTestPersistentStorage(t)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	sid := m.StorageID()
+	id := m.ID()
+
+	require.Equal(t, sid.Address[:], id[:8])
+	require.Equal(t, sid.Index[:], id[8:])
+}

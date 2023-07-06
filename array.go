@@ -2373,6 +2373,16 @@ func (a *Array) StorageID() StorageID {
 	return a.root.ID()
 }
 
+func (a *Array) ID() ID {
+	sid := a.StorageID()
+
+	var id ID
+	copy(id[:], sid.Address[:])
+	copy(id[8:], sid.Index[:])
+
+	return id
+}
+
 func (a *Array) Type() TypeInfo {
 	if extraData := a.root.ExtraData(); extraData != nil {
 		return extraData.TypeInfo

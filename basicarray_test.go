@@ -427,7 +427,7 @@ func TestBasicArrayDecodeEncodeRandomData(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	rootID := array.root.Header().id
+	rootID := array.root.Header().slabID
 
 	// Encode slabs with random data of mixed types
 	m1, err := storage.Encode()

@@ -24,8 +24,8 @@ package atree
 // other non-dictionary values (e.g. strings, integers, etc.) directly in accounts
 // (i.e. directly in slabs aka registers)
 type StorableSlab struct {
-	StorageID StorageID
-	Storable  Storable
+	ID       SlabID
+	Storable Storable
 }
 
 var _ Slab = StorableSlab{}
@@ -42,7 +42,7 @@ func (s StorableSlab) Encode(enc *Encoder) error {
 	flag := maskStorable
 	flag = setNoSizeLimit(flag)
 
-	if _, ok := s.Storable.(StorageIDStorable); ok {
+	if _, ok := s.Storable.(SlabIDStorable); ok {
 		flag = setHasPointers(flag)
 	}
 
@@ -66,8 +66,8 @@ func (s StorableSlab) ByteSize() uint32 {
 	return versionAndFlagSize + s.Storable.ByteSize()
 }
 
-func (s StorableSlab) ID() StorageID {
-	return s.StorageID
+func (s StorableSlab) SlabID() SlabID {
+	return s.ID
 }
 
 func (s StorableSlab) StoredValue(storage SlabStorage) (Value, error) {

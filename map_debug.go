@@ -50,13 +50,13 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 	collisionDataSlabCount := uint64(0)
 	storableDataSlabCount := uint64(0)
 
-	nextLevelIDs := []StorageID{m.StorageID()}
+	nextLevelIDs := []SlabID{m.SlabID()}
 
 	for len(nextLevelIDs) > 0 {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = []StorageID(nil)
+		nextLevelIDs = []SlabID(nil)
 
 		for _, id := range ids {
 
@@ -101,10 +101,10 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 
 							} else {
 								e := elem.(*singleElement)
-								if _, ok := e.key.(StorageIDStorable); ok {
+								if _, ok := e.key.(SlabIDStorable); ok {
 									storableDataSlabCount++
 								}
-								if _, ok := e.value.(StorageIDStorable); ok {
+								if _, ok := e.value.(SlabIDStorable); ok {
 									storableDataSlabCount++
 								}
 							}
@@ -116,11 +116,11 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 				metaDataSlabCount++
 
 				for _, storable := range slab.ChildStorables() {
-					id, ok := storable.(StorageIDStorable)
+					id, ok := storable.(SlabIDStorable)
 					if !ok {
-						return MapStats{}, NewFatalError(fmt.Errorf("metadata slab's child storables are not of type StorageIDStorable"))
+						return MapStats{}, NewFatalError(fmt.Errorf("metadata slab's child storables are not of type SlabIDStorable"))
 					}
-					nextLevelIDs = append(nextLevelIDs, StorageID(id))
+					nextLevelIDs = append(nextLevelIDs, SlabID(id))
 				}
 			}
 		}
@@ -150,17 +150,17 @@ func PrintMap(m *OrderedMap) {
 func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 	var dumps []string
 
-	nextLevelIDs := []StorageID{m.StorageID()}
+	nextLevelIDs := []SlabID{m.SlabID()}
 
-	var overflowIDs []StorageID
-	var collisionSlabIDs []StorageID
+	var overflowIDs []SlabID
+	var collisionSlabIDs []SlabID
 
 	level := 0
 	for len(nextLevelIDs) > 0 {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = []StorageID(nil)
+		nextLevelIDs = []SlabID(nil)
 
 		for _, id := range ids {
 
@@ -183,15 +183,15 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 					if group, ok := elem.(elementGroup); ok {
 						if !group.Inline() {
 							extSlab := group.(*externalCollisionGroup)
-							collisionSlabIDs = append(collisionSlabIDs, extSlab.id)
+							collisionSlabIDs = append(collisionSlabIDs, extSlab.slabID)
 						}
 					}
 				}
 
 				childStorables := dataSlab.ChildStorables()
 				for _, e := range childStorables {
-					if id, ok := e.(StorageIDStorable); ok {
-						overflowIDs = append(overflowIDs, StorageID(id))
+					if id, ok := e.(SlabIDStorable); ok {
+						overflowIDs = append(overflowIDs, SlabID(id))
 					}
 				}
 
@@ -200,11 +200,11 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, meta))
 
 				for _, storable := range slab.ChildStorables() {
-					id, ok := storable.(StorageIDStorable)
+					id, ok := storable.(SlabIDStorable)
 					if !ok {
-						return nil, NewFatalError(errors.New("metadata slab's child storables are not of type StorageIDStorable"))
+						return nil, NewFatalError(errors.New("metadata slab's child storables are not of type SlabIDStorable"))
 					}
-					nextLevelIDs = append(nextLevelIDs, StorageID(id))
+					nextLevelIDs = append(nextLevelIDs, SlabID(id))
 				}
 			}
 		}
@@ -251,7 +251,7 @@ func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip Hash
 
 	extraData := m.root.ExtraData()
 	if extraData == nil {
-		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", m.root.ID()))
+		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", m.root.SlabID()))
 	}
 
 	// Verify that extra data has correct type information
@@ -259,7 +259,7 @@ func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip Hash
 		return NewFatalError(
 			fmt.Errorf(
 				"root slab %d type information %v, want %v",
-				m.root.ID(),
+				m.root.SlabID(),
 				extraData.TypeInfo,
 				typeInfo,
 			))
@@ -267,11 +267,11 @@ func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip Hash
 
 	// Verify that extra data has seed
 	if extraData.Seed == 0 {
-		return NewFatalError(fmt.Errorf("root slab %d seed is uninitialized", m.root.ID()))
+		return NewFatalError(fmt.Errorf("root slab %d seed is uninitialized", m.root.SlabID()))
 	}
 
 	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := validMapSlab(
-		m.Storage, m.digesterBuilder, tic, hip, m.root.ID(), 0, nil, []StorageID{}, []StorageID{}, []Digest{})
+		m.Storage, m.digesterBuilder, tic, hip, m.root.SlabID(), 0, nil, []SlabID{}, []SlabID{}, []Digest{})
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by validMapSlab().
 		return err
@@ -282,7 +282,7 @@ func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip Hash
 		return NewFatalError(
 			fmt.Errorf(
 				"root slab %d count %d is wrong, want %d",
-				m.root.ID(),
+				m.root.SlabID(),
 				extraData.Count,
 				computedCount,
 			))
@@ -320,16 +320,16 @@ func validMapSlab(
 	digesterBuilder DigesterBuilder,
 	tic TypeInfoComparator,
 	hip HashInputProvider,
-	id StorageID,
+	id SlabID,
 	level int,
 	headerFromParentSlab *MapSlabHeader,
-	dataSlabIDs []StorageID,
-	nextDataSlabIDs []StorageID,
+	dataSlabIDs []SlabID,
+	nextDataSlabIDs []SlabID,
 	firstKeys []Digest,
 ) (
 	elementCount uint64,
-	_dataSlabIDs []StorageID,
-	_nextDataSlabIDs []StorageID,
+	_dataSlabIDs []SlabID,
+	_nextDataSlabIDs []SlabID,
 	_firstKeys []Digest,
 	err error,
 ) {
@@ -417,7 +417,7 @@ func validMapSlab(
 
 		dataSlabIDs = append(dataSlabIDs, id)
 
-		if dataSlab.next != StorageIDUndefined {
+		if dataSlab.next != SlabIDUndefined {
 			nextDataSlabIDs = append(nextDataSlabIDs, dataSlab.next)
 		}
 
@@ -447,7 +447,7 @@ func validMapSlab(
 		// Verify child slabs
 		count := uint64(0)
 		count, dataSlabIDs, nextDataSlabIDs, firstKeys, err =
-			validMapSlab(storage, digesterBuilder, tic, hip, h.id, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
+			validMapSlab(storage, digesterBuilder, tic, hip, h.slabID, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by validMapSlab().
 			return 0, nil, nil, nil, err
@@ -500,7 +500,7 @@ func validMapElements(
 	db DigesterBuilder,
 	tic TypeInfoComparator,
 	hip HashInputProvider,
-	id StorageID,
+	id SlabID,
 	elements elements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
@@ -525,7 +525,7 @@ func validMapHkeyElements(
 	db DigesterBuilder,
 	tic TypeInfoComparator,
 	hip HashInputProvider,
-	id StorageID,
+	id SlabID,
 	elements *hkeyElements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
@@ -660,7 +660,7 @@ func validMapSingleElements(
 	db DigesterBuilder,
 	tic TypeInfoComparator,
 	hip HashInputProvider,
-	id StorageID,
+	id SlabID,
 	elements *singleElements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
@@ -727,7 +727,7 @@ func validSingleElement(
 ) {
 
 	// Verify key pointer
-	if _, keyPointer := e.key.(StorageIDStorable); e.keyPointer != keyPointer {
+	if _, keyPointer := e.key.(SlabIDStorable); e.keyPointer != keyPointer {
 		return 0, 0, NewFatalError(fmt.Errorf("element %s keyPointer %t is wrong, want %t", e, e.keyPointer, keyPointer))
 	}
 
@@ -745,7 +745,7 @@ func validSingleElement(
 	}
 
 	// Verify value pointer
-	if _, valuePointer := e.value.(StorageIDStorable); e.valuePointer != valuePointer {
+	if _, valuePointer := e.value.(SlabIDStorable); e.valuePointer != valuePointer {
 		return 0, 0, NewFatalError(fmt.Errorf("element %s valuePointer %t is wrong, want %t", e, e.valuePointer, valuePointer))
 	}
 
@@ -812,7 +812,7 @@ func ValidMapSerialization(
 ) error {
 	return validMapSlabSerialization(
 		m.Storage,
-		m.root.ID(),
+		m.root.SlabID(),
 		cborDecMode,
 		cborEncMode,
 		decodeStorable,
@@ -823,7 +823,7 @@ func ValidMapSerialization(
 
 func validMapSlabSerialization(
 	storage SlabStorage,
-	id StorageID,
+	id SlabID,
 	cborDecMode cbor.DecMode,
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
@@ -931,7 +931,7 @@ func validMapSlabSerialization(
 		// Verify child slabs
 		err = validMapSlabSerialization(
 			storage,
-			h.id,
+			h.slabID,
 			cborDecMode,
 			cborEncMode,
 			decodeStorable,
@@ -1235,14 +1235,14 @@ func mapExternalCollisionElementsEqual(
 		return NewFatalError(fmt.Errorf("externalCollisionGroup size %d is wrong, want %d", actual.size, expected.size))
 	}
 
-	if expected.id != actual.id {
-		return NewFatalError(fmt.Errorf("externalCollisionGroup id %d is wrong, want %d", actual.id, expected.id))
+	if expected.slabID != actual.slabID {
+		return NewFatalError(fmt.Errorf("externalCollisionGroup id %d is wrong, want %d", actual.slabID, expected.slabID))
 	}
 
 	// Compare external collision slab
 	err := validMapSlabSerialization(
 		storage,
-		expected.id,
+		expected.slabID,
 		cborDecMode,
 		cborEncMode,
 		decodeStorable,
@@ -1285,11 +1285,11 @@ func mapSingleElementEqual(
 	}
 
 	// Compare key stored in a separate slab
-	if idStorable, ok := expected.key.(StorageIDStorable); ok {
+	if idStorable, ok := expected.key.(SlabIDStorable); ok {
 
 		v, err := idStorable.StoredValue(storage)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by StorageIDStorable.StoredValue().
+			// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
 			return err
 		}
 
@@ -1312,11 +1312,11 @@ func mapSingleElementEqual(
 	}
 
 	// Compare value stored in a separate slab
-	if idStorable, ok := expected.value.(StorageIDStorable); ok {
+	if idStorable, ok := expected.value.(SlabIDStorable); ok {
 
 		v, err := idStorable.StoredValue(storage)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by StorageIDStorable.StoredValue().
+			// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
 			return err
 		}
 

@@ -47,13 +47,13 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 	dataSlabCount := uint64(0)
 	storableSlabCount := uint64(0)
 
-	nextLevelIDs := []StorageID{a.StorageID()}
+	nextLevelIDs := []SlabID{a.SlabID()}
 
 	for len(nextLevelIDs) > 0 {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = []StorageID(nil)
+		nextLevelIDs = []SlabID(nil)
 
 		for _, id := range ids {
 
@@ -68,7 +68,7 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 
 				childStorables := slab.ChildStorables()
 				for _, s := range childStorables {
-					if _, ok := s.(StorageIDStorable); ok {
+					if _, ok := s.(SlabIDStorable); ok {
 						storableSlabCount++
 					}
 				}
@@ -76,11 +76,11 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 				metaDataSlabCount++
 
 				for _, storable := range slab.ChildStorables() {
-					id, ok := storable.(StorageIDStorable)
+					id, ok := storable.(SlabIDStorable)
 					if !ok {
-						return ArrayStats{}, NewFatalError(fmt.Errorf("metadata slab's child storables are not of type StorageIDStorable"))
+						return ArrayStats{}, NewFatalError(fmt.Errorf("metadata slab's child storables are not of type SlabIDStorable"))
 					}
-					nextLevelIDs = append(nextLevelIDs, StorageID(id))
+					nextLevelIDs = append(nextLevelIDs, SlabID(id))
 				}
 			}
 		}
@@ -111,16 +111,16 @@ func PrintArray(a *Array) {
 func DumpArraySlabs(a *Array) ([]string, error) {
 	var dumps []string
 
-	nextLevelIDs := []StorageID{a.StorageID()}
+	nextLevelIDs := []SlabID{a.SlabID()}
 
-	var overflowIDs []StorageID
+	var overflowIDs []SlabID
 
 	level := 0
 	for len(nextLevelIDs) > 0 {
 
 		ids := nextLevelIDs
 
-		nextLevelIDs = []StorageID(nil)
+		nextLevelIDs = []SlabID(nil)
 
 		for _, id := range ids {
 
@@ -136,8 +136,8 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 
 				childStorables := dataSlab.ChildStorables()
 				for _, e := range childStorables {
-					if id, ok := e.(StorageIDStorable); ok {
-						overflowIDs = append(overflowIDs, StorageID(id))
+					if id, ok := e.(SlabIDStorable); ok {
+						overflowIDs = append(overflowIDs, SlabID(id))
 					}
 				}
 
@@ -146,11 +146,11 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, meta))
 
 				for _, storable := range slab.ChildStorables() {
-					id, ok := storable.(StorageIDStorable)
+					id, ok := storable.(SlabIDStorable)
 					if !ok {
-						return nil, NewFatalError(errors.New("metadata slab's child storables are not of type StorageIDStorable"))
+						return nil, NewFatalError(errors.New("metadata slab's child storables are not of type SlabIDStorable"))
 					}
-					nextLevelIDs = append(nextLevelIDs, StorageID(id))
+					nextLevelIDs = append(nextLevelIDs, SlabID(id))
 				}
 			}
 		}
@@ -179,21 +179,21 @@ func ValidArray(a *Array, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInp
 
 	extraData := a.root.ExtraData()
 	if extraData == nil {
-		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", a.root.ID()))
+		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", a.root.SlabID()))
 	}
 
 	// Verify that extra data has correct type information
 	if typeInfo != nil && !tic(extraData.TypeInfo, typeInfo) {
 		return NewFatalError(fmt.Errorf(
 			"root slab %d type information %v is wrong, want %v",
-			a.root.ID(),
+			a.root.SlabID(),
 			extraData.TypeInfo,
 			typeInfo,
 		))
 	}
 
 	computedCount, dataSlabIDs, nextDataSlabIDs, err :=
-		validArraySlab(tic, hip, a.Storage, a.root.Header().id, 0, nil, []StorageID{}, []StorageID{})
+		validArraySlab(tic, hip, a.Storage, a.root.Header().slabID, 0, nil, []SlabID{}, []SlabID{})
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 		return err
@@ -201,7 +201,7 @@ func ValidArray(a *Array, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInp
 
 	// Verify array count
 	if computedCount != uint32(a.Count()) {
-		return NewFatalError(fmt.Errorf("root slab %d count %d is wrong, want %d", a.root.ID(), a.Count(), computedCount))
+		return NewFatalError(fmt.Errorf("root slab %d count %d is wrong, want %d", a.root.SlabID(), a.Count(), computedCount))
 	}
 
 	// Verify next data slab ids
@@ -217,15 +217,15 @@ func validArraySlab(
 	tic TypeInfoComparator,
 	hip HashInputProvider,
 	storage SlabStorage,
-	id StorageID,
+	id SlabID,
 	level int,
 	headerFromParentSlab *ArraySlabHeader,
-	dataSlabIDs []StorageID,
-	nextDataSlabIDs []StorageID,
+	dataSlabIDs []SlabID,
+	nextDataSlabIDs []SlabID,
 ) (
 	elementCount uint32,
-	_dataSlabIDs []StorageID,
-	_nextDataSlabIDs []StorageID,
+	_dataSlabIDs []SlabID,
+	_nextDataSlabIDs []SlabID,
 	err error,
 ) {
 
@@ -296,7 +296,7 @@ func validArraySlab(
 
 		dataSlabIDs = append(dataSlabIDs, id)
 
-		if dataSlab.next != StorageIDUndefined {
+		if dataSlab.next != SlabIDUndefined {
 			nextDataSlabIDs = append(nextDataSlabIDs, dataSlab.next)
 		}
 
@@ -354,7 +354,7 @@ func validArraySlab(
 		// Verify child slabs
 		var count uint32
 		count, dataSlabIDs, nextDataSlabIDs, err =
-			validArraySlab(tic, hip, storage, h.id, level+1, &h, dataSlabIDs, nextDataSlabIDs)
+			validArraySlab(tic, hip, storage, h.slabID, level+1, &h, dataSlabIDs, nextDataSlabIDs)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 			return 0, nil, nil, err
@@ -399,7 +399,7 @@ func ValidArraySerialization(
 ) error {
 	return validArraySlabSerialization(
 		a.Storage,
-		a.root.ID(),
+		a.root.SlabID(),
 		cborDecMode,
 		cborEncMode,
 		decodeStorable,
@@ -410,7 +410,7 @@ func ValidArraySerialization(
 
 func validArraySlabSerialization(
 	storage SlabStorage,
-	id StorageID,
+	id SlabID,
 	cborDecMode cbor.DecMode,
 	cborEncMode cbor.EncMode,
 	decodeStorable StorableDecoder,
@@ -516,7 +516,7 @@ func validArraySlabSerialization(
 		// Verify child slabs
 		err = validArraySlabSerialization(
 			storage,
-			h.id,
+			h.slabID,
 			cborDecMode,
 			cborEncMode,
 			decodeStorable,
@@ -574,11 +574,11 @@ func arrayDataSlabEqual(
 		}
 
 		// Compare nested element
-		if idStorable, ok := ee.(StorageIDStorable); ok {
+		if idStorable, ok := ee.(SlabIDStorable); ok {
 
 			ev, err := idStorable.StoredValue(storage)
 			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by StorageIDStorable.StoredValue().
+				// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
 				return err
 			}
 

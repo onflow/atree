@@ -41,21 +41,21 @@ const (
 	CBORTagInlineCollisionGroup   = 253
 	CBORTagExternalCollisionGroup = 254
 
-	CBORTagStorageID = 255
+	CBORTagSlabID = 255
 )
 
-type StorageIDStorable StorageID
+type SlabIDStorable SlabID
 
-var _ Storable = StorageIDStorable{}
+var _ Storable = SlabIDStorable{}
 
-func (v StorageIDStorable) ChildStorables() []Storable {
+func (v SlabIDStorable) ChildStorables() []Storable {
 	return nil
 }
 
-func (v StorageIDStorable) StoredValue(storage SlabStorage) (Value, error) {
-	id := StorageID(v)
+func (v SlabIDStorable) StoredValue(storage SlabStorage) (Value, error) {
+	id := SlabID(v)
 	if err := id.Valid(); err != nil {
-		// Don't need to wrap error as external error because err is already categorized by StorageID.Valid().
+		// Don't need to wrap error as external error because err is already categorized by SlabID.Valid().
 		return nil, err
 	}
 
@@ -75,16 +75,16 @@ func (v StorageIDStorable) StoredValue(storage SlabStorage) (Value, error) {
 	return value, nil
 }
 
-// Encode encodes StorageIDStorable as
+// Encode encodes SlabIDStorable as
 //
 //	cbor.Tag{
-//			Number:  cborTagStorageID,
+//			Number:  cborTagSlabID,
 //			Content: byte(v),
 //	}
-func (v StorageIDStorable) Encode(enc *Encoder) error {
+func (v SlabIDStorable) Encode(enc *Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
-		0xd8, CBORTagStorageID,
+		0xd8, CBORTagSlabID,
 	})
 	if err != nil {
 		return NewEncodingError(err)
@@ -93,7 +93,7 @@ func (v StorageIDStorable) Encode(enc *Encoder) error {
 	copy(enc.Scratch[:], v.Address[:])
 	copy(enc.Scratch[8:], v.Index[:])
 
-	err = enc.CBOR.EncodeBytes(enc.Scratch[:storageIDSize])
+	err = enc.CBOR.EncodeBytes(enc.Scratch[:slabIDSize])
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -101,13 +101,13 @@ func (v StorageIDStorable) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (v StorageIDStorable) ByteSize() uint32 {
-	// tag number (2 bytes) + byte string header (1 byte) + storage id (16 bytes)
-	return 2 + 1 + storageIDSize
+func (v SlabIDStorable) ByteSize() uint32 {
+	// tag number (2 bytes) + byte string header (1 byte) + slab id (16 bytes)
+	return 2 + 1 + slabIDSize
 }
 
-func (v StorageIDStorable) String() string {
-	return fmt.Sprintf("StorageIDStorable(%d)", v)
+func (v SlabIDStorable) String() string {
+	return fmt.Sprintf("SlabIDStorable(%d)", v)
 }
 
 // Encode is a wrapper for Storable.Encode()
@@ -129,17 +129,17 @@ func Encode(storable Storable, encMode cbor.EncMode) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func DecodeStorageIDStorable(dec *cbor.StreamDecoder) (Storable, error) {
+func DecodeSlabIDStorable(dec *cbor.StreamDecoder) (Storable, error) {
 	b, err := dec.DecodeBytes()
 	if err != nil {
 		return nil, NewDecodingError(err)
 	}
 
-	id, err := NewStorageIDFromRawBytes(b)
+	id, err := NewSlabIDFromRawBytes(b)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by NewStorageIDFromRawBytes().
+		// Don't need to wrap error as external error because err is already categorized by NewSlabIDFromRawBytes().
 		return nil, err
 	}
 
-	return StorageIDStorable(id), nil
+	return SlabIDStorable(id), nil
 }

@@ -263,7 +263,6 @@ var _ MapSlab = &MapMetaDataSlab{}
 
 type MapSlab interface {
 	Slab
-	fmt.Stringer
 
 	Get(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapValue, error)
 	Set(storage SlabStorage, b DigesterBuilder, digester Digester, level uint, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (existingValue MapValue, err error)
@@ -2317,7 +2316,7 @@ func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 
 func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Digester, level uint, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (MapValue, error) {
 
-	existingValue, err := m.elements.Set(storage, m.SlabID().Address, b, digester, level, hkey, comparator, hip, key, value)
+	existingValue, err := m.elements.Set(storage, m.SlabID().address, b, digester, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by elements.Set().
 		return nil, err
@@ -2383,10 +2382,10 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		return nil, nil, err
 	}
 
-	sID, err := storage.GenerateSlabID(m.SlabID().Address)
+	sID, err := storage.GenerateSlabID(m.SlabID().address)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", m.SlabID().Address))
+		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", m.SlabID().address))
 	}
 
 	// Create new right slab
@@ -3348,10 +3347,10 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	leftChildrenCount := int(math.Ceil(float64(len(m.childrenHeaders)) / 2))
 	leftSize := leftChildrenCount * mapSlabHeaderSize
 
-	sID, err := storage.GenerateSlabID(m.SlabID().Address)
+	sID, err := storage.GenerateSlabID(m.SlabID().address)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", m.SlabID().Address))
+		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", m.SlabID().address))
 	}
 
 	// Construct right slab
@@ -3545,8 +3544,8 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 	// This is for creating the seed, so the seed used here is OK to be 0.
 	// LittleEndian is needed for compatibility (same digest from []byte and
 	// two uint64).
-	a := binary.LittleEndian.Uint64(sID.Address[:])
-	b := binary.LittleEndian.Uint64(sID.Index[:])
+	a := binary.LittleEndian.Uint64(sID.address[:])
+	b := binary.LittleEndian.Uint64(sID.index[:])
 	k0 := circlehash.Hash64Uint64x2(a, b, uint64(0))
 
 	// To save storage space, only store 64-bits of the seed.
@@ -3862,12 +3861,12 @@ func (m *OrderedMap) SlabID() SlabID {
 	return m.root.SlabID()
 }
 
-func (m *OrderedMap) ID() ID {
+func (m *OrderedMap) ValueID() ValueID {
 	sid := m.SlabID()
 
-	var id ID
-	copy(id[:], sid.Address[:])
-	copy(id[8:], sid.Index[:])
+	var id ValueID
+	copy(id[:], sid.address[:])
+	copy(id[8:], sid.index[:])
 
 	return id
 }
@@ -3885,7 +3884,7 @@ func (m *OrderedMap) Count() uint64 {
 }
 
 func (m *OrderedMap) Address() Address {
-	return m.root.SlabID().Address
+	return m.root.SlabID().address
 }
 
 func (m *OrderedMap) Type() TypeInfo {

@@ -1639,10 +1639,10 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.Equal(t, uint64(arraySize), array.Count())
 		require.Equal(t, uint64(1), nestedArray.Count())
 
-		id1 := SlabID{Address: address, Index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{Address: address, Index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{Address: address, Index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		id4 := SlabID{Address: address, Index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id4 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -2563,7 +2563,7 @@ func TestArraySlabDump(t *testing.T) {
 
 		want := []string{
 			"level 1, ArrayDataSlab id:0x102030405060708.1 size:24 count:1 elements: [SlabIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]})]",
-			"overflow: &{0x102030405060708.2 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}",
+			"StorableSlab id:0x102030405060708.2 storable:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		}
 
 		dumps, err := DumpArraySlabs(array)
@@ -2599,8 +2599,8 @@ func TestArrayID(t *testing.T) {
 	require.NoError(t, err)
 
 	sid := array.SlabID()
-	id := array.ID()
+	id := array.ValueID()
 
-	require.Equal(t, sid.Address[:], id[:8])
-	require.Equal(t, sid.Index[:], id[8:])
+	require.Equal(t, sid.address[:], id[:8])
+	require.Equal(t, sid.index[:], id[8:])
 }

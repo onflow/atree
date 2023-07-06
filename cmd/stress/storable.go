@@ -348,30 +348,11 @@ func (v StringValue) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 }
 
 func (v StringValue) Storable(storage atree.SlabStorage, address atree.Address, maxInlineSize uint64) (atree.Storable, error) {
-	if uint64(v.ByteSize()) > maxInlineSize {
-
-		// Create StorableSlab
-		id, err := storage.GenerateSlabID(address)
-		if err != nil {
-			return nil, err
-		}
-
-		slab := &atree.StorableSlab{
-			ID:       id,
-			Storable: v,
-		}
-
-		// Store StorableSlab in storage
-		err = storage.Store(id, slab)
-		if err != nil {
-			return nil, err
-		}
-
-		// Return slab id as storable
-		return atree.SlabIDStorable(id), nil
+	if uint64(v.ByteSize()) <= maxInlineSize {
+		return v, nil
 	}
 
-	return v, nil
+	return atree.NewStorableSlab(storage, address, v)
 }
 
 func (v StringValue) Encode(enc *atree.Encoder) error {

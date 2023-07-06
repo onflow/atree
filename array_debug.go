@@ -167,7 +167,7 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 		if !found {
 			return nil, NewSlabNotFoundErrorf(id, "slab not found during array slab dump")
 		}
-		dumps = append(dumps, fmt.Sprintf("overflow: %s", slab))
+		dumps = append(dumps, slab.String())
 	}
 
 	return dumps, nil

@@ -18,8 +18,11 @@
 
 package atree
 
+import "fmt"
+
 type Slab interface {
 	Storable
+	fmt.Stringer
 
 	SlabID() SlabID
 	Split(SlabStorage) (Slab, Slab, error)

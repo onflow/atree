@@ -2372,10 +2372,10 @@ func (a *Array) SlabID() SlabID {
 	return a.root.SlabID()
 }
 
-func (a *Array) ID() ID {
+func (a *Array) ValueID() ValueID {
 	sid := a.SlabID()
 
-	var id ID
+	var id ValueID
 	copy(id[:], sid.address[:])
 	copy(id[8:], sid.index[:])
 

@@ -4227,7 +4227,7 @@ func TestMapID(t *testing.T) {
 	require.NoError(t, err)
 
 	sid := m.SlabID()
-	id := m.ID()
+	id := m.ValueID()
 
 	require.Equal(t, sid.address[:], id[:8])
 	require.Equal(t, sid.index[:], id[8:])

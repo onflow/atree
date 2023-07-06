@@ -349,14 +349,14 @@ func (v StringValue) Storable(storage SlabStorage, address Address, maxInlineSiz
 	if uint64(v.ByteSize()) > maxInlineSize {
 
 		// Create StorableSlab
-		id, err := storage.GenerateStorageID(address)
+		id, err := storage.GenerateSlabID(address)
 		if err != nil {
 			return nil, err
 		}
 
 		slab := &StorableSlab{
-			StorageID: id,
-			Storable:  v,
+			slabID:   id,
+			storable: v,
 		}
 
 		// Store StorableSlab in storage
@@ -365,8 +365,8 @@ func (v StringValue) Storable(storage SlabStorage, address Address, maxInlineSiz
 			return nil, err
 		}
 
-		// Return storage id as storable
-		return StorageIDStorable(id), nil
+		// Return slab id as storable
+		return SlabIDStorable(id), nil
 	}
 
 	return v, nil
@@ -430,7 +430,7 @@ func (v StringValue) String() string {
 	return v.str
 }
 
-func decodeStorable(dec *cbor.StreamDecoder, id StorageID) (Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, id SlabID) (Storable, error) {
 	t, err := dec.NextType()
 	if err != nil {
 		return nil, err
@@ -451,8 +451,8 @@ func decodeStorable(dec *cbor.StreamDecoder, id StorageID) (Storable, error) {
 		}
 
 		switch tagNumber {
-		case CBORTagStorageID:
-			return DecodeStorageIDStorable(dec)
+		case CBORTagSlabID:
+			return DecodeSlabIDStorable(dec)
 
 		case cborTagUInt8Value:
 			n, err := dec.DecodeUint64()

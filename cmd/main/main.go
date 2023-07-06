@@ -86,15 +86,15 @@ func (i testTypeInfo) Equal(other atree.TypeInfo) bool {
 	return ok
 }
 
-func decodeStorable(dec *cbor.StreamDecoder, _ atree.StorageID) (atree.Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, _ atree.SlabID) (atree.Storable, error) {
 	tagNumber, err := dec.DecodeTagNumber()
 	if err != nil {
 		return nil, err
 	}
 
 	switch tagNumber {
-	case atree.CBORTagStorageID:
-		return atree.DecodeStorageIDStorable(dec)
+	case atree.CBORTagSlabID:
+		return atree.DecodeSlabIDStorable(dec)
 
 	case cborTagUInt64Value:
 		n, err := dec.DecodeUint64()

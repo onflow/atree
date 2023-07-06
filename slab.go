@@ -18,10 +18,13 @@
 
 package atree
 
+import "fmt"
+
 type Slab interface {
 	Storable
+	fmt.Stringer
 
-	ID() StorageID
+	SlabID() SlabID
 	Split(SlabStorage) (Slab, Slab, error)
 	Merge(Slab) error
 	// LendToRight rebalances slabs by moving elements from left to right

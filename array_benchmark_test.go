@@ -99,7 +99,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	require.NoError(b, storage.Commit())
 	b.ResetTimer()
 
-	arrayID := array.StorageID()
+	arrayID := array.SlabID()
 
 	// append
 	storage.DropCache()

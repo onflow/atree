@@ -163,7 +163,7 @@ func testArray(
 			storage.DropCache()
 
 			// Load root slab from storage and cache it in read cache
-			rootID := array.StorageID()
+			rootID := array.SlabID()
 			array, err = atree.NewArrayWithRootID(storage, rootID)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to create array from root id %s: %s", rootID, err)
@@ -393,15 +393,15 @@ func testArray(
 				fmt.Fprintln(os.Stderr, err)
 				return
 			}
-			ids := make([]atree.StorageID, 0, len(rootIDs))
+			ids := make([]atree.SlabID, 0, len(rootIDs))
 			for id := range rootIDs {
 				// filter out root ids with empty address
-				if id.Address != atree.AddressUndefined {
+				if !id.HasTempAddress() {
 					ids = append(ids, id)
 				}
 			}
-			if len(ids) != 1 || ids[0] != array.StorageID() {
-				fmt.Fprintf(os.Stderr, "root storage ids %v in storage, want %s\n", ids, array.StorageID())
+			if len(ids) != 1 || ids[0] != array.SlabID() {
+				fmt.Fprintf(os.Stderr, "root slab ids %v in storage, want %s\n", ids, array.SlabID())
 				return
 			}
 		}

@@ -50,7 +50,7 @@ func (a *BasicArray) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, err
 }
 
 func newBasicArrayDataSlabFromData(
-	id StorageID,
+	id SlabID,
 	data []byte,
 	decMode cbor.DecMode,
 	decodeStorable StorableDecoder,
@@ -80,7 +80,7 @@ func newBasicArrayDataSlabFromData(
 
 	elements := make([]Storable, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		storable, err := decodeStorable(cborDec, StorageIDUndefined)
+		storable, err := decodeStorable(cborDec, SlabIDUndefined)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode array element")
@@ -89,7 +89,7 @@ func newBasicArrayDataSlabFromData(
 	}
 
 	return &BasicArrayDataSlab{
-		header:   ArraySlabHeader{id: id, size: uint32(len(data)), count: uint32(elemCount)},
+		header:   ArraySlabHeader{slabID: id, size: uint32(len(data)), count: uint32(elemCount)},
 		elements: elements,
 	}, nil
 }
@@ -155,10 +155,10 @@ func (a *BasicArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) 
 		oldElem.ByteSize() +
 		v.ByteSize()
 
-	err := storage.Store(a.header.id, a)
+	err := storage.Store(a.header.slabID, a)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.id))
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
 	}
 
 	return nil
@@ -180,10 +180,10 @@ func (a *BasicArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storabl
 	a.header.count++
 	a.header.size += v.ByteSize()
 
-	err := storage.Store(a.header.id, a)
+	err := storage.Store(a.header.slabID, a)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.id))
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
 	}
 
 	return nil
@@ -209,10 +209,10 @@ func (a *BasicArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable
 	a.header.count--
 	a.header.size -= v.ByteSize()
 
-	err := storage.Store(a.header.id, a)
+	err := storage.Store(a.header.slabID, a)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.id))
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
 	}
 
 	return v, nil
@@ -230,8 +230,8 @@ func (a *BasicArrayDataSlab) ByteSize() uint32 {
 	return a.header.size
 }
 
-func (a *BasicArrayDataSlab) ID() StorageID {
-	return a.header.id
+func (a *BasicArrayDataSlab) SlabID() SlabID {
+	return a.header.slabID
 }
 
 func (a *BasicArrayDataSlab) String() string {
@@ -255,16 +255,16 @@ func (a *BasicArrayDataSlab) BorrowFromRight(_ Slab) error {
 }
 
 func NewBasicArray(storage SlabStorage, address Address) (*BasicArray, error) {
-	sID, err := storage.GenerateStorageID(address)
+	sID, err := storage.GenerateSlabID(address)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate storage ID for address 0x%x", address))
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", address))
 	}
 
 	root := &BasicArrayDataSlab{
 		header: ArraySlabHeader{
-			id:   sID,
-			size: basicArrayDataSlabPrefixSize,
+			slabID: sID,
+			size:   basicArrayDataSlabPrefixSize,
 		},
 	}
 
@@ -274,17 +274,17 @@ func NewBasicArray(storage SlabStorage, address Address) (*BasicArray, error) {
 	}, nil
 }
 
-func (a *BasicArray) StorageID() StorageID {
-	return a.root.ID()
+func (a *BasicArray) SlabID() SlabID {
+	return a.root.SlabID()
 }
 
 func (a *BasicArray) Address() Address {
-	return a.StorageID().Address
+	return a.SlabID().address
 }
 
-func NewBasicArrayWithRootID(storage SlabStorage, id StorageID) (*BasicArray, error) {
-	if id == StorageIDUndefined {
-		return nil, NewStorageIDErrorf("cannot create BasicArray from undefined storage id")
+func NewBasicArrayWithRootID(storage SlabStorage, id SlabID) (*BasicArray, error) {
+	if id == SlabIDUndefined {
+		return nil, NewSlabIDErrorf("cannot create BasicArray from undefined slab ID")
 	}
 	slab, found, err := storage.Retrieve(id)
 	if err != nil {

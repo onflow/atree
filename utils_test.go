@@ -127,7 +127,7 @@ func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
 	)
 }
 
-func newTestPersistentStorageWithData(t testing.TB, data map[StorageID][]byte) *PersistentSlabStorage {
+func newTestPersistentStorageWithData(t testing.TB, data map[SlabID][]byte) *PersistentSlabStorage {
 	baseStorage := NewInMemBaseStorage()
 	baseStorage.segments = data
 	return newTestPersistentStorageWithBaseStorage(t, baseStorage)
@@ -166,34 +166,34 @@ func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
 }
 
 type InMemBaseStorage struct {
-	segments         map[StorageID][]byte
-	storageIndex     map[Address]StorageIndex
+	segments         map[SlabID][]byte
+	slabIndex        map[Address]SlabIndex
 	bytesRetrieved   int
 	bytesStored      int
-	segmentsReturned map[StorageID]struct{}
-	segmentsUpdated  map[StorageID]struct{}
-	segmentsTouched  map[StorageID]struct{}
+	segmentsReturned map[SlabID]struct{}
+	segmentsUpdated  map[SlabID]struct{}
+	segmentsTouched  map[SlabID]struct{}
 }
 
 var _ BaseStorage = &InMemBaseStorage{}
 
 func NewInMemBaseStorage() *InMemBaseStorage {
 	return NewInMemBaseStorageFromMap(
-		make(map[StorageID][]byte),
+		make(map[SlabID][]byte),
 	)
 }
 
-func NewInMemBaseStorageFromMap(segments map[StorageID][]byte) *InMemBaseStorage {
+func NewInMemBaseStorageFromMap(segments map[SlabID][]byte) *InMemBaseStorage {
 	return &InMemBaseStorage{
 		segments:         segments,
-		storageIndex:     make(map[Address]StorageIndex),
-		segmentsReturned: make(map[StorageID]struct{}),
-		segmentsUpdated:  make(map[StorageID]struct{}),
-		segmentsTouched:  make(map[StorageID]struct{}),
+		slabIndex:        make(map[Address]SlabIndex),
+		segmentsReturned: make(map[SlabID]struct{}),
+		segmentsUpdated:  make(map[SlabID]struct{}),
+		segmentsTouched:  make(map[SlabID]struct{}),
 	}
 }
 
-func (s *InMemBaseStorage) Retrieve(id StorageID) ([]byte, bool, error) {
+func (s *InMemBaseStorage) Retrieve(id SlabID) ([]byte, bool, error) {
 	seg, ok := s.segments[id]
 	s.bytesRetrieved += len(seg)
 	s.segmentsReturned[id] = struct{}{}
@@ -201,7 +201,7 @@ func (s *InMemBaseStorage) Retrieve(id StorageID) ([]byte, bool, error) {
 	return seg, ok, nil
 }
 
-func (s *InMemBaseStorage) Store(id StorageID, data []byte) error {
+func (s *InMemBaseStorage) Store(id SlabID, data []byte) error {
 	s.segments[id] = data
 	s.bytesStored += len(data)
 	s.segmentsUpdated[id] = struct{}{}
@@ -209,19 +209,19 @@ func (s *InMemBaseStorage) Store(id StorageID, data []byte) error {
 	return nil
 }
 
-func (s *InMemBaseStorage) Remove(id StorageID) error {
+func (s *InMemBaseStorage) Remove(id SlabID) error {
 	s.segmentsUpdated[id] = struct{}{}
 	s.segmentsTouched[id] = struct{}{}
 	delete(s.segments, id)
 	return nil
 }
 
-func (s *InMemBaseStorage) GenerateStorageID(address Address) (StorageID, error) {
-	index := s.storageIndex[address]
+func (s *InMemBaseStorage) GenerateSlabID(address Address) (SlabID, error) {
+	index := s.slabIndex[address]
 	nextIndex := index.Next()
 
-	s.storageIndex[address] = nextIndex
-	return NewStorageID(address, nextIndex), nil
+	s.slabIndex[address] = nextIndex
+	return NewSlabID(address, nextIndex), nil
 }
 
 func (s *InMemBaseStorage) SegmentCounts() int {
@@ -259,9 +259,9 @@ func (s *InMemBaseStorage) SegmentsTouched() int {
 func (s *InMemBaseStorage) ResetReporter() {
 	s.bytesStored = 0
 	s.bytesRetrieved = 0
-	s.segmentsReturned = make(map[StorageID]struct{})
-	s.segmentsUpdated = make(map[StorageID]struct{})
-	s.segmentsTouched = make(map[StorageID]struct{})
+	s.segmentsReturned = make(map[SlabID]struct{})
+	s.segmentsUpdated = make(map[SlabID]struct{})
+	s.segmentsTouched = make(map[SlabID]struct{})
 }
 
 func valueEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
@@ -285,7 +285,7 @@ func arrayEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
 	require.True(t, tic(array1.Type(), array2.Type()))
 	require.Equal(t, array1.Address(), array2.Address())
 	require.Equal(t, array1.Count(), array2.Count())
-	require.Equal(t, array1.StorageID(), array2.StorageID())
+	require.Equal(t, array1.SlabID(), array2.SlabID())
 
 	iterator1, err := array1.Iterator()
 	require.NoError(t, err)
@@ -318,7 +318,7 @@ func mapEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
 	require.True(t, tic(m1.Type(), m2.Type()))
 	require.Equal(t, m1.Address(), m2.Address())
 	require.Equal(t, m1.Count(), m2.Count())
-	require.Equal(t, m1.StorageID(), m2.StorageID())
+	require.Equal(t, m1.SlabID(), m2.SlabID())
 
 	iterator1, err := m1.Iterator()
 	require.NoError(t, err)

@@ -31,12 +31,16 @@ import (
 
 const LedgerBaseStorageSlabPrefix = "$"
 
-type ID [16]byte
+// ValueID identifies Array and OrderedMap.
+type ValueID [16]byte
 
 type (
 	Address   [8]byte
 	SlabIndex [8]byte
 
+	// SlabID identifies slab in storage.
+	// SlabID should only be used to retrieve,
+	// store, and remove slab in storage.
 	SlabID struct {
 		address Address
 		index   SlabIndex

@@ -2599,7 +2599,7 @@ func TestArrayID(t *testing.T) {
 	require.NoError(t, err)
 
 	sid := array.SlabID()
-	id := array.ID()
+	id := array.ValueID()
 
 	require.Equal(t, sid.address[:], id[:8])
 	require.Equal(t, sid.index[:], id[8:])

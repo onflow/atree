@@ -3861,10 +3861,10 @@ func (m *OrderedMap) SlabID() SlabID {
 	return m.root.SlabID()
 }
 
-func (m *OrderedMap) ID() ID {
+func (m *OrderedMap) ValueID() ValueID {
 	sid := m.SlabID()
 
-	var id ID
+	var id ValueID
 	copy(id[:], sid.address[:])
 	copy(id[8:], sid.index[:])
 

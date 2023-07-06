@@ -241,7 +241,7 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 		if !found {
 			return nil, NewSlabNotFoundErrorf(id, "slab not found during map slab dump")
 		}
-		dumps = append(dumps, fmt.Sprintf("overflow: %s", slab))
+		dumps = append(dumps, slab.String())
 	}
 
 	return dumps, nil

@@ -263,7 +263,6 @@ var _ MapSlab = &MapMetaDataSlab{}
 
 type MapSlab interface {
 	Slab
-	fmt.Stringer
 
 	Get(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapValue, error)
 	Set(storage SlabStorage, b DigesterBuilder, digester Digester, level uint, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (existingValue MapValue, err error)
@@ -3862,10 +3861,10 @@ func (m *OrderedMap) SlabID() SlabID {
 	return m.root.SlabID()
 }
 
-func (m *OrderedMap) ID() ID {
+func (m *OrderedMap) ValueID() ValueID {
 	sid := m.SlabID()
 
-	var id ID
+	var id ValueID
 	copy(id[:], sid.address[:])
 	copy(id[8:], sid.index[:])
 

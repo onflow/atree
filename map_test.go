@@ -3909,7 +3909,7 @@ func TestMapSlabDump(t *testing.T) {
 
 		want := []string{
 			"level 1, MapDataSlab id:0x102030405060708.1 size:102 firstkey:0 elements: [0:SlabIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]}):bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]",
-			"overflow: &{0x102030405060708.2 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}",
+			"StorableSlab id:0x102030405060708.2 storable:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		}
 		dumps, err := DumpMapSlabs(m)
 		require.NoError(t, err)
@@ -3936,7 +3936,7 @@ func TestMapSlabDump(t *testing.T) {
 
 		want := []string{
 			"level 1, MapDataSlab id:0x102030405060708.1 size:100 firstkey:0 elements: [0:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:SlabIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]})]",
-			"overflow: &{0x102030405060708.2 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}",
+			"StorableSlab id:0x102030405060708.2 storable:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		}
 		dumps, err := DumpMapSlabs(m)
 		require.NoError(t, err)
@@ -4227,7 +4227,7 @@ func TestMapID(t *testing.T) {
 	require.NoError(t, err)
 
 	sid := m.SlabID()
-	id := m.ID()
+	id := m.ValueID()
 
 	require.Equal(t, sid.address[:], id[:8])
 	require.Equal(t, sid.index[:], id[8:])

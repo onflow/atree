@@ -2563,7 +2563,7 @@ func TestArraySlabDump(t *testing.T) {
 
 		want := []string{
 			"level 1, ArrayDataSlab id:0x102030405060708.1 size:24 count:1 elements: [SlabIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]})]",
-			"overflow: &{0x102030405060708.2 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}",
+			"StorableSlab id:0x102030405060708.2 storable:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		}
 
 		dumps, err := DumpArraySlabs(array)
@@ -2599,7 +2599,7 @@ func TestArrayID(t *testing.T) {
 	require.NoError(t, err)
 
 	sid := array.SlabID()
-	id := array.ID()
+	id := array.ValueID()
 
 	require.Equal(t, sid.address[:], id[:8])
 	require.Equal(t, sid.index[:], id[8:])

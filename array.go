@@ -112,7 +112,6 @@ func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 
 type ArraySlab interface {
 	Slab
-	fmt.Stringer
 
 	Get(storage SlabStorage, index uint64) (Storable, error)
 	Set(storage SlabStorage, address Address, index uint64, value Value) (Storable, error)
@@ -2373,10 +2372,10 @@ func (a *Array) SlabID() SlabID {
 	return a.root.SlabID()
 }
 
-func (a *Array) ID() ID {
+func (a *Array) ValueID() ValueID {
 	sid := a.SlabID()
 
-	var id ID
+	var id ValueID
 	copy(id[:], sid.address[:])
 	copy(id[8:], sid.index[:])
 

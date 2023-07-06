@@ -355,8 +355,8 @@ func (v StringValue) Storable(storage SlabStorage, address Address, maxInlineSiz
 		}
 
 		slab := &StorableSlab{
-			ID:       id,
-			Storable: v,
+			slabID:   id,
+			storable: v,
 		}
 
 		// Store StorableSlab in storage

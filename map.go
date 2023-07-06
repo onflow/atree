@@ -263,7 +263,6 @@ var _ MapSlab = &MapMetaDataSlab{}
 
 type MapSlab interface {
 	Slab
-	fmt.Stringer
 
 	Get(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapValue, error)
 	Set(storage SlabStorage, b DigesterBuilder, digester Digester, level uint, hkey Digest, comparator ValueComparator, hip HashInputProvider, key Value, value Value) (existingValue MapValue, err error)

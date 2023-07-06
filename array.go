@@ -112,7 +112,6 @@ func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 
 type ArraySlab interface {
 	Slab
-	fmt.Stringer
 
 	Get(storage SlabStorage, index uint64) (Storable, error)
 	Set(storage SlabStorage, address Address, index uint64, value Value) (Storable, error)

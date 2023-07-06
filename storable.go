@@ -90,8 +90,8 @@ func (v SlabIDStorable) Encode(enc *Encoder) error {
 		return NewEncodingError(err)
 	}
 
-	copy(enc.Scratch[:], v.Address[:])
-	copy(enc.Scratch[8:], v.Index[:])
+	copy(enc.Scratch[:], v.address[:])
+	copy(enc.Scratch[8:], v.index[:])
 
 	err = enc.CBOR.EncodeBytes(enc.Scratch[:slabIDSize])
 	if err != nil {

@@ -396,7 +396,7 @@ func testArray(
 			ids := make([]atree.SlabID, 0, len(rootIDs))
 			for id := range rootIDs {
 				// filter out root ids with empty address
-				if id.Address != atree.AddressUndefined {
+				if !id.HasTempAddress() {
 					ids = append(ids, id)
 				}
 			}

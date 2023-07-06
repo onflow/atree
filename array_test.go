@@ -1639,10 +1639,10 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.Equal(t, uint64(arraySize), array.Count())
 		require.Equal(t, uint64(1), nestedArray.Count())
 
-		id1 := SlabID{Address: address, Index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{Address: address, Index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{Address: address, Index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		id4 := SlabID{Address: address, Index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id4 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -2601,6 +2601,6 @@ func TestArrayID(t *testing.T) {
 	sid := array.SlabID()
 	id := array.ID()
 
-	require.Equal(t, sid.Address[:], id[:8])
-	require.Equal(t, sid.Index[:], id[8:])
+	require.Equal(t, sid.address[:], id[:8])
+	require.Equal(t, sid.index[:], id[8:])
 }

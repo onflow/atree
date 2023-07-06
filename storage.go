@@ -38,8 +38,8 @@ type (
 	SlabIndex [8]byte
 
 	SlabID struct {
-		Address Address
-		Index   SlabIndex
+		address Address
+		index   SlabIndex
 	}
 )
 
@@ -84,41 +84,49 @@ func (id SlabID) ToRawBytes(b []byte) (int, error) {
 	if len(b) < slabIDSize {
 		return 0, NewSlabIDErrorf("incorrect slab ID buffer length %d", len(b))
 	}
-	copy(b, id.Address[:])
-	copy(b[8:], id.Index[:])
+	copy(b, id.address[:])
+	copy(b[8:], id.index[:])
 	return slabIDSize, nil
 }
 
 func (id SlabID) String() string {
 	return fmt.Sprintf(
 		"0x%x.%d",
-		binary.BigEndian.Uint64(id.Address[:]),
-		binary.BigEndian.Uint64(id.Index[:]),
+		binary.BigEndian.Uint64(id.address[:]),
+		binary.BigEndian.Uint64(id.index[:]),
 	)
 }
 
 func (id SlabID) AddressAsUint64() uint64 {
-	return binary.BigEndian.Uint64(id.Address[:])
+	return binary.BigEndian.Uint64(id.address[:])
 }
 
 func (id SlabID) IndexAsUint64() uint64 {
-	return binary.BigEndian.Uint64(id.Index[:])
+	return binary.BigEndian.Uint64(id.index[:])
+}
+
+func (id SlabID) HasTempAddress() bool {
+	return id.address == AddressUndefined
+}
+
+func (id SlabID) Index() SlabIndex {
+	return id.index
 }
 
 func (id SlabID) Valid() error {
 	if id == SlabIDUndefined {
 		return NewSlabIDError("undefined slab ID")
 	}
-	if id.Index == SlabIndexUndefined {
+	if id.index == SlabIndexUndefined {
 		return NewSlabIDError("undefined slab index")
 	}
 	return nil
 }
 
 func (id SlabID) Compare(other SlabID) int {
-	result := bytes.Compare(id.Address[:], other.Address[:])
+	result := bytes.Compare(id.address[:], other.address[:])
 	if result == 0 {
-		return bytes.Compare(id.Index[:], other.Index[:])
+		return bytes.Compare(id.index[:], other.index[:])
 	}
 	return result
 }
@@ -170,7 +178,7 @@ func NewLedgerBaseStorage(ledger Ledger) *LedgerBaseStorage {
 }
 
 func (s *LedgerBaseStorage) Retrieve(id SlabID) ([]byte, bool, error) {
-	v, err := s.ledger.GetValue(id.Address[:], SlabIndexToLedgerKey(id.Index))
+	v, err := s.ledger.GetValue(id.address[:], SlabIndexToLedgerKey(id.index))
 	s.bytesRetrieved += len(v)
 
 	if err != nil {
@@ -183,7 +191,7 @@ func (s *LedgerBaseStorage) Retrieve(id SlabID) ([]byte, bool, error) {
 
 func (s *LedgerBaseStorage) Store(id SlabID, data []byte) error {
 	s.bytesStored += len(data)
-	err := s.ledger.SetValue(id.Address[:], SlabIndexToLedgerKey(id.Index), data)
+	err := s.ledger.SetValue(id.address[:], SlabIndexToLedgerKey(id.index), data)
 
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Ledger interface.
@@ -194,7 +202,7 @@ func (s *LedgerBaseStorage) Store(id SlabID, data []byte) error {
 }
 
 func (s *LedgerBaseStorage) Remove(id SlabID) error {
-	err := s.ledger.SetValue(id.Address[:], SlabIndexToLedgerKey(id.Index), nil)
+	err := s.ledger.SetValue(id.address[:], SlabIndexToLedgerKey(id.index), nil)
 
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Ledger interface.
@@ -478,8 +486,8 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map
 				return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve parent slab %s", parentID))
 			}
 
-			childOwner := childSlab.SlabID().Address
-			parentOwner := parentSlab.SlabID().Address
+			childOwner := childSlab.SlabID().address
+			parentOwner := parentSlab.SlabID().address
 
 			if childOwner != parentOwner {
 				return nil, NewFatalError(
@@ -705,7 +713,7 @@ func (s *PersistentSlabStorage) sortedOwnedDeltaKeys() []SlabID {
 	keysWithOwners := make([]SlabID, 0, len(s.deltas))
 	for k := range s.deltas {
 		// ignore the ones that are not owned by accounts
-		if k.Address != AddressUndefined {
+		if k.address != AddressUndefined {
 			keysWithOwners = append(keysWithOwners, k)
 		}
 	}
@@ -713,7 +721,7 @@ func (s *PersistentSlabStorage) sortedOwnedDeltaKeys() []SlabID {
 	sort.Slice(keysWithOwners, func(i, j int) bool {
 		a := keysWithOwners[i]
 		b := keysWithOwners[j]
-		if a.Address == b.Address {
+		if a.address == b.address {
 			return a.IndexAsUint64() < b.IndexAsUint64()
 		}
 		return a.AddressAsUint64() < b.AddressAsUint64()
@@ -983,7 +991,7 @@ func (s *PersistentSlabStorage) DeltasWithoutTempAddresses() uint {
 	deltas := uint(0)
 	for k := range s.deltas {
 		// exclude the ones that are not owned by accounts
-		if k.Address != AddressUndefined {
+		if k.address != AddressUndefined {
 			deltas++
 		}
 	}
@@ -995,7 +1003,7 @@ func (s *PersistentSlabStorage) DeltasSizeWithoutTempAddresses() uint64 {
 	size := uint64(0)
 	for k, slab := range s.deltas {
 		// Exclude slabs that are not owned by accounts.
-		if k.Address == AddressUndefined || slab == nil {
+		if k.address == AddressUndefined || slab == nil {
 			continue
 		}
 

@@ -146,7 +146,7 @@ type Array struct {
 var _ Value = &Array{}
 
 func (a *Array) Address() Address {
-	return a.root.SlabID().Address
+	return a.root.SlabID().address
 }
 
 func (a *Array) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
@@ -588,14 +588,14 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	}
 
 	// Construct right slab
-	sID, err := storage.GenerateSlabID(a.header.slabID.Address)
+	sID, err := storage.GenerateSlabID(a.header.slabID.address)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
 		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(
 			err,
 			fmt.Sprintf(
 				"failed to generate slab ID for address 0x%x",
-				a.header.slabID.Address,
+				a.header.slabID.address,
 			),
 		)
 	}
@@ -1722,12 +1722,12 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	}
 
 	// Construct right slab
-	sID, err := storage.GenerateSlabID(a.header.slabID.Address)
+	sID, err := storage.GenerateSlabID(a.header.slabID.address)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
 		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(
 			err,
-			fmt.Sprintf("failed to generate slab ID for address 0x%x", a.header.slabID.Address))
+			fmt.Sprintf("failed to generate slab ID for address 0x%x", a.header.slabID.address))
 	}
 
 	rightSlab := &ArrayMetaDataSlab{
@@ -2377,8 +2377,8 @@ func (a *Array) ID() ID {
 	sid := a.SlabID()
 
 	var id ID
-	copy(id[:], sid.Address[:])
-	copy(id[8:], sid.Index[:])
+	copy(id[:], sid.address[:])
+	copy(id[8:], sid.index[:])
 
 	return id
 }

@@ -279,7 +279,7 @@ func (a *BasicArray) SlabID() SlabID {
 }
 
 func (a *BasicArray) Address() Address {
-	return a.SlabID().Address
+	return a.SlabID().address
 }
 
 func NewBasicArrayWithRootID(storage SlabStorage, id SlabID) (*BasicArray, error) {

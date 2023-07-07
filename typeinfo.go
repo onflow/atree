@@ -24,6 +24,7 @@ import (
 
 type TypeInfo interface {
 	Encode(*cbor.StreamEncoder) error
+	ByteSize() uint32
 }
 
 type TypeInfoDecoder func(

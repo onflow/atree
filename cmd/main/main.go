@@ -77,6 +77,10 @@ type testTypeInfo struct{}
 
 var _ atree.TypeInfo = testTypeInfo{}
 
+func (i testTypeInfo) ByteSize() uint32 {
+	return atree.GetUintCBORSize(42)
+}
+
 func (testTypeInfo) Encode(e *cbor.StreamEncoder) error {
 	return e.EncodeUint8(42)
 }

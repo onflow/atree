@@ -91,6 +91,10 @@ type testTypeInfo struct {
 
 var _ TypeInfo = testTypeInfo{}
 
+func (i testTypeInfo) ByteSize() uint32 {
+	return GetUintCBORSize(i.value)
+}
+
 func (i testTypeInfo) Encode(enc *cbor.StreamEncoder) error {
 	return enc.EncodeUint64(i.value)
 }

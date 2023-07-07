@@ -726,11 +726,6 @@ func validSingleElement(
 	err error,
 ) {
 
-	// Verify key pointer
-	if _, keyPointer := e.key.(SlabIDStorable); e.keyPointer != keyPointer {
-		return 0, 0, NewFatalError(fmt.Errorf("element %s keyPointer %t is wrong, want %t", e, e.keyPointer, keyPointer))
-	}
-
 	// Verify key
 	kv, err := e.key.StoredValue(storage)
 	if err != nil {
@@ -742,11 +737,6 @@ func validSingleElement(
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ValidValue().
 		return 0, 0, fmt.Errorf("element %s key isn't valid: %w", e, err)
-	}
-
-	// Verify value pointer
-	if _, valuePointer := e.value.(SlabIDStorable); e.valuePointer != valuePointer {
-		return 0, 0, NewFatalError(fmt.Errorf("element %s valuePointer %t is wrong, want %t", e, e.valuePointer, valuePointer))
 	}
 
 	// Verify value
@@ -1270,14 +1260,6 @@ func mapSingleElementEqual(
 
 	if expected.size != actual.size {
 		return NewFatalError(fmt.Errorf("singleElement size %d is wrong, want %d", actual.size, expected.size))
-	}
-
-	if expected.keyPointer != actual.keyPointer {
-		return NewFatalError(fmt.Errorf("singleElement keyPointer %t is wrong, want %t", actual.keyPointer, expected.keyPointer))
-	}
-
-	if expected.valuePointer != actual.valuePointer {
-		return NewFatalError(fmt.Errorf("singleElement valuePointer %t is wrong, want %t", actual.valuePointer, expected.valuePointer))
 	}
 
 	if !compare(expected.key, actual.key) {

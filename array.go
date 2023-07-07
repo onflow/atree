@@ -451,7 +451,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 func (a *ArrayDataSlab) hasPointer() bool {
 	for _, e := range a.elements {
-		if _, ok := e.(SlabIDStorable); ok {
+		if hasPointer(e) {
 			return true
 		}
 	}

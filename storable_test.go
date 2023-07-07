@@ -637,6 +637,13 @@ type SomeStorable struct {
 
 var _ Storable = SomeStorable{}
 
+func (v SomeStorable) hasPointer() bool {
+	if ms, ok := v.Storable.(containerStorable); ok {
+		return ms.hasPointer()
+	}
+	return false
+}
+
 func (v SomeStorable) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
 	return 2 + v.Storable.ByteSize()

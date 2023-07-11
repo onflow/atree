@@ -2727,3 +2727,205 @@ func nextLevelArraySlabs(storage SlabStorage, address Address, slabs []ArraySlab
 
 	return slabs[:nextLevelSlabsIndex], nil
 }
+
+type arrayLoadedElementIterator struct {
+	storage SlabStorage
+	slab    *ArrayDataSlab
+	index   int
+}
+
+func (i *arrayLoadedElementIterator) next() (Value, error) {
+	// Iterate loaded elements in data slab.
+	for i.index < len(i.slab.elements) {
+		element := i.slab.elements[i.index]
+		i.index++
+
+		v, err := getLoadedValue(i.storage, element)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by getLoadedValue.
+			return nil, err
+		}
+		if v == nil {
+			// Skip this element because it references unloaded slab.
+			// Try next element.
+			continue
+		}
+
+		return v, nil
+	}
+
+	// Reach end of elements
+	return nil, nil
+}
+
+type arrayLoadedSlabIterator struct {
+	storage SlabStorage
+	slab    *ArrayMetaDataSlab
+	index   int
+}
+
+func (i *arrayLoadedSlabIterator) next() Slab {
+	// Iterate loaded slabs in meta data slab.
+	for i.index < len(i.slab.childrenHeaders) {
+		header := i.slab.childrenHeaders[i.index]
+		i.index++
+
+		childSlab := i.storage.RetrieveIfLoaded(header.slabID)
+		if childSlab == nil {
+			// Skip this child because it references unloaded slab.
+			// Try next child.
+			continue
+		}
+
+		return childSlab
+	}
+
+	// Reach end of children.
+	return nil
+}
+
+// ArrayLoadedValueIterator is used to iterate over loaded array elements.
+type ArrayLoadedValueIterator struct {
+	storage      SlabStorage
+	parents      []*arrayLoadedSlabIterator // LIFO stack for parents of dataIterator
+	dataIterator *arrayLoadedElementIterator
+}
+
+func (i *ArrayLoadedValueIterator) nextDataIterator() (*arrayLoadedElementIterator, error) {
+
+	// Iterate parents (LIFO) to find next loaded array data slab.
+	for len(i.parents) > 0 {
+		lastParent := i.parents[len(i.parents)-1]
+
+		nextChildSlab := lastParent.next()
+
+		switch slab := nextChildSlab.(type) {
+		case *ArrayDataSlab:
+			// Create data iterator
+			return &arrayLoadedElementIterator{
+				storage: i.storage,
+				slab:    slab,
+			}, nil
+
+		case *ArrayMetaDataSlab:
+			// Push new parent to parents queue
+			newParent := &arrayLoadedSlabIterator{
+				storage: i.storage,
+				slab:    slab,
+			}
+			i.parents = append(i.parents, newParent)
+
+		case nil:
+			// Reach end of last parent.
+			// Reset last parent to nil and pop last parent from parents stack.
+			lastParentIndex := len(i.parents) - 1
+			i.parents[lastParentIndex] = nil
+			i.parents = i.parents[:lastParentIndex]
+
+		default:
+			return nil, NewSlabDataErrorf("slab %s isn't ArraySlab", nextChildSlab.SlabID())
+		}
+	}
+
+	// Reach end of parents stack.
+	return nil, nil
+}
+
+// Next iterates and returns next loaded element.
+// It returns nil Value at end of loaded elements.
+func (i *ArrayLoadedValueIterator) Next() (Value, error) {
+	if i.dataIterator != nil {
+		element, err := i.dataIterator.next()
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by arrayLoadedElementIterator.next().
+			return nil, err
+		}
+		if element != nil {
+			return element, nil
+		}
+
+		// Reach end of element in current data slab.
+		i.dataIterator = nil
+	}
+
+	// Get next data iterator.
+	var err error
+	i.dataIterator, err = i.nextDataIterator()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by arrayLoadedValueIterator.nextDataIterator().
+		return nil, err
+	}
+	if i.dataIterator != nil {
+		return i.Next()
+	}
+
+	// Reach end of loaded value iterator
+	return nil, nil
+}
+
+// LoadedValueIterator returns iterator to iterate loaded array elements.
+func (a *Array) LoadedValueIterator() (*ArrayLoadedValueIterator, error) {
+	switch slab := a.root.(type) {
+
+	case *ArrayDataSlab:
+		// Create a data iterator from root slab.
+		dataIterator := &arrayLoadedElementIterator{
+			storage: a.Storage,
+			slab:    slab,
+		}
+
+		// Create iterator with data iterator (no parents).
+		iterator := &ArrayLoadedValueIterator{
+			storage:      a.Storage,
+			dataIterator: dataIterator,
+		}
+
+		return iterator, nil
+
+	case *ArrayMetaDataSlab:
+		// Create a slab iterator from root slab.
+		slabIterator := &arrayLoadedSlabIterator{
+			storage: a.Storage,
+			slab:    slab,
+		}
+
+		// Create iterator with parent (data iterater is uninitialized).
+		iterator := &ArrayLoadedValueIterator{
+			storage: a.Storage,
+			parents: []*arrayLoadedSlabIterator{slabIterator},
+		}
+
+		return iterator, nil
+
+	default:
+		return nil, NewSlabDataErrorf("slab %s isn't ArraySlab", slab.SlabID())
+	}
+}
+
+// IterateLoadedValues iterates loaded array values.
+func (a *Array) IterateLoadedValues(fn ArrayIterationFunc) error {
+	iterator, err := a.LoadedValueIterator()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by Array.LoadedValueIterator().
+		return err
+	}
+
+	for {
+		value, err := iterator.Next()
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by ArrayLoadedValueIterator.Next().
+			return err
+		}
+		if value == nil {
+			return nil
+		}
+		resume, err := fn(value)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by ArrayIterationFunc callback.
+			return wrapErrorAsExternalErrorIfNeeded(err)
+		}
+		if !resume {
+			return nil
+		}
+	}
+}

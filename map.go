@@ -4635,3 +4635,283 @@ func nextLevelMapSlabs(storage SlabStorage, address Address, slabs []MapSlab) ([
 
 	return slabs[:nextLevelSlabsIndex], nil
 }
+
+type mapLoadedElementIterator struct {
+	storage                SlabStorage
+	elements               elements
+	index                  int
+	collisionGroupIterator *mapLoadedElementIterator
+}
+
+func (i *mapLoadedElementIterator) next() (key Value, value Value, err error) {
+	// Iterate loaded elements in data slab (including elements in collision groups).
+	for i.index < int(i.elements.Count()) || i.collisionGroupIterator != nil {
+
+		// Iterate elements in collision group.
+		if i.collisionGroupIterator != nil {
+			key, value, err = i.collisionGroupIterator.next()
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by mapLoadedElementIterator.next().
+				return nil, nil, err
+			}
+			if key != nil {
+				return key, value, nil
+			}
+
+			// Reach end of collision group.
+			i.collisionGroupIterator = nil
+			continue
+		}
+
+		element, err := i.elements.Element(i.index)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by elements.Element().
+			return nil, nil, err
+		}
+
+		i.index++
+
+		switch e := element.(type) {
+		case *singleElement:
+
+			keyValue, err := getLoadedValue(i.storage, e.key)
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by getLoadedValue.
+				return nil, nil, err
+			}
+			if keyValue == nil {
+				// Skip this element because element key references unloaded slab.
+				// Try next element.
+				continue
+			}
+
+			valueValue, err := getLoadedValue(i.storage, e.value)
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by getLoadedValue.
+				return nil, nil, err
+			}
+			if valueValue == nil {
+				// Skip this element because element value references unloaded slab.
+				// Try next element.
+				continue
+			}
+
+			return keyValue, valueValue, nil
+
+		case *inlineCollisionGroup:
+			elems, err := e.Elements(i.storage)
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by elementGroup.Elements().
+				return nil, nil, err
+			}
+
+			i.collisionGroupIterator = &mapLoadedElementIterator{
+				storage:  i.storage,
+				elements: elems,
+			}
+
+			// Continue to iterate elements in collision group using collisionGroupIterator.
+			continue
+
+		case *externalCollisionGroup:
+			externalSlab := i.storage.RetrieveIfLoaded(e.slabID)
+			if externalSlab == nil {
+				// Skip this collsion group because external slab isn't loaded.
+				// Try next element.
+				continue
+			}
+
+			dataSlab, ok := externalSlab.(*MapDataSlab)
+			if !ok {
+				return nil, nil, NewSlabDataErrorf("slab %s isn't MapDataSlab", e.slabID)
+			}
+
+			i.collisionGroupIterator = &mapLoadedElementIterator{
+				storage:  i.storage,
+				elements: dataSlab.elements,
+			}
+
+			// Continue to iterate elements in collision group using collisionGroupIterator.
+			continue
+
+		default:
+			return nil, nil, NewSlabDataError(fmt.Errorf("unexpected element type %T during map iteration", element))
+		}
+	}
+
+	// Reach end of map data slab.
+	return nil, nil, nil
+}
+
+type mapLoadedSlabIterator struct {
+	storage SlabStorage
+	slab    *MapMetaDataSlab
+	index   int
+}
+
+func (i *mapLoadedSlabIterator) next() Slab {
+	// Iterate loaded slabs in meta data slab.
+	for i.index < len(i.slab.childrenHeaders) {
+		header := i.slab.childrenHeaders[i.index]
+		i.index++
+
+		childSlab := i.storage.RetrieveIfLoaded(header.slabID)
+		if childSlab == nil {
+			// Skip this child because it references unloaded slab.
+			// Try next child.
+			continue
+		}
+
+		return childSlab
+	}
+
+	// Reach end of children.
+	return nil
+}
+
+// MapLoadedValueIterator is used to iterate loaded map elements.
+type MapLoadedValueIterator struct {
+	storage      SlabStorage
+	parents      []*mapLoadedSlabIterator // LIFO stack for parents of dataIterator
+	dataIterator *mapLoadedElementIterator
+}
+
+func (i *MapLoadedValueIterator) nextDataIterator() (*mapLoadedElementIterator, error) {
+
+	// Iterate parents (LIFO) to find next loaded map data slab.
+	for len(i.parents) > 0 {
+		lastParent := i.parents[len(i.parents)-1]
+
+		nextChildSlab := lastParent.next()
+
+		switch slab := nextChildSlab.(type) {
+		case *MapDataSlab:
+			// Create data iterator
+			return &mapLoadedElementIterator{
+				storage:  i.storage,
+				elements: slab.elements,
+			}, nil
+
+		case *MapMetaDataSlab:
+			// Push new parent to parents queue
+			newParent := &mapLoadedSlabIterator{
+				storage: i.storage,
+				slab:    slab,
+			}
+			i.parents = append(i.parents, newParent)
+
+		case nil:
+			// Reach end of last parent.
+			// Reset last parent to nil and pop last parent from parents stack.
+			lastParentIndex := len(i.parents) - 1
+			i.parents[lastParentIndex] = nil
+			i.parents = i.parents[:lastParentIndex]
+
+		default:
+			return nil, NewSlabDataErrorf("slab %s isn't MapSlab", nextChildSlab.SlabID())
+		}
+	}
+
+	// Reach end of parents stack.
+	return nil, nil
+}
+
+// Next iterates and returns next loaded element.
+// It returns nil Value at end of loaded elements.
+func (i *MapLoadedValueIterator) Next() (Value, Value, error) {
+	if i.dataIterator != nil {
+		key, value, err := i.dataIterator.next()
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by mapLoadedElementIterator.next().
+			return nil, nil, err
+		}
+		if key != nil {
+			return key, value, nil
+		}
+
+		// Reach end of element in current data slab.
+		i.dataIterator = nil
+	}
+
+	// Get next data iterator.
+	var err error
+	i.dataIterator, err = i.nextDataIterator()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by MapLoadedValueIterator.nextDataIterator().
+		return nil, nil, err
+	}
+	if i.dataIterator != nil {
+		return i.Next()
+	}
+
+	// Reach end of loaded value iterator
+	return nil, nil, nil
+}
+
+// LoadedValueIterator returns iterator to iterate loaded map elements.
+func (m *OrderedMap) LoadedValueIterator() (*MapLoadedValueIterator, error) {
+	switch slab := m.root.(type) {
+
+	case *MapDataSlab:
+		// Create a data iterator from root slab.
+		dataIterator := &mapLoadedElementIterator{
+			storage:  m.Storage,
+			elements: slab.elements,
+		}
+
+		// Create iterator with data iterator (no parents).
+		iterator := &MapLoadedValueIterator{
+			storage:      m.Storage,
+			dataIterator: dataIterator,
+		}
+
+		return iterator, nil
+
+	case *MapMetaDataSlab:
+		// Create a slab iterator from root slab.
+		slabIterator := &mapLoadedSlabIterator{
+			storage: m.Storage,
+			slab:    slab,
+		}
+
+		// Create iterator with parent (data iterater is uninitialized).
+		iterator := &MapLoadedValueIterator{
+			storage: m.Storage,
+			parents: []*mapLoadedSlabIterator{slabIterator},
+		}
+
+		return iterator, nil
+
+	default:
+		return nil, NewSlabDataErrorf("slab %s isn't MapSlab", slab.SlabID())
+	}
+}
+
+// IterateLoadedValues iterates loaded map values.
+func (m *OrderedMap) IterateLoadedValues(fn MapEntryIterationFunc) error {
+	iterator, err := m.LoadedValueIterator()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by OrderedMap.LoadedValueIterator().
+		return err
+	}
+
+	var key, value Value
+	for {
+		key, value, err = iterator.Next()
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by MapLoadedValueIterator.Next().
+			return err
+		}
+		if key == nil {
+			return nil
+		}
+		resume, err := fn(key, value)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by MapEntryIterationFunc callback.
+			return wrapErrorAsExternalErrorIfNeeded(err)
+		}
+		if !resume {
+			return nil
+		}
+	}
+}

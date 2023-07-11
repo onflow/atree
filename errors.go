@@ -145,11 +145,11 @@ func (e *IndexOutOfBoundsError) Error() string {
 
 // NotValueError is returned when we try to create Value objects from non-root slabs.
 type NotValueError struct {
-	id StorageID
+	id SlabID
 }
 
 // NewNotValueError constructs a NotValueError.
-func NewNotValueError(id StorageID) error {
+func NewNotValueError(id SlabID) error {
 	return NewFatalError(&NotValueError{id: id})
 }
 
@@ -210,43 +210,43 @@ func (e *HashError) Error() string {
 	return fmt.Sprintf("hasher error: %s", e.err.Error())
 }
 
-// StorageIDError is returned when storage id can't be created or it's invalid.
-type StorageIDError struct {
+// SlabIDError is returned when slab id can't be created or it's invalid.
+type SlabIDError struct {
 	msg string
 }
 
-// NewStorageIDError constructs a fatal error of StorageIDError.
-func NewStorageIDError(msg string) error {
-	return NewFatalError(&StorageIDError{msg: msg})
+// NewSlabIDError constructs a fatal error of SlabIDError.
+func NewSlabIDError(msg string) error {
+	return NewFatalError(&SlabIDError{msg: msg})
 }
 
-// NewStorageIDErrorf constructs a fatal error of StorageIDError.
-func NewStorageIDErrorf(msg string, args ...interface{}) error {
-	return NewStorageIDError(fmt.Sprintf(msg, args...))
+// NewSlabIDErrorf constructs a fatal error of SlabIDError.
+func NewSlabIDErrorf(msg string, args ...interface{}) error {
+	return NewSlabIDError(fmt.Sprintf(msg, args...))
 }
 
-func (e *StorageIDError) Error() string {
-	return fmt.Sprintf("storage id error: %s", e.msg)
+func (e *SlabIDError) Error() string {
+	return fmt.Sprintf("slab id error: %s", e.msg)
 }
 
 // SlabNotFoundError is always a fatal error returned when an slab is not found
 type SlabNotFoundError struct {
-	storageID StorageID
-	err       error
+	slabID SlabID
+	err    error
 }
 
 // NewSlabNotFoundError constructs a SlabNotFoundError
-func NewSlabNotFoundError(storageID StorageID, err error) error {
-	return NewFatalError(&SlabNotFoundError{storageID: storageID, err: err})
+func NewSlabNotFoundError(slabID SlabID, err error) error {
+	return NewFatalError(&SlabNotFoundError{slabID: slabID, err: err})
 }
 
 // NewSlabNotFoundErrorf constructs a new SlabNotFoundError with error formating
-func NewSlabNotFoundErrorf(storageID StorageID, msg string, args ...interface{}) error {
-	return NewSlabNotFoundError(storageID, fmt.Errorf(msg, args...))
+func NewSlabNotFoundErrorf(slabID SlabID, msg string, args ...interface{}) error {
+	return NewSlabNotFoundError(slabID, fmt.Errorf(msg, args...))
 }
 
 func (e *SlabNotFoundError) Error() string {
-	return fmt.Sprintf("slab (%s) not found: %s", e.storageID.String(), e.err.Error())
+	return fmt.Sprintf("slab (%s) not found: %s", e.slabID.String(), e.err.Error())
 }
 
 // SlabSplitError is always a fatal error returned when splitting an slab has failed

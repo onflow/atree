@@ -348,30 +348,11 @@ func (v StringValue) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 }
 
 func (v StringValue) Storable(storage atree.SlabStorage, address atree.Address, maxInlineSize uint64) (atree.Storable, error) {
-	if uint64(v.ByteSize()) > maxInlineSize {
-
-		// Create StorableSlab
-		id, err := storage.GenerateStorageID(address)
-		if err != nil {
-			return nil, err
-		}
-
-		slab := &atree.StorableSlab{
-			StorageID: id,
-			Storable:  v,
-		}
-
-		// Store StorableSlab in storage
-		err = storage.Store(id, slab)
-		if err != nil {
-			return nil, err
-		}
-
-		// Return storage id as storable
-		return atree.StorageIDStorable(id), nil
+	if uint64(v.ByteSize()) <= maxInlineSize {
+		return v, nil
 	}
 
-	return v, nil
+	return atree.NewStorableSlab(storage, address, v)
 }
 
 func (v StringValue) Encode(enc *atree.Encoder) error {
@@ -432,7 +413,7 @@ func (v StringValue) String() string {
 	return v.str
 }
 
-func decodeStorable(dec *cbor.StreamDecoder, _ atree.StorageID) (atree.Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, _ atree.SlabID) (atree.Storable, error) {
 	t, err := dec.NextType()
 	if err != nil {
 		return nil, err
@@ -454,8 +435,8 @@ func decodeStorable(dec *cbor.StreamDecoder, _ atree.StorageID) (atree.Storable,
 
 		switch tagNumber {
 
-		case atree.CBORTagStorageID:
-			return atree.DecodeStorageIDStorable(dec)
+		case atree.CBORTagSlabID:
+			return atree.DecodeSlabIDStorable(dec)
 
 		case cborTagUInt8Value:
 			n, err := dec.DecodeUint64()

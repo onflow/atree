@@ -18,23 +18,56 @@
 
 package atree
 
+import "fmt"
+
 // StorableSlab allows storing storables (CBOR encoded data) directly in a slab.
 // Eventually we will only have a dictionary at the account storage root,
 // so this won't be needed, but during the refactor we have the need to store
 // other non-dictionary values (e.g. strings, integers, etc.) directly in accounts
 // (i.e. directly in slabs aka registers)
 type StorableSlab struct {
-	StorageID StorageID
-	Storable  Storable
+	slabID   SlabID
+	storable Storable
 }
 
-var _ Slab = StorableSlab{}
+var _ Slab = &StorableSlab{}
 
-func (s StorableSlab) ChildStorables() []Storable {
-	return []Storable{s.Storable}
+func NewStorableSlab(storage SlabStorage, address Address, storable Storable) (Storable, error) {
+	id, err := storage.GenerateSlabID(address)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(
+			err,
+			fmt.Sprintf(
+				"failed to generate slab ID for address 0x%x",
+				address,
+			),
+		)
+	}
+
+	slab := &StorableSlab{
+		slabID:   id,
+		storable: storable,
+	}
+
+	err = storage.Store(id, slab)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
+	}
+
+	return SlabIDStorable(id), nil
 }
 
-func (s StorableSlab) Encode(enc *Encoder) error {
+func (s *StorableSlab) String() string {
+	return fmt.Sprintf("StorableSlab id:%s storable:%s", s.slabID, s.storable)
+}
+
+func (s *StorableSlab) ChildStorables() []Storable {
+	return []Storable{s.storable}
+}
+
+func (s *StorableSlab) Encode(enc *Encoder) error {
 	// Encode version
 	enc.Scratch[0] = 0
 
@@ -42,7 +75,7 @@ func (s StorableSlab) Encode(enc *Encoder) error {
 	flag := maskStorable
 	flag = setNoSizeLimit(flag)
 
-	if _, ok := s.Storable.(StorageIDStorable); ok {
+	if _, ok := s.storable.(SlabIDStorable); ok {
 		flag = setHasPointers(flag)
 	}
 
@@ -53,7 +86,7 @@ func (s StorableSlab) Encode(enc *Encoder) error {
 		return NewEncodingError(err)
 	}
 
-	err = s.Storable.Encode(enc)
+	err = s.storable.Encode(enc)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Storable interface.
 		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable")
@@ -62,16 +95,16 @@ func (s StorableSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (s StorableSlab) ByteSize() uint32 {
-	return versionAndFlagSize + s.Storable.ByteSize()
+func (s *StorableSlab) ByteSize() uint32 {
+	return versionAndFlagSize + s.storable.ByteSize()
 }
 
-func (s StorableSlab) ID() StorageID {
-	return s.StorageID
+func (s *StorableSlab) SlabID() SlabID {
+	return s.slabID
 }
 
-func (s StorableSlab) StoredValue(storage SlabStorage) (Value, error) {
-	value, err := s.Storable.StoredValue(storage)
+func (s *StorableSlab) StoredValue(storage SlabStorage) (Value, error) {
+	value, err := s.storable.StoredValue(storage)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Storable interface.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
@@ -79,18 +112,18 @@ func (s StorableSlab) StoredValue(storage SlabStorage) (Value, error) {
 	return value, nil
 }
 
-func (StorableSlab) Split(_ SlabStorage) (Slab, Slab, error) {
+func (*StorableSlab) Split(_ SlabStorage) (Slab, Slab, error) {
 	return nil, nil, NewNotApplicableError("StorableSlab", "Slab", "Split")
 }
 
-func (StorableSlab) Merge(_ Slab) error {
+func (*StorableSlab) Merge(_ Slab) error {
 	return NewNotApplicableError("StorableSlab", "Slab", "Merge")
 }
 
-func (StorableSlab) LendToRight(_ Slab) error {
+func (*StorableSlab) LendToRight(_ Slab) error {
 	return NewNotApplicableError("StorableSlab", "Slab", "LendToRight")
 }
 
-func (StorableSlab) BorrowFromRight(_ Slab) error {
+func (*StorableSlab) BorrowFromRight(_ Slab) error {
 	return NewNotApplicableError("StorableSlab", "Slab", "BorrowFromRight")
 }

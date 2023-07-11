@@ -47,7 +47,7 @@ var _ Digester = &mockDigester{}
 func (h *mockDigesterBuilder) SetSeed(_ uint64, _ uint64) {
 }
 
-func (h *mockDigesterBuilder) Digest(hip HashInputProvider, value Value) (Digester, error) {
+func (h *mockDigesterBuilder) Digest(_ HashInputProvider, value Value) (Digester, error) {
 	args := h.Called(value)
 	return args.Get(0).(mockDigester), nil
 }
@@ -85,7 +85,7 @@ func newErrorDigesterBuilder(err error) *errorDigesterBuilder {
 func (h *errorDigesterBuilder) SetSeed(_ uint64, _ uint64) {
 }
 
-func (h *errorDigesterBuilder) Digest(hip HashInputProvider, value Value) (Digester, error) {
+func (h *errorDigesterBuilder) Digest(_ HashInputProvider, _ Value) (Digester, error) {
 	return nil, h.err
 }
 
@@ -171,12 +171,12 @@ func verifyMap(
 	rootIDSet, err := CheckStorageHealth(storage, 1)
 	require.NoError(t, err)
 
-	rootIDs := make([]StorageID, 0, len(rootIDSet))
+	rootIDs := make([]SlabID, 0, len(rootIDSet))
 	for id := range rootIDSet {
 		rootIDs = append(rootIDs, id)
 	}
 	require.Equal(t, 1, len(rootIDs))
-	require.Equal(t, m.StorageID(), rootIDs[0])
+	require.Equal(t, m.SlabID(), rootIDs[0])
 
 	if !hasNestedArrayMapElement {
 		// Need to call Commit before calling storage.Count() for PersistentSlabStorage.
@@ -688,13 +688,13 @@ func testMapRemoveElement(t *testing.T, m *OrderedMap, k Value, expectedV Value)
 	require.NoError(t, err)
 	valueEqual(t, typeInfoComparator, expectedV, removedValue)
 
-	if id, ok := removedKeyStorable.(StorageIDStorable); ok {
-		err = m.Storage.Remove(StorageID(id))
+	if id, ok := removedKeyStorable.(SlabIDStorable); ok {
+		err = m.Storage.Remove(SlabID(id))
 		require.NoError(t, err)
 	}
 
-	if id, ok := removedValueStorable.(StorageIDStorable); ok {
-		err = m.Storage.Remove(StorageID(id))
+	if id, ok := removedValueStorable.(SlabIDStorable); ok {
+		err = m.Storage.Remove(SlabID(id))
 		require.NoError(t, err)
 	}
 
@@ -1292,13 +1292,13 @@ func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLeve
 		require.NoError(t, err)
 		valueEqual(t, typeInfoComparator, v, removedValue)
 
-		if id, ok := removedKeyStorable.(StorageIDStorable); ok {
-			err = storage.Remove(StorageID(id))
+		if id, ok := removedKeyStorable.(SlabIDStorable); ok {
+			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
 
-		if id, ok := removedValueStorable.(StorageIDStorable); ok {
-			err = storage.Remove(StorageID(id))
+		if id, ok := removedValueStorable.(SlabIDStorable); ok {
+			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
 	}
@@ -1360,13 +1360,13 @@ func testMapRandomHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) 
 		require.NoError(t, err)
 		valueEqual(t, typeInfoComparator, v, removedValue)
 
-		if id, ok := removedKeyStorable.(StorageIDStorable); ok {
-			err = storage.Remove(StorageID(id))
+		if id, ok := removedKeyStorable.(SlabIDStorable); ok {
+			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
 
-		if id, ok := removedValueStorable.(StorageIDStorable); ok {
-			err = storage.Remove(StorageID(id))
+		if id, ok := removedValueStorable.(SlabIDStorable); ok {
+			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
 	}
@@ -1457,8 +1457,8 @@ func testMapSetRemoveRandomValues(
 				require.NoError(t, err)
 				valueEqual(t, typeInfoComparator, oldv, existingValue)
 
-				if id, ok := existingStorable.(StorageIDStorable); ok {
-					err = storage.Remove(StorageID(id))
+				if id, ok := existingStorable.(SlabIDStorable); ok {
+					err = storage.Remove(SlabID(id))
 					require.NoError(t, err)
 				}
 			} else {
@@ -1484,13 +1484,13 @@ func testMapSetRemoveRandomValues(
 			require.NoError(t, err)
 			valueEqual(t, typeInfoComparator, keyValues[k], removedValue)
 
-			if id, ok := removedKeyStorable.(StorageIDStorable); ok {
-				err := storage.Remove(StorageID(id))
+			if id, ok := removedKeyStorable.(SlabIDStorable); ok {
+				err := storage.Remove(SlabID(id))
 				require.NoError(t, err)
 			}
 
-			if id, ok := removedValueStorable.(StorageIDStorable); ok {
-				err := storage.Remove(StorageID(id))
+			if id, ok := removedValueStorable.(SlabIDStorable); ok {
+				err := storage.Remove(SlabID(id))
 				require.NoError(t, err)
 			}
 
@@ -1537,9 +1537,9 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), m.Count())
 
-		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 
-		expected := map[StorageID][]byte{
+		expected := map[SlabID][]byte{
 			id1: {
 				// extra data
 				// version
@@ -1623,10 +1623,10 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 
-		// Expected serialized slab data with storage id
-		expected := map[StorageID][]byte{
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
 
 			id1: {
 				// extra data
@@ -1742,13 +1742,13 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		id4 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id4 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
 
-		// Expected serialized slab data with storage id
-		expected := map[StorageID][]byte{
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
 
 			// metadata slab
 			id1: {
@@ -1772,7 +1772,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x89,
 				// child header count
 				0x00, 0x02,
-				// child header 1 (storage id, first key, size)
+				// child header 1 (slab id, first key, size)
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				0x00, 0x00, 0x01, 0x02,
@@ -1788,7 +1788,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x00,
 				// flag: map data
 				0x08,
-				// next storage id
+				// next slab id
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
 
 				// the following encoded data is valid CBOR
@@ -1837,7 +1837,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x00,
 				// flag: has pointer + map data
 				0x48,
-				// next storage id
+				// next slab id
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
 				// the following encoded data is valid CBOR
@@ -1874,7 +1874,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
-				// element: [hhhhhhhhhhhhhhhhhhhhhh:StorageID(1,2,3,4,5,6,7,8,0,0,0,0,0,0,0,4)]
+				// element: [hhhhhhhhhhhhhhhhhhhhhh:SlabID(1,2,3,4,5,6,7,8,0,0,0,0,0,0,0,4)]
 				0x82,
 				0x76, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68,
 				0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
@@ -1961,10 +1961,10 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 
-		// Expected serialized slab data with storage id
-		expected := map[StorageID][]byte{
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
 
 			// map metadata slab
 			id1: {
@@ -2154,10 +2154,10 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 
-		// Expected serialized slab data with storage id
-		expected := map[StorageID][]byte{
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
 
 			// map metadata slab
 			id1: {
@@ -2397,12 +2397,12 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		// Expected serialized slab data with storage id
-		expected := map[StorageID][]byte{
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
 
 			// map data slab
 			id1: {
@@ -2445,14 +2445,14 @@ func TestMapEncodeDecode(t *testing.T) {
 				// external collision group corresponding to hkey 0
 				// (tag number CBORTagExternalCollisionGroup)
 				0xd8, 0xfe,
-				// (tag content: storage id)
+				// (tag content: slab id)
 				0xd8, 0xff, 0x50,
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 
 				// external collision group corresponding to hkey 1
 				// (tag number CBORTagExternalCollisionGroup)
 				0xd8, 0xfe,
-				// (tag content: storage id)
+				// (tag content: slab id)
 				0xd8, 0xff, 0x50,
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
 			},
@@ -2463,7 +2463,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x00,
 				// flag: any size + collision group
 				0x2b,
-				// next storage id
+				// next slab id
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
 				// the following encoded data is valid CBOR
@@ -2528,7 +2528,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x00,
 				// flag: any size + collision group
 				0x2b,
-				// next storage id
+				// next slab id
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
 				// the following encoded data is valid CBOR
@@ -2627,7 +2627,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(1), m.Count())
 
-		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 
 		expectedNoPointer := []byte{
 
@@ -2720,9 +2720,9 @@ func TestMapEncodeDecode(t *testing.T) {
 			// elements (array of 1 elements)
 			// each element is encoded as CBOR array of 2 elements (key, value)
 			0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-			// element: [uint64(0), storage id]
+			// element: [uint64(0), slab id]
 			0x82, 0xd8, 0xa4, 0x00,
-			// (tag content: storage id)
+			// (tag content: slab id)
 			0xd8, 0xff, 0x50,
 			0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 		}
@@ -2753,7 +2753,7 @@ func TestMapEncodeDecodeRandomValues(t *testing.T) {
 	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
 
 	// Create new map from new storage
-	m2, err := NewMapWithRootID(storage2, m.StorageID(), m.digesterBuilder)
+	m2, err := NewMapWithRootID(storage2, m.SlabID(), m.digesterBuilder)
 	require.NoError(t, err)
 
 	verifyMap(t, storage2, typeInfo, address, m2, keyValues, nil, false)
@@ -2786,7 +2786,7 @@ func TestMapStoredValue(t *testing.T) {
 		require.Nil(t, existingStorable)
 	}
 
-	rootID := m.StorageID()
+	rootID := m.SlabID()
 
 	slabIterator, err := storage.SlabIterator()
 	require.NoError(t, err)
@@ -2794,7 +2794,7 @@ func TestMapStoredValue(t *testing.T) {
 	for {
 		id, slab := slabIterator()
 
-		if id == StorageIDUndefined {
+		if id == SlabIDUndefined {
 			break
 		}
 
@@ -3115,7 +3115,7 @@ func TestMapFromBatchData(t *testing.T) {
 				return iter.Next()
 			})
 		require.NoError(t, err)
-		require.NotEqual(t, copied.StorageID(), m.StorageID())
+		require.NotEqual(t, copied.SlabID(), m.SlabID())
 
 		verifyEmptyMap(t, storage, typeInfo, address, copied)
 	})
@@ -3176,7 +3176,7 @@ func TestMapFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, copied.StorageID(), m.StorageID())
+		require.NotEqual(t, copied.SlabID(), m.SlabID())
 
 		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
@@ -3235,7 +3235,7 @@ func TestMapFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, m.StorageID(), copied.StorageID())
+		require.NotEqual(t, m.SlabID(), copied.SlabID())
 
 		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
@@ -3300,7 +3300,7 @@ func TestMapFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, m.StorageID(), copied.StorageID())
+		require.NotEqual(t, m.SlabID(), copied.SlabID())
 
 		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
@@ -3369,7 +3369,7 @@ func TestMapFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, m.StorageID(), copied.StorageID())
+		require.NotEqual(t, m.SlabID(), copied.SlabID())
 
 		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
@@ -3432,7 +3432,7 @@ func TestMapFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, m.StorageID(), copied.StorageID())
+		require.NotEqual(t, m.SlabID(), copied.SlabID())
 
 		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
@@ -3514,7 +3514,7 @@ func TestMapFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, m.StorageID(), copied.StorageID())
+		require.NotEqual(t, m.SlabID(), copied.SlabID())
 
 		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
@@ -3596,7 +3596,7 @@ func TestMapFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, m.StorageID(), copied.StorageID())
+		require.NotEqual(t, m.SlabID(), copied.SlabID())
 
 		verifyMap(t, storage, typeInfo, address, copied, keyValues, sortedKeys, false)
 	})
@@ -3700,8 +3700,8 @@ func TestMapMaxInlineElement(t *testing.T) {
 
 	// Size of root data slab with two elements (key+value pairs) of
 	// max inlined size is target slab size minus
-	// storage id size (next storage id is omitted in root slab)
-	require.Equal(t, targetThreshold-storageIDSize, uint64(m.root.Header().size))
+	// slab id size (next slab id is omitted in root slab)
+	require.Equal(t, targetThreshold-slabIDSize, uint64(m.root.Header().size))
 
 	verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 }
@@ -3908,8 +3908,8 @@ func TestMapSlabDump(t *testing.T) {
 		require.Nil(t, existingStorable)
 
 		want := []string{
-			"level 1, MapDataSlab id:0x102030405060708.1 size:102 firstkey:0 elements: [0:StorageIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]}):bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]",
-			"overflow: &{0x102030405060708.2 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}",
+			"level 1, MapDataSlab id:0x102030405060708.1 size:102 firstkey:0 elements: [0:SlabIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]}):bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]",
+			"StorableSlab id:0x102030405060708.2 storable:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		}
 		dumps, err := DumpMapSlabs(m)
 		require.NoError(t, err)
@@ -3935,8 +3935,8 @@ func TestMapSlabDump(t *testing.T) {
 		require.Nil(t, existingStorable)
 
 		want := []string{
-			"level 1, MapDataSlab id:0x102030405060708.1 size:100 firstkey:0 elements: [0:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:StorageIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]})]",
-			"overflow: &{0x102030405060708.2 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}",
+			"level 1, MapDataSlab id:0x102030405060708.1 size:100 firstkey:0 elements: [0:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:SlabIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]})]",
+			"StorableSlab id:0x102030405060708.2 storable:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		}
 		dumps, err := DumpMapSlabs(m)
 		require.NoError(t, err)
@@ -4234,7 +4234,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
@@ -4263,10 +4263,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.True(t, ok)
 
 			// Find storage id for StringValue s.
-			var keyID StorageID
+			var keyID SlabID
 			for id, slab := range storage.deltas {
 				if sslab, ok := slab.(*StorableSlab); ok {
-					if other, ok := sslab.Storable.(StringValue); ok {
+					if other, ok := sslab.storable.(StringValue); ok {
 						if s.str == other.str {
 							keyID = id
 							break
@@ -4313,7 +4313,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
@@ -4349,7 +4349,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
@@ -4380,7 +4380,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload external collision group slab from front to back
 
-		var externalCollisionSlabIDs []StorageID
+		var externalCollisionSlabIDs []SlabID
 		for id, slab := range storage.deltas {
 			if dataSlab, ok := slab.(*MapDataSlab); ok {
 				if dataSlab.collisionGroup {
@@ -4393,7 +4393,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		sort.Slice(externalCollisionSlabIDs, func(i, j int) bool {
 			a := externalCollisionSlabIDs[i]
 			b := externalCollisionSlabIDs[j]
-			if a.Address == b.Address {
+			if a.address == b.address {
 				return a.IndexAsUint64() < b.IndexAsUint64()
 			}
 			return a.AddressAsUint64() < b.AddressAsUint64()
@@ -4435,7 +4435,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
@@ -4464,10 +4464,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.True(t, ok)
 
 			// Find storage id for StringValue s.
-			var keyID StorageID
+			var keyID SlabID
 			for id, slab := range storage.deltas {
 				if sslab, ok := slab.(*StorableSlab); ok {
-					if other, ok := sslab.Storable.(StringValue); ok {
+					if other, ok := sslab.storable.(StringValue); ok {
 						if s.str == other.str {
 							keyID = id
 							break
@@ -4514,7 +4514,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
@@ -4550,7 +4550,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
@@ -4580,7 +4580,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		verifyMapLoadedElements(t, m, values)
 
 		// Unload external slabs from back to front
-		var externalCollisionSlabIDs []StorageID
+		var externalCollisionSlabIDs []SlabID
 		for id, slab := range storage.deltas {
 			if dataSlab, ok := slab.(*MapDataSlab); ok {
 				if dataSlab.collisionGroup {
@@ -4593,7 +4593,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		sort.Slice(externalCollisionSlabIDs, func(i, j int) bool {
 			a := externalCollisionSlabIDs[i]
 			b := externalCollisionSlabIDs[j]
-			if a.Address == b.Address {
+			if a.address == b.address {
 				return a.IndexAsUint64() < b.IndexAsUint64()
 			}
 			return a.AddressAsUint64() < b.AddressAsUint64()
@@ -4636,7 +4636,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		nestedArray, ok := v.(*Array)
 		require.True(t, ok)
 
-		err := storage.Remove(nestedArray.StorageID())
+		err := storage.Remove(nestedArray.SlabID())
 		require.NoError(t, err)
 
 		copy(values[unloadValueIndex:], values[unloadValueIndex+1:])
@@ -4667,10 +4667,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		require.True(t, ok)
 
 		// Find storage id for StringValue s.
-		var keyID StorageID
+		var keyID SlabID
 		for id, slab := range storage.deltas {
 			if sslab, ok := slab.(*StorableSlab); ok {
-				if other, ok := sslab.Storable.(StringValue); ok {
+				if other, ok := sslab.storable.(StringValue); ok {
 					if s.str == other.str {
 						keyID = id
 						break
@@ -4718,7 +4718,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 		}
 
@@ -4758,7 +4758,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 		}
 
@@ -4794,7 +4794,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		verifyMapLoadedElements(t, m, values)
 
 		// Unload external slabs in the middle.
-		var externalCollisionSlabIDs []StorageID
+		var externalCollisionSlabIDs []SlabID
 		for id, slab := range storage.deltas {
 			if dataSlab, ok := slab.(*MapDataSlab); ok {
 				if dataSlab.collisionGroup {
@@ -4807,7 +4807,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		sort.Slice(externalCollisionSlabIDs, func(i, j int) bool {
 			a := externalCollisionSlabIDs[i]
 			b := externalCollisionSlabIDs[j]
-			if a.Address == b.Address {
+			if a.address == b.address {
 				return a.IndexAsUint64() < b.IndexAsUint64()
 			}
 			return a.AddressAsUint64() < b.AddressAsUint64()
@@ -4853,7 +4853,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				nestedArray, ok := value.(*Array)
 				require.True(t, ok)
 
-				err := storage.Remove(nestedArray.StorageID())
+				err := storage.Remove(nestedArray.SlabID())
 				require.NoError(t, err)
 			}
 
@@ -4895,7 +4895,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			// Unload composite value
 			v := values[nestedCompositeIndex][1].(*Array)
 
-			err := storage.Remove(v.StorageID())
+			err := storage.Remove(v.SlabID())
 			require.NoError(t, err)
 
 			copy(values[nestedCompositeIndex:], values[nestedCompositeIndex+1:])
@@ -4973,7 +4973,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
@@ -5008,7 +5008,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
@@ -5044,7 +5044,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			copy(values[index:], values[index+1:])
@@ -5080,7 +5080,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			v := values[nestedCompositeIndex][1].(*Array)
 
-			err := storage.Remove(v.StorageID())
+			err := storage.Remove(v.SlabID())
 			require.NoError(t, err)
 
 			copy(values[nestedCompositeIndex:], values[nestedCompositeIndex+1:])
@@ -5120,12 +5120,12 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Get data slab element count before unload it from storage.
 			// Element count isn't in the header.
-			mapDataSlab, ok := storage.deltas[childHeader.id].(*MapDataSlab)
+			mapDataSlab, ok := storage.deltas[childHeader.slabID].(*MapDataSlab)
 			require.True(t, ok)
 
 			count := mapDataSlab.elements.Count()
 
-			err := storage.Remove(childHeader.id)
+			err := storage.Remove(childHeader.slabID)
 			require.NoError(t, err)
 
 			values = values[count:]
@@ -5164,12 +5164,12 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Get data slab element count before unload it from storage
 			// Element count isn't in the header.
-			mapDataSlab, ok := storage.deltas[childHeader.id].(*MapDataSlab)
+			mapDataSlab, ok := storage.deltas[childHeader.slabID].(*MapDataSlab)
 			require.True(t, ok)
 
 			count := mapDataSlab.elements.Count()
 
-			err := storage.Remove(childHeader.id)
+			err := storage.Remove(childHeader.slabID)
 			require.NoError(t, err)
 
 			values = values[:len(values)-int(count)]
@@ -5207,18 +5207,18 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		childHeader := rootMetaDataSlab.childrenHeaders[index]
 
 		// Get element count from previous data slab
-		mapDataSlab, ok := storage.deltas[rootMetaDataSlab.childrenHeaders[0].id].(*MapDataSlab)
+		mapDataSlab, ok := storage.deltas[rootMetaDataSlab.childrenHeaders[0].slabID].(*MapDataSlab)
 		require.True(t, ok)
 
 		countAtIndex0 := mapDataSlab.elements.Count()
 
 		// Get element count from slab to be unloaded
-		mapDataSlab, ok = storage.deltas[rootMetaDataSlab.childrenHeaders[index].id].(*MapDataSlab)
+		mapDataSlab, ok = storage.deltas[rootMetaDataSlab.childrenHeaders[index].slabID].(*MapDataSlab)
 		require.True(t, ok)
 
 		countAtIndex1 := mapDataSlab.elements.Count()
 
-		err := storage.Remove(childHeader.id)
+		err := storage.Remove(childHeader.slabID)
 		require.NoError(t, err)
 
 		copy(values[countAtIndex0:], values[countAtIndex0+countAtIndex1:])
@@ -5252,7 +5252,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			childHeader := rootMetaDataSlab.childrenHeaders[i]
 
-			err := storage.Remove(childHeader.id)
+			err := storage.Remove(childHeader.slabID)
 			require.NoError(t, err)
 
 			// Use firstKey to deduce number of elements in slab.
@@ -5291,7 +5291,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			childHeader := rootMetaDataSlab.childrenHeaders[i]
 
-			err := storage.Remove(childHeader.id)
+			err := storage.Remove(childHeader.slabID)
 			require.NoError(t, err)
 
 			// Use firstKey to deduce number of elements in slabs.
@@ -5334,7 +5334,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			copy(values[i:], values[i+1:])
@@ -5369,7 +5369,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		require.True(t, ok)
 
 		type slabInfo struct {
-			id         StorageID
+			id         SlabID
 			startIndex int
 			count      int
 		}
@@ -5377,7 +5377,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		var dataSlabInfos []*slabInfo
 		for _, mheader := range rootMetaDataSlab.childrenHeaders {
 
-			nonRootMetaDataSlab, ok := storage.deltas[mheader.id].(*MapMetaDataSlab)
+			nonRootMetaDataSlab, ok := storage.deltas[mheader.slabID].(*MapMetaDataSlab)
 			require.True(t, ok)
 
 			for i := 0; i < len(nonRootMetaDataSlab.childrenHeaders); i++ {
@@ -5388,7 +5388,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 					dataSlabInfos[len(dataSlabInfos)-1].count = int(h.firstKey) - dataSlabInfos[len(dataSlabInfos)-1].startIndex
 				}
 
-				dataSlabInfos = append(dataSlabInfos, &slabInfo{id: h.id, startIndex: int(h.firstKey)})
+				dataSlabInfos = append(dataSlabInfos, &slabInfo{id: h.slabID, startIndex: int(h.firstKey)})
 			}
 		}
 
@@ -5445,7 +5445,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		verifyMapLoadedElements(t, m, values)
 
 		type slabInfo struct {
-			id         StorageID
+			id         SlabID
 			startIndex int
 			count      int
 			children   []*slabInfo
@@ -5469,17 +5469,17 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			}
 
 			metadataSlabInfo := &slabInfo{
-				id:         mheader.id,
+				id:         mheader.slabID,
 				startIndex: int(mheader.firstKey),
 			}
 
-			nonRootMetadataSlab, ok := storage.deltas[mheader.id].(*MapMetaDataSlab)
+			nonRootMetadataSlab, ok := storage.deltas[mheader.slabID].(*MapMetaDataSlab)
 			require.True(t, ok)
 
 			children := make([]*slabInfo, len(nonRootMetadataSlab.childrenHeaders))
 			for i, h := range nonRootMetadataSlab.childrenHeaders {
 				children[i] = &slabInfo{
-					id:         h.id,
+					id:         h.slabID,
 					startIndex: int(h.firstKey),
 				}
 				if i > 0 {
@@ -5848,7 +5848,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 	t.Run("large key", func(t *testing.T) {
 		// Value has larger max inline size when key is more than max map key size because
 		// when key size exceeds max map key size, it is stored in a separate storable slab,
-		// and StorageIDStorable is stored as key in the map, which is 19 bytes.
+		// and SlabIDStorable is stored as key in the map, which is 19 bytes.
 
 		SetThreshold(256)
 		defer SetThreshold(1024)
@@ -5884,4 +5884,19 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 
 		verifyMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
+}
+
+func TestMapID(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	storage := newTestPersistentStorage(t)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	sid := m.SlabID()
+	id := m.ValueID()
+
+	require.Equal(t, sid.address[:], id[:8])
+	require.Equal(t, sid.index[:], id[8:])
 }

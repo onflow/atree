@@ -184,20 +184,20 @@ func copyMap(storage *atree.PersistentSlabStorage, address atree.Address, m *atr
 func removeValue(storage *atree.PersistentSlabStorage, value atree.Value) error {
 	switch v := value.(type) {
 	case *atree.Array:
-		return removeStorable(storage, atree.StorageIDStorable(v.StorageID()))
+		return removeStorable(storage, atree.SlabIDStorable(v.SlabID()))
 	case *atree.OrderedMap:
-		return removeStorable(storage, atree.StorageIDStorable(v.StorageID()))
+		return removeStorable(storage, atree.SlabIDStorable(v.SlabID()))
 	}
 	return nil
 }
 
 func removeStorable(storage *atree.PersistentSlabStorage, storable atree.Storable) error {
-	sid, ok := storable.(atree.StorageIDStorable)
+	sid, ok := storable.(atree.SlabIDStorable)
 	if !ok {
 		return nil
 	}
 
-	id := atree.StorageID(sid)
+	id := atree.SlabID(sid)
 
 	value, err := storable.StoredValue(storage)
 	if err != nil {
@@ -458,8 +458,8 @@ func newMap(storage *atree.PersistentSlabStorage, address atree.Address, length 
 }
 
 type InMemBaseStorage struct {
-	segments       map[atree.StorageID][]byte
-	storageIndex   map[atree.Address]atree.StorageIndex
+	segments       map[atree.SlabID][]byte
+	storageIndex   map[atree.Address]atree.SlabIndex
 	bytesRetrieved int
 	bytesStored    int
 }
@@ -468,40 +468,40 @@ var _ atree.BaseStorage = &InMemBaseStorage{}
 
 func NewInMemBaseStorage() *InMemBaseStorage {
 	return NewInMemBaseStorageFromMap(
-		make(map[atree.StorageID][]byte),
+		make(map[atree.SlabID][]byte),
 	)
 }
 
-func NewInMemBaseStorageFromMap(segments map[atree.StorageID][]byte) *InMemBaseStorage {
+func NewInMemBaseStorageFromMap(segments map[atree.SlabID][]byte) *InMemBaseStorage {
 	return &InMemBaseStorage{
 		segments:     segments,
-		storageIndex: make(map[atree.Address]atree.StorageIndex),
+		storageIndex: make(map[atree.Address]atree.SlabIndex),
 	}
 }
 
-func (s *InMemBaseStorage) Retrieve(id atree.StorageID) ([]byte, bool, error) {
+func (s *InMemBaseStorage) Retrieve(id atree.SlabID) ([]byte, bool, error) {
 	seg, ok := s.segments[id]
 	s.bytesRetrieved += len(seg)
 	return seg, ok, nil
 }
 
-func (s *InMemBaseStorage) Store(id atree.StorageID, data []byte) error {
+func (s *InMemBaseStorage) Store(id atree.SlabID, data []byte) error {
 	s.segments[id] = data
 	s.bytesStored += len(data)
 	return nil
 }
 
-func (s *InMemBaseStorage) Remove(id atree.StorageID) error {
+func (s *InMemBaseStorage) Remove(id atree.SlabID) error {
 	delete(s.segments, id)
 	return nil
 }
 
-func (s *InMemBaseStorage) GenerateStorageID(address atree.Address) (atree.StorageID, error) {
+func (s *InMemBaseStorage) GenerateSlabID(address atree.Address) (atree.SlabID, error) {
 	index := s.storageIndex[address]
 	nextIndex := index.Next()
 
 	s.storageIndex[address] = nextIndex
-	return atree.NewStorageID(address, nextIndex), nil
+	return atree.NewSlabID(address, nextIndex), nil
 }
 
 func (s *InMemBaseStorage) SegmentCounts() int {

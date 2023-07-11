@@ -42,14 +42,14 @@ func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
 
 type StorableDecoder func(
 	decoder *cbor.StreamDecoder,
-	storableSlabStorageID StorageID,
+	storableSlabID SlabID,
 ) (
 	Storable,
 	error,
 )
 
 func DecodeSlab(
-	id StorageID,
+	id SlabID,
 	data []byte,
 	decMode cbor.DecMode,
 	decodeStorable StorableDecoder,
@@ -100,9 +100,9 @@ func DecodeSlab(
 			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode slab storable")
 		}
-		return StorableSlab{
-			StorageID: id,
-			Storable:  storable,
+		return &StorableSlab{
+			slabID:   id,
+			storable: storable,
 		}, nil
 
 	default:

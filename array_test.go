@@ -100,12 +100,12 @@ func verifyArray(
 	rootIDSet, err := CheckStorageHealth(storage, 1)
 	require.NoError(t, err)
 
-	rootIDs := make([]StorageID, 0, len(rootIDSet))
+	rootIDs := make([]SlabID, 0, len(rootIDSet))
 	for id := range rootIDSet {
 		rootIDs = append(rootIDs, id)
 	}
 	require.Equal(t, 1, len(rootIDs))
-	require.Equal(t, array.StorageID(), rootIDs[0])
+	require.Equal(t, array.SlabID(), rootIDs[0])
 
 	if !hasNestedArrayMapElement {
 		// Need to call Commit before calling storage.Count() for PersistentSlabStorage.
@@ -483,8 +483,8 @@ func TestArrayRemove(t *testing.T) {
 
 			valueEqual(t, typeInfoComparator, values[i], existingValue)
 
-			if id, ok := existingStorable.(StorageIDStorable); ok {
-				err = array.Storage.Remove(StorageID(id))
+			if id, ok := existingStorable.(SlabIDStorable); ok {
+				err = array.Storage.Remove(SlabID(id))
 				require.NoError(t, err)
 			}
 
@@ -530,8 +530,8 @@ func TestArrayRemove(t *testing.T) {
 
 			valueEqual(t, typeInfoComparator, values[i], existingValue)
 
-			if id, ok := existingStorable.(StorageIDStorable); ok {
-				err = array.Storage.Remove(StorageID(id))
+			if id, ok := existingStorable.(SlabIDStorable); ok {
+				err = array.Storage.Remove(SlabID(id))
 				require.NoError(t, err)
 			}
 
@@ -580,8 +580,8 @@ func TestArrayRemove(t *testing.T) {
 
 			valueEqual(t, typeInfoComparator, v, existingValue)
 
-			if id, ok := existingStorable.(StorageIDStorable); ok {
-				err = array.Storage.Remove(StorageID(id))
+			if id, ok := existingStorable.(SlabIDStorable); ok {
+				err = array.Storage.Remove(SlabID(id))
 				require.NoError(t, err)
 			}
 
@@ -849,7 +849,7 @@ func TestArrayIterate(t *testing.T) {
 	})
 }
 
-func testArrayIterateRange(t *testing.T, storage *PersistentSlabStorage, array *Array, values []Value) {
+func testArrayIterateRange(t *testing.T, array *Array, values []Value) {
 	var i uint64
 	var err error
 	var sliceOutOfBoundsError *SliceOutOfBoundsError
@@ -919,7 +919,7 @@ func TestArrayIterateRange(t *testing.T) {
 		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		testArrayIterateRange(t, storage, array, []Value{})
+		testArrayIterateRange(t, array, []Value{})
 	})
 
 	t.Run("dataslab as root", func(t *testing.T) {
@@ -938,7 +938,7 @@ func TestArrayIterateRange(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		testArrayIterateRange(t, storage, array, values)
+		testArrayIterateRange(t, array, values)
 	})
 
 	t.Run("metadataslab as root", func(t *testing.T) {
@@ -960,7 +960,7 @@ func TestArrayIterateRange(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		testArrayIterateRange(t, storage, array, values)
+		testArrayIterateRange(t, array, values)
 	})
 
 	t.Run("stop", func(t *testing.T) {
@@ -1025,7 +1025,7 @@ func TestArrayIterateRange(t *testing.T) {
 	})
 }
 
-func TestArrayRootStorageID(t *testing.T) {
+func TestArrayRootSlabID(t *testing.T) {
 	SetThreshold(256)
 	defer SetThreshold(1024)
 
@@ -1038,14 +1038,14 @@ func TestArrayRootStorageID(t *testing.T) {
 	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	savedRootID := array.StorageID()
-	require.NotEqual(t, StorageIDUndefined, savedRootID)
+	savedRootID := array.SlabID()
+	require.NotEqual(t, SlabIDUndefined, savedRootID)
 
 	// Append elements
 	for i := uint64(0); i < arraySize; i++ {
 		err := array.Append(Uint64Value(i))
 		require.NoError(t, err)
-		require.Equal(t, savedRootID, array.StorageID())
+		require.Equal(t, savedRootID, array.SlabID())
 	}
 
 	require.True(t, typeInfoComparator(typeInfo, array.Type()))
@@ -1057,13 +1057,13 @@ func TestArrayRootStorageID(t *testing.T) {
 		storable, err := array.Remove(0)
 		require.NoError(t, err)
 		require.Equal(t, Uint64Value(i), storable)
-		require.Equal(t, savedRootID, array.StorageID())
+		require.Equal(t, savedRootID, array.SlabID())
 	}
 
 	require.True(t, typeInfoComparator(typeInfo, array.Type()))
 	require.Equal(t, address, array.Address())
 	require.Equal(t, uint64(0), array.Count())
-	require.Equal(t, savedRootID, array.StorageID())
+	require.Equal(t, savedRootID, array.SlabID())
 }
 
 func TestArraySetRandomValues(t *testing.T) {
@@ -1232,8 +1232,8 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 		copy(values[k:], values[k+1:])
 		values = values[:len(values)-1]
 
-		if id, ok := existingStorable.(StorageIDStorable); ok {
-			err = storage.Remove(StorageID(id))
+		if id, ok := existingStorable.(SlabIDStorable); ok {
+			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
 	}
@@ -1297,8 +1297,8 @@ func testArrayAppendSetInsertRemoveRandomValues(
 			require.NoError(t, err)
 			valueEqual(t, typeInfoComparator, oldV, existingValue)
 
-			if id, ok := existingStorable.(StorageIDStorable); ok {
-				err = storage.Remove(StorageID(id))
+			if id, ok := existingStorable.(SlabIDStorable); ok {
+				err = storage.Remove(SlabID(id))
 				require.NoError(t, err)
 			}
 
@@ -1330,8 +1330,8 @@ func testArrayAppendSetInsertRemoveRandomValues(
 			copy(values[k:], values[k+1:])
 			values = values[:len(values)-1]
 
-			if id, ok := existingStorable.(StorageIDStorable); ok {
-				err = storage.Remove(StorageID(id))
+			if id, ok := existingStorable.(SlabIDStorable); ok {
+				err = storage.Remove(SlabID(id))
 				require.NoError(t, err)
 			}
 		}
@@ -1545,13 +1545,13 @@ func TestArrayEncodeDecode(t *testing.T) {
 		slabData, err := storage.Encode()
 		require.NoError(t, err)
 		require.Equal(t, 1, len(slabData))
-		require.Equal(t, expectedData, slabData[array.StorageID()])
+		require.Equal(t, expectedData, slabData[array.SlabID()])
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, slabData)
 
 		// Test new array from storage2
-		array2, err := NewArrayWithRootID(storage2, array.StorageID())
+		array2, err := NewArrayWithRootID(storage2, array.SlabID())
 		require.NoError(t, err)
 
 		verifyEmptyArray(t, storage2, typeInfo, address, array2)
@@ -1594,13 +1594,13 @@ func TestArrayEncodeDecode(t *testing.T) {
 		slabData, err := storage.Encode()
 		require.NoError(t, err)
 		require.Equal(t, 1, len(slabData))
-		require.Equal(t, expectedData, slabData[array.StorageID()])
+		require.Equal(t, expectedData, slabData[array.SlabID()])
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, slabData)
 
 		// Test new array from storage2
-		array2, err := NewArrayWithRootID(storage2, array.StorageID())
+		array2, err := NewArrayWithRootID(storage2, array.SlabID())
 		require.NoError(t, err)
 
 		verifyArray(t, storage2, typeInfo, address, array2, values, false)
@@ -1639,13 +1639,13 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.Equal(t, uint64(arraySize), array.Count())
 		require.Equal(t, uint64(1), nestedArray.Count())
 
-		id1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		id4 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id4 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
 
-		// Expected serialized slab data with storage id
-		expected := map[StorageID][]byte{
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
 
 			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:270 count:11} ]
 			id1: {
@@ -1665,7 +1665,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 				0x81,
 				// child header count
 				0x00, 0x02,
-				// child header 1 (storage id, count, size)
+				// child header 1 (slab id, count, size)
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 				0x00, 0x00, 0x00, 0x09,
 				0x00, 0x00, 0x00, 0xe4,
@@ -1681,7 +1681,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 				0x00,
 				// array data slab flag
 				0x00,
-				// next storage id
+				// next slab id
 				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x09,
@@ -1697,13 +1697,13 @@ func TestArrayEncodeDecode(t *testing.T) {
 				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
 			},
 
-			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... StorageID(...)]
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
 			id3: {
 				// version
 				0x00,
 				// array data slab flag
 				0x40,
-				// next storage id
+				// next slab id
 				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x0b,
@@ -1756,7 +1756,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		storage2 := newTestPersistentStorageWithData(t, m)
 
 		// Test new array from storage2
-		array2, err := NewArrayWithRootID(storage2, array.StorageID())
+		array2, err := NewArrayWithRootID(storage2, array.SlabID())
 		require.NoError(t, err)
 
 		verifyArray(t, storage2, typeInfo, address, array2, values, false)
@@ -1784,7 +1784,7 @@ func TestArrayEncodeDecodeRandomValues(t *testing.T) {
 	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
 
 	// Test new array from storage2
-	array2, err := NewArrayWithRootID(storage2, array.StorageID())
+	array2, err := NewArrayWithRootID(storage2, array.SlabID())
 	require.NoError(t, err)
 
 	verifyArray(t, storage2, typeInfo, address, array2, values, false)
@@ -1956,7 +1956,7 @@ func TestArrayStoredValue(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	rootID := array.StorageID()
+	rootID := array.SlabID()
 
 	slabIterator, err := storage.SlabIterator()
 	require.NoError(t, err)
@@ -1964,7 +1964,7 @@ func TestArrayStoredValue(t *testing.T) {
 	for {
 		id, slab := slabIterator()
 
-		if id == StorageIDUndefined {
+		if id == SlabIDUndefined {
 			break
 		}
 
@@ -2102,7 +2102,7 @@ func TestArrayFromBatchData(t *testing.T) {
 				return iter.Next()
 			})
 		require.NoError(t, err)
-		require.NotEqual(t, copied.StorageID(), array.StorageID())
+		require.NotEqual(t, copied.SlabID(), array.SlabID())
 
 		verifyEmptyArray(t, storage, typeInfo, address, copied)
 	})
@@ -2143,7 +2143,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, copied.StorageID(), array.StorageID())
+		require.NotEqual(t, copied.SlabID(), array.SlabID())
 
 		verifyArray(t, storage, typeInfo, address, copied, values, false)
 	})
@@ -2186,7 +2186,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, array.StorageID(), copied.StorageID())
+		require.NotEqual(t, array.SlabID(), copied.SlabID())
 
 		verifyArray(t, storage, typeInfo, address, copied, values, false)
 	})
@@ -2236,7 +2236,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, array.StorageID(), copied.StorageID())
+		require.NotEqual(t, array.SlabID(), copied.SlabID())
 
 		verifyArray(t, storage, typeInfo, address, copied, values, false)
 	})
@@ -2286,7 +2286,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, array.StorageID(), copied.StorageID())
+		require.NotEqual(t, array.SlabID(), copied.SlabID())
 
 		verifyArray(t, storage, typeInfo, address, copied, values, false)
 	})
@@ -2333,7 +2333,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, array.StorageID(), copied.StorageID())
+		require.NotEqual(t, array.SlabID(), copied.SlabID())
 
 		verifyArray(t, storage, typeInfo, address, copied, values, false)
 	})
@@ -2387,7 +2387,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			})
 
 		require.NoError(t, err)
-		require.NotEqual(t, array.StorageID(), copied.StorageID())
+		require.NotEqual(t, array.SlabID(), copied.SlabID())
 
 		verifyArray(t, storage, typeInfo, address, copied, values, false)
 	})
@@ -2445,9 +2445,9 @@ func TestArrayMaxInlineElement(t *testing.T) {
 	require.True(t, array.root.IsData())
 
 	// Size of root data slab with two elements of max inlined size is target slab size minus
-	// storage id size (next storage id is omitted in root slab), and minus 1 byte
+	// slab id size (next slab id is omitted in root slab), and minus 1 byte
 	// (for rounding when computing max inline array element size).
-	require.Equal(t, targetThreshold-storageIDSize-1, uint64(array.root.Header().size))
+	require.Equal(t, targetThreshold-slabIDSize-1, uint64(array.root.Header().size))
 
 	verifyArray(t, storage, typeInfo, address, array, values, false)
 }
@@ -2562,8 +2562,8 @@ func TestArraySlabDump(t *testing.T) {
 		require.NoError(t, err)
 
 		want := []string{
-			"level 1, ArrayDataSlab id:0x102030405060708.1 size:24 count:1 elements: [StorageIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]})]",
-			"overflow: &{0x102030405060708.2 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}",
+			"level 1, ArrayDataSlab id:0x102030405060708.1 size:24 count:1 elements: [SlabIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]})]",
+			"StorableSlab id:0x102030405060708.2 storable:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		}
 
 		dumps, err := DumpArraySlabs(array)
@@ -2658,7 +2658,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
@@ -2686,7 +2686,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
@@ -2715,7 +2715,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		nestedArray, ok := v.(*Array)
 		require.True(t, ok)
 
-		err := storage.Remove(nestedArray.StorageID())
+		err := storage.Remove(nestedArray.SlabID())
 		require.NoError(t, err)
 
 		copy(values[unloadValueIndex:], values[unloadValueIndex+1:])
@@ -2746,7 +2746,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 				nestedArray, ok := value.(*Array)
 				require.True(t, ok)
 
-				err := storage.Remove(nestedArray.StorageID())
+				err := storage.Remove(nestedArray.SlabID())
 				require.NoError(t, err)
 			}
 
@@ -2779,7 +2779,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			// Unload composite element
 			v := values[nestedCompositeIndex].(*Array)
 
-			err := storage.Remove(v.StorageID())
+			err := storage.Remove(v.SlabID())
 			require.NoError(t, err)
 
 			copy(values[nestedCompositeIndex:], values[nestedCompositeIndex+1:])
@@ -2836,7 +2836,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
@@ -2864,7 +2864,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
@@ -2893,7 +2893,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			copy(values[index:], values[index+1:])
@@ -2922,7 +2922,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			// Unload composite value
 			v := values[nestedCompositeIndex].(*Array)
 
-			err := storage.Remove(v.StorageID())
+			err := storage.Remove(v.SlabID())
 			require.NoError(t, err)
 
 			copy(values[nestedCompositeIndex:], values[nestedCompositeIndex+1:])
@@ -2952,7 +2952,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			childHeader := metaDataSlab.childrenHeaders[i]
 
-			err := storage.Remove(childHeader.id)
+			err := storage.Remove(childHeader.slabID)
 			require.NoError(t, err)
 
 			values = values[childHeader.count:]
@@ -2981,7 +2981,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			childHeader := metaDataSlab.childrenHeaders[i]
 
-			err := storage.Remove(childHeader.id)
+			err := storage.Remove(childHeader.slabID)
 			require.NoError(t, err)
 
 			values = values[:len(values)-int(childHeader.count)]
@@ -3010,7 +3010,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		index := 1
 		childHeader := metaDataSlab.childrenHeaders[index]
 
-		err := storage.Remove(childHeader.id)
+		err := storage.Remove(childHeader.slabID)
 		require.NoError(t, err)
 
 		copy(values[metaDataSlab.childrenCountSum[index-1]:], values[metaDataSlab.childrenCountSum[index]:])
@@ -3036,7 +3036,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			childHeader := rootMetaDataSlab.childrenHeaders[i]
 
-			err := storage.Remove(childHeader.id)
+			err := storage.Remove(childHeader.slabID)
 			require.NoError(t, err)
 
 			values = values[childHeader.count:]
@@ -3062,7 +3062,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			childHeader := rootMetaDataSlab.childrenHeaders[i]
 
-			err := storage.Remove(childHeader.id)
+			err := storage.Remove(childHeader.slabID)
 			require.NoError(t, err)
 
 			values = values[childHeader.count:]
@@ -3097,7 +3097,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			nestedArray, ok := v.(*Array)
 			require.True(t, ok)
 
-			err := storage.Remove(nestedArray.StorageID())
+			err := storage.Remove(nestedArray.SlabID())
 			require.NoError(t, err)
 
 			copy(values[i:], values[i+1:])
@@ -3125,7 +3125,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.True(t, ok)
 
 		type slabInfo struct {
-			id         StorageID
+			id         SlabID
 			startIndex int
 			count      int
 		}
@@ -3133,11 +3133,11 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		count := 0
 		var dataSlabInfos []*slabInfo
 		for _, mheader := range rootMetaDataSlab.childrenHeaders {
-			nonrootMetaDataSlab, ok := storage.deltas[mheader.id].(*ArrayMetaDataSlab)
+			nonrootMetaDataSlab, ok := storage.deltas[mheader.slabID].(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
 			for _, h := range nonrootMetaDataSlab.childrenHeaders {
-				dataSlabInfo := &slabInfo{id: h.id, startIndex: count, count: int(h.count)}
+				dataSlabInfo := &slabInfo{id: h.slabID, startIndex: count, count: int(h.count)}
 				dataSlabInfos = append(dataSlabInfos, dataSlabInfo)
 				count += int(h.count)
 			}
@@ -3187,7 +3187,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		verifyArrayLoadedElements(t, array, values)
 
 		type slabInfo struct {
-			id         StorageID
+			id         SlabID
 			startIndex int
 			count      int
 			children   []*slabInfo
@@ -3201,19 +3201,19 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		for i, mheader := range rootMetaDataSlab.childrenHeaders {
 
 			nonrootMetadataSlabInfo := &slabInfo{
-				id:         mheader.id,
+				id:         mheader.slabID,
 				startIndex: metadataSlabCount,
 				count:      int(mheader.count),
 			}
 			metadataSlabCount += int(mheader.count)
 
-			nonrootMetadataSlab, ok := storage.deltas[mheader.id].(*ArrayMetaDataSlab)
+			nonrootMetadataSlab, ok := storage.deltas[mheader.slabID].(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
 			children := make([]*slabInfo, len(nonrootMetadataSlab.childrenHeaders))
 			for i, h := range nonrootMetadataSlab.childrenHeaders {
 				children[i] = &slabInfo{
-					id:         h.id,
+					id:         h.slabID,
 					startIndex: dataSlabCount,
 					count:      int(h.count),
 				}
@@ -3432,4 +3432,19 @@ func getArrayMetaDataSlabCount(storage *PersistentSlabStorage) int {
 		}
 	}
 	return counter
+}
+
+func TestArrayID(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	storage := newTestPersistentStorage(t)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	sid := array.SlabID()
+	id := array.ValueID()
+
+	require.Equal(t, sid.address[:], id[:8])
+	require.Equal(t, sid.index[:], id[8:])
 }

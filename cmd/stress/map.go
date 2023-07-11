@@ -71,13 +71,13 @@ func (status *mapStatus) String() string {
 	)
 }
 
-func (status *mapStatus) incSet(new bool) {
+func (status *mapStatus) incSet(newValue bool) {
 	status.lock.Lock()
 	defer status.lock.Unlock()
 
 	status.setOps++
 
-	if new {
+	if newValue {
 		status.count++
 	}
 }
@@ -151,7 +151,7 @@ func testMap(
 			elements = make(map[atree.Value]atree.Value, maxLength)
 
 			// Load root slab from storage and cache it in read cache
-			rootID := m.StorageID()
+			rootID := m.SlabID()
 			m, err = atree.NewMapWithRootID(storage, rootID, atree.NewDefaultDigesterBuilder())
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to create map from root id %s: %s", rootID, err)
@@ -366,15 +366,15 @@ func testMap(
 				fmt.Fprintln(os.Stderr, err)
 				return
 			}
-			ids := make([]atree.StorageID, 0, len(rootIDs))
+			ids := make([]atree.SlabID, 0, len(rootIDs))
 			for id := range rootIDs {
 				// filter out root ids with empty address
-				if id.Address != atree.AddressUndefined {
+				if !id.HasTempAddress() {
 					ids = append(ids, id)
 				}
 			}
-			if len(ids) != 1 || ids[0] != m.StorageID() {
-				fmt.Fprintf(os.Stderr, "root storage ids %v in storage, want %s\n", ids, m.StorageID())
+			if len(ids) != 1 || ids[0] != m.SlabID() {
+				fmt.Fprintf(os.Stderr, "root slab ids %v in storage, want %s\n", ids, m.SlabID())
 				return
 			}
 		}

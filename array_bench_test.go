@@ -204,7 +204,7 @@ func setupArray(b *testing.B, r *rand.Rand, storage *PersistentSlabStorage, init
 	err = storage.Commit()
 	require.NoError(b, err)
 
-	arrayID := array.StorageID()
+	arrayID := array.SlabID()
 
 	storage.DropCache()
 

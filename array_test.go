@@ -2724,6 +2724,42 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		verifyArrayLoadedElements(t, array, values)
 	})
 
+	t.Run("root data slab with composite values, unload composite elements during iteration", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const arraySize = 3
+		array, values := createArrayWithCompositeValues(t, storage, address, typeInfo, arraySize)
+
+		// parent array: 1 root data slab
+		// nested composite elements: 1 root data slab for each
+		require.Equal(t, 1+arraySize, len(storage.deltas))
+		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
+
+		verifyArrayLoadedElements(t, array, values)
+
+		i := 0
+		err := array.IterateLoadedValues(func(v Value) (bool, error) {
+			// At this point, iterator returned first element (v).
+
+			// Remove all other nested composite elements (except first element) from storage.
+			for _, value := range values[1:] {
+				nestedArray, ok := value.(*Array)
+				require.True(t, ok)
+
+				err := storage.Remove(nestedArray.StorageID())
+				require.NoError(t, err)
+			}
+
+			require.Equal(t, 0, i)
+			valueEqual(t, typeInfoComparator, values[0], v)
+			i++
+			return true, nil
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 1, i) // Only first element is iterated because other elements are remove during iteration.
+	})
+
 	t.Run("root data slab with simple and composite values, unload composite element", func(t *testing.T) {
 		const arraySize = 3
 

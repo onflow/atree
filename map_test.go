@@ -4823,6 +4823,51 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		verifyMapLoadedElements(t, m, values)
 	})
 
+	t.Run("root data slab with composite values, unload composite elements during iteration", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		const mapSize = 3
+		m, values := createMapWithCompositeValues(
+			t,
+			storage,
+			address,
+			typeInfo,
+			mapSize,
+			func(i int) []Digest { return []Digest{Digest(i)} },
+		)
+
+		// parent map: 1 root data slab
+		// nested composite elements: 1 root data slab for each
+		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
+
+		verifyMapLoadedElements(t, m, values)
+
+		i := 0
+		err := m.IterateLoadedValues(func(k Value, v Value) (bool, error) {
+			// At this point, iterator returned first element (v).
+
+			// Remove all other nested composite elements (except first element) from storage.
+			for _, element := range values[1:] {
+				value := element[1]
+				nestedArray, ok := value.(*Array)
+				require.True(t, ok)
+
+				err := storage.Remove(nestedArray.StorageID())
+				require.NoError(t, err)
+			}
+
+			require.Equal(t, 0, i)
+			valueEqual(t, typeInfoComparator, values[0][0], k)
+			valueEqual(t, typeInfoComparator, values[0][1], v)
+			i++
+			return true, nil
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 1, i) // Only first element is iterated because other elements are remove during iteration.
+	})
+
 	t.Run("root data slab with simple and composite values, unloading composite value", func(t *testing.T) {
 		const mapSize = 3
 

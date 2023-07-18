@@ -132,7 +132,7 @@ func copyValue(storage *atree.PersistentSlabStorage, address atree.Address, valu
 }
 
 func copyArray(storage *atree.PersistentSlabStorage, address atree.Address, array *atree.Array) (*atree.Array, error) {
-	iterator, err := array.Iterator()
+	iterator, err := array.ReadOnlyIterator()
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func copyArray(storage *atree.PersistentSlabStorage, address atree.Address, arra
 }
 
 func copyMap(storage *atree.PersistentSlabStorage, address atree.Address, m *atree.OrderedMap) (*atree.OrderedMap, error) {
-	iterator, err := m.Iterator()
+	iterator, err := m.ReadOnlyIterator()
 	if err != nil {
 		return nil, err
 	}
@@ -260,12 +260,12 @@ func arrayEqual(a atree.Value, b atree.Value) error {
 		return fmt.Errorf("array %s count %d != array %s count %d", array1, array1.Count(), array2, array2.Count())
 	}
 
-	iterator1, err := array1.Iterator()
+	iterator1, err := array1.ReadOnlyIterator()
 	if err != nil {
 		return fmt.Errorf("failed to get array1 iterator: %w", err)
 	}
 
-	iterator2, err := array2.Iterator()
+	iterator2, err := array2.ReadOnlyIterator()
 	if err != nil {
 		return fmt.Errorf("failed to get array2 iterator: %w", err)
 	}
@@ -309,12 +309,12 @@ func mapEqual(a atree.Value, b atree.Value) error {
 		return fmt.Errorf("map %s count %d != map %s count %d", m1, m1.Count(), m2, m2.Count())
 	}
 
-	iterator1, err := m1.Iterator()
+	iterator1, err := m1.ReadOnlyIterator()
 	if err != nil {
 		return fmt.Errorf("failed to get m1 iterator: %w", err)
 	}
 
-	iterator2, err := m2.Iterator()
+	iterator2, err := m2.ReadOnlyIterator()
 	if err != nil {
 		return fmt.Errorf("failed to get m2 iterator: %w", err)
 	}

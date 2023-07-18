@@ -342,7 +342,7 @@ func valueEqual(t *testing.T, expected Value, actual Value) {
 func arrayEqual(t *testing.T, expected arrayValue, actual *Array) {
 	require.Equal(t, uint64(len(expected)), actual.Count())
 
-	iterator, err := actual.Iterator()
+	iterator, err := actual.ReadOnlyIterator()
 	require.NoError(t, err)
 
 	i := 0
@@ -363,7 +363,7 @@ func arrayEqual(t *testing.T, expected arrayValue, actual *Array) {
 func mapEqual(t *testing.T, expected mapValue, actual *OrderedMap) {
 	require.Equal(t, uint64(len(expected)), actual.Count())
 
-	iterator, err := actual.Iterator()
+	iterator, err := actual.ReadOnlyIterator()
 	require.NoError(t, err)
 
 	i := 0

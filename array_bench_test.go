@@ -355,7 +355,7 @@ func benchmarkNewArrayFromAppend(b *testing.B, initialArraySize int) {
 	for i := 0; i < b.N; i++ {
 		copied, _ := NewArray(storage, array.Address(), array.Type())
 
-		_ = array.Iterate(func(value Value) (bool, error) {
+		_ = array.IterateReadOnly(func(value Value) (bool, error) {
 			_ = copied.Append(value)
 			return true, nil
 		})
@@ -379,7 +379,7 @@ func benchmarkNewArrayFromBatchData(b *testing.B, initialArraySize int) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		iter, err := array.Iterator()
+		iter, err := array.ReadOnlyIterator()
 		require.NoError(b, err)
 
 		copied, _ := NewArrayFromBatchData(storage, array.Address(), array.Type(), func() (Value, error) {

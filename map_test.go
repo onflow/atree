@@ -130,7 +130,7 @@ func verifyMap(
 		require.Equal(t, len(keyValues), len(sortedKeys))
 
 		i := 0
-		err = m.Iterate(func(k, v Value) (bool, error) {
+		err = m.IterateReadOnly(func(k, v Value) (bool, error) {
 			expectedKey := sortedKeys[i]
 			expectedValue := keyValues[expectedKey]
 
@@ -1086,7 +1086,7 @@ func TestMapIterate(t *testing.T) {
 
 		// Iterate key value pairs
 		i = uint64(0)
-		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
+		err = m.IterateReadOnly(func(k Value, v Value) (resume bool, err error) {
 			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
 			valueEqual(t, typeInfoComparator, keyValues[k], v)
 			i++
@@ -1098,7 +1098,7 @@ func TestMapIterate(t *testing.T) {
 
 		// Iterate keys
 		i = uint64(0)
-		err = m.IterateKeys(func(k Value) (resume bool, err error) {
+		err = m.IterateReadOnlyKeys(func(k Value) (resume bool, err error) {
 			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
 			i++
 			return true, nil
@@ -1109,7 +1109,7 @@ func TestMapIterate(t *testing.T) {
 
 		// Iterate values
 		i = uint64(0)
-		err = m.IterateValues(func(v Value) (resume bool, err error) {
+		err = m.IterateReadOnlyValues(func(v Value) (resume bool, err error) {
 			k := sortedKeys[i]
 			valueEqual(t, typeInfoComparator, keyValues[k], v)
 			i++
@@ -1172,7 +1172,7 @@ func TestMapIterate(t *testing.T) {
 
 		// Iterate key value pairs
 		i := uint64(0)
-		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
+		err = m.IterateReadOnly(func(k Value, v Value) (resume bool, err error) {
 			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
 			valueEqual(t, typeInfoComparator, keyValues[k], v)
 			i++
@@ -1185,7 +1185,7 @@ func TestMapIterate(t *testing.T) {
 
 		// Iterate keys
 		i = uint64(0)
-		err = m.IterateKeys(func(k Value) (resume bool, err error) {
+		err = m.IterateReadOnlyKeys(func(k Value) (resume bool, err error) {
 			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
 			i++
 			return true, nil
@@ -1197,7 +1197,7 @@ func TestMapIterate(t *testing.T) {
 
 		// Iterate values
 		i = uint64(0)
-		err = m.IterateValues(func(v Value) (resume bool, err error) {
+		err = m.IterateReadOnlyValues(func(v Value) (resume bool, err error) {
 			valueEqual(t, typeInfoComparator, keyValues[sortedKeys[i]], v)
 			i++
 			return true, nil
@@ -3058,7 +3058,7 @@ func TestEmptyMap(t *testing.T) {
 
 	t.Run("iterate", func(t *testing.T) {
 		i := 0
-		err := m.Iterate(func(k Value, v Value) (bool, error) {
+		err := m.IterateReadOnly(func(k Value, v Value) (bool, error) {
 			i++
 			return true, nil
 		})
@@ -3096,7 +3096,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), m.Count())
 
-		iter, err := m.Iterator()
+		iter, err := m.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		storage := newTestPersistentStorage(t)
@@ -3143,7 +3143,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		iter, err := m.Iterator()
+		iter, err := m.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		var sortedKeys []Value
@@ -3205,7 +3205,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		iter, err := m.Iterator()
+		iter, err := m.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		var sortedKeys []Value
@@ -3270,7 +3270,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize+1), m.Count())
 
-		iter, err := m.Iterator()
+		iter, err := m.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		var sortedKeys []Value
@@ -3339,7 +3339,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.Equal(t, uint64(mapSize+1), m.Count())
 		require.Equal(t, typeInfo, m.Type())
 
-		iter, err := m.Iterator()
+		iter, err := m.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		var sortedKeys []Value
@@ -3402,7 +3402,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		iter, err := m.Iterator()
+		iter, err := m.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		storage := newTestPersistentStorage(t)
@@ -3483,7 +3483,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		iter, err := m.Iterator()
+		iter, err := m.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		var sortedKeys []Value
@@ -3567,7 +3567,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, storable)
 
-		iter, err := m.Iterator()
+		iter, err := m.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		var sortedKeys []Value
@@ -4844,7 +4844,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		verifyMapLoadedElements(t, m, values)
 
 		i := 0
-		err := m.IterateLoadedValues(func(k Value, v Value) (bool, error) {
+		err := m.IterateReadOnlyLoadedValues(func(k Value, v Value) (bool, error) {
 			// At this point, iterator returned first element (v).
 
 			// Remove all other nested composite elements (except first element) from storage.
@@ -5746,7 +5746,7 @@ func createMapWithSimpleAndCompositeValues(
 
 func verifyMapLoadedElements(t *testing.T, m *OrderedMap, expectedValues [][2]Value) {
 	i := 0
-	err := m.IterateLoadedValues(func(k Value, v Value) (bool, error) {
+	err := m.IterateReadOnlyLoadedValues(func(k Value, v Value) (bool, error) {
 		require.True(t, i < len(expectedValues))
 		valueEqual(t, typeInfoComparator, expectedValues[i][0], k)
 		valueEqual(t, typeInfoComparator, expectedValues[i][1], v)

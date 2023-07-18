@@ -287,10 +287,10 @@ func arrayEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
 	require.Equal(t, array1.Count(), array2.Count())
 	require.Equal(t, array1.SlabID(), array2.SlabID())
 
-	iterator1, err := array1.Iterator()
+	iterator1, err := array1.ReadOnlyIterator()
 	require.NoError(t, err)
 
-	iterator2, err := array2.Iterator()
+	iterator2, err := array2.ReadOnlyIterator()
 	require.NoError(t, err)
 
 	for {
@@ -320,10 +320,10 @@ func mapEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
 	require.Equal(t, m1.Count(), m2.Count())
 	require.Equal(t, m1.SlabID(), m2.SlabID())
 
-	iterator1, err := m1.Iterator()
+	iterator1, err := m1.ReadOnlyIterator()
 	require.NoError(t, err)
 
-	iterator2, err := m2.Iterator()
+	iterator2, err := m2.ReadOnlyIterator()
 	require.NoError(t, err)
 
 	for {

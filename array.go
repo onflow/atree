@@ -2195,6 +2195,7 @@ type ArrayIterator struct {
 	dataSlab       *ArrayDataSlab
 	index          int
 	remainingCount int
+	readOnly       bool
 }
 
 func (i *ArrayIterator) Next() (Value, error) {
@@ -2257,6 +2258,19 @@ func (a *Array) Iterator() (*ArrayIterator, error) {
 	}, nil
 }
 
+// ReadOnlyIterator returns readonly iterator for array elements.
+// If elements of child containers are mutated, those changes
+// are not guaranteed to persist.
+func (a *Array) ReadOnlyIterator() (*ArrayIterator, error) {
+	iterator, err := a.Iterator()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by Iterator().
+		return nil, err
+	}
+	iterator.readOnly = true
+	return iterator, nil
+}
+
 func (a *Array) RangeIterator(startIndex uint64, endIndex uint64) (*ArrayIterator, error) {
 	count := a.Count()
 
@@ -2307,63 +2321,74 @@ func (a *Array) RangeIterator(startIndex uint64, endIndex uint64) (*ArrayIterato
 	}, nil
 }
 
+func (a *Array) ReadOnlyRangeIterator(startIndex uint64, endIndex uint64) (*ArrayIterator, error) {
+	iterator, err := a.RangeIterator(startIndex, endIndex)
+	if err != nil {
+		return nil, err
+	}
+	iterator.readOnly = true
+	return iterator, nil
+}
+
 type ArrayIterationFunc func(element Value) (resume bool, err error)
 
-func (a *Array) Iterate(fn ArrayIterationFunc) error {
+func iterate(iterator *ArrayIterator, fn ArrayIterationFunc) error {
+	for {
+		value, err := iterator.Next()
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by ArrayIterator.Next().
+			return err
+		}
+		if value == nil {
+			return nil
+		}
+		resume, err := fn(value)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by ArrayIterationFunc callback.
+			return wrapErrorAsExternalErrorIfNeeded(err)
+		}
+		if !resume {
+			return nil
+		}
+	}
+}
 
+func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	iterator, err := a.Iterator()
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Array.Iterator().
 		return err
 	}
+	return iterate(iterator, fn)
+}
 
-	for {
-		value, err := iterator.Next()
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ArrayIterator.Next().
-			return err
-		}
-		if value == nil {
-			return nil
-		}
-		resume, err := fn(value)
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by ArrayIterationFunc callback.
-			return wrapErrorAsExternalErrorIfNeeded(err)
-		}
-		if !resume {
-			return nil
-		}
+func (a *Array) IterateReadOnly(fn ArrayIterationFunc) error {
+	iterator, err := a.ReadOnlyIterator()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by Array.ReadOnlyIterator().
+		return err
 	}
+	return iterate(iterator, fn)
 }
 
 func (a *Array) IterateRange(startIndex uint64, endIndex uint64, fn ArrayIterationFunc) error {
-
 	iterator, err := a.RangeIterator(startIndex, endIndex)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Array.RangeIterator().
 		return err
 	}
-
-	for {
-		value, err := iterator.Next()
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ArrayIterator.Next().
-			return err
-		}
-		if value == nil {
-			return nil
-		}
-		resume, err := fn(value)
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by ArrayIterationFunc callback.
-			return wrapErrorAsExternalErrorIfNeeded(err)
-		}
-		if !resume {
-			return nil
-		}
-	}
+	return iterate(iterator, fn)
 }
+
+func (a *Array) IterateReadOnlyRange(startIndex uint64, endIndex uint64, fn ArrayIterationFunc) error {
+	iterator, err := a.ReadOnlyRangeIterator(startIndex, endIndex)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by Array.ReadOnlyRangeIterator().
+		return err
+	}
+	return iterate(iterator, fn)
+}
+
 func (a *Array) Count() uint64 {
 	return uint64(a.root.Header().count)
 }
@@ -2390,7 +2415,7 @@ func (a *Array) Type() TypeInfo {
 }
 
 func (a *Array) String() string {
-	iterator, err := a.Iterator()
+	iterator, err := a.ReadOnlyIterator()
 	if err != nil {
 		return err.Error()
 	}
@@ -2863,8 +2888,8 @@ func (i *ArrayLoadedValueIterator) Next() (Value, error) {
 	return nil, nil
 }
 
-// LoadedValueIterator returns iterator to iterate loaded array elements.
-func (a *Array) LoadedValueIterator() (*ArrayLoadedValueIterator, error) {
+// ReadOnlyLoadedValueIterator returns iterator to iterate loaded array elements.
+func (a *Array) ReadOnlyLoadedValueIterator() (*ArrayLoadedValueIterator, error) {
 	switch slab := a.root.(type) {
 
 	case *ArrayDataSlab:
@@ -2902,9 +2927,9 @@ func (a *Array) LoadedValueIterator() (*ArrayLoadedValueIterator, error) {
 	}
 }
 
-// IterateLoadedValues iterates loaded array values.
-func (a *Array) IterateLoadedValues(fn ArrayIterationFunc) error {
-	iterator, err := a.LoadedValueIterator()
+// IterateReadOnlyLoadedValues iterates loaded array values.
+func (a *Array) IterateReadOnlyLoadedValues(fn ArrayIterationFunc) error {
+	iterator, err := a.ReadOnlyLoadedValueIterator()
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Array.LoadedValueIterator().
 		return err

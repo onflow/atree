@@ -28,24 +28,32 @@ import (
 )
 
 const (
-	slabIDSize = 16
+	slabAddressSize = 8
+	slabIndexSize   = 8
+	slabIDSize      = slabAddressSize + slabIndexSize
 
 	// version and flag size: version (1 byte) + flag (1 byte)
 	versionAndFlagSize = 2
 
-	// slab header size: slab id (16 bytes) + count (4 bytes) + size (4 bytes)
-	arraySlabHeaderSize = slabIDSize + 4 + 4
+	// slab header size: slab index (8 bytes) + count (4 bytes) + size (2 bytes)
+	// Support up to 4,294,967,295 elements in each array.
+	// Support up to 65,535 bytes for slab size limit (default limit is 1536 max bytes).
+	arraySlabHeaderSize = slabIndexSize + 4 + 2
 
-	// meta data slab prefix size: version (1 byte) + flag (1 byte) + child header count (2 bytes)
-	arrayMetaDataSlabPrefixSize = versionAndFlagSize + 2
+	// meta data slab prefix size: version (1 byte) + flag (1 byte) + address (8 bytes) + child header count (2 bytes)
+	// Support up to 65,535 children per metadata slab.
+	arrayMetaDataSlabPrefixSize = versionAndFlagSize + slabAddressSize + 2
 
-	// version (1 byte) + flag (1 byte) + next id (16 bytes) + CBOR array size (3 bytes)
-	// up to 65535 array elements are supported
-	arrayDataSlabPrefixSize = versionAndFlagSize + slabIDSize + 3
+	// Encoded element head in array data slab (fixed-size for easy computation).
+	arrayDataSlabElementHeadSize = 3
 
-	// version (1 byte) + flag (1 byte) + CBOR array size (3 bytes)
-	// up to 65535 array elements are supported
-	arrayRootDataSlabPrefixSize = versionAndFlagSize + 3
+	// non-root data slab prefix size: version (1 byte) + flag (1 byte) + next id (16 bytes) + element array head (3 bytes)
+	// Support up to 65,535 elements in the array per data slab.
+	arrayDataSlabPrefixSize = versionAndFlagSize + slabIDSize + arrayDataSlabElementHeadSize
+
+	// root data slab prefix size: version (1 byte) + flag (1 byte) + element array head (3 bytes)
+	// Support up to 65,535 elements in the array per data slab.
+	arrayRootDataSlabPrefixSize = versionAndFlagSize + arrayDataSlabElementHeadSize
 
 	// 32 is faster than 24 and 40.
 	linearScanThreshold = 32
@@ -163,30 +171,29 @@ func newArrayExtraDataFromData(
 	[]byte,
 	error,
 ) {
-	// Check data length
-	if len(data) < versionAndFlagSize {
-		return nil, data, NewDecodingErrorf("data is too short for array extra data")
+	dec := decMode.NewByteStreamDecoder(data)
+
+	extraData, err := newArrayExtraData(dec, decodeTypeInfo)
+	if err != nil {
+		return nil, data, err
 	}
 
-	// Check flag
-	flag := data[1]
-	if !isRoot(flag) {
-		return nil, data, NewDecodingErrorf("array extra data has invalid flag 0x%x, want root flag", flag)
-	}
+	return extraData, data[dec.NumBytesDecoded():], nil
+}
 
-	// Decode extra data
-
-	dec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
-
+// newArrayExtraData decodes CBOR array to extra data:
+//
+//	cborArray{type info}
+func newArrayExtraData(dec *cbor.StreamDecoder, decodeTypeInfo TypeInfoDecoder) (*ArrayExtraData, error) {
 	length, err := dec.DecodeArrayHead()
 	if err != nil {
-		return nil, data, NewDecodingError(err)
+		return nil, NewDecodingError(err)
 	}
 
 	if length != arrayExtraDataLength {
-		return nil, data, NewDecodingError(
+		return nil, NewDecodingError(
 			fmt.Errorf(
-				"data has invalid length %d, want %d",
+				"array extra data has invalid length %d, want %d",
 				length,
 				arrayExtraDataLength,
 			))
@@ -195,46 +202,17 @@ func newArrayExtraDataFromData(
 	typeInfo, err := decodeTypeInfo(dec)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by TypeInfoDecoder callback.
-		return nil, data, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode type info")
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode type info")
 	}
 
-	// Reslice for remaining data
-	n := dec.NumBytesDecoded()
-	data = data[versionAndFlagSize+n:]
-
-	return &ArrayExtraData{
-		TypeInfo: typeInfo,
-	}, data, nil
+	return &ArrayExtraData{TypeInfo: typeInfo}, nil
 }
 
-// Encode encodes extra data to the given encoder.
+// Encode encodes extra data as CBOR array:
 //
-// Header (2 bytes):
-//
-//	+-----------------------------+--------------------------+
-//	| extra data version (1 byte) | extra data flag (1 byte) |
-//	+-----------------------------+--------------------------+
-//
-// Content (for now):
-//
-//	CBOR encoded array of extra data: cborArray{type info}
-//
-// Extra data flag is the same as the slab flag it prepends.
-func (a *ArrayExtraData) Encode(enc *Encoder, flag byte) error {
-	// Encode version
-	enc.Scratch[0] = 0
-
-	// Encode flag
-	enc.Scratch[1] = flag
-
-	// Write scratch content to encoder
-	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
-	if err != nil {
-		return NewEncodingError(err)
-	}
-
-	// Encode extra data
-	err = enc.CBOR.EncodeArrayHead(arrayExtraDataLength)
+//	[type info]
+func (a *ArrayExtraData) Encode(enc *Encoder) error {
+	err := enc.CBOR.EncodeArrayHead(arrayExtraDataLength)
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -268,6 +246,62 @@ func newArrayDataSlabFromData(
 		return nil, NewDecodingErrorf("data is too short for array data slab")
 	}
 
+	version, flag := data[0], data[1]
+
+	if getSlabArrayType(flag) != slabArrayData {
+		return nil, NewDecodingErrorf(
+			"data has invalid flag 0x%x, want 0x%x",
+			flag,
+			maskArrayData,
+		)
+	}
+
+	switch version {
+	case 0:
+		return newArrayDataSlabFromDataV0(id, data, decMode, decodeStorable, decodeTypeInfo)
+
+	case 1:
+		return newArrayDataSlabFromDataV1(id, data, decMode, decodeStorable, decodeTypeInfo)
+
+	default:
+		return nil, NewDecodingErrorf("unexpected version %d for array data slab", version)
+	}
+}
+
+// newArrayDataSlabFromDataV0 decodes data in version 0:
+//
+// Root DataSlab Header:
+//
+//	+-------------------------------+------------+-------------------------------+
+//	| slab version + flag (2 bytes) | extra data | slab version + flag (2 bytes) |
+//	+-------------------------------+------------+-------------------------------+
+//
+// Non-root DataSlab Header (18 bytes):
+//
+//	+-------------------------------+-----------------------------+
+//	| slab version + flag (2 bytes) | next sib slab ID (16 bytes) |
+//	+-------------------------------+-----------------------------+
+//
+// Content:
+//
+//	CBOR encoded array of elements
+//
+// See ArrayExtraData.Encode() for extra data section format.
+func newArrayDataSlabFromDataV0(
+	id SlabID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) (
+	*ArrayDataSlab,
+	error,
+) {
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short for array data slab")
+	}
+
 	isRootSlab := isRoot(data[1])
 
 	var extraData *ArrayExtraData
@@ -276,7 +310,7 @@ func newArrayDataSlabFromData(
 	if isRootSlab {
 		// Decode extra data
 		var err error
-		extraData, data, err = newArrayExtraDataFromData(data, decMode, decodeTypeInfo)
+		extraData, data, err = newArrayExtraDataFromData(data[versionAndFlagSize:], decMode, decodeTypeInfo)
 		if err != nil {
 			// err is categorized already by newArrayExtraDataFromData.
 			return nil, err
@@ -291,17 +325,6 @@ func newArrayDataSlabFromData(
 	// Check data length (after decoding extra data if present)
 	if len(data) < minDataLength {
 		return nil, NewDecodingErrorf("data is too short for array data slab")
-	}
-
-	// Check flag
-	flag := data[1]
-
-	if getSlabArrayType(flag) != slabArrayData {
-		return nil, NewDecodingErrorf(
-			"data has invalid flag 0x%x, want 0x%x",
-			flag,
-			maskArrayData,
-		)
 	}
 
 	var next SlabID
@@ -343,9 +366,124 @@ func newArrayDataSlabFromData(
 		elements[i] = storable
 	}
 
+	// Compute slab size for version 1.
+	slabSize := versionAndFlagSize + cborDec.NumBytesDecoded()
+	if !isRootSlab {
+		slabSize += slabIDSize
+	}
+
 	header := ArraySlabHeader{
 		slabID: id,
-		size:   uint32(len(data)),
+		size:   uint32(slabSize),
+		count:  uint32(elemCount),
+	}
+
+	return &ArrayDataSlab{
+		next:      next,
+		header:    header,
+		elements:  elements,
+		extraData: extraData,
+	}, nil
+}
+
+// newArrayDataSlabFromDataV1 decodes data in version 1:
+//
+// Root DataSlab Header:
+//
+//	+-------------------------------+------------+
+//	| slab version + flag (2 bytes) | extra data |
+//	+-------------------------------+------------+
+//
+// Non-root DataSlab Header (18 bytes):
+//
+//	+-------------------------------+-----------------------------+
+//	| slab version + flag (2 bytes) | next sib slab ID (16 bytes) |
+//	+-------------------------------+-----------------------------+
+//
+// Content:
+//
+//	CBOR encoded array of elements
+//
+// See ArrayExtraData.Encode() for extra data section format.
+func newArrayDataSlabFromDataV1(
+	id SlabID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) (
+	*ArrayDataSlab,
+	error,
+) {
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short for array data slab")
+	}
+
+	isRootSlab := isRoot(data[1])
+
+	data = data[versionAndFlagSize:]
+
+	var err error
+	var extraData *ArrayExtraData
+	var next SlabID
+
+	// Decode header
+	if isRootSlab {
+		// Decode extra data
+		extraData, data, err = newArrayExtraDataFromData(data, decMode, decodeTypeInfo)
+		if err != nil {
+			// err is categorized already by newArrayExtraDataFromData.
+			return nil, err
+		}
+	} else {
+		// Decode next slab ID
+		next, err = NewSlabIDFromRawBytes(data)
+		if err != nil {
+			// error returned from NewSlabIDFromRawBytes is categorized already.
+			return nil, err
+		}
+
+		data = data[slabIDSize:]
+	}
+
+	// Check minimum data length after header
+	if len(data) < arrayDataSlabElementHeadSize {
+		return nil, NewDecodingErrorf("data is too short for array data slab")
+	}
+
+	// Decode content (CBOR array)
+	cborDec := decMode.NewByteStreamDecoder(data)
+
+	elemCount, err := cborDec.DecodeArrayHead()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	elements := make([]Storable, elemCount)
+	for i := 0; i < int(elemCount); i++ {
+		storable, err := decodeStorable(cborDec, SlabIDUndefined)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode array element")
+		}
+		elements[i] = storable
+	}
+
+	// Check if data reached EOF
+	if cborDec.NumBytesDecoded() < len(data) {
+		return nil, NewDecodingErrorf("data has %d bytes of extraneous data for array data slab", len(data)-cborDec.NumBytesDecoded())
+	}
+
+	// Compute slab size for version 1.
+	slabSize := versionAndFlagSize + cborDec.NumBytesDecoded()
+	if !isRootSlab {
+		slabSize += slabIDSize
+	}
+
+	header := ArraySlabHeader{
+		slabID: id,
+		size:   uint32(slabSize),
 		count:  uint32(elemCount),
 	}
 
@@ -359,17 +497,22 @@ func newArrayDataSlabFromData(
 
 // Encode encodes this array data slab to the given encoder.
 //
-// Header (18 bytes):
+// Root DataSlab Header:
 //
-//	+-------------------------------+--------------------------------+
+//	+-------------------------------+------------+
+//	| slab version + flag (2 bytes) | extra data |
+//	+-------------------------------+------------+
+//
+// Non-root DataSlab Header (18 bytes):
+//
+//	+-------------------------------+-----------------------------+
 //	| slab version + flag (2 bytes) | next sib slab ID (16 bytes) |
-//	+-------------------------------+--------------------------------+
+//	+-------------------------------+-----------------------------+
 //
-// Content (for now):
+// Content:
 //
 //	CBOR encoded array of elements
 //
-// If this is root slab, extra data section is prepended to slab's encoded content.
 // See ArrayExtraData.Encode() for extra data section format.
 func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
@@ -379,46 +522,48 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 		flag = setHasPointers(flag)
 	}
 
-	// Encode extra data if present
 	if a.extraData != nil {
 		flag = setRoot(flag)
-
-		err := a.extraData.Encode(enc, flag)
-		if err != nil {
-			// err is already categorized by ArrayExtraData.Encode().
-			return err
-		}
 	}
 
 	// Encode version
-	enc.Scratch[0] = 0
+	enc.Scratch[0] = 1
 
 	// Encode flag
 	enc.Scratch[1] = flag
 
-	var contentOffset int
+	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
+	if err != nil {
+		return NewEncodingError(err)
+	}
 
-	// Encode next slab ID for non-root data slabs
-	if a.extraData == nil {
-
+	// Encode header
+	if a.extraData != nil {
+		// Encode extra data
+		err = a.extraData.Encode(enc)
+		if err != nil {
+			// err is already categorized by ArrayExtraData.Encode().
+			return err
+		}
+	} else {
 		// Encode next slab ID to scratch
-		const nextSlabIDOffset = versionAndFlagSize
-		_, err := a.next.ToRawBytes(enc.Scratch[nextSlabIDOffset:])
+		n, err := a.next.ToRawBytes(enc.Scratch[:])
 		if err != nil {
 			// Don't need to wrap because err is already categorized by SlabID.ToRawBytes().
 			return err
 		}
 
-		contentOffset = nextSlabIDOffset + slabIDSize
-	} else {
-		contentOffset = versionAndFlagSize
+		_, err = enc.Write(enc.Scratch[:n])
+		if err != nil {
+			return NewEncodingError(err)
+		}
 	}
 
 	// Encode CBOR array size manually for fix-sized encoding
 
-	enc.Scratch[contentOffset] = 0x80 | 25
+	enc.Scratch[0] = 0x80 | 25
 
-	countOffset := contentOffset + 1
+	countOffset := 1
 	const countSize = 2
 	binary.BigEndian.PutUint16(
 		enc.Scratch[countOffset:],
@@ -427,7 +572,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	// Write scratch content to encoder
 	totalSize := countOffset + countSize
-	_, err := enc.Write(enc.Scratch[:totalSize])
+	_, err = enc.Write(enc.Scratch[:totalSize])
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -861,26 +1006,8 @@ func newArrayMetaDataSlabFromData(
 		return nil, NewDecodingErrorf("data is too short for array metadata slab")
 	}
 
-	var extraData *ArrayExtraData
+	version, flag := data[0], data[1]
 
-	// Check flag for extra data
-	if isRoot(data[1]) {
-		// Decode extra data
-		var err error
-		extraData, data, err = newArrayExtraDataFromData(data, decMode, decodeTypeInfo)
-		if err != nil {
-			// Don't need to wrap because err is already categorized by newArrayExtraDataFromData().
-			return nil, err
-		}
-	}
-
-	// Check data length (after decoding extra data if present)
-	if len(data) < arrayMetaDataSlabPrefixSize {
-		return nil, NewDecodingErrorf("data is too short for array metadata slab")
-	}
-
-	// Check flag
-	flag := data[1]
 	if getSlabArrayType(flag) != slabArrayMeta {
 		return nil, NewDecodingErrorf(
 			"data has invalid flag 0x%x, want 0x%x",
@@ -889,11 +1016,83 @@ func newArrayMetaDataSlabFromData(
 		)
 	}
 
+	switch version {
+	case 0:
+		return newArrayMetaDataSlabFromDataV0(id, data, decMode, decodeTypeInfo)
+
+	case 1:
+		return newArrayMetaDataSlabFromDataV1(id, data, decMode, decodeTypeInfo)
+
+	default:
+		return nil, NewDecodingErrorf("unexpected version %d for array metadata slab", version)
+	}
+}
+
+// newArrayMetaDataSlabFromDataV0 decodes data in version 0:
+//
+// Root MetaDataSlab Header:
+//
+//	+------------------------------+------------+------------------------------+------------------------------+
+//	| slab version + flag (2 byte) | extra data | slab version + flag (2 byte) | child header count (2 bytes) |
+//	+------------------------------+------------+------------------------------+------------------------------+
+//
+// Non-root MetaDataSlab Header (4 bytes):
+//
+//	+------------------------------+------------------------------+
+//	| slab version + flag (2 byte) | child header count (2 bytes) |
+//	+------------------------------+------------------------------+
+//
+// Content (n * 24 bytes):
+//
+//	[[slab id (16 bytes), count (4 bytes), size (4 bytes)], ...]
+//
+// See ArrayExtraData.Encode() for extra data section format.
+func newArrayMetaDataSlabFromDataV0(
+	id SlabID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeTypeInfo TypeInfoDecoder,
+) (
+	*ArrayMetaDataSlab,
+	error,
+) {
+	// NOTE: the following encoded sizes are for version 0 only (changed in later version).
+	const (
+		// meta data slab prefix size: version (1 byte) + flag (1 byte) + child header count (2 bytes)
+		arrayMetaDataSlabPrefixSizeV0 = versionAndFlagSize + 2
+
+		// slab header size: slab id (16 bytes) + count (4 bytes) + size (4 bytes)
+		arraySlabHeaderSizeV0 = slabIDSize + 4 + 4
+	)
+
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short for array metadata slab")
+	}
+
+	flag := data[1]
+
+	var err error
+	var extraData *ArrayExtraData
+
+	if isRoot(flag) {
+		extraData, data, err = newArrayExtraDataFromData(data[versionAndFlagSize:], decMode, decodeTypeInfo)
+		if err != nil {
+			// Don't need to wrap because err is already categorized by newArrayExtraDataFromData().
+			return nil, err
+		}
+	}
+
+	// Check data length (after decoding extra data if present)
+	if len(data) < arrayMetaDataSlabPrefixSizeV0 {
+		return nil, NewDecodingErrorf("data is too short for array metadata slab")
+	}
+
 	// Decode number of child headers
 	const childHeaderCountOffset = versionAndFlagSize
 	childHeaderCount := binary.BigEndian.Uint16(data[childHeaderCountOffset:])
 
-	expectedDataLength := arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*int(childHeaderCount)
+	expectedDataLength := arrayMetaDataSlabPrefixSizeV0 + arraySlabHeaderSizeV0*int(childHeaderCount)
 	if len(data) != expectedDataLength {
 		return nil, NewDecodingErrorf(
 			"data has unexpected length %d, want %d",
@@ -930,12 +1129,137 @@ func newArrayMetaDataSlabFromData(
 		}
 		childrenCountSum[i] = totalCount
 
-		offset += arraySlabHeaderSize
+		offset += arraySlabHeaderSizeV0
 	}
+
+	// Compute slab size in version 1.
+	slabSize := arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*uint32(childHeaderCount)
 
 	header := ArraySlabHeader{
 		slabID: id,
-		size:   uint32(len(data)),
+		size:   slabSize,
+		count:  totalCount,
+	}
+
+	return &ArrayMetaDataSlab{
+		header:           header,
+		childrenHeaders:  childrenHeaders,
+		childrenCountSum: childrenCountSum,
+		extraData:        extraData,
+	}, nil
+}
+
+// newArrayMetaDataSlabFromDataV1 decodes data in version 1:
+//
+// Root MetaDataSlab Header:
+//
+//	+------------------------------+------------+--------------------------------+------------------------------+
+//	| slab version + flag (2 byte) | extra data | child shared address (8 bytes) | child header count (2 bytes) |
+//	+------------------------------+------------+--------------------------------+------------------------------+
+//
+// Non-root MetaDataSlab Header (12 bytes):
+//
+//	+------------------------------+--------------------------------+------------------------------+
+//	| slab version + flag (2 byte) | child shared address (8 bytes) | child header count (2 bytes) |
+//	+------------------------------+--------------------------------+------------------------------+
+//
+// Content (n * 14 bytes):
+//
+//	[[slab index (8 bytes), count (4 bytes), size (2 bytes)], ...]
+//
+// See ArrayExtraData.Encode() for extra data section format.
+func newArrayMetaDataSlabFromDataV1(
+	id SlabID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeTypeInfo TypeInfoDecoder,
+) (
+	*ArrayMetaDataSlab,
+	error,
+) {
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short for array metadata slab")
+	}
+
+	isRoot := isRoot(data[1])
+
+	data = data[versionAndFlagSize:]
+
+	var err error
+	var extraData *ArrayExtraData
+
+	if isRoot {
+		extraData, data, err = newArrayExtraDataFromData(data, decMode, decodeTypeInfo)
+		if err != nil {
+			// Don't need to wrap because err is already categorized by newArrayExtraDataFromData().
+			return nil, err
+		}
+	}
+
+	// Check minimum data length after version, flag, and extra data are processed
+	minLength := arrayMetaDataSlabPrefixSize - versionAndFlagSize
+	if len(data) < minLength {
+		return nil, NewDecodingErrorf("data is too short for array metadata slab")
+	}
+
+	offset := 0
+
+	// Decode shared address of headers
+	var address Address
+	copy(address[:], data[offset:])
+	offset += slabAddressSize
+
+	// Decode number of child headers
+	const arrayHeaderSize = 2
+	childHeaderCount := binary.BigEndian.Uint16(data[offset:])
+	offset += arrayHeaderSize
+
+	expectedDataLength := arraySlabHeaderSize * int(childHeaderCount)
+	if len(data[offset:]) != expectedDataLength {
+		return nil, NewDecodingErrorf(
+			"data has unexpected length %d, want %d",
+			len(data),
+			expectedDataLength,
+		)
+	}
+
+	// Decode child headers
+	childrenHeaders := make([]ArraySlabHeader, childHeaderCount)
+	childrenCountSum := make([]uint32, childHeaderCount)
+	totalCount := uint32(0)
+
+	for i := 0; i < int(childHeaderCount); i++ {
+		// Decode slab index
+		var index SlabIndex
+		copy(index[:], data[offset:])
+
+		slabID := SlabID{address, index}
+		offset += slabIndexSize
+
+		// Decode count
+		count := binary.BigEndian.Uint32(data[offset:])
+		offset += 4
+
+		// Decode size
+		size := binary.BigEndian.Uint16(data[offset:])
+		offset += 2
+
+		childrenHeaders[i] = ArraySlabHeader{
+			slabID: slabID,
+			count:  count,
+			size:   uint32(size),
+		}
+
+		totalCount += count
+		childrenCountSum[i] = totalCount
+	}
+
+	slabSize := arrayMetaDataSlabPrefixSize + arraySlabHeaderSize*uint32(childHeaderCount)
+
+	header := ArraySlabHeader{
+		slabID: id,
+		size:   slabSize,
 		count:  totalCount,
 	}
 
@@ -949,41 +1273,57 @@ func newArrayMetaDataSlabFromData(
 
 // Encode encodes this array meta-data slab to the given encoder.
 //
-// Header (4 bytes):
+// Root MetaDataSlab Header:
 //
-//	+-----------------------+--------------------+------------------------------+
-//	| slab version (1 byte) | slab flag (1 byte) | child header count (2 bytes) |
-//	+-----------------------+--------------------+------------------------------+
+//	+------------------------------+------------+--------------------------------+------------------------------+
+//	| slab version + flag (2 byte) | extra data | child shared address (8 bytes) | child header count (2 bytes) |
+//	+------------------------------+------------+--------------------------------+------------------------------+
 //
-// Content (n * 16 bytes):
+// Non-root MetaDataSlab Header (12 bytes):
 //
-//	[[count, size, slab ID], ...]
+//	+------------------------------+--------------------------------+------------------------------+
+//	| slab version + flag (2 byte) | child shared address (8 bytes) | child header count (2 bytes) |
+//	+------------------------------+--------------------------------+------------------------------+
 //
-// If this is root slab, extra data section is prepended to slab's encoded content.
+// Content (n * 14 bytes):
+//
+//	[[slab index (8 bytes), count (4 bytes), size (2 bytes)], ...]
+//
 // See ArrayExtraData.Encode() for extra data section format.
 func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
 	flag := maskArrayMeta
 
-	// Encode extra data if present
 	if a.extraData != nil {
 		flag = setRoot(flag)
+	}
 
-		err := a.extraData.Encode(enc, flag)
+	// Encode version
+	enc.Scratch[0] = 1
+
+	// Encode flag
+	enc.Scratch[1] = flag
+
+	// Write version and flag
+	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// Encode extra data if present
+	if a.extraData != nil {
+		err = a.extraData.Encode(enc)
 		if err != nil {
 			// Don't need to wrap because err is already categorized by ArrayExtraData.Encode().
 			return err
 		}
 	}
 
-	// Encode version
-	enc.Scratch[0] = 0
-
-	// Encode flag
-	enc.Scratch[1] = flag
+	// Encode shared address to scratch
+	copy(enc.Scratch[:], a.header.slabID.address[:])
 
 	// Encode child header count to scratch
-	const childHeaderCountOffset = versionAndFlagSize
+	const childHeaderCountOffset = slabAddressSize
 	binary.BigEndian.PutUint16(
 		enc.Scratch[childHeaderCountOffset:],
 		uint16(len(a.childrenHeaders)),
@@ -991,26 +1331,25 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
 	// Write scratch content to encoder
 	const totalSize = childHeaderCountOffset + 2
-	_, err := enc.Write(enc.Scratch[:totalSize])
+	_, err = enc.Write(enc.Scratch[:totalSize])
 	if err != nil {
 		return NewEncodingError(err)
 	}
 
 	// Encode children headers
 	for _, h := range a.childrenHeaders {
-		_, err := h.slabID.ToRawBytes(enc.Scratch[:])
-		if err != nil {
-			// Don't need to wrap because err is already categorized by SlabID.ToRawBytes().
-			return err
-		}
+		// Encode slab index to scratch
+		copy(enc.Scratch[:], h.slabID.index[:])
 
-		const countOffset = slabIDSize
+		// Encode count
+		const countOffset = slabIndexSize
 		binary.BigEndian.PutUint32(enc.Scratch[countOffset:], h.count)
 
+		// Encode size
 		const sizeOffset = countOffset + 4
-		binary.BigEndian.PutUint32(enc.Scratch[sizeOffset:], h.size)
+		binary.BigEndian.PutUint16(enc.Scratch[sizeOffset:], uint16(h.size))
 
-		const totalSize = sizeOffset + 4
+		const totalSize = sizeOffset + 2
 		_, err = enc.Write(enc.Scratch[:totalSize])
 		if err != nil {
 			return NewEncodingError(err)

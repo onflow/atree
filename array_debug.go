@@ -650,7 +650,7 @@ func getEncodedArrayExtraDataSize(extraData *ArrayExtraData, cborEncMode cbor.En
 
 	// Normally the flag shouldn't be 0. But in this case we just need the encoded data size
 	// so the content of the flag doesn't matter.
-	err := extraData.Encode(enc, byte(0))
+	err := extraData.Encode(enc)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArrayExtraData.Encode().
 		return 0, err

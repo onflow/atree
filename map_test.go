@@ -1883,7 +1883,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			id4: {
 				// extra data
 				// version
-				0x00,
+				0x01,
 				// flag: root + array data
 				0x80,
 				// extra data (CBOR encoded array of 1 elements)
@@ -1891,10 +1891,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				// type info
 				0x18, 0x2b,
 
-				// version
-				0x00,
-				// flag: root + array data
-				0x80,
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x01,
 				// CBOR encoded array elements

@@ -126,7 +126,7 @@ type element interface {
 
 	Encode(*Encoder) error
 
-	HasPointer() bool
+	hasPointer() bool
 
 	Size() uint32
 
@@ -166,7 +166,7 @@ type elements interface {
 
 	Encode(*Encoder) error
 
-	HasPointer() bool
+	hasPointer() bool
 
 	firstKey() Digest
 
@@ -178,11 +178,9 @@ type elements interface {
 }
 
 type singleElement struct {
-	key          MapKey
-	value        MapValue
-	size         uint32
-	keyPointer   bool
-	valuePointer bool
+	key   MapKey
+	value MapValue
+	size  uint32
 }
 
 var _ element = &singleElement{}
@@ -464,22 +462,10 @@ func newSingleElement(storage SlabStorage, address Address, key Value, value Val
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
 	}
 
-	var keyPointer bool
-	if _, ok := ks.(SlabIDStorable); ok {
-		keyPointer = true
-	}
-
-	var valuePointer bool
-	if _, ok := vs.(SlabIDStorable); ok {
-		valuePointer = true
-	}
-
 	return &singleElement{
-		key:          ks,
-		value:        vs,
-		size:         singleElementPrefixSize + ks.ByteSize() + vs.ByteSize(),
-		keyPointer:   keyPointer,
-		valuePointer: valuePointer,
+		key:   ks,
+		value: vs,
+		size:  singleElementPrefixSize + ks.ByteSize() + vs.ByteSize(),
 	}, nil
 }
 
@@ -505,22 +491,10 @@ func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable Storab
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode value's storable")
 	}
 
-	var keyPointer bool
-	if _, ok := key.(SlabIDStorable); ok {
-		keyPointer = true
-	}
-
-	var valuePointer bool
-	if _, ok := value.(SlabIDStorable); ok {
-		valuePointer = true
-	}
-
 	return &singleElement{
-		key:          key,
-		value:        value,
-		size:         singleElementPrefixSize + key.ByteSize() + value.ByteSize(),
-		keyPointer:   keyPointer,
-		valuePointer: valuePointer,
+		key:   key,
+		value: value,
+		size:  singleElementPrefixSize + key.ByteSize() + value.ByteSize(),
 	}, nil
 }
 
@@ -603,14 +577,8 @@ func (e *singleElement) Set(
 			return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
 		}
 
-		valuePointer := false
-		if _, ok := valueStorable.(SlabIDStorable); ok {
-			valuePointer = true
-		}
-
 		e.value = valueStorable
 		e.size = singleElementPrefixSize + e.key.ByteSize() + e.value.ByteSize()
-		e.valuePointer = valuePointer
 		return e, existingValue, nil
 	}
 
@@ -676,8 +644,8 @@ func (e *singleElement) Remove(storage SlabStorage, _ Digester, _ uint, _ Digest
 	return nil, nil, nil, NewKeyNotFoundError(key)
 }
 
-func (e *singleElement) HasPointer() bool {
-	return e.keyPointer || e.valuePointer
+func (e *singleElement) hasPointer() bool {
+	return hasPointer(e.key) || hasPointer(e.value)
 }
 
 func (e *singleElement) Size() uint32 {
@@ -849,8 +817,8 @@ func (e *inlineCollisionGroup) Remove(storage SlabStorage, digester Digester, le
 	return k, v, e, nil
 }
 
-func (e *inlineCollisionGroup) HasPointer() bool {
-	return e.elements.HasPointer()
+func (e *inlineCollisionGroup) hasPointer() bool {
+	return e.elements.hasPointer()
 }
 
 func (e *inlineCollisionGroup) Size() uint32 {
@@ -1019,7 +987,7 @@ func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, 
 	return k, v, e, nil
 }
 
-func (e *externalCollisionGroup) HasPointer() bool {
+func (e *externalCollisionGroup) hasPointer() bool {
 	return true
 }
 
@@ -1530,9 +1498,9 @@ func (e *hkeyElements) Element(i int) (element, error) {
 	return e.elems[i], nil
 }
 
-func (e *hkeyElements) HasPointer() bool {
+func (e *hkeyElements) hasPointer() bool {
 	for _, elem := range e.elems {
-		if elem.HasPointer() {
+		if elem.hasPointer() {
 			return true
 		}
 	}
@@ -2015,9 +1983,9 @@ func (e *singleElements) CanLendToRight(_ uint32) bool {
 	return false
 }
 
-func (e *singleElements) HasPointer() bool {
+func (e *singleElements) hasPointer() bool {
 	for _, elem := range e.elems {
-		if elem.HasPointer() {
+		if elem.hasPointer() {
 			return true
 		}
 	}
@@ -2255,7 +2223,7 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 }
 
 func (m *MapDataSlab) hasPointer() bool {
-	return m.elements.HasPointer()
+	return m.elements.hasPointer()
 }
 
 func (m *MapDataSlab) ChildStorables() []Storable {

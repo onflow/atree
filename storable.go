@@ -37,6 +37,18 @@ type Storable interface {
 	ChildStorables() []Storable
 }
 
+type containerStorable interface {
+	Storable
+	hasPointer() bool
+}
+
+func hasPointer(storable Storable) bool {
+	if cs, ok := storable.(containerStorable); ok {
+		return cs.hasPointer()
+	}
+	return false
+}
+
 const (
 	CBORTagInlineCollisionGroup   = 253
 	CBORTagExternalCollisionGroup = 254
@@ -47,6 +59,10 @@ const (
 type SlabIDStorable SlabID
 
 var _ Storable = SlabIDStorable{}
+
+func (v SlabIDStorable) hasPointer() bool {
+	return true
+}
 
 func (v SlabIDStorable) ChildStorables() []Storable {
 	return nil

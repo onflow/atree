@@ -32,34 +32,44 @@ import (
 const (
 	digestSize = 8
 
-	// single element prefix size: CBOR array header (1 byte)
+	// Encoded size of single element prefix size: CBOR array header (1 byte)
 	singleElementPrefixSize = 1
 
-	// inline collision group prefix size: CBOR tag number (2 bytes)
+	// Encoded size of inline collision group prefix size: CBOR tag number (2 bytes)
 	inlineCollisionGroupPrefixSize = 2
 
-	// external collision group prefix size: CBOR tag number (2 bytes)
+	// Encoded size of external collision group prefix size: CBOR tag number (2 bytes)
 	externalCollisionGroupPrefixSize = 2
 
+	// Encoded size of digests: CBOR byte string head (3 bytes)
+	digestPrefixSize = 3
+
+	// Encoded size of number of elements: CBOR array head (3 bytes).
+	elementPrefixSize = 3
+
 	// hkey elements prefix size:
-	// CBOR array header (1 byte) + level (1 byte) + hkeys byte string header (9 bytes) + elements array header (9 bytes)
-	hkeyElementsPrefixSize = 1 + 1 + 9 + 9
+	// CBOR array header (1 byte) + level (1 byte) + hkeys byte string header (3 bytes) + elements array header (3 bytes)
+	// Support up to 8,191 elements in the map per data slab.
+	hkeyElementsPrefixSize = 1 + 1 + digestPrefixSize + elementPrefixSize
 
 	// single elements prefix size:
-	// CBOR array header (1 byte) + encoded level (1 byte) + hkeys byte string header (1 bytes) + elements array header (9 bytes)
-	singleElementsPrefixSize = 1 + 1 + 1 + 9
+	// CBOR array header (1 byte) + encoded level (1 byte) + hkeys byte string header (1 bytes) + elements array header (3 bytes)
+	// Support up to 65,535 elements in the map per data slab.
+	singleElementsPrefixSize = 1 + 1 + 1 + elementPrefixSize
 
-	// slab header size: slab ID (16 bytes) + size (4 bytes) + first digest (8 bytes)
-	mapSlabHeaderSize = slabIDSize + 4 + digestSize
+	// slab header size: slab index (8 bytes) + size (2 bytes) + first digest (8 bytes)
+	// Support up to 65,535 bytes for slab size limit (default limit is 1536 max bytes).
+	mapSlabHeaderSize = slabIndexSize + 2 + digestSize
 
-	// meta data slab prefix size: version (1 byte) + flag (1 byte) + child header count (2 bytes)
-	mapMetaDataSlabPrefixSize = 1 + 1 + 2
+	// meta data slab prefix size: version (1 byte) + flag (1 byte) + address (8 bytes) + child header count (2 bytes)
+	// Support up to 65,535 children per metadata slab.
+	mapMetaDataSlabPrefixSize = versionAndFlagSize + slabAddressSize + 2
 
 	// version (1 byte) + flag (1 byte) + next id (16 bytes)
-	mapDataSlabPrefixSize = 2 + slabIDSize
+	mapDataSlabPrefixSize = versionAndFlagSize + slabIDSize
 
 	// version (1 byte) + flag (1 byte)
-	mapRootDataSlabPrefixSize = 2
+	mapRootDataSlabPrefixSize = versionAndFlagSize
 
 	// maxDigestLevel is max levels of 64-bit digests allowed
 	maxDigestLevel = 8
@@ -294,6 +304,9 @@ var _ Value = &OrderedMap{}
 
 const mapExtraDataLength = 3
 
+// newMapExtraDataFromData decodes CBOR array to extra data:
+//
+//	[type info, count, seed]
 func newMapExtraDataFromData(
 	data []byte,
 	decMode cbor.DecMode,
@@ -303,28 +316,25 @@ func newMapExtraDataFromData(
 	[]byte,
 	error,
 ) {
-	// Check data length
-	if len(data) < versionAndFlagSize {
-		return nil, data, NewDecodingError(errors.New("data is too short for map extra data"))
+	dec := decMode.NewByteStreamDecoder(data)
+
+	extraData, err := newMapExtraData(dec, decodeTypeInfo)
+	if err != nil {
+		return nil, data, err
 	}
 
-	// Check flag
-	flag := data[1]
-	if !isRoot(flag) {
-		return nil, data, NewDecodingError(fmt.Errorf("data has invalid flag 0x%x, want root flag", flag))
-	}
+	return extraData, data[dec.NumBytesDecoded():], nil
+}
 
-	// Decode extra data
-
-	dec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
+func newMapExtraData(dec *cbor.StreamDecoder, decodeTypeInfo TypeInfoDecoder) (*MapExtraData, error) {
 
 	length, err := dec.DecodeArrayHead()
 	if err != nil {
-		return nil, data, NewDecodingError(err)
+		return nil, NewDecodingError(err)
 	}
 
 	if length != mapExtraDataLength {
-		return nil, data, NewDecodingError(
+		return nil, NewDecodingError(
 			fmt.Errorf(
 				"data has invalid length %d, want %d",
 				length,
@@ -335,59 +345,32 @@ func newMapExtraDataFromData(
 	typeInfo, err := decodeTypeInfo(dec)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by TypeInfoDecoder callback.
-		return nil, data, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode type info")
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode type info")
 	}
 
 	count, err := dec.DecodeUint64()
 	if err != nil {
-		return nil, data, NewDecodingError(err)
+		return nil, NewDecodingError(err)
 	}
 
 	seed, err := dec.DecodeUint64()
 	if err != nil {
-		return nil, data, NewDecodingError(err)
+		return nil, NewDecodingError(err)
 	}
-
-	// Reslice for remaining data
-	n := dec.NumBytesDecoded()
-	data = data[versionAndFlagSize+n:]
 
 	return &MapExtraData{
 		TypeInfo: typeInfo,
 		Count:    count,
 		Seed:     seed,
-	}, data, nil
+	}, nil
 }
 
-// Encode encodes extra data to the given encoder.
+// Encode encodes extra data as CBOR array:
 //
-// Header (2 bytes):
-//
-//	+-----------------------------+--------------------------+
-//	| extra data version (1 byte) | extra data flag (1 byte) |
-//	+-----------------------------+--------------------------+
-//
-// Content (for now):
-//
-//	CBOR encoded array of extra data
-//
-// Extra data flag is the same as the slab flag it prepends.
-func (m *MapExtraData) Encode(enc *Encoder, version byte, flag byte) error {
+//	[type info, count, seed]
+func (m *MapExtraData) Encode(enc *Encoder) error {
 
-	// Encode version
-	enc.Scratch[0] = version
-
-	// Encode flag
-	enc.Scratch[1] = flag
-
-	// Write scratch content to encoder
-	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
-	if err != nil {
-		return NewEncodingError(err)
-	}
-
-	// Encode extra data
-	err = enc.CBOR.EncodeArrayHead(mapExtraDataLength)
+	err := enc.CBOR.EncodeArrayHead(mapExtraDataLength)
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -1179,11 +1162,12 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 
 	// Encode hkeys bytes header manually for fix-sized encoding
 	// TODO: maybe make this header dynamic to reduce size
-	enc.Scratch[2] = 0x5b
-	binary.BigEndian.PutUint64(enc.Scratch[3:], uint64(len(e.hkeys)*8))
+	enc.Scratch[2] = 0x59
+
+	binary.BigEndian.PutUint16(enc.Scratch[3:], uint16(len(e.hkeys)*8))
 
 	// Write scratch content to encoder
-	const totalSize = 11
+	const totalSize = 5
 	err := enc.CBOR.EncodeRawBytes(enc.Scratch[:totalSize])
 	if err != nil {
 		return NewEncodingError(err)
@@ -1202,9 +1186,9 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 
 	// Encode elements array header manually for fix-sized encoding
 	// TODO: maybe make this header dynamic to reduce size
-	enc.Scratch[0] = 0x9b
-	binary.BigEndian.PutUint64(enc.Scratch[1:], uint64(len(e.elems)))
-	err = enc.CBOR.EncodeRawBytes(enc.Scratch[:9])
+	enc.Scratch[0] = 0x99
+	binary.BigEndian.PutUint16(enc.Scratch[1:], uint16(len(e.elems)))
+	err = enc.CBOR.EncodeRawBytes(enc.Scratch[:3])
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -1822,11 +1806,11 @@ func (e *singleElements) Encode(enc *Encoder) error {
 
 	// Encode elements array header manually for fix-sized encoding
 	// TODO: maybe make this header dynamic to reduce size
-	enc.Scratch[3] = 0x9b
-	binary.BigEndian.PutUint64(enc.Scratch[4:], uint64(len(e.elems)))
+	enc.Scratch[3] = 0x99
+	binary.BigEndian.PutUint16(enc.Scratch[4:], uint16(len(e.elems)))
 
 	// Write scratch content to encoder
-	const totalSize = 12
+	const totalSize = 6
 	err := enc.CBOR.EncodeRawBytes(enc.Scratch[:totalSize])
 	if err != nil {
 		return NewEncodingError(err)
@@ -2049,15 +2033,76 @@ func newMapDataSlabFromData(
 		return nil, NewDecodingErrorf("data is too short for map data slab")
 	}
 
-	isRootSlab := isRoot(data[1])
+	version, flag := data[0], data[1]
 
+	mapType := getSlabMapType(flag)
+
+	if mapType != slabMapData && mapType != slabMapCollisionGroup {
+		return nil, NewDecodingErrorf(
+			"data has invalid flag 0x%x, want 0x%x or 0x%x",
+			flag,
+			maskMapData,
+			maskCollisionGroup,
+		)
+	}
+
+	switch version {
+	case 0:
+		return newMapDataSlabFromDataV0(id, data, decMode, decodeStorable, decodeTypeInfo)
+
+	case 1:
+		return newMapDataSlabFromDataV1(id, data, decMode, decodeStorable, decodeTypeInfo)
+
+	default:
+		return nil, NewDecodingErrorf("unexpected version %d for map data slab", version)
+	}
+}
+
+// newMapDataSlabFromDataV0 decodes data in version 0:
+//
+// Root DataSlab Header:
+//
+//	+-------------------------------+------------+-------------------------------+
+//	| slab version + flag (2 bytes) | extra data | slab version + flag (2 bytes) |
+//	+-------------------------------+------------+-------------------------------+
+//
+// Non-root DataSlab Header (18 bytes):
+//
+//	+-------------------------------+-----------------------------+
+//	| slab version + flag (2 bytes) | next sib slab ID (16 bytes) |
+//	+-------------------------------+-----------------------------+
+//
+// Content:
+//
+//	CBOR encoded elements
+//
+// See MapExtraData.Encode() for extra data section format.
+// See hkeyElements.Encode() and singleElements.Encode() for elements section format.
+func newMapDataSlabFromDataV0(
+	id SlabID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) (
+	*MapDataSlab,
+	error,
+) {
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short for map data slab")
+	}
+
+	flag := data[1]
+	mapType := getSlabMapType(flag)
+	isRootSlab := isRoot(flag)
+
+	var err error
 	var extraData *MapExtraData
 
-	// Check flag for extra data
 	if isRootSlab {
 		// Decode extra data
-		var err error
-		extraData, data, err = newMapExtraDataFromData(data, decMode, decodeTypeInfo)
+		extraData, data, err = newMapExtraDataFromData(data[versionAndFlagSize:], decMode, decodeTypeInfo)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by newMapExtraDataFromData().
 			return nil, err
@@ -2072,20 +2117,6 @@ func newMapDataSlabFromData(
 	// Check data length (after decoding extra data if present)
 	if len(data) < minDataLength {
 		return nil, NewDecodingErrorf("data is too short for map data slab")
-	}
-
-	// Check flag
-	flag := data[1]
-
-	mapType := getSlabMapType(flag)
-
-	if mapType != slabMapData && mapType != slabMapCollisionGroup {
-		return nil, NewDecodingErrorf(
-			"data has invalid flag 0x%x, want 0x%x or 0x%x",
-			flag,
-			maskMapData,
-			maskCollisionGroup,
-		)
 	}
 
 	var next SlabID
@@ -2113,13 +2144,117 @@ func newMapDataSlabFromData(
 	cborDec := decMode.NewByteStreamDecoder(data[contentOffset:])
 	elements, err := newElementsFromData(cborDec, decodeStorable)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by newElementsFromData().
+		// Don't need to wrap error as external error because err is already categorized by newElementsFromDataV0().
 		return nil, err
+	}
+
+	// Compute slab size for version 1.
+	slabSize := versionAndFlagSize + elements.Size()
+	if !isRootSlab {
+		slabSize += slabIDSize
 	}
 
 	header := MapSlabHeader{
 		slabID:   id,
-		size:     uint32(len(data)),
+		size:     slabSize,
+		firstKey: elements.firstKey(),
+	}
+
+	return &MapDataSlab{
+		next:           next,
+		header:         header,
+		elements:       elements,
+		extraData:      extraData,
+		anySize:        !hasSizeLimit(flag),
+		collisionGroup: mapType == slabMapCollisionGroup,
+	}, nil
+}
+
+// newMapDataSlabFromDataV1 decodes data in version 1:
+//
+// Root DataSlab Header:
+//
+//	+-------------------------------+------------+
+//	| slab version + flag (2 bytes) | extra data |
+//	+-------------------------------+------------+
+//
+// Non-root DataSlab Header (18 bytes):
+//
+//	+-------------------------------+-----------------------------+
+//	| slab version + flag (2 bytes) | next sib slab ID (16 bytes) |
+//	+-------------------------------+-----------------------------+
+//
+// Content:
+//
+//	CBOR encoded elements
+//
+// See MapExtraData.Encode() for extra data section format.
+// See hkeyElements.Encode() and singleElements.Encode() for elements section format.
+func newMapDataSlabFromDataV1(
+	id SlabID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+) (
+	*MapDataSlab,
+	error,
+) {
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short for map data slab")
+	}
+
+	flag := data[1]
+	mapType := getSlabMapType(flag)
+	isRootSlab := isRoot(flag)
+
+	data = data[versionAndFlagSize:]
+
+	var err error
+	var extraData *MapExtraData
+	var next SlabID
+
+	// Decode header
+	if isRootSlab {
+		// Decode extra data
+		extraData, data, err = newMapExtraDataFromData(data, decMode, decodeTypeInfo)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by newMapExtraDataFromData().
+			return nil, err
+		}
+	} else {
+		if len(data) < slabIDSize {
+			return nil, NewDecodingErrorf("data is too short for map data slab")
+		}
+
+		// Decode next slab ID
+		next, err = NewSlabIDFromRawBytes(data)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by NewSlabIDFromRawBytes().
+			return nil, err
+		}
+
+		data = data[slabIDSize:]
+	}
+
+	// Decode elements
+	cborDec := decMode.NewByteStreamDecoder(data)
+	elements, err := newElementsFromData(cborDec, decodeStorable)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by newElementsFromDataV1().
+		return nil, err
+	}
+
+	// Compute slab size.
+	slabSize := versionAndFlagSize + elements.Size()
+	if !isRootSlab {
+		slabSize += slabIDSize
+	}
+
+	header := MapSlabHeader{
+		slabID:   id,
+		size:     slabSize,
 		firstKey: elements.firstKey(),
 	}
 
@@ -2135,21 +2270,27 @@ func newMapDataSlabFromData(
 
 // Encode encodes this map data slab to the given encoder.
 //
-// Header (18 bytes):
+// Root DataSlab Header:
 //
-//	+-------------------------------+-----------------------------+
-//	| slab version + flag (2 bytes) | next sib slab ID (16 bytes) |
-//	+-------------------------------+-----------------------------+
+//	+-------------------------------+------------+
+//	| slab version + flag (2 bytes) | extra data |
+//	+-------------------------------+------------+
 //
-// Content (for now):
+// Non-root DataSlab Header (18 bytes):
 //
-//	CBOR array of 3 elements (level, hkeys, elements)
+//	+-------------------------------+-------------------------+
+//	| slab version + flag (2 bytes) | next slab ID (16 bytes) |
+//	+-------------------------------+-------------------------+
 //
-// If this is root slab, extra data section is prepended to slab's encoded content.
+// Content:
+//
+//	CBOR encoded elements
+//
 // See MapExtraData.Encode() for extra data section format.
+// See hkeyElements.Encode() and singleElements.Encode() for elements section format.
 func (m *MapDataSlab) Encode(enc *Encoder) error {
 
-	version := byte(0)
+	const version = 1
 
 	flag := maskMapData
 
@@ -2165,15 +2306,8 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 		flag = setNoSizeLimit(flag)
 	}
 
-	// Encode extra data if present
 	if m.extraData != nil {
 		flag = setRoot(flag)
-
-		err := m.extraData.Encode(enc, version, flag)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by MapExtraData.Encode().
-			return err
-		}
 	}
 
 	// Encode version
@@ -2182,29 +2316,32 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	// Encode flag
 	enc.Scratch[1] = flag
 
-	var totalSize int
+	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
+	if err != nil {
+		return NewEncodingError(err)
+	}
 
-	if m.extraData == nil {
-
+	// Encode header
+	if m.extraData != nil {
+		// Encode extra data
+		err = m.extraData.Encode(enc)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by MapExtraData.Encode().
+			return err
+		}
+	} else {
 		// Encode next slab ID to scratch
-		const nextSlabIDOffset = versionAndFlagSize
-		_, err := m.next.ToRawBytes(enc.Scratch[nextSlabIDOffset:])
+		n, err := m.next.ToRawBytes(enc.Scratch[:])
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by SlabID.ToRawBytes().
 			return err
 		}
 
-		totalSize = nextSlabIDOffset + slabIDSize
-
-	} else {
-
-		totalSize = versionAndFlagSize
-	}
-
-	// Write scratch content to encoder
-	_, err := enc.Write(enc.Scratch[:totalSize])
-	if err != nil {
-		return NewEncodingError(err)
+		// Write scratch content to encoder
+		_, err = enc.Write(enc.Scratch[:n])
+		if err != nil {
+			return NewEncodingError(err)
+		}
 	}
 
 	// Encode elements
@@ -2545,7 +2682,67 @@ func newMapMetaDataSlabFromData(
 	data []byte,
 	decMode cbor.DecMode,
 	decodeTypeInfo TypeInfoDecoder,
+) (
+	*MapMetaDataSlab,
+	error,
+) {
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short for map metadata slab")
+	}
+
+	version, flag := data[0], data[1]
+
+	if getSlabMapType(flag) != slabMapMeta {
+		return nil, NewDecodingErrorf(
+			"data has invalid flag 0x%x, want 0x%x",
+			flag,
+			maskMapMeta,
+		)
+	}
+
+	switch version {
+	case 0:
+		return newMapMetaDataSlabFromDataV0(id, data, decMode, decodeTypeInfo)
+
+	case 1:
+		return newMapMetaDataSlabFromDataV1(id, data, decMode, decodeTypeInfo)
+
+	default:
+		return nil, NewDecodingErrorf("unexpected version %d for map metadata slab", version)
+	}
+}
+
+// newMapMetaDataSlabFromDataV0 decodes data in version 0:
+//
+// Root MetaDataSlab Header:
+//
+//	+-------------------------------+------------+-------------------------------+------------------------------+
+//	| slab version + flag (2 bytes) | extra data | slab version + flag (2 bytes) | child header count (2 bytes) |
+//	+-------------------------------+------------+-------------------------------+------------------------------+
+//
+// Non-root MetaDataSlab Header (4 bytes):
+//
+//	+-------------------------------+------------------------------+
+//	| slab version + flag (2 bytes) | child header count (2 bytes) |
+//	+-------------------------------+------------------------------+
+//
+// Content (n * 28 bytes):
+//
+//	[ +[slab ID (16 bytes), first key (8 bytes), size (4 bytes)]]
+//
+// See MapExtraData.Encode() for extra data section format.
+func newMapMetaDataSlabFromDataV0(
+	id SlabID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeTypeInfo TypeInfoDecoder,
 ) (*MapMetaDataSlab, error) {
+	const (
+		mapMetaDataSlabPrefixSizeV0 = versionAndFlagSize + 2
+		mapSlabHeaderSizeV0         = slabIDSize + 4 + digestSize
+	)
+
 	// Check minimum data length
 	if len(data) < versionAndFlagSize {
 		return nil, NewDecodingErrorf("data is too short for map metadata slab")
@@ -2557,7 +2754,7 @@ func newMapMetaDataSlabFromData(
 	if isRoot(data[1]) {
 		// Decode extra data
 		var err error
-		extraData, data, err = newMapExtraDataFromData(data, decMode, decodeTypeInfo)
+		extraData, data, err = newMapExtraDataFromData(data[versionAndFlagSize:], decMode, decodeTypeInfo)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by newMapExtraDataFromData().
 			return nil, err
@@ -2565,25 +2762,15 @@ func newMapMetaDataSlabFromData(
 	}
 
 	// Check data length (after decoding extra data if present)
-	if len(data) < mapMetaDataSlabPrefixSize {
+	if len(data) < mapMetaDataSlabPrefixSizeV0 {
 		return nil, NewDecodingErrorf("data is too short for map metadata slab")
-	}
-
-	// Check flag
-	flag := data[1]
-	if getSlabMapType(flag) != slabMapMeta {
-		return nil, NewDecodingErrorf(
-			"data has invalid flag 0x%x, want 0x%x",
-			flag,
-			maskMapMeta,
-		)
 	}
 
 	// Decode number of child headers
 	const childHeaderCountOffset = versionAndFlagSize
 	childHeaderCount := binary.BigEndian.Uint16(data[childHeaderCountOffset:])
 
-	expectedDataLength := mapMetaDataSlabPrefixSize + mapSlabHeaderSize*int(childHeaderCount)
+	expectedDataLength := mapMetaDataSlabPrefixSizeV0 + mapSlabHeaderSizeV0*int(childHeaderCount)
 	if len(data) != expectedDataLength {
 		return nil, NewDecodingErrorf(
 			"data has unexpected length %d, want %d",
@@ -2615,7 +2802,7 @@ func newMapMetaDataSlabFromData(
 			firstKey: Digest(firstKey),
 		}
 
-		offset += mapSlabHeaderSize
+		offset += mapSlabHeaderSizeV0
 	}
 
 	var firstKey Digest
@@ -2623,9 +2810,12 @@ func newMapMetaDataSlabFromData(
 		firstKey = childrenHeaders[0].firstKey
 	}
 
+	// Compute slab size in version 1.
+	slabSize := mapMetaDataSlabPrefixSize + mapSlabHeaderSize*uint32(childHeaderCount)
+
 	header := MapSlabHeader{
 		slabID:   id,
-		size:     uint32(len(data)),
+		size:     slabSize,
 		firstKey: firstKey,
 	}
 
@@ -2636,35 +2826,150 @@ func newMapMetaDataSlabFromData(
 	}, nil
 }
 
-// Encode encodes this array meta-data slab to the given encoder.
+// newMapMetaDataSlabFromDataV1 decodes data in version 1:
 //
-// Header (4 bytes):
+// Root MetaDataSlab Header:
 //
-//	+-----------------------+--------------------+------------------------------+
-//	| slab version (1 byte) | slab flag (1 byte) | child header count (2 bytes) |
-//	+-----------------------+--------------------+------------------------------+
+//	+------------------------------+------------+--------------------------------+------------------------------+
+//	| slab version + flag (2 byte) | extra data | child shared address (8 bytes) | child header count (2 bytes) |
+//	+------------------------------+------------+--------------------------------+------------------------------+
 //
-// Content (n * 28 bytes):
+// Non-root MetaDataSlab Header (4 bytes):
 //
-//	[[slab ID, first key, size], ...]
+//	+------------------------------+--------------------------------+------------------------------+
+//	| slab version + flag (2 byte) | child shared address (8 bytes) | child header count (2 bytes) |
+//	+------------------------------+--------------------------------+------------------------------+
 //
-// If this is root slab, extra data section is prepended to slab's encoded content.
+// Content (n * 18 bytes):
+//
+//	[ +[slab index (8 bytes), first key (8 bytes), size (2 bytes)]]
+//
+// See MapExtraData.Encode() for extra data section format.
+func newMapMetaDataSlabFromDataV1(
+	id SlabID,
+	data []byte,
+	decMode cbor.DecMode,
+	decodeTypeInfo TypeInfoDecoder,
+) (*MapMetaDataSlab, error) {
+	// Check minimum data length
+	if len(data) < versionAndFlagSize {
+		return nil, NewDecodingErrorf("data is too short for map metadata slab")
+	}
+
+	isRoot := isRoot(data[1])
+
+	data = data[versionAndFlagSize:]
+
+	var err error
+	var extraData *MapExtraData
+
+	if isRoot {
+		// Decode extra data
+		extraData, data, err = newMapExtraDataFromData(data, decMode, decodeTypeInfo)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by newMapExtraDataFromData().
+			return nil, err
+		}
+	}
+
+	// Check minimum data length after version, flag, and extra data are processed
+	minLength := mapMetaDataSlabPrefixSize - versionAndFlagSize
+	if len(data) < minLength {
+		return nil, NewDecodingErrorf("data is too short for map metadata slab")
+	}
+
+	offset := 0
+
+	// Decode shared address of headers
+	var address Address
+	copy(address[:], data[offset:])
+	offset += slabAddressSize
+
+	// Decode number of child headers
+	const arrayHeaderSize = 2
+	childHeaderCount := binary.BigEndian.Uint16(data[offset:])
+	offset += arrayHeaderSize
+
+	expectedDataLength := mapSlabHeaderSize * int(childHeaderCount)
+	if len(data[offset:]) != expectedDataLength {
+		return nil, NewDecodingErrorf(
+			"data has unexpected length %d, want %d",
+			len(data),
+			expectedDataLength,
+		)
+	}
+
+	// Decode child headers
+	childrenHeaders := make([]MapSlabHeader, childHeaderCount)
+
+	for i := 0; i < int(childHeaderCount); i++ {
+		// Decode slab index
+		var index SlabIndex
+		copy(index[:], data[offset:])
+		offset += slabIndexSize
+
+		// Decode first key
+		firstKey := binary.BigEndian.Uint64(data[offset:])
+		offset += digestSize
+
+		// Decode size
+		size := binary.BigEndian.Uint16(data[offset:])
+		offset += 2
+
+		childrenHeaders[i] = MapSlabHeader{
+			slabID:   SlabID{address, index},
+			size:     uint32(size),
+			firstKey: Digest(firstKey),
+		}
+	}
+
+	var firstKey Digest
+	if len(childrenHeaders) > 0 {
+		firstKey = childrenHeaders[0].firstKey
+	}
+
+	slabSize := mapMetaDataSlabPrefixSize + mapSlabHeaderSize*uint32(childHeaderCount)
+
+	header := MapSlabHeader{
+		slabID:   id,
+		size:     slabSize,
+		firstKey: firstKey,
+	}
+
+	return &MapMetaDataSlab{
+		header:          header,
+		childrenHeaders: childrenHeaders,
+		extraData:       extraData,
+	}, nil
+}
+
+// Encode encodes map meta-data slab to the given encoder.
+//
+// Root MetaDataSlab Header:
+//
+//	+------------------------------+------------+--------------------------------+------------------------------+
+//	| slab version + flag (2 byte) | extra data | child shared address (8 bytes) | child header count (2 bytes) |
+//	+------------------------------+------------+--------------------------------+------------------------------+
+//
+// Non-root MetaDataSlab Header (12 bytes):
+//
+//	+------------------------------+--------------------------------+------------------------------+
+//	| slab version + flag (2 byte) | child shared address (8 bytes) | child header count (2 bytes) |
+//	+------------------------------+--------------------------------+------------------------------+
+//
+// Content (n * 18 bytes):
+//
+//	[ +[slab index (8 bytes), first key (8 bytes), size (2 bytes)]]
+//
 // See MapExtraData.Encode() for extra data section format.
 func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 
-	version := byte(0)
+	const version = 1
 
 	flag := maskMapMeta
 
-	// Encode extra data if present
 	if m.extraData != nil {
 		flag = setRoot(flag)
-
-		err := m.extraData.Encode(enc, version, flag)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by MapExtraData.Encode().
-			return err
-		}
 	}
 
 	// Encode version
@@ -2673,8 +2978,26 @@ func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 	// Encode flag
 	enc.Scratch[1] = flag
 
+	// Write version and flag
+	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// Encode extra data if present
+	if m.extraData != nil {
+		err = m.extraData.Encode(enc)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by MapExtraData.Encode().
+			return err
+		}
+	}
+
+	// Encode shared address to scratch
+	copy(enc.Scratch[:], m.header.slabID.address[:])
+
 	// Encode child header count to scratch
-	const childHeaderCountOffset = versionAndFlagSize
+	const childHeaderCountOffset = slabAddressSize
 	binary.BigEndian.PutUint16(
 		enc.Scratch[childHeaderCountOffset:],
 		uint16(len(m.childrenHeaders)),
@@ -2682,26 +3005,23 @@ func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 
 	// Write scratch content to encoder
 	const totalSize = childHeaderCountOffset + 2
-	_, err := enc.Write(enc.Scratch[:totalSize])
+	_, err = enc.Write(enc.Scratch[:totalSize])
 	if err != nil {
 		return NewEncodingError(err)
 	}
 
 	// Encode children headers
 	for _, h := range m.childrenHeaders {
-		_, err := h.slabID.ToRawBytes(enc.Scratch[:])
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by SlabID.ToRawBytes().
-			return err
-		}
+		// Encode slab index to scratch
+		copy(enc.Scratch[:], h.slabID.index[:])
 
-		const firstKeyOffset = slabIDSize
+		const firstKeyOffset = slabIndexSize
 		binary.BigEndian.PutUint64(enc.Scratch[firstKeyOffset:], uint64(h.firstKey))
 
 		const sizeOffset = firstKeyOffset + digestSize
-		binary.BigEndian.PutUint32(enc.Scratch[sizeOffset:], h.size)
+		binary.BigEndian.PutUint16(enc.Scratch[sizeOffset:], uint16(h.size))
 
-		const totalSize = sizeOffset + 4
+		const totalSize = sizeOffset + 2
 		_, err = enc.Write(enc.Scratch[:totalSize])
 		if err != nil {
 			return NewEncodingError(err)

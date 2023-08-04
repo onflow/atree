@@ -9,9 +9,11 @@
   <a href=https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml><img src=https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml/badge.svg></a>
 </p>
 
-# Atree 
+# Atree
 
-__Atree__ provides scalable arrays and scalable ordered maps.  It is used by [Cadence](https://github.com/onflow/cadence) in the [Flow](https://github.com/onflow/flow-go) blockchain.
+__Atree__ provides scalable arrays and scalable ordered maps. It segments, encodes, and stores data into relatively small payloads.
+
+Atree is used by [Cadence](https://github.com/onflow/cadence) in the [Flow](https://github.com/onflow/flow-go) blockchain.
 
 Inspired by patterns used in modern variants of B+ Trees, Atree provides two types of data structures: Scalable Array Type (SAT) and Ordered Map Type (OMT).
 
@@ -23,7 +25,7 @@ Inspired by patterns used in modern variants of B+ Trees, Atree provides two typ
 
 Atree uses new types of high-fanout B+ tree and some heuristics to balance the trade-off between latency of operations and the number of reads and writes.
 
-Each data structure holds the data as several relatively fixed-size segments of bytes (also known as slabs) forming a tree and as the size of data structures grows or shrinks, it adjusts the number of segments used. After each operation, Atree tries to keep segment size within an acceptable size range by merging segments when needed (lower than min threshold) and splitting large-size slabs (above max threshold) or moving some values to neighbouring segments (rebalancing). For ordered maps and arrays with small number of elements, Atree is designed to have a very minimal overhead in compare to less scalable standard array and ordermaps (using a single data segment at start). 
+Each data structure holds the data as several relatively fixed-size segments of bytes (aka payloads, registers, or slabs) forming a tree and as the size of data structures grows or shrinks, it adjusts the number of segments used. After each operation, Atree tries to keep segment size within an acceptable size range by merging segments when needed (lower than min threshold) and splitting large-size slabs (above max threshold) or moving some values to neighbouring segments (rebalancing). For ordered maps and arrays with small number of elements, Atree is designed to have a very minimal overhead in compare to less scalable standard array and ordermaps (using a single data segment at start). 
 
 In order to minimize the number of bytes touched after each operation, Atree uses a deterministic greedy approach ("Optimistic Encasing Algorithm") to postpone merge, split and rebalancing the tree as much as possible. In other words, it tolerates the tree to get unbalanced with the cost of keeping some space for future insertions or growing a segment a bit larger than what it should be which would minimize the number of segments (and bytes) that are touched at each operation.
 

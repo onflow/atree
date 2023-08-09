@@ -1752,11 +1752,12 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedData := []byte{
-			// extra data
 			// version
 			0x01,
 			// flag
 			0x80,
+
+			// extra data
 			// array of extra data
 			0x81,
 			// type info
@@ -1795,11 +1796,12 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedData := []byte{
-			// extra data
 			// version
 			0x01,
 			// flag
 			0x80,
+
+			// extra data
 			// array of extra data
 			0x81,
 			// type info
@@ -1869,11 +1871,12 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:270 count:11} ]
 			id1: {
-				// extra data
 				// version
 				0x01,
 				// flag
 				0x81,
+
+				// extra data
 				// array of extra data
 				0x81,
 				// type info
@@ -1941,11 +1944,12 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 			// (data slab) next: 0, data: [0]
 			id4: {
-				// extra data
 				// version
 				0x01,
 				// extra data flag
 				0x80,
+
+				// extra data
 				// array of extra data
 				0x81,
 				// type info

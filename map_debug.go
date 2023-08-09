@@ -1366,7 +1366,7 @@ func getEncodedMapExtraDataSize(extraData *MapExtraData, cborEncMode cbor.EncMod
 	var buf bytes.Buffer
 	enc := NewEncoder(&buf, cborEncMode)
 
-	err := extraData.Encode(enc, byte(0), byte(0))
+	err := extraData.Encode(enc)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapExtraData.Encode().
 		return 0, err

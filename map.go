@@ -1153,7 +1153,8 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 	}
 
 	// Encode CBOR array head of 3 elements (level, hkeys, elements)
-	enc.Scratch[0] = 0x83
+	const cborArrayHeadOfThreeElements = 0x83
+	enc.Scratch[0] = cborArrayHeadOfThreeElements
 
 	// Encode hash level
 	enc.Scratch[1] = byte(e.level)
@@ -1162,7 +1163,9 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 
 	// Encode hkeys bytes header manually for fix-sized encoding
 	// TODO: maybe make this header dynamic to reduce size
-	enc.Scratch[2] = 0x59
+	// CBOR byte string head 0x59 indicates that the number of bytes in byte string are encoded in the next 2 bytes.
+	const cborByteStringHead = 0x59
+	enc.Scratch[2] = cborByteStringHead
 
 	binary.BigEndian.PutUint16(enc.Scratch[3:], uint16(len(e.hkeys)*8))
 
@@ -1186,7 +1189,9 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 
 	// Encode elements array header manually for fix-sized encoding
 	// TODO: maybe make this header dynamic to reduce size
-	enc.Scratch[0] = 0x99
+	// CBOR array head 0x99 indicating that the number of array elements are encoded in the next 2 bytes.
+	const cborArrayHead = 0x99
+	enc.Scratch[0] = cborArrayHead
 	binary.BigEndian.PutUint16(enc.Scratch[1:], uint16(len(e.elems)))
 	err = enc.CBOR.EncodeRawBytes(enc.Scratch[:3])
 	if err != nil {

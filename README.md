@@ -11,7 +11,7 @@
 
 # Atree
 
-__Atree__ provides scalable arrays and scalable ordered maps. It segments, encodes, and stores data into relatively small payloads.
+__Atree__ provides scalable arrays and scalable ordered maps. It segments, encodes, and stores data into relatively small, relatively fixed-size segments of bytes (aka payloads, registers, or slabs).  This enables blockchains to only hash and transmit modified segments instead of the entire array, map, or large element.
 
 Atree is used by [Cadence](https://github.com/onflow/cadence) in the [Flow](https://github.com/onflow/flow-go) blockchain.
 

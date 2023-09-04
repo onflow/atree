@@ -3666,3 +3666,52 @@ func TestArrayID(t *testing.T) {
 	require.Equal(t, sid.address[:], id[:8])
 	require.Equal(t, sid.index[:], id[8:])
 }
+
+func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
+	const (
+		arraySize           = 3
+		initialStorableSize = 1
+		mutatedStorableSize = 5
+	)
+
+	typeInfo := testTypeInfo{42}
+	storage := newTestPersistentStorage(t)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	array, err := NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	values := make([]*mutableValue, arraySize)
+	for i := uint64(0); i < arraySize; i++ {
+		v := newMutableValue(initialStorableSize)
+		values[i] = v
+
+		err := array.Append(v)
+		require.NoError(t, err)
+	}
+
+	require.True(t, array.root.IsData())
+
+	expectedArrayRootDataSlabSize := arrayRootDataSlabPrefixSize + initialStorableSize*arraySize
+	require.Equal(t, uint32(expectedArrayRootDataSlabSize), array.root.ByteSize())
+
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+	require.NoError(t, err)
+
+	for i := uint64(0); i < arraySize; i++ {
+		mv := values[i]
+		mv.updateStorableSize(mutatedStorableSize)
+
+		existingStorable, err := array.Set(i, mv)
+		require.NoError(t, err)
+		require.NotNil(t, existingStorable)
+	}
+
+	require.True(t, array.root.IsData())
+
+	expectedArrayRootDataSlabSize = arrayRootDataSlabPrefixSize + mutatedStorableSize*arraySize
+	require.Equal(t, uint32(expectedArrayRootDataSlabSize), array.root.ByteSize())
+
+	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+	require.NoError(t, err)
+}

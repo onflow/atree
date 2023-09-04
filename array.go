@@ -609,6 +609,13 @@ func (a *ArrayDataSlab) ChildStorables() []Storable {
 	return s
 }
 
+func (a *ArrayDataSlab) getPrefixSize() uint32 {
+	if a.extraData != nil {
+		return arrayRootDataSlabPrefixSize
+	}
+	return arrayDataSlabPrefixSize
+}
+
 func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {
 	if index >= uint64(len(a.elements)) {
 		return nil, NewIndexOutOfBoundsError(index, 0, uint64(len(a.elements)))
@@ -622,7 +629,6 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, address Address, index uint64, 
 	}
 
 	oldElem := a.elements[index]
-	oldSize := oldElem.ByteSize()
 
 	storable, err := value.Storable(storage, address, maxInlineArrayElementSize)
 	if err != nil {
@@ -631,7 +637,16 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, address Address, index uint64, 
 	}
 
 	a.elements[index] = storable
-	a.header.size = a.header.size - oldSize + storable.ByteSize()
+
+	// Recompute slab size by adding all element sizes instead of using the size diff of old and new element because
+	// oldElem can be the same storable when the same value is reset and oldElem.ByteSize() can equal storable.ByteSize().
+	// Given this, size diff of the old and new element can be 0 even when its actual size changed.
+	size := a.getPrefixSize()
+	for _, e := range a.elements {
+		size += e.ByteSize()
+	}
+
+	a.header.size = size
 
 	err = storage.Store(a.header.slabID, a)
 	if err != nil {
@@ -973,7 +988,7 @@ func (a *ArrayDataSlab) PopIterate(_ SlabStorage, fn ArrayPopIterationFunc) erro
 	// Reset data slab
 	a.elements = nil
 	a.header.count = 0
-	a.header.size = arrayDataSlabPrefixSize
+	a.header.size = a.getPrefixSize()
 
 	return nil
 }

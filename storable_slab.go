@@ -68,20 +68,21 @@ func (s *StorableSlab) ChildStorables() []Storable {
 }
 
 func (s *StorableSlab) Encode(enc *Encoder) error {
-	// Encode version
-	enc.Scratch[0] = 0
 
-	// Encode flag
-	flag := maskStorable
-	flag = setNoSizeLimit(flag)
+	const version = 1
 
-	if _, ok := s.storable.(SlabIDStorable); ok {
-		flag = setHasPointers(flag)
+	h, err := newStorableSlabHead(version)
+	if err != nil {
+		return NewEncodingError(err)
 	}
 
-	enc.Scratch[1] = flag
+	h.setNoSizeLimit()
 
-	_, err := enc.Write(enc.Scratch[:versionAndFlagSize])
+	if hasPointer(s.storable) {
+		h.setHasPointers()
+	}
+
+	_, err = enc.Write(h[:])
 	if err != nil {
 		return NewEncodingError(err)
 	}

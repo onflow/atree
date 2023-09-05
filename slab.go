@@ -38,9 +38,12 @@ func IsRootOfAnObject(slabData []byte) (bool, error) {
 		return false, NewDecodingErrorf("data is too short")
 	}
 
-	flag := slabData[1]
+	h, err := newHeadFromData(slabData[:versionAndFlagSize])
+	if err != nil {
+		return false, NewDecodingError(err)
+	}
 
-	return isRoot(flag), nil
+	return h.isRoot(), nil
 }
 
 func HasPointers(slabData []byte) (bool, error) {
@@ -48,9 +51,12 @@ func HasPointers(slabData []byte) (bool, error) {
 		return false, NewDecodingErrorf("data is too short")
 	}
 
-	flag := slabData[1]
+	h, err := newHeadFromData(slabData[:versionAndFlagSize])
+	if err != nil {
+		return false, NewDecodingError(err)
+	}
 
-	return hasPointers(flag), nil
+	return h.hasPointers(), nil
 }
 
 func HasSizeLimit(slabData []byte) (bool, error) {
@@ -58,7 +64,10 @@ func HasSizeLimit(slabData []byte) (bool, error) {
 		return false, NewDecodingErrorf("data is too short")
 	}
 
-	flag := slabData[1]
+	h, err := newHeadFromData(slabData[:versionAndFlagSize])
+	if err != nil {
+		return false, NewDecodingError(err)
+	}
 
-	return hasSizeLimit(flag), nil
+	return h.hasSizeLimit(), nil
 }

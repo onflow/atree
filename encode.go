@@ -62,14 +62,18 @@ func DecodeSlab(
 		return nil, NewDecodingErrorf("data is too short")
 	}
 
-	flag := data[1]
+	h, err := newHeadFromData(data[:versionAndFlagSize])
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
 
-	dataType := getSlabType(flag)
-	switch dataType {
+	switch h.getSlabType() {
 
 	case slabArray:
 
-		switch arrayDataType := getSlabArrayType(flag); arrayDataType {
+		arrayDataType := h.getSlabArrayType()
+
+		switch arrayDataType {
 		case slabArrayData:
 			return newArrayDataSlabFromData(id, data, decMode, decodeStorable, decodeTypeInfo)
 		case slabArrayMeta:
@@ -77,12 +81,14 @@ func DecodeSlab(
 		case slabBasicArray:
 			return newBasicArrayDataSlabFromData(id, data, decMode, decodeStorable)
 		default:
-			return nil, NewDecodingErrorf("data has invalid flag 0x%x", flag)
+			return nil, NewDecodingErrorf("data has invalid head 0x%x", h[:])
 		}
 
 	case slabMap:
 
-		switch mapDataType := getSlabMapType(flag); mapDataType {
+		mapDataType := h.getSlabMapType()
+
+		switch mapDataType {
 		case slabMapData:
 			return newMapDataSlabFromData(id, data, decMode, decodeStorable, decodeTypeInfo)
 		case slabMapMeta:
@@ -90,7 +96,7 @@ func DecodeSlab(
 		case slabMapCollisionGroup:
 			return newMapDataSlabFromData(id, data, decMode, decodeStorable, decodeTypeInfo)
 		default:
-			return nil, NewDecodingErrorf("data has invalid flag 0x%x", flag)
+			return nil, NewDecodingErrorf("data has invalid head 0x%x", h[:])
 		}
 
 	case slabStorable:
@@ -106,7 +112,7 @@ func DecodeSlab(
 		}, nil
 
 	default:
-		return nil, NewDecodingErrorf("data has invalid flag 0x%x", flag)
+		return nil, NewDecodingErrorf("data has invalid head 0x%x", h[:])
 	}
 }
 

@@ -1753,7 +1753,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 		expectedData := []byte{
 			// version
-			0x01,
+			0x10,
 			// flag
 			0x80,
 
@@ -1797,7 +1797,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 		expectedData := []byte{
 			// version
-			0x01,
+			0x10,
 			// flag
 			0x80,
 
@@ -1872,7 +1872,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:270 count:11} ]
 			id1: {
 				// version
-				0x01,
+				0x10,
 				// flag
 				0x81,
 
@@ -1899,7 +1899,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			// (data slab) next: 3, data: [aaaaaaaaaaaaaaaaaaaaaa ... aaaaaaaaaaaaaaaaaaaaaa]
 			id2: {
 				// version
-				0x01,
+				0x10,
 				// array data slab flag
 				0x00,
 				// next slab id
@@ -1921,7 +1921,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
 			id3: {
 				// version
-				0x01,
+				0x10,
 				// array data slab flag
 				0x40,
 				// next slab id
@@ -1945,7 +1945,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			// (data slab) next: 0, data: [0]
 			id4: {
 				// version
-				0x01,
+				0x10,
 				// extra data flag
 				0x80,
 

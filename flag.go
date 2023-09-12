@@ -18,6 +18,10 @@
 
 package atree
 
+import (
+	"fmt"
+)
+
 type slabType int
 
 const (
@@ -47,6 +51,16 @@ const (
 	slabMapCollisionGroup
 )
 
+// Version and flag masks for the 1st byte of encoded slab.
+// Flags in this group are only for v1 and above.
+const (
+	maskVersion         byte = 0b1111_0000
+	maskHasNextSlabID   byte = 0b0000_0010 // This flag is only relevant for data slab.
+	maskHasInlinedSlabs byte = 0b0000_0001
+)
+
+// Flag masks for the 2nd byte of encoded slab.
+// Flags in this group are available for all versions.
 const (
 	// Slab flags: 3 high bits
 	maskSlabRoot        byte = 0b100_00000
@@ -69,31 +83,136 @@ const (
 	maskStorable byte = 0b000_11111
 )
 
-func setRoot(f byte) byte {
-	return f | maskSlabRoot
+const (
+	maxVersion = 0b0000_1111
+)
+
+type head [2]byte
+
+// newArraySlabHead returns an array slab head of given version and slab type.
+func newArraySlabHead(version byte, t slabArrayType) (*head, error) {
+	if version > maxVersion {
+		return nil, fmt.Errorf("encoding version must be less than %d, got %d", maxVersion+1, version)
+	}
+
+	var h head
+
+	h[0] = version << 4
+
+	switch t {
+	case slabArrayData:
+		h[1] = maskArrayData
+
+	case slabArrayMeta:
+		h[1] = maskArrayMeta
+
+	case slabBasicArray:
+		h[1] = maskBasicArray
+
+	default:
+		return nil, fmt.Errorf("unsupported array slab type %d", t)
+	}
+
+	return &h, nil
 }
 
-func setHasPointers(f byte) byte {
-	return f | maskSlabHasPointers
+// newMapSlabHead returns a map slab head of given version and slab type.
+func newMapSlabHead(version byte, t slabMapType) (*head, error) {
+	if version > maxVersion {
+		return nil, fmt.Errorf("encoding version must be less than %d, got %d", maxVersion+1, version)
+	}
+
+	var h head
+
+	h[0] = version << 4
+
+	switch t {
+	case slabMapData:
+		h[1] = maskMapData
+
+	case slabMapMeta:
+		h[1] = maskMapMeta
+
+	case slabMapCollisionGroup:
+		h[1] = maskCollisionGroup
+
+	default:
+		return nil, fmt.Errorf("unsupported map slab type %d", t)
+	}
+
+	return &h, nil
 }
 
-func setNoSizeLimit(f byte) byte {
-	return f | maskSlabAnySize
+// newStorableSlabHead returns a storable slab head of given version.
+func newStorableSlabHead(version byte) (*head, error) {
+	if version > maxVersion {
+		return nil, fmt.Errorf("encoding version must be less than %d, got %d", maxVersion+1, version)
+	}
+
+	var h head
+	h[0] = version << 4
+	h[1] = maskStorable
+	return &h, nil
 }
 
-func isRoot(f byte) bool {
-	return f&maskSlabRoot > 0
+// newHeadFromData returns a head with given data.
+func newHeadFromData(data []byte) (head, error) {
+	if len(data) != 2 {
+		return head{}, fmt.Errorf("head must be 2 bytes, got %d bytes", len(data))
+	}
+
+	return head{data[0], data[1]}, nil
 }
 
-func hasPointers(f byte) bool {
-	return f&maskSlabHasPointers > 0
+func (h *head) version() byte {
+	return (h[0] & maskVersion) >> 4
 }
 
-func hasSizeLimit(f byte) bool {
-	return f&maskSlabAnySize == 0
+func (h *head) isRoot() bool {
+	return h[1]&maskSlabRoot > 0
 }
 
-func getSlabType(f byte) slabType {
+func (h *head) setRoot() {
+	h[1] |= maskSlabRoot
+}
+
+func (h *head) hasPointers() bool {
+	return h[1]&maskSlabHasPointers > 0
+}
+
+func (h *head) setHasPointers() {
+	h[1] |= maskSlabHasPointers
+}
+
+func (h *head) hasSizeLimit() bool {
+	return h[1]&maskSlabAnySize == 0
+}
+
+func (h *head) setNoSizeLimit() {
+	h[1] |= maskSlabAnySize
+}
+
+func (h *head) hasInlinedSlabs() bool {
+	return h[0]&maskHasInlinedSlabs > 0
+}
+
+func (h *head) setHasInlinedSlabs() {
+	h[0] |= maskHasInlinedSlabs
+}
+
+func (h *head) hasNextSlabID() bool {
+	if h.version() == 0 {
+		return !h.isRoot()
+	}
+	return h[0]&maskHasNextSlabID > 0
+}
+
+func (h *head) setHasNextSlabID() {
+	h[0] |= maskHasNextSlabID
+}
+
+func (h head) getSlabType() slabType {
+	f := h[1]
 	// Extract 4th and 5th bits for slab type.
 	dataType := (f & byte(0b000_11000)) >> 3
 	switch dataType {
@@ -111,10 +230,12 @@ func getSlabType(f byte) slabType {
 	}
 }
 
-func getSlabArrayType(f byte) slabArrayType {
-	if getSlabType(f) != slabArray {
+func (h head) getSlabArrayType() slabArrayType {
+	if h.getSlabType() != slabArray {
 		return slabArrayUndefined
 	}
+
+	f := h[1]
 
 	// Extract 3 low bits for slab array type.
 	dataType := (f & byte(0b000_00111))
@@ -132,10 +253,12 @@ func getSlabArrayType(f byte) slabArrayType {
 	}
 }
 
-func getSlabMapType(f byte) slabMapType {
-	if getSlabType(f) != slabMap {
+func (h head) getSlabMapType() slabMapType {
+	if h.getSlabType() != slabMap {
 		return slabMapUndefined
 	}
+
+	f := h[1]
 
 	// Extract 3 low bits for slab map type.
 	dataType := (f & byte(0b000_00111))

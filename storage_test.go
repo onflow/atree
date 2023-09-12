@@ -902,7 +902,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 			id1: {
 				// extra data
 				// version
-				0x01,
+				0x10,
 				// extra data flag
 				0x81,
 				// array of extra data
@@ -927,7 +927,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 			// (data slab) next: 3, data: [aaaaaaaaaaaaaaaaaaaaaa ... aaaaaaaaaaaaaaaaaaaaaa]
 			id2: {
 				// version
-				0x01,
+				0x12,
 				// array data slab flag
 				0x00,
 				// next slab id
@@ -949,11 +949,9 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
 			id3: {
 				// version
-				0x01,
+				0x10,
 				// array data slab flag
 				0x40,
-				// next slab id
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x0b,
 				// CBOR encoded array elements
@@ -974,7 +972,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 			id4: {
 				// extra data
 				// version
-				0x01,
+				0x10,
 				// extra data flag
 				0x80,
 				// array of extra data

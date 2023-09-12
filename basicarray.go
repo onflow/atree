@@ -62,11 +62,16 @@ func newBasicArrayDataSlabFromData(
 		return nil, NewDecodingErrorf("data is too short for basic array slab")
 	}
 
+	h, err := newHeadFromData(data[:versionAndFlagSize])
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
 	// Check flag
-	if getSlabArrayType(data[1]) != slabBasicArray {
+	if h.getSlabArrayType() != slabBasicArray {
 		return nil, NewDecodingErrorf(
-			"data has invalid flag 0x%x, want 0x%x",
-			data[0],
+			"data has invalid head 0x%x, want 0x%x",
+			h[:],
 			maskBasicArray,
 		)
 	}

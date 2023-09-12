@@ -1836,9 +1836,8 @@ func TestMapDecodeV0(t *testing.T) {
 
 			// array data slab
 			nestedSlabID: {
-				// extra data
 				// version
-				0x01,
+				0x00,
 				// flag: root + array data
 				0x80,
 				// extra data (CBOR encoded array of 1 elements)
@@ -1846,6 +1845,10 @@ func TestMapDecodeV0(t *testing.T) {
 				// type info
 				0x18, 0x2b,
 
+				// version
+				0x00,
+				// flag: root + array data
+				0x80,
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x01,
 				// CBOR encoded array elements
@@ -2500,7 +2503,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		expected := map[SlabID][]byte{
 			id1: {
 				// version
-				0x01,
+				0x10,
 				// flag: root + map data
 				0x88,
 
@@ -2584,7 +2587,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 			id1: {
 				// version
-				0x01,
+				0x10,
 				// flag: root + map data
 				0x88,
 
@@ -2702,7 +2705,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			// metadata slab
 			id1: {
 				// version
-				0x01,
+				0x10,
 				// flag: root + map meta
 				0x89,
 
@@ -2734,7 +2737,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			// data slab
 			id2: {
 				// version
-				0x01,
+				0x12,
 				// flag: map data
 				0x08,
 				// next slab id
@@ -2783,11 +2786,9 @@ func TestMapEncodeDecode(t *testing.T) {
 			// data slab
 			id3: {
 				// version
-				0x01,
+				0x10,
 				// flag: has pointer + map data
 				0x48,
-				// next slab id
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
 				// the following encoded data is valid CBOR
 
@@ -2831,7 +2832,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			// array data slab
 			id4: {
 				// version
-				0x01,
+				0x10,
 				// flag: root + array data
 				0x80,
 				// extra data (CBOR encoded array of 1 elements)
@@ -2861,7 +2862,8 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, 2, len(meta.childrenHeaders))
 		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
-		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
+		// Need to add slabIDSize to encoded data slab here because empty slab ID is omitted during encoding.
+		require.Equal(t, uint32(len(stored[id3])+slabIDSize), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, stored)
@@ -2913,7 +2915,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			// map metadata slab
 			id1: {
 				// version
-				0x01,
+				0x10,
 				// flag: root + map data
 				0x88,
 				// extra data (CBOR encoded array of 3 elements)
@@ -3100,7 +3102,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			// map data slab
 			id1: {
 				// version
-				0x01,
+				0x10,
 				// flag: root + map data
 				0x88,
 				// extra data (CBOR encoded array of 3 elements)
@@ -3339,7 +3341,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			// map data slab
 			id1: {
 				// version
-				0x01,
+				0x10,
 				// flag: root + has pointer + map data
 				0xc8,
 				// extra data (CBOR encoded array of 3 elements)
@@ -3386,11 +3388,9 @@ func TestMapEncodeDecode(t *testing.T) {
 			// external collision group
 			id2: {
 				// version
-				0x01,
+				0x10,
 				// flag: any size + collision group
 				0x2b,
-				// next slab id
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
 				// the following encoded data is valid CBOR
 
@@ -3451,11 +3451,9 @@ func TestMapEncodeDecode(t *testing.T) {
 			// external collision group
 			id3: {
 				// version
-				0x01,
+				0x10,
 				// flag: any size + collision group
 				0x2b,
-				// next slab id
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
 				// the following encoded data is valid CBOR
 
@@ -3558,7 +3556,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		expectedNoPointer := []byte{
 
 			// version
-			0x01,
+			0x10,
 			// flag: root + map data
 			0x88,
 			// extra data (CBOR encoded array of 3 elements)
@@ -3608,7 +3606,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		expectedHasPointer := []byte{
 
 			// version
-			0x01,
+			0x10,
 			// flag: root + pointer + map data
 			0xc8,
 			// extra data (CBOR encoded array of 3 elements)

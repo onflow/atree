@@ -2200,20 +2200,21 @@ func newMapDataSlabFromDataV1(
 	var extraData *MapExtraData
 	var next SlabID
 
-	// Decode header
+	// Decode extra data
 	if h.isRoot() {
-		// Decode extra data
 		extraData, data, err = newMapExtraDataFromData(data, decMode, decodeTypeInfo)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by newMapExtraDataFromData().
 			return nil, err
 		}
-	} else {
+	}
+
+	// Decode next slab ID
+	if h.hasNextSlabID() {
 		if len(data) < slabIDSize {
 			return nil, NewDecodingErrorf("data is too short for map data slab")
 		}
 
-		// Decode next slab ID
 		next, err = NewSlabIDFromRawBytes(data)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by NewSlabIDFromRawBytes().
@@ -2291,6 +2292,10 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 		h.setHasPointers()
 	}
 
+	if m.next != SlabIDUndefined {
+		h.setHasNextSlabID()
+	}
+
 	if m.anySize {
 		h.setNoSizeLimit()
 	}
@@ -2305,16 +2310,17 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 		return NewEncodingError(err)
 	}
 
-	// Encode header
+	// Encode extra data
 	if m.extraData != nil {
-		// Encode extra data
 		err = m.extraData.Encode(enc)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by MapExtraData.Encode().
 			return err
 		}
-	} else {
-		// Encode next slab ID to scratch
+	}
+
+	// Encode next slab ID
+	if m.next != SlabIDUndefined {
 		n, err := m.next.ToRawBytes(enc.Scratch[:])
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by SlabID.ToRawBytes().

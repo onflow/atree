@@ -417,16 +417,17 @@ func newArrayDataSlabFromDataV1(
 	var extraData *ArrayExtraData
 	var next SlabID
 
-	// Decode header
+	// Decode extra data
 	if h.isRoot() {
-		// Decode extra data
 		extraData, data, err = newArrayExtraDataFromData(data, decMode, decodeTypeInfo)
 		if err != nil {
 			// err is categorized already by newArrayExtraDataFromData.
 			return nil, err
 		}
-	} else {
-		// Decode next slab ID
+	}
+
+	// Decode next slab ID
+	if h.hasNextSlabID() {
 		next, err = NewSlabIDFromRawBytes(data)
 		if err != nil {
 			// error returned from NewSlabIDFromRawBytes is categorized already.
@@ -516,6 +517,10 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 		h.setHasPointers()
 	}
 
+	if a.next != SlabIDUndefined {
+		h.setHasNextSlabID()
+	}
+
 	if a.extraData != nil {
 		h.setRoot()
 	}
@@ -534,8 +539,10 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 			// err is already categorized by ArrayExtraData.Encode().
 			return err
 		}
-	} else {
-		// Encode next slab ID to scratch
+	}
+
+	// Encode next slab ID
+	if a.next != SlabIDUndefined {
 		n, err := a.next.ToRawBytes(enc.Scratch[:])
 		if err != nil {
 			// Don't need to wrap because err is already categorized by SlabID.ToRawBytes().

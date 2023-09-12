@@ -446,17 +446,15 @@ func validArraySlabSerialization(
 	}
 
 	// Extra check: encoded data size == header.size
-	encodedExtraDataSize, err := getEncodedArrayExtraDataSize(slab.ExtraData(), cborEncMode)
+	encodedSlabSize, err := computeSlabSize(data)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getEncodedArrayExtraDataSize().
+		// Don't need to wrap error as external error because err is already categorized by computeSlabSize().
 		return err
 	}
 
-	// Need to exclude extra data size from encoded data size.
-	encodedSlabSize := uint32(len(data) - encodedExtraDataSize)
-	if slab.Header().size != encodedSlabSize {
-		return NewFatalError(fmt.Errorf("slab %d encoded size %d != header.size %d (encoded extra data size %d)",
-			id, encodedSlabSize, slab.Header().size, encodedExtraDataSize))
+	if slab.Header().size != uint32(encodedSlabSize) {
+		return NewFatalError(fmt.Errorf("slab %d encoded size %d != header.size %d",
+			id, encodedSlabSize, slab.Header().size))
 	}
 
 	// Compare encoded data of original slab with encoded data of decoded slab
@@ -640,25 +638,6 @@ func arrayExtraDataEqual(expected, actual *ArrayExtraData) error {
 	return nil
 }
 
-func getEncodedArrayExtraDataSize(extraData *ArrayExtraData, cborEncMode cbor.EncMode) (int, error) {
-	if extraData == nil {
-		return 0, nil
-	}
-
-	var buf bytes.Buffer
-	enc := NewEncoder(&buf, cborEncMode)
-
-	// Normally the flag shouldn't be 0. But in this case we just need the encoded data size
-	// so the content of the flag doesn't matter.
-	err := extraData.Encode(enc)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by ArrayExtraData.Encode().
-		return 0, err
-	}
-
-	return len(buf.Bytes()), nil
-}
-
 func ValidValueSerialization(
 	value Value,
 	cborDecMode cbor.DecMode,
@@ -689,4 +668,48 @@ func ValidValueSerialization(
 		)
 	}
 	return nil
+}
+
+func computeSlabSize(data []byte) (int, error) {
+	if len(data) < versionAndFlagSize {
+		return 0, NewDecodingError(fmt.Errorf("data is too short"))
+	}
+
+	h, err := newHeadFromData(data[:versionAndFlagSize])
+	if err != nil {
+		return 0, NewDecodingError(err)
+	}
+
+	slabExtraDataSize, err := getExtraDataSize(h, data[versionAndFlagSize:])
+	if err != nil {
+		return 0, err
+	}
+
+	// Computed slab size (slab header size):
+	// - excludes slab extra data size
+	// - adds next slab ID for non-root data slab if not encoded
+	size := len(data) - slabExtraDataSize
+
+	isDataSlab := h.getSlabArrayType() == slabArrayData ||
+		h.getSlabMapType() == slabMapData ||
+		h.getSlabMapType() == slabMapCollisionGroup
+
+	if !h.isRoot() && isDataSlab && !h.hasNextSlabID() {
+		size += slabIDSize
+	}
+
+	return size, nil
+}
+
+func getExtraDataSize(h head, data []byte) (int, error) {
+	if h.isRoot() {
+		dec := cbor.NewStreamDecoder(bytes.NewBuffer(data))
+		b, err := dec.DecodeRawBytes()
+		if err != nil {
+			return 0, NewDecodingError(err)
+		}
+		return len(b), nil
+	}
+
+	return 0, nil
 }

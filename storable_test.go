@@ -676,3 +676,48 @@ func (v SomeStorable) StoredValue(storage SlabStorage) (Value, error) {
 func (v SomeStorable) String() string {
 	return fmt.Sprintf("%s", v.Storable)
 }
+
+type mutableValue struct {
+	storable *mutableStorable
+}
+
+var _ Value = &mutableValue{}
+
+func newMutableValue(storableSize uint32) *mutableValue {
+	return &mutableValue{
+		storable: &mutableStorable{
+			size: storableSize,
+		},
+	}
+}
+
+func (v *mutableValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+	return v.storable, nil
+}
+
+func (v *mutableValue) updateStorableSize(n uint32) {
+	v.storable.size = n
+}
+
+type mutableStorable struct {
+	size uint32
+}
+
+var _ Storable = &mutableStorable{}
+
+func (s *mutableStorable) ByteSize() uint32 {
+	return s.size
+}
+
+func (s *mutableStorable) StoredValue(SlabStorage) (Value, error) {
+	return &mutableValue{s}, nil
+}
+
+func (*mutableStorable) ChildStorables() []Storable {
+	return nil
+}
+
+func (*mutableStorable) Encode(*Encoder) error {
+	// no-op for testing
+	return nil
+}

@@ -6817,3 +6817,59 @@ func TestMapID(t *testing.T) {
 	require.Equal(t, sid.address[:], id[:8])
 	require.Equal(t, sid.index[:], id[8:])
 }
+
+func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
+	const (
+		mapSize             = 3
+		keyStringSize       = 16
+		initialStorableSize = 1
+		mutatedStorableSize = 5
+	)
+
+	keyValues := make(map[Value]*mutableValue, mapSize)
+	for i := 0; i < mapSize; i++ {
+		k := Uint64Value(i)
+		v := newMutableValue(initialStorableSize)
+		keyValues[k] = v
+	}
+
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	storage := newTestPersistentStorage(t)
+
+	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	for k, v := range keyValues {
+		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+	}
+
+	require.True(t, m.root.IsData())
+
+	expectedElementSize := singleElementPrefixSize + digestSize + Uint64Value(0).ByteSize() + initialStorableSize
+	expectedMapRootDataSlabSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize + expectedElementSize*mapSize
+	require.Equal(t, expectedMapRootDataSlabSize, m.root.ByteSize())
+
+	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	require.NoError(t, err)
+
+	// Reset mutable values after changing its storable size
+	for k, v := range keyValues {
+		v.updateStorableSize(mutatedStorableSize)
+
+		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		require.NoError(t, err)
+		require.NotNil(t, existingStorable)
+	}
+
+	require.True(t, m.root.IsData())
+
+	expectedElementSize = singleElementPrefixSize + digestSize + Uint64Value(0).ByteSize() + mutatedStorableSize
+	expectedMapRootDataSlabSize = mapRootDataSlabPrefixSize + hkeyElementsPrefixSize + expectedElementSize*mapSize
+	require.Equal(t, expectedMapRootDataSlabSize, m.root.ByteSize())
+
+	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	require.NoError(t, err)
+}

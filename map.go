@@ -1374,8 +1374,6 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 			}
 		}
 
-		oldElemSize := elem.Size()
-
 		elem, existingValue, err := elem.Set(storage, address, b, digester, level, hkey, comparator, hip, key, value)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by element.Set().
@@ -1384,7 +1382,14 @@ func (e *hkeyElements) Set(storage SlabStorage, address Address, b DigesterBuild
 
 		e.elems[equalIndex] = elem
 
-		e.size += elem.Size() - oldElemSize
+		// Recompute slab size by adding all element sizes instead of using the size diff of old and new element because
+		// oldElem can be the same storable when the same value is reset and oldElem.ByteSize() can equal storable.ByteSize().
+		// Given this, size diff of the old and new element can be 0 even when its actual size changed.
+		size := uint32(hkeyElementsPrefixSize)
+		for _, element := range e.elems {
+			size += element.Size() + digestSize
+		}
+		e.size = size
 
 		return existingValue, nil
 	}
@@ -1879,8 +1884,6 @@ func (e *singleElements) Set(storage SlabStorage, address Address, _ DigesterBui
 		if equal {
 			existingValue := elem.value
 
-			oldSize := elem.Size()
-
 			vs, err := value.Storable(storage, address, maxInlineMapValueSize(uint64(elem.key.ByteSize())))
 			if err != nil {
 				// Wrap err as external error (if needed) because err is returned by Value interface.
@@ -1890,7 +1893,14 @@ func (e *singleElements) Set(storage SlabStorage, address Address, _ DigesterBui
 			elem.value = vs
 			elem.size = singleElementPrefixSize + elem.key.ByteSize() + elem.value.ByteSize()
 
-			e.size += elem.Size() - oldSize
+			// Recompute slab size by adding all element sizes instead of using the size diff of old and new element because
+			// oldElem can be the same storable when the same value is reset and oldElem.ByteSize() can equal storable.ByteSize().
+			// Given this, size diff of the old and new element can be 0 even when its actual size changed.
+			size := uint32(singleElementsPrefixSize)
+			for _, element := range e.elems {
+				size += element.Size()
+			}
+			e.size = size
 
 			return existingValue, nil
 		}
@@ -2372,6 +2382,13 @@ func (m *MapDataSlab) ChildStorables() []Storable {
 	return elementsStorables(m.elements, nil)
 }
 
+func (m *MapDataSlab) getPrefixSize() uint32 {
+	if m.extraData != nil {
+		return mapRootDataSlabPrefixSize
+	}
+	return mapDataSlabPrefixSize
+}
+
 func elementsStorables(elems elements, childStorables []Storable) []Storable {
 
 	switch v := elems.(type) {
@@ -2436,11 +2453,7 @@ func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Diges
 	m.header.firstKey = m.elements.firstKey()
 
 	// Adjust header's slab size
-	if m.extraData == nil {
-		m.header.size = mapDataSlabPrefixSize + m.elements.Size()
-	} else {
-		m.header.size = mapRootDataSlabPrefixSize + m.elements.Size()
-	}
+	m.header.size = m.getPrefixSize() + m.elements.Size()
 
 	// Store modified slab
 	err = storage.Store(m.header.slabID, m)
@@ -2464,11 +2477,7 @@ func (m *MapDataSlab) Remove(storage SlabStorage, digester Digester, level uint,
 	m.header.firstKey = m.elements.firstKey()
 
 	// Adjust header's slab size
-	if m.extraData == nil {
-		m.header.size = mapDataSlabPrefixSize + m.elements.Size()
-	} else {
-		m.header.size = mapRootDataSlabPrefixSize + m.elements.Size()
-	}
+	m.header.size = m.getPrefixSize() + m.elements.Size()
 
 	// Store modified slab
 	err = storage.Store(m.header.slabID, m)
@@ -2668,7 +2677,7 @@ func (m *MapDataSlab) PopIterate(storage SlabStorage, fn MapPopIterationFunc) er
 	}
 
 	// Reset data slab
-	m.header.size = mapDataSlabPrefixSize + hkeyElementsPrefixSize
+	m.header.size = m.getPrefixSize() + hkeyElementsPrefixSize
 	m.header.firstKey = 0
 	return nil
 }

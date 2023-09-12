@@ -849,18 +849,16 @@ func validMapSlabSerialization(
 	}
 
 	// Extra check: encoded data size == header.size
-	encodedExtraDataSize, err := getEncodedMapExtraDataSize(slab.ExtraData(), cborEncMode)
+	encodedSlabSize, err := computeSlabSize(data)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getEncodedMapExtraDataSize().
+		// Don't need to wrap error as external error because err is already categorized by computeSlabSize().
 		return err
 	}
 
-	// Need to exclude extra data size from encoded data size.
-	encodedSlabSize := uint32(len(data) - encodedExtraDataSize)
-	if slab.Header().size != encodedSlabSize {
+	if slab.Header().size != uint32(encodedSlabSize) {
 		return NewFatalError(
-			fmt.Errorf("slab %d encoded size %d != header.size %d (encoded extra data size %d)",
-				id, encodedSlabSize, slab.Header().size, encodedExtraDataSize))
+			fmt.Errorf("slab %d encoded size %d != header.size %d",
+				id, encodedSlabSize, slab.Header().size))
 	}
 
 	// Compare encoded data of original slab with encoded data of decoded slab
@@ -1356,21 +1354,4 @@ func mapExtraDataEqual(expected, actual *MapExtraData) error {
 	}
 
 	return nil
-}
-
-func getEncodedMapExtraDataSize(extraData *MapExtraData, cborEncMode cbor.EncMode) (int, error) {
-	if extraData == nil {
-		return 0, nil
-	}
-
-	var buf bytes.Buffer
-	enc := NewEncoder(&buf, cborEncMode)
-
-	err := extraData.Encode(enc)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by MapExtraData.Encode().
-		return 0, err
-	}
-
-	return len(buf.Bytes()), nil
 }

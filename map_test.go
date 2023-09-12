@@ -2737,7 +2737,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			// data slab
 			id2: {
 				// version
-				0x10,
+				0x12,
 				// flag: map data
 				0x08,
 				// next slab id
@@ -2789,8 +2789,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x10,
 				// flag: has pointer + map data
 				0x48,
-				// next slab id
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
 				// the following encoded data is valid CBOR
 
@@ -2864,7 +2862,8 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, 2, len(meta.childrenHeaders))
 		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
-		require.Equal(t, uint32(len(stored[id3])), meta.childrenHeaders[1].size)
+		// Need to add slabIDSize to encoded data slab here because empty slab ID is omitted during encoding.
+		require.Equal(t, uint32(len(stored[id3])+slabIDSize), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, stored)
@@ -3392,8 +3391,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x10,
 				// flag: any size + collision group
 				0x2b,
-				// next slab id
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
 				// the following encoded data is valid CBOR
 
@@ -3457,8 +3454,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x10,
 				// flag: any size + collision group
 				0x2b,
-				// next slab id
-				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 
 				// the following encoded data is valid CBOR
 

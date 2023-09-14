@@ -25,3 +25,12 @@ type Value interface {
 type ValueComparator func(SlabStorage, Value, Storable) (bool, error)
 
 type StorableComparator func(Storable, Storable) bool
+
+type parentUpdater func() error
+
+// valueNotifier is an interface that allows child value to notify and update parent.
+type valueNotifier interface {
+	Value
+	ValueID() ValueID
+	setParentUpdater(parentUpdater)
+}

@@ -19,6 +19,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/onflow/atree"
 
 	"github.com/fxamacker/cbor/v2"
@@ -29,6 +31,14 @@ type testTypeInfo struct {
 }
 
 var _ atree.TypeInfo = testTypeInfo{}
+
+func (i testTypeInfo) IsComposite() bool {
+	return false
+}
+
+func (i testTypeInfo) ID() string {
+	return fmt.Sprintf("uint64(%d)", i)
+}
 
 func (i testTypeInfo) Encode(e *cbor.StreamEncoder) error {
 	return e.EncodeUint64(i.value)

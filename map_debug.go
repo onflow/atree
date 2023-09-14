@@ -107,6 +107,9 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 								if _, ok := e.value.(SlabIDStorable); ok {
 									storableDataSlabCount++
 								}
+								// This handles use case of inlined array or map value containing SlabID
+								ids := getSlabIDFromStorable(e.value, nil)
+								storableDataSlabCount += uint64(len(ids))
 							}
 						}
 					}
@@ -188,12 +191,7 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 					}
 				}
 
-				childStorables := dataSlab.ChildStorables()
-				for _, e := range childStorables {
-					if id, ok := e.(SlabIDStorable); ok {
-						overflowIDs = append(overflowIDs, SlabID(id))
-					}
-				}
+				overflowIDs = getSlabIDFromStorable(dataSlab, overflowIDs)
 
 			} else {
 				meta := slab.(*MapMetaDataSlab)
@@ -271,7 +269,7 @@ func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip Hash
 	}
 
 	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := validMapSlab(
-		m.Storage, m.digesterBuilder, tic, hip, m.root.SlabID(), 0, nil, []SlabID{}, []SlabID{}, []Digest{})
+		m.Storage, m.digesterBuilder, tic, hip, m.root, 0, nil, []SlabID{}, []SlabID{}, []Digest{})
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by validMapSlab().
 		return err
@@ -320,7 +318,7 @@ func validMapSlab(
 	digesterBuilder DigesterBuilder,
 	tic TypeInfoComparator,
 	hip HashInputProvider,
-	id SlabID,
+	slab MapSlab,
 	level int,
 	headerFromParentSlab *MapSlabHeader,
 	dataSlabIDs []SlabID,
@@ -334,11 +332,7 @@ func validMapSlab(
 	err error,
 ) {
 
-	slab, err := getMapSlab(storage, id)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getMapSlab().
-		return 0, nil, nil, nil, err
-	}
+	id := slab.Header().slabID
 
 	if level > 0 {
 		// Verify that non-root slab doesn't have extra data.
@@ -388,10 +382,18 @@ func validMapSlab(
 					id, dataSlab.header.firstKey, dataSlab.elements.firstKey()))
 		}
 
+		// Verify that only root slab can be inlined
+		if level > 0 && slab.Inlined() {
+			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
+		}
+
 		// Verify that aggregated element size + slab prefix is the same as header.size
 		computedSize := uint32(mapDataSlabPrefixSize)
 		if level == 0 {
 			computedSize = uint32(mapRootDataSlabPrefixSize)
+			if dataSlab.Inlined() {
+				computedSize = uint32(inlinedMapDataSlabPrefixSize)
+			}
 		}
 		computedSize += elementSize
 
@@ -444,10 +446,16 @@ func validMapSlab(
 	for i := 0; i < len(meta.childrenHeaders); i++ {
 		h := meta.childrenHeaders[i]
 
+		childSlab, err := getMapSlab(storage, h.slabID)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by getMapSlab().
+			return 0, nil, nil, nil, err
+		}
+
 		// Verify child slabs
 		count := uint64(0)
 		count, dataSlabIDs, nextDataSlabIDs, firstKeys, err =
-			validMapSlab(storage, digesterBuilder, tic, hip, h.slabID, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
+			validMapSlab(storage, digesterBuilder, tic, hip, childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by validMapSlab().
 			return 0, nil, nil, nil, err
@@ -849,16 +857,31 @@ func validMapSlabSerialization(
 	}
 
 	// Extra check: encoded data size == header.size
-	encodedSlabSize, err := computeSlabSize(data)
+	// This check is skipped for slabs with inlined composite because
+	// encoded size and slab size differ for inlined composites.
+	// For inlined composites, digests and field keys are encoded in
+	// composite extra data section for reuse, and only composite field
+	// values are encoded in non-extra data section.
+	// This reduces encoding size because composite values of the same
+	// composite type can reuse encoded type info, seed, digests, and field names.
+	// TODO: maybe add size check for slabs with inlined composite by decoding entire slab.
+	inlinedComposite, err := hasInlinedComposite(data)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by computeSlabSize().
+		// Don't need to wrap error as external error because err is already categorized by hasInlinedComposite().
 		return err
 	}
+	if !inlinedComposite {
+		encodedSlabSize, err := computeSize(data)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by computeSize().
+			return err
+		}
 
-	if slab.Header().size != uint32(encodedSlabSize) {
-		return NewFatalError(
-			fmt.Errorf("slab %d encoded size %d != header.size %d",
-				id, encodedSlabSize, slab.Header().size))
+		if slab.Header().size != uint32(encodedSlabSize) {
+			return NewFatalError(
+				fmt.Errorf("slab %d encoded size %d != header.size %d",
+					id, encodedSlabSize, slab.Header().size))
+		}
 	}
 
 	// Compare encoded data of original slab with encoded data of decoded slab
@@ -951,6 +974,11 @@ func mapDataSlabEqual(
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by mapExtraDataEqual().
 		return err
+	}
+
+	// Compare inlined
+	if expected.inlined != actual.inlined {
+		return NewFatalError(fmt.Errorf("inlined %t is wrong, want %t", actual.inlined, expected.inlined))
 	}
 
 	// Compare next
@@ -1287,14 +1315,14 @@ func mapSingleElementEqual(
 		}
 	}
 
-	if !compare(expected.value, actual.value) {
-		return NewFatalError(fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value))
-	}
+	// Compare nested element
+	switch ee := expected.value.(type) {
+	case SlabIDStorable:
+		if !compare(expected.value, actual.value) {
+			return NewFatalError(fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value))
+		}
 
-	// Compare value stored in a separate slab
-	if idStorable, ok := expected.value.(SlabIDStorable); ok {
-
-		v, err := idStorable.StoredValue(storage)
+		v, err := ee.StoredValue(storage)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
 			return err
@@ -1311,6 +1339,27 @@ func mapSingleElementEqual(
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by ValidValueSerialization().
 			return err
+		}
+
+	case *ArrayDataSlab:
+		ae, ok := actual.value.(*ArrayDataSlab)
+		if !ok {
+			return NewFatalError(fmt.Errorf("expect element as *ArrayDataSlab, actual %T", ae))
+		}
+
+		return arrayDataSlabEqual(ee, ae, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo, compare)
+
+	case *MapDataSlab:
+		ae, ok := actual.value.(*MapDataSlab)
+		if !ok {
+			return NewFatalError(fmt.Errorf("expect element as *MapDataSlab, actual %T", ae))
+		}
+
+		return mapDataSlabEqual(ee, ae, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo, compare)
+
+	default:
+		if !compare(expected.value, actual.value) {
+			return NewFatalError(fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value))
 		}
 	}
 

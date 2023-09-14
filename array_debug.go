@@ -66,12 +66,9 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 			if slab.IsData() {
 				dataSlabCount++
 
-				childStorables := slab.ChildStorables()
-				for _, s := range childStorables {
-					if _, ok := s.(SlabIDStorable); ok {
-						storableSlabCount++
-					}
-				}
+				ids := getSlabIDFromStorable(slab, nil)
+				storableSlabCount += uint64(len(ids))
+
 			} else {
 				metaDataSlabCount++
 
@@ -134,12 +131,7 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 				dataSlab := slab.(*ArrayDataSlab)
 				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, dataSlab))
 
-				childStorables := dataSlab.ChildStorables()
-				for _, e := range childStorables {
-					if id, ok := e.(SlabIDStorable); ok {
-						overflowIDs = append(overflowIDs, SlabID(id))
-					}
-				}
+				overflowIDs = getSlabIDFromStorable(dataSlab, overflowIDs)
 
 			} else {
 				meta := slab.(*ArrayMetaDataSlab)
@@ -193,7 +185,7 @@ func ValidArray(a *Array, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInp
 	}
 
 	computedCount, dataSlabIDs, nextDataSlabIDs, err :=
-		validArraySlab(tic, hip, a.Storage, a.root.Header().slabID, 0, nil, []SlabID{}, []SlabID{})
+		validArraySlab(tic, hip, a.Storage, a.root, 0, nil, []SlabID{}, []SlabID{})
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 		return err
@@ -217,7 +209,7 @@ func validArraySlab(
 	tic TypeInfoComparator,
 	hip HashInputProvider,
 	storage SlabStorage,
-	id SlabID,
+	slab ArraySlab,
 	level int,
 	headerFromParentSlab *ArraySlabHeader,
 	dataSlabIDs []SlabID,
@@ -229,34 +221,30 @@ func validArraySlab(
 	err error,
 ) {
 
-	slab, err := getArraySlab(storage, id)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getArraySlab().
-		return 0, nil, nil, err
-	}
+	id := slab.Header().slabID
 
 	if level > 0 {
 		// Verify that non-root slab doesn't have extra data
 		if slab.ExtraData() != nil {
-			return 0, nil, nil, NewFatalError(fmt.Errorf("non-root slab %d has extra data", id))
+			return 0, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s has extra data", id))
 		}
 
 		// Verify that non-root slab doesn't underflow
 		if underflowSize, underflow := slab.IsUnderflow(); underflow {
-			return 0, nil, nil, NewFatalError(fmt.Errorf("slab %d underflows by %d bytes", id, underflowSize))
+			return 0, nil, nil, NewFatalError(fmt.Errorf("slab %s underflows by %d bytes", id, underflowSize))
 		}
 
 	}
 
 	// Verify that slab doesn't overflow
 	if slab.IsFull() {
-		return 0, nil, nil, NewFatalError(fmt.Errorf("slab %d overflows", id))
+		return 0, nil, nil, NewFatalError(fmt.Errorf("slab %s overflows", id))
 	}
 
 	// Verify that header is in sync with header from parent slab
 	if headerFromParentSlab != nil {
 		if !reflect.DeepEqual(*headerFromParentSlab, slab.Header()) {
-			return 0, nil, nil, NewFatalError(fmt.Errorf("slab %d header %+v is different from header %+v from parent slab",
+			return 0, nil, nil, NewFatalError(fmt.Errorf("slab %s header %+v is different from header %+v from parent slab",
 				id, slab.Header(), headerFromParentSlab))
 		}
 	}
@@ -264,25 +252,34 @@ func validArraySlab(
 	if slab.IsData() {
 		dataSlab, ok := slab.(*ArrayDataSlab)
 		if !ok {
-			return 0, nil, nil, NewFatalError(fmt.Errorf("slab %d is not ArrayDataSlab", id))
+			return 0, nil, nil, NewFatalError(fmt.Errorf("slab %s is not ArrayDataSlab", id))
 		}
 
 		// Verify that element count is the same as header.count
 		if uint32(len(dataSlab.elements)) != dataSlab.header.count {
-			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %d header count %d is wrong, want %d",
+			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s header count %d is wrong, want %d",
 				id, dataSlab.header.count, len(dataSlab.elements)))
+		}
+
+		// Verify that only root slab can be inlined
+		if level > 0 && slab.Inlined() {
+			return 0, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
 		}
 
 		// Verify that aggregated element size + slab prefix is the same as header.size
 		computedSize := uint32(arrayDataSlabPrefixSize)
 		if level == 0 {
 			computedSize = uint32(arrayRootDataSlabPrefixSize)
+			if slab.Inlined() {
+				computedSize = uint32(inlinedArrayDataSlabPrefixSize)
+			}
 		}
+
 		for _, e := range dataSlab.elements {
 
 			// Verify element size is <= inline size
 			if e.ByteSize() > uint32(maxInlineArrayElementSize) {
-				return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
+				return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s element %s size %d is too large, want < %d",
 					id, e, e.ByteSize(), maxInlineArrayElementSize))
 			}
 
@@ -290,7 +287,7 @@ func validArraySlab(
 		}
 
 		if computedSize != dataSlab.header.size {
-			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %d header size %d is wrong, want %d",
+			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s header size %d is wrong, want %d",
 				id, dataSlab.header.size, computedSize))
 		}
 
@@ -315,7 +312,7 @@ func validArraySlab(
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by ValidValue().
 				return 0, nil, nil, fmt.Errorf(
-					"data slab %d element %s isn't valid: %w",
+					"data slab %s element %q isn't valid: %w",
 					id, e, err,
 				)
 			}
@@ -351,10 +348,16 @@ func validArraySlab(
 	for i := 0; i < len(meta.childrenHeaders); i++ {
 		h := meta.childrenHeaders[i]
 
+		childSlab, err := getArraySlab(storage, h.slabID)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by getArraySlab().
+			return 0, nil, nil, err
+		}
+
 		// Verify child slabs
 		var count uint32
 		count, dataSlabIDs, nextDataSlabIDs, err =
-			validArraySlab(tic, hip, storage, h.slabID, level+1, &h, dataSlabIDs, nextDataSlabIDs)
+			validArraySlab(tic, hip, storage, childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 			return 0, nil, nil, err
@@ -446,15 +449,30 @@ func validArraySlabSerialization(
 	}
 
 	// Extra check: encoded data size == header.size
-	encodedSlabSize, err := computeSlabSize(data)
+	// This check is skipped for slabs with inlined composite because
+	// encoded size and slab size differ for inlined composites.
+	// For inlined composites, digests and field keys are encoded in
+	// composite extra data section for reuse, and only composite field
+	// values are encoded in non-extra data section.
+	// This reduces encoding size because composite values of the same
+	// composite type can reuse encoded type info, seed, digests, and field names.
+	// TODO: maybe add size check for slabs with inlined composite by decoding entire slab.
+	inlinedComposite, err := hasInlinedComposite(data)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by computeSlabSize().
+		// Don't need to wrap error as external error because err is already categorized by hasInlinedComposite().
 		return err
 	}
+	if !inlinedComposite {
+		encodedSlabSize, err := computeSize(data)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by computeSize().
+			return err
+		}
 
-	if slab.Header().size != uint32(encodedSlabSize) {
-		return NewFatalError(fmt.Errorf("slab %d encoded size %d != header.size %d",
-			id, encodedSlabSize, slab.Header().size))
+		if slab.Header().size != uint32(encodedSlabSize) {
+			return NewFatalError(fmt.Errorf("slab %s encoded size %d != header.size %d",
+				id, encodedSlabSize, slab.Header().size))
+		}
 	}
 
 	// Compare encoded data of original slab with encoded data of decoded slab
@@ -548,6 +566,11 @@ func arrayDataSlabEqual(
 		return err
 	}
 
+	// Compare inlined
+	if expected.inlined != actual.inlined {
+		return NewFatalError(fmt.Errorf("inlined %t is wrong, want %t", actual.inlined, expected.inlined))
+	}
+
 	// Compare next
 	if expected.next != actual.next {
 		return NewFatalError(fmt.Errorf("next %d is wrong, want %d", actual.next, expected.next))
@@ -567,14 +590,14 @@ func arrayDataSlabEqual(
 	for i := 0; i < len(expected.elements); i++ {
 		ee := expected.elements[i]
 		ae := actual.elements[i]
-		if !compare(ee, ae) {
-			return NewFatalError(fmt.Errorf("element %d %+v is wrong, want %+v", i, ae, ee))
-		}
 
-		// Compare nested element
-		if idStorable, ok := ee.(SlabIDStorable); ok {
+		switch ee := ee.(type) {
+		case SlabIDStorable:
+			if !compare(ee, ae) {
+				return NewFatalError(fmt.Errorf("element %d %+v is wrong, want %+v", i, ae, ee))
+			}
 
-			ev, err := idStorable.StoredValue(storage)
+			ev, err := ee.StoredValue(storage)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
 				return err
@@ -588,6 +611,27 @@ func arrayDataSlabEqual(
 				decodeTypeInfo,
 				compare,
 			)
+
+		case *ArrayDataSlab:
+			ae, ok := ae.(*ArrayDataSlab)
+			if !ok {
+				return NewFatalError(fmt.Errorf("expect element as *ArrayDataSlab, actual %T", ae))
+			}
+
+			return arrayDataSlabEqual(ee, ae, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo, compare)
+
+		case *MapDataSlab:
+			ae, ok := ae.(*MapDataSlab)
+			if !ok {
+				return NewFatalError(fmt.Errorf("expect element as *MapDataSlab, actual %T", ae))
+			}
+
+			return mapDataSlabEqual(ee, ae, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo, compare)
+
+		default:
+			if !compare(ee, ae) {
+				return NewFatalError(fmt.Errorf("element %d %+v is wrong, want %+v", i, ae, ee))
+			}
 		}
 	}
 
@@ -670,7 +714,7 @@ func ValidValueSerialization(
 	return nil
 }
 
-func computeSlabSize(data []byte) (int, error) {
+func computeSize(data []byte) (int, error) {
 	if len(data) < versionAndFlagSize {
 		return 0, NewDecodingError(fmt.Errorf("data is too short"))
 	}
@@ -680,19 +724,22 @@ func computeSlabSize(data []byte) (int, error) {
 		return 0, NewDecodingError(err)
 	}
 
-	slabExtraDataSize, err := getExtraDataSize(h, data[versionAndFlagSize:])
+	slabExtraDataSize, inlinedSlabExtrDataSize, err := getExtraDataSizes(h, data[versionAndFlagSize:])
 	if err != nil {
 		return 0, err
 	}
 
-	// Computed slab size (slab header size):
-	// - excludes slab extra data size
-	// - adds next slab ID for non-root data slab if not encoded
-	size := len(data) - slabExtraDataSize
-
 	isDataSlab := h.getSlabArrayType() == slabArrayData ||
 		h.getSlabMapType() == slabMapData ||
 		h.getSlabMapType() == slabMapCollisionGroup
+
+	// computed size (slab header size):
+	// - excludes slab extra data size
+	// - excludes inlined slab extra data size
+	// - adds next slab ID for non-root data slab if not encoded
+	size := len(data)
+	size -= slabExtraDataSize
+	size -= inlinedSlabExtrDataSize
 
 	if !h.isRoot() && isDataSlab && !h.hasNextSlabID() {
 		size += slabIDSize
@@ -701,15 +748,102 @@ func computeSlabSize(data []byte) (int, error) {
 	return size, nil
 }
 
-func getExtraDataSize(h head, data []byte) (int, error) {
+func hasInlinedComposite(data []byte) (bool, error) {
+	if len(data) < versionAndFlagSize {
+		return false, NewDecodingError(fmt.Errorf("data is too short"))
+	}
+
+	h, err := newHeadFromData(data[:versionAndFlagSize])
+	if err != nil {
+		return false, NewDecodingError(err)
+	}
+
+	if !h.hasInlinedSlabs() {
+		return false, nil
+	}
+
+	data = data[versionAndFlagSize:]
+
+	// Skip slab extra data if needed.
 	if h.isRoot() {
 		dec := cbor.NewStreamDecoder(bytes.NewBuffer(data))
 		b, err := dec.DecodeRawBytes()
 		if err != nil {
-			return 0, NewDecodingError(err)
+			return false, NewDecodingError(err)
 		}
-		return len(b), nil
+
+		data = data[len(b):]
 	}
 
-	return 0, nil
+	// Parse inlined extra data to find composite extra data.
+	dec := cbor.NewStreamDecoder(bytes.NewBuffer(data))
+	count, err := dec.DecodeArrayHead()
+	if err != nil {
+		return false, NewDecodingError(err)
+	}
+
+	for i := uint64(0); i < count; i++ {
+		tagNum, err := dec.DecodeTagNumber()
+		if err != nil {
+			return false, NewDecodingError(err)
+		}
+		if tagNum == CBORTagInlinedCompositeExtraData {
+			return true, nil
+		}
+		err = dec.Skip()
+		if err != nil {
+			return false, NewDecodingError(err)
+		}
+	}
+
+	return false, nil
+}
+
+func getExtraDataSizes(h head, data []byte) (int, int, error) {
+
+	var slabExtraDataSize, inlinedSlabExtraDataSize int
+
+	if h.isRoot() {
+		dec := cbor.NewStreamDecoder(bytes.NewBuffer(data))
+		b, err := dec.DecodeRawBytes()
+		if err != nil {
+			return 0, 0, NewDecodingError(err)
+		}
+		slabExtraDataSize = len(b)
+
+		data = data[slabExtraDataSize:]
+	}
+
+	if h.hasInlinedSlabs() {
+		dec := cbor.NewStreamDecoder(bytes.NewBuffer(data))
+		b, err := dec.DecodeRawBytes()
+		if err != nil {
+			return 0, 0, NewDecodingError(err)
+		}
+		inlinedSlabExtraDataSize = len(b)
+	}
+
+	return slabExtraDataSize, inlinedSlabExtraDataSize, nil
+}
+
+// getSlabIDFromStorable appends slab IDs from storable to ids.
+// This function traverses child storables.  If child storable
+// is inlined map or array, inlined map or array is also traversed.
+func getSlabIDFromStorable(storable Storable, ids []SlabID) []SlabID {
+	childStorables := storable.ChildStorables()
+
+	for _, e := range childStorables {
+		switch e := e.(type) {
+		case SlabIDStorable:
+			ids = append(ids, SlabID(e))
+
+		case *ArrayDataSlab:
+			ids = getSlabIDFromStorable(e, ids)
+
+		case *MapDataSlab:
+			ids = getSlabIDFromStorable(e, ids)
+		}
+	}
+
+	return ids
 }

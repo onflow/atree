@@ -37,6 +37,14 @@ type Storable interface {
 	ChildStorables() []Storable
 }
 
+// EquatableStorable is an interface that supports comparison of Storable.
+// This is only used for composite keys.
+type EquatableStorable interface {
+	Storable
+	// Equal returns true if the given storable is equal to this storable.
+	Equal(Storable) bool
+}
+
 type containerStorable interface {
 	Storable
 	hasPointer() bool
@@ -50,6 +58,14 @@ func hasPointer(storable Storable) bool {
 }
 
 const (
+	CBORTagInlinedArrayExtraData     = 247
+	CBORTagInlinedMapExtraData       = 248
+	CBORTagInlinedCompositeExtraData = 249
+
+	CBORTagInlinedArray     = 250
+	CBORTagInlinedMap       = 251
+	CBORTagInlinedComposite = 252
+
 	CBORTagInlineCollisionGroup   = 253
 	CBORTagExternalCollisionGroup = 254
 
@@ -59,6 +75,7 @@ const (
 type SlabIDStorable SlabID
 
 var _ Storable = SlabIDStorable{}
+var _ containerStorable = SlabIDStorable{}
 
 func (v SlabIDStorable) hasPointer() bool {
 	return true

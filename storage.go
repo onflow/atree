@@ -34,6 +34,13 @@ const LedgerBaseStorageSlabPrefix = "$"
 // ValueID identifies Array and OrderedMap.
 type ValueID [16]byte
 
+func slabIDToValueID(sid SlabID) ValueID {
+	var id ValueID
+	copy(id[:], sid.address[:])
+	copy(id[8:], sid.index[:])
+	return id
+}
+
 type (
 	Address   [8]byte
 	SlabIndex [8]byte
@@ -448,6 +455,8 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map
 					atLeastOneExternalSlab = true
 				}
 
+				// This handles inlined slab because inlined slab is a child storable (s) and
+				// we traverse s.ChildStorables() for its inlined elements.
 				next = append(next, s.ChildStorables()...)
 			}
 
@@ -574,6 +583,11 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 
 				slabIDStorable, ok := childStorable.(SlabIDStorable)
 				if !ok {
+					// Append child storables of this childStorable to handle inlined slab containing SlabIDStorable.
+					nextChildStorables = append(
+						nextChildStorables,
+						childStorable.ChildStorables()...,
+					)
 					continue
 				}
 
@@ -989,12 +1003,18 @@ func (s *PersistentSlabStorage) Retrieve(id SlabID) (Slab, bool, error) {
 }
 
 func (s *PersistentSlabStorage) Store(id SlabID, slab Slab) error {
+	if id == SlabIDUndefined {
+		return NewSlabIDError("failed to store slab with undefined slab ID")
+	}
 	// add to deltas
 	s.deltas[id] = slab
 	return nil
 }
 
 func (s *PersistentSlabStorage) Remove(id SlabID) error {
+	if id == SlabIDUndefined {
+		return NewSlabIDError("failed to remove slab with undefined slab ID")
+	}
 	// add to nil to deltas under that id
 	s.deltas[id] = nil
 	return nil

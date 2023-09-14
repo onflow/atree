@@ -77,6 +77,14 @@ type testTypeInfo struct{}
 
 var _ atree.TypeInfo = testTypeInfo{}
 
+func (testTypeInfo) IsComposite() bool {
+	return false
+}
+
+func (i testTypeInfo) ID() string {
+	return fmt.Sprintf("uint64(%d)", i)
+}
+
 func (testTypeInfo) Encode(e *cbor.StreamEncoder) error {
 	return e.EncodeUint8(42)
 }
@@ -86,7 +94,7 @@ func (i testTypeInfo) Equal(other atree.TypeInfo) bool {
 	return ok
 }
 
-func decodeStorable(dec *cbor.StreamDecoder, _ atree.SlabID) (atree.Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, _ atree.SlabID, _ []atree.ExtraData) (atree.Storable, error) {
 	tagNumber, err := dec.DecodeTagNumber()
 	if err != nil {
 		return nil, err

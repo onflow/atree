@@ -19,6 +19,7 @@
 package atree
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -83,6 +84,14 @@ const (
 	// CircleHash64fx and SipHash might use this const as part of their
 	// 128-bit seed (when they don't use 64-bit -> 128-bit seed expansion func).
 	typicalRandomConstant = uint64(0x1BD11BDAA9FC1A22) // DO NOT MODIFY
+
+	// inlined map data slab prefix size:
+	//   tag number (2 bytes) +
+	//   3-element array head (1 byte) +
+	//   extra data ref index (2 bytes) [0, 255] +
+	//   value index head (1 byte) +
+	//   value index (8 bytes)
+	inlinedMapDataSlabPrefixSize = 2 + 1 + 2 + 1 + 8
 )
 
 // MaxCollisionLimitPerDigest is the noncryptographic hash collision limit
@@ -134,7 +143,7 @@ type element interface {
 		key Value,
 	) (MapKey, MapValue, element, error)
 
-	Encode(*Encoder) error
+	Encode(*Encoder, *inlinedExtraData) error
 
 	hasPointer() bool
 
@@ -174,7 +183,8 @@ type elements interface {
 
 	Element(int) (element, error)
 
-	Encode(*Encoder) error
+	Encode(*Encoder, *inlinedExtraData) error
+	EncodeCompositeValues(*Encoder, []MapKey, *inlinedExtraData) error
 
 	hasPointer() bool
 
@@ -239,6 +249,8 @@ type MapExtraData struct {
 	Seed     uint64
 }
 
+var _ ExtraData = &MapExtraData{}
+
 // MapDataSlab is leaf node, implementing MapSlab.
 // anySize is true for data slab that isn't restricted by size requirement.
 type MapDataSlab struct {
@@ -253,9 +265,11 @@ type MapDataSlab struct {
 
 	anySize        bool
 	collisionGroup bool
+	inlined        bool
 }
 
 var _ MapSlab = &MapDataSlab{}
+var _ Storable = &MapDataSlab{}
 
 // MapMetaDataSlab is internal node, implementing MapSlab.
 type MapMetaDataSlab struct {
@@ -292,15 +306,20 @@ type MapSlab interface {
 	SetExtraData(*MapExtraData)
 
 	PopIterate(SlabStorage, MapPopIterationFunc) error
+
+	Inlined() bool
+	Inlinable(maxInlineSize uint64) bool
 }
 
 type OrderedMap struct {
 	Storage         SlabStorage
 	root            MapSlab
 	digesterBuilder DigesterBuilder
+	parentUpdater   parentUpdater
 }
 
 var _ Value = &OrderedMap{}
+var _ valueNotifier = &OrderedMap{}
 
 const mapExtraDataLength = 3
 
@@ -365,6 +384,10 @@ func newMapExtraData(dec *cbor.StreamDecoder, decodeTypeInfo TypeInfoDecoder) (*
 	}, nil
 }
 
+func (m *MapExtraData) isExtraData() bool {
+	return true
+}
+
 // Encode encodes extra data as CBOR array:
 //
 //	[type info, count, seed]
@@ -399,7 +422,7 @@ func (m *MapExtraData) Encode(enc *Encoder) error {
 	return nil
 }
 
-func newElementFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (element, error) {
+func newElementFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder, slabID SlabID, inlinedExtraData []ExtraData) (element, error) {
 	nt, err := cborDec.NextType()
 	if err != nil {
 		return nil, NewDecodingError(err)
@@ -408,7 +431,7 @@ func newElementFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDeco
 	switch nt {
 	case cbor.ArrayType:
 		// Don't need to wrap error as external error because err is already categorized by newSingleElementFromData().
-		return newSingleElementFromData(cborDec, decodeStorable)
+		return newSingleElementFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
 
 	case cbor.TagType:
 		tagNum, err := cborDec.DecodeTagNumber()
@@ -418,10 +441,10 @@ func newElementFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDeco
 		switch tagNum {
 		case CBORTagInlineCollisionGroup:
 			// Don't need to wrap error as external error because err is already categorized by newInlineCollisionGroupFromData().
-			return newInlineCollisionGroupFromData(cborDec, decodeStorable)
+			return newInlineCollisionGroupFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
 		case CBORTagExternalCollisionGroup:
 			// Don't need to wrap error as external error because err is already categorized by newExternalCollisionGroupFromData().
-			return newExternalCollisionGroupFromData(cborDec, decodeStorable)
+			return newExternalCollisionGroupFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
 		default:
 			return nil, NewDecodingError(fmt.Errorf("failed to decode element: unrecognized tag number %d", tagNum))
 		}
@@ -452,7 +475,7 @@ func newSingleElement(storage SlabStorage, address Address, key Value, value Val
 	}, nil
 }
 
-func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (*singleElement, error) {
+func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder, slabID SlabID, inlinedExtraData []ExtraData) (*singleElement, error) {
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
 		return nil, NewDecodingError(err)
@@ -462,13 +485,13 @@ func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable Storab
 		return nil, NewDecodingError(fmt.Errorf("failed to decode single element: expect array of 2 elements, got %d elements", elemCount))
 	}
 
-	key, err := decodeStorable(cborDec, SlabIDUndefined)
+	key, err := decodeStorable(cborDec, slabID, inlinedExtraData)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode key's storable")
 	}
 
-	value, err := decodeStorable(cborDec, SlabIDUndefined)
+	value, err := decodeStorable(cborDec, slabID, inlinedExtraData)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode value's storable")
@@ -484,7 +507,7 @@ func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable Storab
 // Encode encodes singleElement to the given encoder.
 //
 //	CBOR encoded array of 2 elements (key, value).
-func (e *singleElement) Encode(enc *Encoder) error {
+func (e *singleElement) Encode(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
 
 	// Encode CBOR array head for 2 elements
 	err := enc.CBOR.EncodeRawBytes([]byte{0x82})
@@ -500,7 +523,7 @@ func (e *singleElement) Encode(enc *Encoder) error {
 	}
 
 	// Encode value
-	err = e.value.Encode(enc)
+	err = encodeStorableAsElement(enc, e.value, inlinedTypeInfo)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Storable interface.
 		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode map value")
@@ -648,8 +671,8 @@ func (e *singleElement) String() string {
 	return fmt.Sprintf("%s:%s", e.key, e.value)
 }
 
-func newInlineCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (*inlineCollisionGroup, error) {
-	elements, err := newElementsFromData(cborDec, decodeStorable)
+func newInlineCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder, slabID SlabID, inlinedExtraData []ExtraData) (*inlineCollisionGroup, error) {
+	elements, err := newElementsFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by newElementsFromData().
 		return nil, err
@@ -661,7 +684,7 @@ func newInlineCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorable
 // Encode encodes inlineCollisionGroup to the given encoder.
 //
 //	CBOR tag (number: CBORTagInlineCollisionGroup, content: elements)
-func (e *inlineCollisionGroup) Encode(enc *Encoder) error {
+func (e *inlineCollisionGroup) Encode(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
 
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number CBORTagInlineCollisionGroup
@@ -671,7 +694,7 @@ func (e *inlineCollisionGroup) Encode(enc *Encoder) error {
 		return NewEncodingError(err)
 	}
 
-	err = e.elements.Encode(enc)
+	err = e.elements.Encode(enc, inlinedTypeInfo)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by elements.Encode().
 		return err
@@ -829,9 +852,9 @@ func (e *inlineCollisionGroup) String() string {
 	return "inline[" + e.elements.String() + "]"
 }
 
-func newExternalCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (*externalCollisionGroup, error) {
+func newExternalCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder, slabID SlabID, inlinedExtraData []ExtraData) (*externalCollisionGroup, error) {
 
-	storable, err := decodeStorable(cborDec, SlabIDUndefined)
+	storable, err := decodeStorable(cborDec, slabID, inlinedExtraData)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode Storable")
@@ -851,7 +874,7 @@ func newExternalCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorab
 // Encode encodes externalCollisionGroup to the given encoder.
 //
 //	CBOR tag (number: CBORTagExternalCollisionGroup, content: slab ID)
-func (e *externalCollisionGroup) Encode(enc *Encoder) error {
+func (e *externalCollisionGroup) Encode(enc *Encoder, _ *inlinedExtraData) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number CBORTagExternalCollisionGroup
 		0xd8, CBORTagExternalCollisionGroup,
@@ -1029,7 +1052,7 @@ func (e *externalCollisionGroup) String() string {
 	return fmt.Sprintf("external(%s)", e.slabID)
 }
 
-func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder) (elements, error) {
+func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder, slabID SlabID, inlinedExtraData []ExtraData) (elements, error) {
 
 	arrayCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
@@ -1076,7 +1099,7 @@ func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDec
 		size := uint32(singleElementsPrefixSize)
 		elems := make([]*singleElement, elemCount)
 		for i := 0; i < int(elemCount); i++ {
-			elem, err := newSingleElementFromData(cborDec, decodeStorable)
+			elem, err := newSingleElementFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by newSingleElementFromData().
 				return nil, err
@@ -1102,7 +1125,7 @@ func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDec
 	size := uint32(hkeyElementsPrefixSize)
 	elems := make([]element, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		elem, err := newElementFromData(cborDec, decodeStorable)
+		elem, err := newElementFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by newElementFromData().
 			return nil, err
@@ -1146,7 +1169,7 @@ func newHkeyElementsWithElement(level uint, hkey Digest, elem element) *hkeyElem
 //	    1: hkeys (byte string)
 //	    2: elements (array)
 //	]
-func (e *hkeyElements) Encode(enc *Encoder) error {
+func (e *hkeyElements) Encode(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
 
 	if e.level > maxDigestLevel {
 		return NewFatalError(fmt.Errorf("hash level %d exceeds max digest level %d", e.level, maxDigestLevel))
@@ -1200,7 +1223,7 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 
 	// Encode each element
 	for _, e := range e.elems {
-		err = e.Encode(enc)
+		err = e.Encode(enc, inlinedTypeInfo)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by element.Encode().
 			return err
@@ -1208,6 +1231,70 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 	}
 
 	// TODO: is Flush necessary
+	err = enc.CBOR.Flush()
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	return nil
+}
+
+// EncodeCompositeValues encodes hkeyElements as an array of values ordered by orderedKeys.
+// Level is not encoded because it is always 0.  Digests are not encoded because
+// they are encoded with composite keys in the composite extra data section.
+func (e *hkeyElements) EncodeCompositeValues(enc *Encoder, orderedKeys []MapKey, inlinedTypeInfo *inlinedExtraData) error {
+	if e.level != 0 {
+		return NewEncodingError(fmt.Errorf("hash level must be 0 to be encoded as composite, got %d", e.level))
+	}
+
+	if len(e.elems) != len(orderedKeys) {
+		return NewEncodingError(fmt.Errorf("number of elements %d is different from number of elements in composite extra data %d", len(e.elems), len(orderedKeys)))
+	}
+
+	var err error
+
+	err = enc.CBOR.EncodeArrayHead(uint64(len(orderedKeys)))
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	keyIndexes := make([]int, len(e.elems))
+	for i := 0; i < len(e.elems); i++ {
+		keyIndexes[i] = i
+	}
+
+	// Encode values in the same order as orderedKeys.
+	for i, k := range orderedKeys {
+		key, ok := k.(EquatableStorable)
+		if !ok {
+			return NewEncodingError(fmt.Errorf("composite keys must be implement EquableStorable"))
+		}
+
+		found := false
+		for j := i; j < len(keyIndexes); j++ {
+			index := keyIndexes[j]
+			se, ok := e.elems[index].(*singleElement)
+			if !ok {
+				return NewEncodingError(fmt.Errorf("composite element must not have collision"))
+			}
+			if key.Equal(se.key) {
+				found = true
+				keyIndexes[i], keyIndexes[j] = keyIndexes[j], keyIndexes[i]
+
+				err = encodeStorableAsElement(enc, se.value, inlinedTypeInfo)
+				if err != nil {
+					// Don't need to wrap error as external error because err is already categorized by encodeStorable().
+					return err
+				}
+
+				break
+			}
+		}
+		if !found {
+			return NewEncodingError(fmt.Errorf("failed to find key %v", k))
+		}
+	}
+
 	err = enc.CBOR.Flush()
 	if err != nil {
 		return NewEncodingError(err)
@@ -1797,7 +1884,7 @@ func newSingleElementsWithElement(level uint, elem *singleElement) *singleElemen
 //	    1: hkeys (0 length byte string)
 //	    2: elements (array)
 //	]
-func (e *singleElements) Encode(enc *Encoder) error {
+func (e *singleElements) Encode(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
 
 	if e.level > maxDigestLevel {
 		return NewFatalError(fmt.Errorf("digest level %d exceeds max digest level %d", e.level, maxDigestLevel))
@@ -1828,7 +1915,7 @@ func (e *singleElements) Encode(enc *Encoder) error {
 
 	// Encode each element
 	for _, e := range e.elems {
-		err = e.Encode(enc)
+		err = e.Encode(enc, inlinedTypeInfo)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by singleElement.Encode().
 			return err
@@ -1842,6 +1929,10 @@ func (e *singleElements) Encode(enc *Encoder) error {
 	}
 
 	return nil
+}
+
+func (e *singleElements) EncodeCompositeValues(_ *Encoder, _ []MapKey, _ *inlinedExtraData) error {
+	return NewEncodingError(fmt.Errorf("singleElements can't encoded as composite value"))
 }
 
 func (e *singleElements) Get(storage SlabStorage, digester Digester, level uint, _ Digest, comparator ValueComparator, key Value) (MapValue, error) {
@@ -2147,7 +2238,7 @@ func newMapDataSlabFromDataV0(
 
 	// Decode elements
 	cborDec := decMode.NewByteStreamDecoder(data)
-	elements, err := newElementsFromData(cborDec, decodeStorable)
+	elements, err := newElementsFromData(cborDec, decodeStorable, id, nil)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by newElementsFromDataV0().
 		return nil, err
@@ -2179,21 +2270,22 @@ func newMapDataSlabFromDataV0(
 //
 // Root DataSlab Header:
 //
-//	+-------------------------------+------------+
-//	| slab version + flag (2 bytes) | extra data |
-//	+-------------------------------+------------+
+//	+-------------------------------+------------+---------------------------------+
+//	| slab version + flag (2 bytes) | extra data | inlined extra data (if present) |
+//	+-------------------------------+------------+---------------------------------+
 //
-// Non-root DataSlab Header (18 bytes):
+// Non-root DataSlab Header:
 //
-//	+-------------------------------+-----------------------------+
-//	| slab version + flag (2 bytes) | next sib slab ID (16 bytes) |
-//	+-------------------------------+-----------------------------+
+//	+-------------------------------+---------------------------------+-----------------------------+
+//	| slab version + flag (2 bytes) | inlined extra data (if present) | next slab ID (if non-empty) |
+//	+-------------------------------+---------------------------------+-----------------------------+
 //
 // Content:
 //
 //	CBOR encoded elements
 //
 // See MapExtraData.Encode() for extra data section format.
+// See InlinedExtraData.Encode() for inlined extra data section format.
 // See hkeyElements.Encode() and singleElements.Encode() for elements section format.
 func newMapDataSlabFromDataV1(
 	id SlabID,
@@ -2208,6 +2300,7 @@ func newMapDataSlabFromDataV1(
 ) {
 	var err error
 	var extraData *MapExtraData
+	var inlinedExtraData []ExtraData
 	var next SlabID
 
 	// Decode extra data
@@ -2219,7 +2312,21 @@ func newMapDataSlabFromDataV1(
 		}
 	}
 
-	// Decode next slab ID
+	// Decode inlined extra data
+	if h.hasInlinedSlabs() {
+		inlinedExtraData, data, err = newInlinedExtraDataFromData(
+			data,
+			decMode,
+			decodeStorable,
+			decodeTypeInfo,
+		)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by newInlinedExtraDataFromData().
+			return nil, err
+		}
+	}
+
+	// Decode next slab ID for non-root slab
 	if h.hasNextSlabID() {
 		if len(data) < slabIDSize {
 			return nil, NewDecodingErrorf("data is too short for map data slab")
@@ -2236,7 +2343,7 @@ func newMapDataSlabFromDataV1(
 
 	// Decode elements
 	cborDec := decMode.NewByteStreamDecoder(data)
-	elements, err := newElementsFromData(cborDec, decodeStorable)
+	elements, err := newElementsFromData(cborDec, decodeStorable, id, inlinedExtraData)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by newElementsFromDataV1().
 		return nil, err
@@ -2264,27 +2371,284 @@ func newMapDataSlabFromDataV1(
 	}, nil
 }
 
+// DecodeInlinedCompositeStorable decodes inlined composite data. Encoding is
+// version 1 with CBOR tag having tag number CBORTagInlinedComposite, and tag contant
+// as 3-element array:
+//
+// - index of inlined extra data
+// - value ID index
+// - CBOR array of elements
+//
+// NOTE: This function doesn't decode tag number because tag number is decoded
+// in the caller and decoder only contains tag content.
+func DecodeInlinedCompositeStorable(
+	dec *cbor.StreamDecoder,
+	decodeStorable StorableDecoder,
+	parentSlabID SlabID,
+	inlinedExtraData []ExtraData,
+) (
+	Storable,
+	error,
+) {
+	const inlinedMapDataSlabArrayCount = 3
+
+	arrayCount, err := dec.DecodeArrayHead()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	if arrayCount != inlinedMapDataSlabArrayCount {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined composite, expect array of %d elements, got %d elements",
+				inlinedMapDataSlabArrayCount,
+				arrayCount))
+	}
+
+	// element 0: extra data index
+	extraDataIndex, err := dec.DecodeUint64()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+	if extraDataIndex >= uint64(len(inlinedExtraData)) {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined composite: inlined extra data index %d exceeds number of inlined extra data %d",
+				extraDataIndex,
+				len(inlinedExtraData)))
+	}
+
+	extraData, ok := inlinedExtraData[extraDataIndex].(*compositeExtraData)
+	if !ok {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined composite: expect *compositeExtraData, got %T",
+				inlinedExtraData[extraDataIndex]))
+	}
+
+	// element 1: slab index
+	b, err := dec.DecodeBytes()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+	if len(b) != slabIndexSize {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined composite: expect %d bytes for slab index, got %d bytes",
+				slabIndexSize,
+				len(b)))
+	}
+
+	var index [8]byte
+	copy(index[:], b)
+
+	slabID := NewSlabID(parentSlabID.address, SlabIndex(index))
+
+	// Decode values
+	elemCount, err := dec.DecodeArrayHead()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	if elemCount != uint64(len(extraData.keys)) {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode composite values: got %d, expect %d",
+				elemCount,
+				extraData.mapExtraData.Count))
+	}
+
+	hkeys := make([]Digest, len(extraData.hkeys))
+	copy(hkeys, extraData.hkeys)
+
+	// Decode values
+	size := uint32(hkeyElementsPrefixSize)
+	elems := make([]element, elemCount)
+	for i := 0; i < int(elemCount); i++ {
+		value, err := decodeStorable(dec, parentSlabID, inlinedExtraData)
+		if err != nil {
+			return nil, err
+		}
+
+		elemSize := singleElementPrefixSize + extraData.keys[i].ByteSize() + value.ByteSize()
+		// TODO: does key need to be copied?
+		elem := &singleElement{extraData.keys[i], value, elemSize}
+
+		elems[i] = elem
+		size += digestSize + elem.Size()
+	}
+
+	// Create hkeyElements
+	elements := &hkeyElements{
+		hkeys: hkeys,
+		elems: elems,
+		level: 0,
+		size:  size,
+	}
+
+	header := MapSlabHeader{
+		slabID:   slabID,
+		size:     inlinedMapDataSlabPrefixSize + elements.Size(),
+		firstKey: elements.firstKey(),
+	}
+
+	// TODO: does extra data needs to be copied?
+	copiedExtraData := &MapExtraData{
+		TypeInfo: extraData.mapExtraData.TypeInfo,
+		Count:    extraData.mapExtraData.Count,
+		Seed:     extraData.mapExtraData.Seed,
+	}
+
+	return &MapDataSlab{
+		header:         header,
+		elements:       elements,
+		extraData:      copiedExtraData,
+		anySize:        false,
+		collisionGroup: false,
+		inlined:        true,
+	}, nil
+}
+
+// DecodeInlinedMapStorable decodes inlined map data slab. Encoding is
+// version 1 with CBOR tag having tag number CBORTagInlinedMap, and tag contant
+// as 3-element array:
+//
+// - index of inlined extra data
+// - value ID index
+// - CBOR array of elements
+//
+// NOTE: This function doesn't decode tag number because tag number is decoded
+// in the caller and decoder only contains tag content.
+func DecodeInlinedMapStorable(
+	dec *cbor.StreamDecoder,
+	decodeStorable StorableDecoder,
+	parentSlabID SlabID,
+	inlinedExtraData []ExtraData,
+) (
+	Storable,
+	error,
+) {
+	const inlinedMapDataSlabArrayCount = 3
+
+	arrayCount, err := dec.DecodeArrayHead()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	if arrayCount != inlinedMapDataSlabArrayCount {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined map data slab, expect array of %d elements, got %d elements",
+				inlinedMapDataSlabArrayCount,
+				arrayCount))
+	}
+
+	// element 0: extra data index
+	extraDataIndex, err := dec.DecodeUint64()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+	if extraDataIndex >= uint64(len(inlinedExtraData)) {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined composite: inlined extra data index %d exceeds number of inlined extra data %d",
+				extraDataIndex,
+				len(inlinedExtraData)))
+	}
+	extraData, ok := inlinedExtraData[extraDataIndex].(*MapExtraData)
+	if !ok {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"extra data (%T) is wrong type, expect *MapExtraData",
+				inlinedExtraData[extraDataIndex]))
+	}
+
+	// element 1: slab index
+	b, err := dec.DecodeBytes()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+	if len(b) != slabIndexSize {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined composite: expect %d bytes for slab index, got %d bytes",
+				slabIndexSize,
+				len(b)))
+	}
+
+	var index [8]byte
+	copy(index[:], b)
+
+	slabID := NewSlabID(parentSlabID.address, SlabIndex(index))
+
+	// Decode elements
+	elements, err := newElementsFromData(dec, decodeStorable, parentSlabID, inlinedExtraData)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by newElementsFromData().
+		return nil, err
+	}
+
+	header := MapSlabHeader{
+		slabID:   slabID,
+		size:     inlinedMapDataSlabPrefixSize + elements.Size(),
+		firstKey: elements.firstKey(),
+	}
+
+	// NOTE: extra data doesn't need to be copied because every inlined map has its own inlined extra data.
+
+	return &MapDataSlab{
+		header:         header,
+		elements:       elements,
+		extraData:      extraData,
+		anySize:        false,
+		collisionGroup: false,
+		inlined:        true,
+	}, nil
+}
+
 // Encode encodes this map data slab to the given encoder.
 //
 // Root DataSlab Header:
 //
-//	+-------------------------------+------------+
-//	| slab version + flag (2 bytes) | extra data |
-//	+-------------------------------+------------+
+//	+-------------------------------+------------+---------------------------------+
+//	| slab version + flag (2 bytes) | extra data | inlined extra data (if present) |
+//	+-------------------------------+------------+---------------------------------+
 //
-// Non-root DataSlab Header (18 bytes):
+// Non-root DataSlab Header:
 //
-//	+-------------------------------+-------------------------+
-//	| slab version + flag (2 bytes) | next slab ID (16 bytes) |
-//	+-------------------------------+-------------------------+
+//	+-------------------------------+---------------------------------+-----------------------------+
+//	| slab version + flag (2 bytes) | inlined extra data (if present) | next slab ID (if non-empty) |
+//	+-------------------------------+---------------------------------+-----------------------------+
 //
 // Content:
 //
 //	CBOR encoded elements
 //
 // See MapExtraData.Encode() for extra data section format.
+// See InlinedExtraData.Encode() for inlined extra data section format.
 // See hkeyElements.Encode() and singleElements.Encode() for elements section format.
 func (m *MapDataSlab) Encode(enc *Encoder) error {
+
+	if m.inlined {
+		return NewEncodingError(
+			fmt.Errorf("failed to encode inlined map data slab as standalone slab"))
+	}
+
+	// Encoding is done in two steps:
+	//
+	// 1. Encode map elements using a new buffer while collecting inlined extra data from inlined elements.
+	// 2. Encode slab with deduplicated inlined extra data and copy encoded elements from previous buffer.
+
+	inlinedTypes := newInlinedExtraData()
+
+	// TODO: maybe use a buffer pool
+	var buf bytes.Buffer
+	elemEnc := NewEncoder(&buf, enc.encMode)
+
+	err := m.encodeElements(elemEnc, inlinedTypes)
+	if err != nil {
+		return err
+	}
 
 	const version = 1
 
@@ -2314,7 +2678,11 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 		h.setRoot()
 	}
 
-	// Write head (version + flag)
+	if !inlinedTypes.empty() {
+		h.setHasInlinedSlabs()
+	}
+
+	// Encode head
 	_, err = enc.Write(h[:])
 	if err != nil {
 		return NewEncodingError(err)
@@ -2329,7 +2697,15 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 		}
 	}
 
-	// Encode next slab ID
+	// Encode inlined types
+	if !inlinedTypes.empty() {
+		err = inlinedTypes.Encode(enc)
+		if err != nil {
+			return NewEncodingError(err)
+		}
+	}
+
+	// Encode next slab ID for non-root slab
 	if m.next != SlabIDUndefined {
 		n, err := m.next.ToRawBytes(enc.Scratch[:])
 		if err != nil {
@@ -2345,7 +2721,21 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode elements
-	err = m.elements.Encode(enc)
+	err = enc.CBOR.EncodeRawBytes(buf.Bytes())
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	err = enc.CBOR.Flush()
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	return nil
+}
+
+func (m *MapDataSlab) encodeElements(enc *Encoder, inlinedTypes *inlinedExtraData) error {
+	err := m.elements.Encode(enc, inlinedTypes)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by elements.Encode().
 		return err
@@ -2359,6 +2749,196 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
+// encodeAsInlined encodes inlined map data slab. Encoding is
+// version 1 with CBOR tag having tag number CBORTagInlinedMap,
+// and tag contant as 3-element array:
+//
+// - index of inlined extra data
+// - value ID index
+// - CBOR array of elements
+func (m *MapDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
+	if m.extraData == nil {
+		return NewEncodingError(
+			fmt.Errorf("failed to encode non-root map data slab as inlined"))
+	}
+
+	if !m.inlined {
+		return NewEncodingError(
+			fmt.Errorf("failed to encode standalone map data slab as inlined"))
+	}
+
+	if m.canBeEncodedAsComposite() {
+		return m.encodeAsInlinedComposite(enc, inlinedTypeInfo)
+	}
+
+	return m.encodeAsInlinedMap(enc, inlinedTypeInfo)
+}
+
+func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
+
+	extraDataIndex := inlinedTypeInfo.addMapExtraData(m.extraData)
+
+	if extraDataIndex > 255 {
+		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit 255", extraDataIndex))
+	}
+
+	var err error
+
+	// Encode tag number and array head of 3 elements
+	err = enc.CBOR.EncodeRawBytes([]byte{
+		// tag number
+		0xd8, CBORTagInlinedMap,
+		// array head of 3 elements
+		0x83,
+	})
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// element 0: extra data index
+	// NOTE: encoded extra data index is fixed sized CBOR uint
+	err = enc.CBOR.EncodeRawBytes([]byte{
+		0x18,
+		byte(extraDataIndex),
+	})
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// element 1: slab index
+	err = enc.CBOR.EncodeBytes(m.header.slabID.index[:])
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// element 2: map elements
+	err = m.elements.Encode(enc, inlinedTypeInfo)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by elements.Encode().
+		return err
+	}
+
+	err = enc.CBOR.Flush()
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	return nil
+}
+
+func (m *MapDataSlab) encodeAsInlinedComposite(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
+
+	// Composite extra data is deduplicated by TypeInfo.ID() and number of fields,
+	// Composite fields can be removed but new fields can't be added, and existing field types can't be modified.
+	// Given this, composites with same type ID and same number of fields have the same fields.
+	// See https://developers.flow.com/cadence/language/contract-updatability#fields
+
+	extraDataIndex, orderedKeys, exist := inlinedTypeInfo.getCompositeTypeInfo(m.extraData.TypeInfo, int(m.extraData.Count))
+
+	if !exist {
+		elements, ok := m.elements.(*hkeyElements)
+		if !ok {
+			// This should never happen because canBeEncodedAsComposite()
+			// returns false for map containing any collision elements.
+			return NewEncodingError(fmt.Errorf("singleElements can't be encoded as composite elements"))
+		}
+
+		orderedKeys = make([]MapKey, len(elements.elems))
+		for i, e := range elements.elems {
+			e, ok := e.(*singleElement)
+			if !ok {
+				// This should never happen because canBeEncodedAsComposite()
+				// returns false for map containing any collision elements.
+				return NewEncodingError(fmt.Errorf("non-singleElement can't be encoded as composite elements"))
+			}
+			orderedKeys[i] = e.key
+		}
+
+		extraDataIndex = inlinedTypeInfo.addCompositeExtraData(m.extraData, elements.hkeys, orderedKeys)
+	}
+
+	if extraDataIndex > 255 {
+		// This should never happen because of slab size.
+		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit 255", extraDataIndex))
+	}
+
+	var err error
+
+	// Encode tag number and array head of 3 elements
+	err = enc.CBOR.EncodeRawBytes([]byte{
+		// tag number
+		0xd8, CBORTagInlinedComposite,
+		// array head of 3 elements
+		0x83,
+	})
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// element 0: extra data index
+	// NOTE: encoded extra data index is fixed sized CBOR uint
+	err = enc.CBOR.EncodeRawBytes([]byte{
+		0x18,
+		byte(extraDataIndex),
+	})
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// element 1: slab id
+	err = enc.CBOR.EncodeBytes(m.header.slabID.index[:])
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// element 2: map elements
+	err = m.elements.EncodeCompositeValues(enc, orderedKeys, inlinedTypeInfo)
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	err = enc.CBOR.Flush()
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	return nil
+}
+
+// canBeEncodedAsComposite returns true if:
+// - map data slab is inlined
+// - map is composite type
+// - no collision elements
+// - keys are stored inline (not in a separate slab)
+func (m *MapDataSlab) canBeEncodedAsComposite() bool {
+	if !m.inlined {
+		return false
+	}
+
+	if !m.extraData.TypeInfo.IsComposite() {
+		return false
+	}
+
+	elements, ok := m.elements.(*hkeyElements)
+	if !ok {
+		return false
+	}
+
+	for _, e := range elements.elems {
+		se, ok := e.(*singleElement)
+		if !ok {
+			// Has collision element
+			return false
+		}
+		if _, ok = se.key.(SlabIDStorable); ok {
+			// Key is stored in a separate slab
+			return false
+		}
+	}
+
+	return true
+}
+
 func (m *MapDataSlab) hasPointer() bool {
 	return m.elements.hasPointer()
 }
@@ -2368,10 +2948,32 @@ func (m *MapDataSlab) ChildStorables() []Storable {
 }
 
 func (m *MapDataSlab) getPrefixSize() uint32 {
+	if m.inlined {
+		return inlinedMapDataSlabPrefixSize
+	}
 	if m.extraData != nil {
 		return mapRootDataSlabPrefixSize
 	}
 	return mapDataSlabPrefixSize
+}
+
+func (m *MapDataSlab) Inlined() bool {
+	return m.inlined
+}
+
+// Inlinable returns true if
+// - map data slab is root slab
+// - size of inlined map data slab <= maxInlineSize
+func (m *MapDataSlab) Inlinable(maxInlineSize uint64) bool {
+	if m.extraData == nil {
+		// Non-root data slab is not inlinable.
+		return false
+	}
+
+	inlinedSize := inlinedMapDataSlabPrefixSize + m.elements.Size()
+
+	// Inlined byte size must be less than max inline size.
+	return uint64(inlinedSize) <= maxInlineSize
 }
 
 func elementsStorables(elems elements, childStorables []Storable) []Storable {
@@ -2441,10 +3043,12 @@ func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Diges
 	m.header.size = m.getPrefixSize() + m.elements.Size()
 
 	// Store modified slab
-	err = storage.Store(m.header.slabID, m)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.slabID))
+	if !m.inlined {
+		err := storage.Store(m.header.slabID, m)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.slabID))
+		}
 	}
 
 	return existingValue, nil
@@ -2465,10 +3069,12 @@ func (m *MapDataSlab) Remove(storage SlabStorage, digester Digester, level uint,
 	m.header.size = m.getPrefixSize() + m.elements.Size()
 
 	// Store modified slab
-	err = storage.Store(m.header.slabID, m)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.slabID))
+	if !m.inlined {
+		err := storage.Store(m.header.slabID, m)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.slabID))
+		}
 	}
 
 	return k, v, nil
@@ -3025,6 +3631,14 @@ func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 	}
 
 	return nil
+}
+
+func (m *MapMetaDataSlab) Inlined() bool {
+	return false
+}
+
+func (m *MapMetaDataSlab) Inlinable(_ uint64) bool {
+	return false
 }
 
 func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
@@ -3888,6 +4502,51 @@ func NewMapWithRootID(storage SlabStorage, rootID SlabID, digestBuilder Digester
 	}, nil
 }
 
+func (m *OrderedMap) Inlined() bool {
+	return m.root.Inlined()
+}
+
+func (m *OrderedMap) setParentUpdater(f parentUpdater) {
+	m.parentUpdater = f
+}
+
+// setCallbackWithChild sets up callback function with child value so
+// parent map m can be notified when child value is modified.
+func (m *OrderedMap) setCallbackWithChild(
+	comparator ValueComparator,
+	hip HashInputProvider,
+	key Value,
+	child Value,
+) {
+	c, ok := child.(valueNotifier)
+	if !ok {
+		return
+	}
+
+	c.setParentUpdater(func() error {
+		// Set child value with parent map using same key.
+		// Set() calls c.Storable() which returns inlined or not-inlined child storable.
+		existingValueStorable, err := m.Set(comparator, hip, key, c)
+		if err != nil {
+			return err
+		}
+
+		if existingValueStorable == nil {
+			return NewFatalError(fmt.Errorf("failed to reset child value in parent updater callback because previous value is nil"))
+		}
+
+		return nil
+	})
+}
+
+// notifyParentIfNeeded calls parent updater if this map is a child value.
+func (m *OrderedMap) notifyParentIfNeeded() error {
+	if m.parentUpdater == nil {
+		return nil
+	}
+	return m.parentUpdater()
+}
+
 func (m *OrderedMap) Has(comparator ValueComparator, hip HashInputProvider, key Value) (bool, error) {
 	_, err := m.get(comparator, hip, key)
 	if err != nil {
@@ -3914,6 +4573,9 @@ func (m *OrderedMap) Get(comparator ValueComparator, hip HashInputProvider, key 
 		// Wrap err as external error (if needed) because err is returned by Storable interface.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
 	}
+
+	m.setCallbackWithChild(comparator, hip, key, v)
+
 	return v, nil
 }
 
@@ -3986,6 +4648,11 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 		}
 	}
 
+	err = m.notifyParentIfNeeded()
+	if err != nil {
+		return nil, err
+	}
+
 	return existingValue, nil
 }
 
@@ -4033,6 +4700,11 @@ func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, k
 			// Don't need to wrap error as external error because err is already categorized by OrderedMap.splitRoot().
 			return nil, nil, err
 		}
+	}
+
+	err = m.notifyParentIfNeeded()
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return k, v, nil
@@ -4142,24 +4814,88 @@ func (m *OrderedMap) promoteChildAsNewRoot(childID SlabID) error {
 }
 
 func (m *OrderedMap) SlabID() SlabID {
+	if m.root.Inlined() {
+		return SlabIDUndefined
+	}
 	return m.root.SlabID()
 }
 
 func (m *OrderedMap) ValueID() ValueID {
-	sid := m.SlabID()
-
-	var id ValueID
-	copy(id[:], sid.address[:])
-	copy(id[8:], sid.index[:])
-
-	return id
+	return slabIDToValueID(m.root.SlabID())
 }
 
-func (m *OrderedMap) StoredValue(_ SlabStorage) (Value, error) {
-	return m, nil
-}
+// Storable returns OrderedMap m as either:
+// - SlabIDStorable, or
+// - inlined data slab storable
+func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storable, error) {
 
-func (m *OrderedMap) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
+	inlined := m.root.Inlined()
+	inlinable := m.root.Inlinable(maxInlineSize)
+
+	if inlinable && inlined {
+		// Root slab is inlinable and was inlined.
+		// Return root slab as storable, no size adjustment and change to storage.
+		return m.root, nil
+	}
+
+	if !inlinable && !inlined {
+		// Root slab is not inlinable and was not inlined.
+		// Return root slab as storable, no size adjustment and change to storage.
+		return SlabIDStorable(m.SlabID()), nil
+	}
+
+	if inlinable && !inlined {
+		// Root slab is inlinable and was NOT inlined.
+
+		// Inline root data slab.
+
+		// Inlineable root slab must be data slab.
+		rootDataSlab, ok := m.root.(*MapDataSlab)
+		if !ok {
+			return nil, NewFatalError(fmt.Errorf("unexpected inlinable map slab type %T", m.root))
+		}
+
+		rootID := rootDataSlab.header.slabID
+
+		// Remove root slab from storage because it is going to be inlined.
+		err := m.Storage.Remove(rootID)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", rootID))
+		}
+
+		// Update root data slab size from not inlined to inlined
+		rootDataSlab.header.size = inlinedMapDataSlabPrefixSize + rootDataSlab.elements.Size()
+
+		// Update root data slab inlined status.
+		rootDataSlab.inlined = true
+
+		return rootDataSlab, nil
+	}
+
+	// here, root slab is NOT inlinable and was inlined.
+
+	// Un-inline root slab.
+
+	// Inlined root slab must be data slab.
+	rootDataSlab, ok := m.root.(*MapDataSlab)
+	if !ok {
+		return nil, NewFatalError(fmt.Errorf("unexpected inlined map slab type %T", m.root))
+	}
+
+	// Update root data slab size from inlined to not inlined.
+	rootDataSlab.header.size = mapRootDataSlabPrefixSize + rootDataSlab.elements.Size()
+
+	// Update root data slab inlined status.
+	rootDataSlab.inlined = false
+
+	// Store root slab in storage
+	err := m.Storage.Store(m.SlabID(), m.root)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.SlabID()))
+	}
+
 	return SlabIDStorable(m.SlabID()), nil
 }
 
@@ -4564,22 +5300,33 @@ func (m *OrderedMap) PopIterate(fn MapPopIterationFunc) error {
 	extraData := m.root.ExtraData()
 	extraData.Count = 0
 
+	inlined := m.root.Inlined()
+
+	prefixSize := uint32(mapRootDataSlabPrefixSize)
+	if inlined {
+		prefixSize = uint32(inlinedMapDataSlabPrefixSize)
+	}
+
 	// Set root to empty data slab
 	m.root = &MapDataSlab{
 		header: MapSlabHeader{
 			slabID: rootID,
-			size:   mapRootDataSlabPrefixSize + hkeyElementsPrefixSize,
+			size:   prefixSize + hkeyElementsPrefixSize,
 		},
 		elements:  newHkeyElements(0),
 		extraData: extraData,
+		inlined:   inlined,
 	}
 
-	// Save root slab
-	err = m.Storage.Store(m.root.SlabID(), m.root)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.root.SlabID()))
+	if !m.Inlined() {
+		// Save root slab
+		err = m.Storage.Store(m.root.SlabID(), m.root)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.root.SlabID()))
+		}
 	}
+
 	return nil
 }
 

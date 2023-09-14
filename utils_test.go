@@ -20,7 +20,9 @@ package atree
 
 import (
 	"flag"
+	"fmt"
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
@@ -91,6 +93,14 @@ type testTypeInfo struct {
 
 var _ TypeInfo = testTypeInfo{}
 
+func (i testTypeInfo) IsComposite() bool {
+	return false
+}
+
+func (i testTypeInfo) ID() string {
+	return fmt.Sprintf("uint64(%d)", i)
+}
+
 func (i testTypeInfo) Encode(enc *cbor.StreamEncoder) error {
 	return enc.EncodeUint64(i.value)
 }
@@ -100,13 +110,46 @@ func (i testTypeInfo) Equal(other TypeInfo) bool {
 	return ok && i.value == otherTestTypeInfo.value
 }
 
+const testCompositeTypeInfoTagNum = 246
+
+type testCompositeTypeInfo struct {
+	value uint64
+}
+
+var _ TypeInfo = testCompositeTypeInfo{}
+
+func (i testCompositeTypeInfo) IsComposite() bool {
+	return true
+}
+
+func (i testCompositeTypeInfo) ID() string {
+	return fmt.Sprintf("composite(%d)", i)
+}
+
+func (i testCompositeTypeInfo) Encode(enc *cbor.StreamEncoder) error {
+	err := enc.EncodeTagHead(testCompositeTypeInfoTagNum)
+	if err != nil {
+		return err
+	}
+	return enc.EncodeUint64(i.value)
+}
+
+func (i testCompositeTypeInfo) Equal(other TypeInfo) bool {
+	otherTestTypeInfo, ok := other.(testCompositeTypeInfo)
+	return ok && i.value == otherTestTypeInfo.value
+}
+
 func typeInfoComparator(a, b TypeInfo) bool {
-	x, ok := a.(testTypeInfo)
-	if !ok {
+	switch x := a.(type) {
+	case testTypeInfo:
+		return x.Equal(b)
+
+	case testCompositeTypeInfo:
+		return x.Equal(b)
+
+	default:
 		return false
 	}
-	y, ok := b.(testTypeInfo)
-	return ok && x.value == y.value
 }
 
 func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
@@ -323,21 +366,83 @@ func mapEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
 	iterator1, err := m1.Iterator()
 	require.NoError(t, err)
 
-	iterator2, err := m2.Iterator()
-	require.NoError(t, err)
+	if m1.Type().IsComposite() {
+		// Check element by key for composite type because
+		// composite fields can be rearranged to reuse seed and digests.
 
-	for {
-		key1, value1, err := iterator1.Next()
+		for {
+			key1, value1, err := iterator1.Next()
+			require.NoError(t, err)
+
+			if key1 == nil {
+				break
+			}
+
+			iterator2, err := m2.Iterator()
+			require.NoError(t, err)
+
+			var value2 Value
+			for {
+				key, value, err := iterator2.Next()
+				require.NoError(t, err)
+				require.NotNil(t, key)
+
+				if reflect.DeepEqual(key, key1) {
+					value2 = value
+					break
+				}
+			}
+
+			valueEqual(t, tic, value1, value2)
+		}
+	} else {
+
+		iterator2, err := m2.Iterator()
 		require.NoError(t, err)
 
-		key2, value2, err := iterator2.Next()
-		require.NoError(t, err)
+		for {
+			key1, value1, err := iterator1.Next()
+			require.NoError(t, err)
 
-		valueEqual(t, tic, key1, key2)
-		valueEqual(t, tic, value1, value2)
+			key2, value2, err := iterator2.Next()
+			require.NoError(t, err)
 
-		if key1 == nil || key2 == nil {
-			break
+			valueEqual(t, tic, key1, key2)
+			valueEqual(t, tic, value1, value2)
+
+			if key1 == nil || key2 == nil {
+				break
+			}
 		}
 	}
+}
+
+func valueIDToSlabID(vid ValueID) SlabID {
+	var id SlabID
+	copy(id.address[:], vid[:slabAddressSize])
+	copy(id.index[:], vid[slabAddressSize:])
+	return id
+}
+
+func testInlinedMapIDs(t *testing.T, address Address, m *OrderedMap) {
+	testInlinedSlabIDAndValueID(t, address, m.SlabID(), m.ValueID())
+}
+
+func testNotInlinedMapIDs(t *testing.T, address Address, m *OrderedMap) {
+	testNotInlinedSlabIDAndValueID(t, address, m.SlabID(), m.ValueID())
+}
+
+func testInlinedSlabIDAndValueID(t *testing.T, expectedAddress Address, slabID SlabID, valueID ValueID) {
+	require.Equal(t, SlabIDUndefined, slabID)
+
+	require.Equal(t, expectedAddress[:], valueID[:slabAddressSize])
+	require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+}
+
+func testNotInlinedSlabIDAndValueID(t *testing.T, expectedAddress Address, slabID SlabID, valueID ValueID) {
+	require.Equal(t, expectedAddress, slabID.address)
+	require.NotEqual(t, SlabIndexUndefined, slabID.index)
+
+	require.Equal(t, slabID.address[:], valueID[:slabAddressSize])
+	require.Equal(t, slabID.index[:], valueID[slabAddressSize:])
 }

@@ -900,7 +900,6 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 		data := map[SlabID][]byte{
 			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:270 count:11} ]
 			id1: {
-				// extra data
 				// version
 				0x10,
 				// extra data flag
@@ -970,7 +969,6 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 
 			// (data slab) next: 0, data: [0]
 			id4: {
-				// extra data
 				// version
 				0x10,
 				// extra data flag

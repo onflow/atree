@@ -345,6 +345,13 @@ func (v StringValue) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
 }
 
+func (v StringValue) Equal(other Storable) bool {
+	if _, ok := other.(StringValue); !ok {
+		return false
+	}
+	return v.str == other.(StringValue).str
+}
+
 func (v StringValue) Storable(storage SlabStorage, address Address, maxInlineSize uint64) (Storable, error) {
 	if uint64(v.ByteSize()) > maxInlineSize {
 
@@ -430,7 +437,7 @@ func (v StringValue) String() string {
 	return v.str
 }
 
-func decodeStorable(dec *cbor.StreamDecoder, id SlabID) (Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, id SlabID, inlinedExtraData []ExtraData) (Storable, error) {
 	t, err := dec.NextType()
 	if err != nil {
 		return nil, err
@@ -451,6 +458,15 @@ func decodeStorable(dec *cbor.StreamDecoder, id SlabID) (Storable, error) {
 		}
 
 		switch tagNumber {
+		case CBORTagInlinedArray:
+			return DecodeInlinedArrayStorable(dec, decodeStorable, id, inlinedExtraData)
+
+		case CBORTagInlinedMap:
+			return DecodeInlinedMapStorable(dec, decodeStorable, id, inlinedExtraData)
+
+		case CBORTagInlinedComposite:
+			return DecodeInlinedCompositeStorable(dec, decodeStorable, id, inlinedExtraData)
+
 		case CBORTagSlabID:
 			return DecodeSlabIDStorable(dec)
 
@@ -492,7 +508,7 @@ func decodeStorable(dec *cbor.StreamDecoder, id SlabID) (Storable, error) {
 			return Uint64Value(n), nil
 
 		case cborTagSomeValue:
-			storable, err := decodeStorable(dec, id)
+			storable, err := decodeStorable(dec, id, inlinedExtraData)
 			if err != nil {
 				return nil, err
 			}
@@ -507,12 +523,43 @@ func decodeStorable(dec *cbor.StreamDecoder, id SlabID) (Storable, error) {
 }
 
 func decodeTypeInfo(dec *cbor.StreamDecoder) (TypeInfo, error) {
-	value, err := dec.DecodeUint64()
+	t, err := dec.NextType()
 	if err != nil {
 		return nil, err
 	}
 
-	return testTypeInfo{value: value}, nil
+	switch t {
+	case cbor.UintType:
+		value, err := dec.DecodeUint64()
+		if err != nil {
+			return nil, err
+		}
+
+		return testTypeInfo{value: value}, nil
+
+	case cbor.TagType:
+		tagNum, err := dec.DecodeTagNumber()
+		if err != nil {
+			return nil, err
+		}
+
+		switch tagNum {
+		case testCompositeTypeInfoTagNum:
+			value, err := dec.DecodeUint64()
+			if err != nil {
+				return nil, err
+			}
+
+			return testCompositeTypeInfo{value: value}, nil
+
+		default:
+			return nil, fmt.Errorf("failed to decode type info")
+		}
+
+	default:
+		return nil, fmt.Errorf("failed to decode type info")
+	}
+
 }
 
 func compare(storage SlabStorage, value Value, storable Storable) (bool, error) {
@@ -677,25 +724,25 @@ func (v SomeStorable) String() string {
 	return fmt.Sprintf("%s", v.Storable)
 }
 
-type mutableValue struct {
+type testMutableValue struct {
 	storable *mutableStorable
 }
 
-var _ Value = &mutableValue{}
+var _ Value = &testMutableValue{}
 
-func newMutableValue(storableSize uint32) *mutableValue {
-	return &mutableValue{
+func newTestMutableValue(storableSize uint32) *testMutableValue {
+	return &testMutableValue{
 		storable: &mutableStorable{
 			size: storableSize,
 		},
 	}
 }
 
-func (v *mutableValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+func (v *testMutableValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
 	return v.storable, nil
 }
 
-func (v *mutableValue) updateStorableSize(n uint32) {
+func (v *testMutableValue) updateStorableSize(n uint32) {
 	v.storable.size = n
 }
 
@@ -710,7 +757,7 @@ func (s *mutableStorable) ByteSize() uint32 {
 }
 
 func (s *mutableStorable) StoredValue(SlabStorage) (Value, error) {
-	return &mutableValue{s}, nil
+	return &testMutableValue{s}, nil
 }
 
 func (*mutableStorable) ChildStorables() []Storable {

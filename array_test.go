@@ -1374,7 +1374,7 @@ func TestArrayNestedArrayMap(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		// Create a list of arrays with 2 elements.
+		// Create a list of arrays with 1 element.
 		nestedArrays := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
 			nested, err := NewArray(storage, address, nestedTypeInfo)
@@ -1782,7 +1782,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		verifyEmptyArray(t, storage2, typeInfo, address, array2)
 	})
 
-	t.Run("dataslab as root", func(t *testing.T) {
+	t.Run("root dataslab", func(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestBasicStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -1828,7 +1828,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		verifyArray(t, storage2, typeInfo, address, array2, values, false)
 	})
 
-	t.Run("has pointers", func(t *testing.T) {
+	t.Run("root metadata slab", func(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestBasicStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -1836,30 +1836,781 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		const arraySize = 20
+		const arraySize = 18
 		values := make([]Value, arraySize)
-		for i := uint64(0); i < arraySize-1; i++ {
+		for i := uint64(0); i < arraySize; i++ {
 			v := NewStringValue(strings.Repeat("a", 22))
 			values[i] = v
+
 			err := array.Append(v)
 			require.NoError(t, err)
 		}
 
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
+
+			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:270 count:11} ]
+			id1: {
+				// version
+				0x10,
+				// flag
+				0x81,
+
+				// extra data
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// child shared address
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+				// child header count
+				0x00, 0x02,
+				// child header 1 (slab index, count, size)
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0x09,
+				0x00, 0xe4,
+				// child header 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x00, 0x00, 0x00, 0x09,
+				0x00, 0xe4,
+			},
+
+			// (data slab) next: 3, data: [aaaaaaaaaaaaaaaaaaaaaa ... aaaaaaaaaaaaaaaaaaaaaa]
+			id2: {
+				// version
+				0x12,
+				// array data slab flag
+				0x00,
+				// next slab id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x09,
+				// CBOR encoded array elements
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+			},
+
+			// (data slab) data: [aaaaaaaaaaaaaaaaaaaaaa ... aaaaaaaaaaaaaaaaaaaaaa]
+			id3: {
+				// version
+				0x10,
+				// array data slab flag
+				0x00,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x09,
+				// CBOR encoded array elements
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+			},
+		}
+
+		m, err := storage.Encode()
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(m))
+		require.Equal(t, expected[id1], m[id1])
+		require.Equal(t, expected[id2], m[id2])
+		require.Equal(t, expected[id3], m[id3])
+
+		// Decode data to new storage
+		storage2 := newTestPersistentStorageWithData(t, m)
+
+		// Test new array from storage2
+		array2, err := NewArrayWithRootID(storage2, array.SlabID())
+		require.NoError(t, err)
+
+		verifyArray(t, storage2, typeInfo, address, array2, values, false)
+	})
+
+	// Same type info is reused.
+	t.Run("root data slab, inlined child array of same type", func(t *testing.T) {
+		typeInfo := testTypeInfo{42}
 		typeInfo2 := testTypeInfo{43}
+		storage := newTestBasicStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		nestedArray, err := NewArray(storage, address, typeInfo2)
+		parentArray, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		err = nestedArray.Append(Uint64Value(0))
+		const arraySize = 2
+		values := make([]Value, arraySize)
+		for i := 0; i < arraySize; i++ {
+			v := Uint64Value(i)
+
+			childArray, err := NewArray(storage, address, typeInfo2)
+			require.NoError(t, err)
+
+			err = childArray.Append(v)
+			require.NoError(t, err)
+
+			err = parentArray.Append(childArray)
+			require.NoError(t, err)
+
+			values[i] = childArray
+		}
+
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
+			// (data slab) data: [[0] [1]]
+			id1: {
+				// version
+				0x11,
+				// array data slab flag
+				0x80,
+
+				// extra data
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// inlined extra data
+				0x81,
+				// inlined array extra data
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2b,
+
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x02,
+				// CBOR encoded array elements
+				0xd8, 0xfa, 0x83, 0x18, 0x00, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x00,
+				0xd8, 0xfa, 0x83, 0x18, 0x00, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x01,
+			},
+		}
+
+		m, err := storage.Encode()
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(m))
+		require.Equal(t, expected[id1], m[id1])
+
+		// Decode data to new storage
+		storage2 := newTestPersistentStorageWithData(t, m)
+
+		// Test new array from storage2
+		array2, err := NewArrayWithRootID(storage2, parentArray.SlabID())
 		require.NoError(t, err)
 
-		values[arraySize-1] = nestedArray
+		verifyArray(t, storage2, typeInfo, address, array2, values, false)
+	})
 
-		err = array.Append(nestedArray)
+	// Different type info are encoded.
+	t.Run("root data slab, inlined array of different type", func(t *testing.T) {
+		typeInfo := testTypeInfo{42}
+		typeInfo2 := testTypeInfo{43}
+		typeInfo3 := testTypeInfo{44}
+		storage := newTestBasicStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		parentArray, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
+
+		const arraySize = 2
+		values := make([]Value, arraySize)
+		for i := 0; i < arraySize; i++ {
+			v := Uint64Value(i)
+
+			var ti TypeInfo
+			if i == 0 {
+				ti = typeInfo3
+			} else {
+				ti = typeInfo2
+			}
+			childArray, err := NewArray(storage, address, ti)
+			require.NoError(t, err)
+
+			err = childArray.Append(v)
+			require.NoError(t, err)
+
+			err = parentArray.Append(childArray)
+			require.NoError(t, err)
+
+			values[i] = childArray
+		}
+
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
+			// (data slab) data: [[0] [1]]
+			id1: {
+				// version
+				0x11,
+				// array data slab flag
+				0x80,
+
+				// extra data
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// inlined extra data
+				0x82,
+				// inlined array extra data
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2c,
+				// inlined array extra data
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2b,
+
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x02,
+				// CBOR encoded array elements
+				0xd8, 0xfa, 0x83, 0x18, 0x00, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x00,
+				0xd8, 0xfa, 0x83, 0x18, 0x01, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x01,
+			},
+		}
+
+		m, err := storage.Encode()
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(m))
+		require.Equal(t, expected[id1], m[id1])
+
+		// Decode data to new storage
+		storage2 := newTestPersistentStorageWithData(t, m)
+
+		// Test new array from storage2
+		array2, err := NewArrayWithRootID(storage2, parentArray.SlabID())
+		require.NoError(t, err)
+
+		verifyArray(t, storage2, typeInfo, address, array2, values, false)
+	})
+
+	// Same type info is reused.
+	t.Run("root data slab, multiple levels of inlined array of same type", func(t *testing.T) {
+		typeInfo := testTypeInfo{42}
+		typeInfo2 := testTypeInfo{43}
+		typeInfo3 := testTypeInfo{44}
+		storage := newTestBasicStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		const arraySize = 2
+		values := make([]Value, arraySize)
+		for i := 0; i < arraySize; i++ {
+			v := Uint64Value(i)
+
+			gchildArray, err := NewArray(storage, address, typeInfo2)
+			require.NoError(t, err)
+
+			err = gchildArray.Append(v)
+			require.NoError(t, err)
+
+			childArray, err := NewArray(storage, address, typeInfo3)
+			require.NoError(t, err)
+
+			err = childArray.Append(gchildArray)
+			require.NoError(t, err)
+
+			err = parentArray.Append(childArray)
+			require.NoError(t, err)
+
+			values[i] = childArray
+		}
+
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
+			// (data slab) data: [[0] [1]]
+			id1: {
+				// version
+				0x11,
+				// array data slab flag
+				0x80,
+
+				// extra data
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// inlined extra data
+				0x82,
+				// inlined array extra data
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2c,
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2b,
+
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x02,
+				// CBOR encoded array elements
+				0xd8, 0xfa, 0x83, 0x18, 0x00, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x99, 0x00, 0x01, 0xd8, 0xfa, 0x83, 0x18, 0x01, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x00,
+				0xd8, 0xfa, 0x83, 0x18, 0x00, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x99, 0x00, 0x01, 0xd8, 0xfa, 0x83, 0x18, 0x01, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x01,
+			},
+		}
+
+		m, err := storage.Encode()
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(m))
+		require.Equal(t, expected[id1], m[id1])
+
+		// Decode data to new storage
+		storage2 := newTestPersistentStorageWithData(t, m)
+
+		// Test new array from storage2
+		array2, err := NewArrayWithRootID(storage2, parentArray.SlabID())
+		require.NoError(t, err)
+
+		verifyArray(t, storage2, typeInfo, address, array2, values, false)
+	})
+
+	t.Run("root data slab, multiple levels of inlined array of different type", func(t *testing.T) {
+		typeInfo := testTypeInfo{42}
+		typeInfo2 := testTypeInfo{43}
+		typeInfo3 := testTypeInfo{44}
+		typeInfo4 := testTypeInfo{45}
+		typeInfo5 := testTypeInfo{46}
+		storage := newTestBasicStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		const arraySize = 2
+		values := make([]Value, arraySize)
+		for i := 0; i < arraySize; i++ {
+			v := Uint64Value(i)
+
+			var ti TypeInfo
+			if i == 0 {
+				ti = typeInfo2
+			} else {
+				ti = typeInfo4
+			}
+			gchildArray, err := NewArray(storage, address, ti)
+			require.NoError(t, err)
+
+			err = gchildArray.Append(v)
+			require.NoError(t, err)
+
+			if i == 0 {
+				ti = typeInfo3
+			} else {
+				ti = typeInfo5
+			}
+			childArray, err := NewArray(storage, address, ti)
+			require.NoError(t, err)
+
+			err = childArray.Append(gchildArray)
+			require.NoError(t, err)
+
+			err = parentArray.Append(childArray)
+			require.NoError(t, err)
+
+			values[i] = childArray
+		}
+
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
+			// (data slab) data: [[0] [1]]
+			id1: {
+				// version
+				0x11,
+				// array data slab flag
+				0x80,
+
+				// extra data
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// inlined extra data
+				0x84,
+				// typeInfo3
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2c,
+				// typeInfo2
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2b,
+				// typeInfo5
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2e,
+				// typeInfo4
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2d,
+
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x02,
+				// CBOR encoded array elements
+				0xd8, 0xfa, 0x83, 0x18, 0x00, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x99, 0x00, 0x01, 0xd8, 0xfa, 0x83, 0x18, 0x01, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x00,
+				0xd8, 0xfa, 0x83, 0x18, 0x02, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x99, 0x00, 0x01, 0xd8, 0xfa, 0x83, 0x18, 0x03, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x01,
+			},
+		}
+
+		m, err := storage.Encode()
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(m))
+		require.Equal(t, expected[id1], m[id1])
+
+		// Decode data to new storage
+		storage2 := newTestPersistentStorageWithData(t, m)
+
+		// Test new array from storage2
+		array2, err := NewArrayWithRootID(storage2, parentArray.SlabID())
+		require.NoError(t, err)
+
+		verifyArray(t, storage2, typeInfo, address, array2, values, false)
+	})
+
+	t.Run("root metadata slab, inlined array of same type", func(t *testing.T) {
+
+		typeInfo := testTypeInfo{42}
+		typeInfo2 := testTypeInfo{43}
+		storage := newTestBasicStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		const arraySize = 20
+		values := make([]Value, 0, arraySize)
+		for i := uint64(0); i < arraySize-2; i++ {
+			v := NewStringValue(strings.Repeat("a", 22))
+
+			err := array.Append(v)
+			require.NoError(t, err)
+
+			values = append(values, v)
+		}
+
+		for i := 0; i < 2; i++ {
+			childArray, err := NewArray(storage, address, typeInfo2)
+			require.NoError(t, err)
+
+			err = childArray.Append(Uint64Value(i))
+			require.NoError(t, err)
+
+			err = array.Append(childArray)
+			require.NoError(t, err)
+
+			values = append(values, childArray)
+		}
 
 		require.Equal(t, uint64(arraySize), array.Count())
-		require.Equal(t, uint64(1), nestedArray.Count())
+
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
+
+			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:268 count:11} ]
+			id1: {
+				// version
+				0x10,
+				// flag
+				0x81,
+
+				// extra data
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// child shared address
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+				// child header count
+				0x00, 0x02,
+				// child header 1 (slab index, count, size)
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0x09,
+				0x00, 0xe4,
+				// child header 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x00, 0x00, 0x00, 0x0b,
+				0x01, 0x0c,
+			},
+
+			// (data slab) next: 3, data: [aaaaaaaaaaaaaaaaaaaaaa ... aaaaaaaaaaaaaaaaaaaaaa]
+			id2: {
+				// version
+				0x12,
+				// array data slab flag
+				0x00,
+				// next slab id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x09,
+				// CBOR encoded array elements
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+			},
+
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... [0] [1]]
+			id3: {
+				// version
+				0x11,
+				// array data slab flag
+				0x00,
+				// inlined extra data
+				0x81,
+				// inlined array extra data
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2b,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x0b,
+				// CBOR encoded array elements
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0xd8, 0xfa, 0x83, 0x18, 0x00, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x0,
+				0xd8, 0xfa, 0x83, 0x18, 0x00, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x1,
+			},
+		}
+
+		m, err := storage.Encode()
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(m))
+		require.Equal(t, expected[id1], m[id1])
+		require.Equal(t, expected[id2], m[id2])
+		require.Equal(t, expected[id3], m[id3])
+
+		// Decode data to new storage
+		storage2 := newTestPersistentStorageWithData(t, m)
+
+		// Test new array from storage2
+		array2, err := NewArrayWithRootID(storage2, array.SlabID())
+		require.NoError(t, err)
+
+		verifyArray(t, storage2, typeInfo, address, array2, values, false)
+	})
+
+	t.Run("root metadata slab, inlined array of different type", func(t *testing.T) {
+
+		typeInfo := testTypeInfo{42}
+		typeInfo2 := testTypeInfo{43}
+		typeInfo3 := testTypeInfo{44}
+		storage := newTestBasicStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		const arraySize = 20
+		values := make([]Value, 0, arraySize)
+		for i := uint64(0); i < arraySize-2; i++ {
+			v := NewStringValue(strings.Repeat("a", 22))
+
+			err := array.Append(v)
+			require.NoError(t, err)
+
+			values = append(values, v)
+		}
+
+		for i := 0; i < 2; i++ {
+			var ti TypeInfo
+			if i == 0 {
+				ti = typeInfo3
+			} else {
+				ti = typeInfo2
+			}
+
+			childArray, err := NewArray(storage, address, ti)
+			require.NoError(t, err)
+
+			err = childArray.Append(Uint64Value(i))
+			require.NoError(t, err)
+
+			err = array.Append(childArray)
+			require.NoError(t, err)
+
+			values = append(values, childArray)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
+
+			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:268 count:11} ]
+			id1: {
+				// version
+				0x10,
+				// flag
+				0x81,
+
+				// extra data
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// child shared address
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+				// child header count
+				0x00, 0x02,
+				// child header 1 (slab index, count, size)
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0x09,
+				0x00, 0xe4,
+				// child header 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x00, 0x00, 0x00, 0x0b,
+				0x01, 0x0c,
+			},
+
+			// (data slab) next: 3, data: [aaaaaaaaaaaaaaaaaaaaaa ... aaaaaaaaaaaaaaaaaaaaaa]
+			id2: {
+				// version
+				0x12,
+				// array data slab flag
+				0x00,
+				// next slab id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x09,
+				// CBOR encoded array elements
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+			},
+
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... [0] [1]]
+			id3: {
+				// version
+				0x11,
+				// array data slab flag
+				0x00,
+				// inlined extra data
+				0x82,
+				// inlined array extra data
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2c,
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2b,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x0b,
+				// CBOR encoded array elements
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0xd8, 0xfa, 0x83, 0x18, 0x00, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x0,
+				0xd8, 0xfa, 0x83, 0x18, 0x01, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x99, 0x00, 0x01, 0xd8, 0xa4, 0x1,
+			},
+		}
+
+		m, err := storage.Encode()
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(m))
+		require.Equal(t, expected[id1], m[id1])
+		require.Equal(t, expected[id2], m[id2])
+		require.Equal(t, expected[id3], m[id3])
+
+		// Decode data to new storage
+		storage2 := newTestPersistentStorageWithData(t, m)
+
+		// Test new array from storage2
+		array2, err := NewArrayWithRootID(storage2, array.SlabID())
+		require.NoError(t, err)
+
+		verifyArray(t, storage2, typeInfo, address, array2, values, false)
+	})
+
+	t.Run("has pointers", func(t *testing.T) {
+		typeInfo := testTypeInfo{42}
+		typeInfo2 := testTypeInfo{43}
+		storage := newTestBasicStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		const arraySize = 20
+		values := make([]Value, 0, arraySize)
+		for i := uint64(0); i < arraySize-1; i++ {
+			v := NewStringValue(strings.Repeat("a", 22))
+
+			err := array.Append(v)
+			require.NoError(t, err)
+
+			values = append(values, v)
+		}
+
+		childArray, err := NewArray(storage, address, typeInfo2)
+		require.NoError(t, err)
+
+		for i := 0; i < 5; i++ {
+			v := NewStringValue(strings.Repeat("b", 22))
+			err = childArray.Append(v)
+			require.NoError(t, err)
+		}
+
+		err = array.Append(childArray)
+		require.NoError(t, err)
+
+		values = append(values, childArray)
+
+		require.Equal(t, uint64(arraySize), array.Count())
+		require.Equal(t, uint64(5), childArray.Count())
 
 		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
@@ -1920,7 +2671,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
 			id3: {
-				// version
+				// version (no next slab ID, no inlined slabs)
 				0x10,
 				// array data slab flag
 				0x40,
@@ -1940,7 +2691,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 				0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
 			},
 
-			// (data slab) next: 0, data: [0]
+			// (data slab) next: 0, data: [bbbbbbbbbbbbbbbbbbbbbb ...]
 			id4: {
 				// version
 				0x10,
@@ -1954,9 +2705,189 @@ func TestArrayEncodeDecode(t *testing.T) {
 				0x18, 0x2b,
 
 				// CBOR encoded array head (fixed size 3 byte)
-				0x99, 0x00, 0x01,
+				0x99, 0x00, 0x05,
 				// CBOR encoded array elements
-				0xd8, 0xa4, 0x00,
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
+			},
+		}
+
+		m, err := storage.Encode()
+		require.NoError(t, err)
+		require.Equal(t, len(expected), len(m))
+		require.Equal(t, expected[id1], m[id1])
+		require.Equal(t, expected[id2], m[id2])
+		require.Equal(t, expected[id3], m[id3])
+		require.Equal(t, expected[id4], m[id4])
+
+		// Decode data to new storage
+		storage2 := newTestPersistentStorageWithData(t, m)
+
+		// Test new array from storage2
+		array2, err := NewArrayWithRootID(storage2, array.SlabID())
+		require.NoError(t, err)
+
+		verifyArray(t, storage2, typeInfo, address, array2, values, false)
+	})
+
+	t.Run("has pointers in inlined slab", func(t *testing.T) {
+		typeInfo := testTypeInfo{42}
+		typeInfo2 := testTypeInfo{43}
+		typeInfo3 := testTypeInfo{44}
+		storage := newTestBasicStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		const arraySize = 20
+		values := make([]Value, 0, arraySize)
+		for i := uint64(0); i < arraySize-1; i++ {
+			v := NewStringValue(strings.Repeat("a", 22))
+
+			err := array.Append(v)
+			require.NoError(t, err)
+
+			values = append(values, v)
+		}
+
+		childArray, err := NewArray(storage, address, typeInfo3)
+		require.NoError(t, err)
+
+		gchildArray, err := NewArray(storage, address, typeInfo2)
+		require.NoError(t, err)
+
+		for i := 0; i < 5; i++ {
+			v := NewStringValue(strings.Repeat("b", 22))
+
+			err = gchildArray.Append(v)
+			require.NoError(t, err)
+		}
+
+		err = childArray.Append(gchildArray)
+		require.NoError(t, err)
+
+		err = array.Append(childArray)
+		require.NoError(t, err)
+
+		values = append(values, childArray)
+
+		require.Equal(t, uint64(arraySize), array.Count())
+		require.Equal(t, uint64(1), childArray.Count())
+		require.Equal(t, uint64(5), gchildArray.Count())
+
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id4 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 5}}
+
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
+
+			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:287 count:11} ]
+			id1: {
+				// version
+				0x10,
+				// flag
+				0x81,
+
+				// extra data
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// child shared address
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+				// child header count
+				0x00, 0x02,
+				// child header 1 (slab index, count, size)
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0x09,
+				0x00, 0xe4,
+				// child header 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x00, 0x00, 0x00, 0x0b,
+				0x01, 0x1f,
+			},
+
+			// (data slab) next: 3, data: [aaaaaaaaaaaaaaaaaaaaaa ... aaaaaaaaaaaaaaaaaaaaaa]
+			id2: {
+				// version
+				0x12,
+				// array data slab flag
+				0x00,
+				// next slab id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x09,
+				// CBOR encoded array elements
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+			},
+
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... [SlabID(...)]]
+			id3: {
+				// version (no next slab ID, has inlined slabs)
+				0x11,
+				// array data slab flag (has pointer)
+				0x40,
+
+				// inlined array of extra data
+				0x81,
+				// type info
+				0xd8, 0xf7,
+				0x81,
+				0x18, 0x2c,
+
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x0b,
+				// CBOR encoded array elements
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0xd8, 0xfa, 0x83, 0x18, 0x00, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x99, 0x00, 0x01,
+				0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+			},
+
+			// (data slab) data: [bbbbbbbbbbbbbbbbbbbbbb ...]
+			id4: {
+				// version
+				0x10,
+				// extra data flag
+				0x80,
+
+				// extra data
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2b,
+
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x05,
+				// CBOR encoded array elements
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
 			},
 		}
 
@@ -3577,8 +4508,10 @@ func createArrayWithCompositeValues(
 		nested, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		err = nested.Append(Uint64Value(i))
-		require.NoError(t, err)
+		for j := 0; j < 50; j++ {
+			err = nested.Append(Uint64Value(j))
+			require.NoError(t, err)
+		}
 
 		expectedValues[i] = nested
 
@@ -3612,8 +4545,10 @@ func createArrayWithSimpleAndCompositeValues(
 			a, err := NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			err = a.Append(Uint64Value(i))
-			require.NoError(t, err)
+			for j := 0; j < 50; j++ {
+				err = a.Append(Uint64Value(j))
+				require.NoError(t, err)
+			}
 
 			values[i] = a
 		} else {
@@ -3679,9 +4614,9 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	values := make([]*mutableValue, arraySize)
+	values := make([]*testMutableValue, arraySize)
 	for i := uint64(0); i < arraySize; i++ {
-		v := newMutableValue(initialStorableSize)
+		v := newTestMutableValue(initialStorableSize)
 		values[i] = v
 
 		err := array.Append(v)
@@ -3712,4 +4647,1558 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 
 	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
 	require.NoError(t, err)
+}
+
+func TestChildArrayInlinabilityInParentArray(t *testing.T) {
+
+	SetThreshold(256)
+	defer SetThreshold(1024)
+
+	t.Run("parent is root data slab, with one child array", func(t *testing.T) {
+		const arraySize = 1
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		// Create an array with empty child array as element.
+		parentArray, expectedValues := createArrayWithEmptyChildArray(t, storage, address, typeInfo, arraySize)
+
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+		require.True(t, parentArray.root.IsData())
+		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
+
+		// Test parent slab size with 1 empty inlined child arrays
+		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*arraySize
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Get inlined child array
+		e, err := parentArray.Get(0)
+		require.NoError(t, err)
+		require.Equal(t, 1, getStoredDeltas(storage))
+
+		childArray, ok := e.(*Array)
+		require.True(t, ok)
+		require.True(t, childArray.Inlined())
+		require.Equal(t, SlabIDUndefined, childArray.SlabID())
+
+		valueID := childArray.ValueID()
+		require.Equal(t, address[:], valueID[:slabAddressSize])
+		require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+
+		v := NewStringValue(strings.Repeat("a", 9))
+		vSize := v.size
+
+		// Appending 10 elements to child array so that inlined child array reaches max inlined size as array element.
+		for i := 0; i < 10; i++ {
+			err = childArray.Append(v)
+			require.NoError(t, err)
+			require.Equal(t, uint64(i+1), childArray.Count())
+
+			require.True(t, childArray.Inlined())
+			require.Equal(t, 1, getStoredDeltas(storage))
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, valueID, childArray.ValueID())        // Value ID is unchanged
+
+			// Test inlined child slab size
+			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			// Test parent slab size
+			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedSize
+			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// Add one more element to child array which triggers inlined child array slab becomes standalone slab
+		err = childArray.Append(v)
+		require.NoError(t, err)
+
+		require.False(t, childArray.Inlined())
+		require.Equal(t, 2, getStoredDeltas(storage)) // There are 2 stored slab because child array is no longer inlined.
+
+		expectedSlabID := valueIDToSlabID(valueID)
+		require.Equal(t, expectedSlabID, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
+		require.Equal(t, valueID, childArray.ValueID())       // Value ID is unchanged
+
+		expectedStandaloneSlabSize := arrayRootDataSlabPrefixSize + uint32(childArray.Count())*vSize
+		require.Equal(t, expectedStandaloneSlabSize, childArray.root.ByteSize())
+
+		expectedParentSize = arrayRootDataSlabPrefixSize + SlabIDStorable(expectedSlabID).ByteSize()
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Remove elements from child array which triggers standalone array slab becomes inlined slab again.
+		for childArray.Count() > 0 {
+			existingStorable, err := childArray.Remove(0)
+			require.NoError(t, err)
+			require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+
+			require.True(t, childArray.Inlined())
+			require.Equal(t, 1, getStoredDeltas(storage))
+			require.Equal(t, SlabIDUndefined, childArray.SlabID())
+			require.Equal(t, valueID, childArray.ValueID()) // value ID is unchanged
+
+			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedSize
+			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		require.Equal(t, uint64(0), childArray.Count())
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+	})
+
+	t.Run("parent is root data slab, with two child arrays", func(t *testing.T) {
+		const arraySize = 2
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		// Create an array with empty child array as element.
+		parentArray, expectedValues := createArrayWithEmptyChildArray(t, storage, address, typeInfo, arraySize)
+
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
+
+		// Test parent slab size with 2 empty inlined child arrays
+		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*arraySize
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		children := make([]struct {
+			array   *Array
+			valueID ValueID
+		}, arraySize)
+
+		for i := 0; i < arraySize; i++ {
+			e, err := parentArray.Get(uint64(i))
+			require.NoError(t, err)
+			require.Equal(t, 1, getStoredDeltas(storage))
+
+			childArray, ok := e.(*Array)
+			require.True(t, ok)
+			require.True(t, childArray.Inlined())
+			require.Equal(t, SlabIDUndefined, childArray.SlabID())
+
+			valueID := childArray.ValueID()
+			require.Equal(t, address[:], valueID[:slabAddressSize])
+			require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+
+			children[i].array = childArray
+			children[i].valueID = valueID
+		}
+
+		v := NewStringValue(strings.Repeat("a", 9))
+		vSize := v.size
+
+		// Appending 10 elements to child array so that inlined child array reaches max inlined size as array element.
+		for i := 0; i < 10; i++ {
+			for _, child := range children {
+				childArray := child.array
+				childValueID := child.valueID
+
+				err := childArray.Append(v)
+				require.NoError(t, err)
+				require.Equal(t, uint64(i+1), childArray.Count())
+
+				require.True(t, childArray.Inlined())
+				require.Equal(t, 1, getStoredDeltas(storage))
+				require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+				require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
+
+				// Test inlined child slab size
+				expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+				require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+				// Test parent slab size
+				expectedParentSize += vSize
+				require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			}
+		}
+
+		expectedStoredDeltas := 1
+
+		// Add one more element to child array which triggers inlined child array slab becomes standalone slab
+		for _, child := range children {
+			childArray := child.array
+			childValueID := child.valueID
+
+			err := childArray.Append(v)
+			require.NoError(t, err)
+			require.False(t, childArray.Inlined())
+
+			expectedStoredDeltas++
+			require.Equal(t, expectedStoredDeltas, getStoredDeltas(storage)) // There are more stored slab because child array is no longer inlined.
+
+			expectedSlabID := valueIDToSlabID(childValueID)
+			require.Equal(t, expectedSlabID, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
+			require.Equal(t, childValueID, childArray.ValueID())  // Value ID is unchanged
+
+			expectedStandaloneSlabSize := arrayRootDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedStandaloneSlabSize, childArray.root.ByteSize())
+
+			//expectedParentSize := arrayRootDataSlabPrefixSize + SlabIDStorable(expectedSlabID).ByteSize()
+			expectedParentSize -= inlinedArrayDataSlabPrefixSize + uint32(childArray.Count()-1)*vSize
+			expectedParentSize += SlabIDStorable(expectedSlabID).ByteSize()
+			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// Remove one element from child array which triggers standalone array slab becomes inlined slab again.
+		for _, child := range children {
+			childArray := child.array
+			childValueID := child.valueID
+
+			existingStorable, err := childArray.Remove(0)
+			require.NoError(t, err)
+			require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+
+			require.True(t, childArray.Inlined())
+
+			expectedStoredDeltas--
+			require.Equal(t, expectedStoredDeltas, getStoredDeltas(storage))
+
+			require.Equal(t, SlabIDUndefined, childArray.SlabID())
+			require.Equal(t, childValueID, childArray.ValueID()) // value ID is unchanged
+
+			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			expectedParentSize -= SlabIDStorable{}.ByteSize()
+			expectedParentSize += expectedInlinedSize
+			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// Remove remaining elements from inlined child array
+		childArrayCount := children[0].array.Count()
+		for i := 0; i < int(childArrayCount); i++ {
+			for _, child := range children {
+				childArray := child.array
+				childValueID := child.valueID
+
+				existingStorable, err := childArray.Remove(0)
+				require.NoError(t, err)
+				require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+
+				require.True(t, childArray.Inlined())
+				require.Equal(t, 1, getStoredDeltas(storage))
+				require.Equal(t, SlabIDUndefined, childArray.SlabID())
+				require.Equal(t, childValueID, childArray.ValueID()) // value ID is unchanged
+
+				expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+				require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+				expectedParentSize -= vSize
+				require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			}
+		}
+
+		for _, child := range children {
+			require.Equal(t, uint64(0), child.array.Count())
+		}
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+	})
+
+	t.Run("parent is root metadata slab, with four child arrays", func(t *testing.T) {
+		const arraySize = 4
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		// Create an array with empty child array as element.
+		parentArray, expectedValues := createArrayWithEmptyChildArray(t, storage, address, typeInfo, arraySize)
+
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+		require.True(t, parentArray.root.IsData())
+		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
+
+		// Test parent slab size with 4 empty inlined child arrays
+		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*arraySize
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		children := make([]struct {
+			array   *Array
+			valueID ValueID
+		}, arraySize)
+
+		for i := 0; i < arraySize; i++ {
+			e, err := parentArray.Get(uint64(i))
+			require.NoError(t, err)
+			require.Equal(t, 1, getStoredDeltas(storage))
+
+			childArray, ok := e.(*Array)
+			require.True(t, ok)
+			require.True(t, childArray.Inlined())
+			require.Equal(t, SlabIDUndefined, childArray.SlabID())
+
+			valueID := childArray.ValueID()
+			require.Equal(t, address[:], valueID[:slabAddressSize])
+			require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+
+			children[i].array = childArray
+			children[i].valueID = valueID
+		}
+
+		v := NewStringValue(strings.Repeat("a", 9))
+		vSize := v.size
+
+		// Appending 10 elements to child array so that inlined child array reaches max inlined size as array element.
+		for i := 0; i < 10; i++ {
+			for _, child := range children {
+				childArray := child.array
+				childValueID := child.valueID
+
+				err := childArray.Append(v)
+				require.NoError(t, err)
+				require.Equal(t, uint64(i+1), childArray.Count())
+
+				require.True(t, childArray.Inlined())
+				require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+				require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
+
+				// Test inlined child slab size
+				expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+				require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			}
+		}
+
+		// Parent array has 1 meta data slab and 2 data slabs.
+		// All child arrays are inlined.
+		require.Equal(t, 3, getStoredDeltas(storage))
+		require.False(t, parentArray.root.IsData())
+
+		// Add one more element to child array which triggers inlined child array slab becomes standalone slab
+		for _, child := range children {
+			childArray := child.array
+			childValueID := child.valueID
+
+			err := childArray.Append(v)
+			require.NoError(t, err)
+			require.False(t, childArray.Inlined())
+
+			expectedSlabID := valueIDToSlabID(childValueID)
+			require.Equal(t, expectedSlabID, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
+			require.Equal(t, childValueID, childArray.ValueID())  // Value ID is unchanged
+
+			expectedStandaloneSlabSize := arrayRootDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedStandaloneSlabSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// Parent array has one data slab and all child arrays are not inlined.
+		require.Equal(t, 1+arraySize, getStoredDeltas(storage))
+		require.True(t, parentArray.root.IsData())
+
+		// Remove one element from child array which triggers standalone array slab becomes inlined slab again.
+		for _, child := range children {
+			childArray := child.array
+			childValueID := child.valueID
+
+			existingStorable, err := childArray.Remove(0)
+			require.NoError(t, err)
+			require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+
+			require.True(t, childArray.Inlined())
+			require.Equal(t, SlabIDUndefined, childArray.SlabID())
+			require.Equal(t, childValueID, childArray.ValueID()) // value ID is unchanged
+
+			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// Parent array has 1 meta data slab and 2 data slabs.
+		// All child arrays are inlined.
+		require.Equal(t, 3, getStoredDeltas(storage))
+		require.False(t, parentArray.root.IsData())
+
+		// Remove remaining elements from inlined child array
+		childArrayCount := children[0].array.Count()
+		for i := 0; i < int(childArrayCount); i++ {
+			for _, child := range children {
+				childArray := child.array
+				childValueID := child.valueID
+
+				existingStorable, err := childArray.Remove(0)
+				require.NoError(t, err)
+				require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+
+				require.True(t, childArray.Inlined())
+				require.Equal(t, SlabIDUndefined, childArray.SlabID())
+				require.Equal(t, childValueID, childArray.ValueID()) // value ID is unchanged
+
+				expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+				require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			}
+		}
+
+		// Parent array has 1 data slab.
+		// All child arrays are inlined.
+		require.Equal(t, 1, getStoredDeltas(storage))
+		require.True(t, parentArray.root.IsData())
+
+		for _, child := range children {
+			require.Equal(t, uint64(0), child.array.Count())
+		}
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+	})
+}
+
+func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
+
+	SetThreshold(256)
+	defer SetThreshold(1024)
+
+	t.Run("parent is root data slab, one child array, one grand child array, changes to grand child array triggers child array slab to become standalone slab", func(t *testing.T) {
+		const arraySize = 1
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		// Create an array with empty child array as element, which has empty child array.
+		parentArray, expectedValues := createArrayWithEmpty2LevelChildArray(t, storage, address, typeInfo, arraySize)
+
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+		require.True(t, parentArray.root.IsData())
+		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
+
+		// Test parent slab size with 1 inlined child array
+		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*2*arraySize
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Get inlined child array
+		e, err := parentArray.Get(0)
+		require.NoError(t, err)
+		require.Equal(t, 1, getStoredDeltas(storage))
+
+		childArray, ok := e.(*Array)
+		require.True(t, ok)
+		require.True(t, childArray.Inlined())
+		require.Equal(t, SlabIDUndefined, childArray.SlabID())
+
+		valueID := childArray.ValueID()
+		require.Equal(t, address[:], valueID[:slabAddressSize])
+		require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+
+		// Get inlined grand child array
+		e, err = childArray.Get(0)
+		require.NoError(t, err)
+		require.Equal(t, 1, getStoredDeltas(storage))
+
+		gchildArray, ok := e.(*Array)
+		require.True(t, ok)
+		require.True(t, gchildArray.Inlined())
+		require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
+
+		gValueID := gchildArray.ValueID()
+		require.Equal(t, address[:], gValueID[:slabAddressSize])
+		require.NotEqual(t, SlabIndexUndefined[:], gValueID[slabAddressSize:])
+		require.NotEqual(t, valueID[slabAddressSize:], gValueID[slabAddressSize:])
+
+		v := NewStringValue(strings.Repeat("a", 9))
+		vSize := v.size
+
+		// Appending 8 elements to grand child array so that inlined grand child array reaches max inlined size as array element.
+		for i := 0; i < 8; i++ {
+			err = gchildArray.Append(v)
+			require.NoError(t, err)
+			require.Equal(t, uint64(i+1), gchildArray.Count())
+			require.Equal(t, uint64(1), childArray.Count())
+
+			require.True(t, childArray.Inlined())
+			require.True(t, gchildArray.Inlined())
+			require.Equal(t, 1, getStoredDeltas(storage))
+
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, valueID, childArray.ValueID())        // Value ID is unchanged
+
+			require.Equal(t, SlabIDUndefined, gchildArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
+
+			// Test inlined grand child slab size
+			expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+			require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+			// Test inlined child slab size
+			expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
+			require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
+
+			// Test parent slab size
+			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedChildSize
+			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// Add one more element to grand child array which triggers inlined child array slab (NOT grand child array slab) becomes standalone slab
+		err = gchildArray.Append(v)
+		require.NoError(t, err)
+
+		require.True(t, gchildArray.Inlined())
+		require.False(t, childArray.Inlined())
+		require.Equal(t, 2, getStoredDeltas(storage)) // There are 2 stored slab because child array is no longer inlined.
+
+		expectedSlabID := valueIDToSlabID(valueID)
+		require.Equal(t, expectedSlabID, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
+		require.Equal(t, valueID, childArray.ValueID())       // Value ID is unchanged
+
+		require.Equal(t, SlabIDUndefined, gchildArray.SlabID()) // Slab ID is undefined for inlined slab
+		require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
+
+		// Test inlined grand child slab size
+		expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+		require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+		expectedStandaloneSlabSize := arrayRootDataSlabPrefixSize + expectedInlinedGrandChildSize
+		require.Equal(t, expectedStandaloneSlabSize, childArray.root.ByteSize())
+
+		expectedParentSize = arrayRootDataSlabPrefixSize + SlabIDStorable(expectedSlabID).ByteSize()
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Remove elements from grand child array which triggers standalone child array slab becomes inlined slab again.
+		for gchildArray.Count() > 0 {
+			existingStorable, err := gchildArray.Remove(0)
+			require.NoError(t, err)
+			require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+
+			require.True(t, gchildArray.Inlined())
+			require.True(t, gchildArray.Inlined())
+			require.Equal(t, 1, getStoredDeltas(storage))
+
+			require.Equal(t, SlabIDUndefined, childArray.SlabID())
+			require.Equal(t, valueID, childArray.ValueID()) // value ID is unchanged
+
+			require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
+			require.Equal(t, gValueID, gchildArray.ValueID()) // value ID is unchanged
+
+			// Test inlined grand child slab size
+			expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+			require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+			// Test inlined child slab size
+			expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
+			require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
+
+			// Test parent slab size
+			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedChildSize
+			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		require.Equal(t, uint64(0), gchildArray.Count())
+		require.Equal(t, uint64(1), childArray.Count())
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+	})
+
+	t.Run("parent is root data slab, one child array, one grand child array, changes to grand child array triggers grand child array slab to become standalone slab", func(t *testing.T) {
+		const arraySize = 1
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		// Create an array with empty child array as element, which has empty child array.
+		parentArray, expectedValues := createArrayWithEmpty2LevelChildArray(t, storage, address, typeInfo, arraySize)
+
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+		require.True(t, parentArray.root.IsData())
+		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
+
+		// Test parent slab size with 1 inlined child array
+		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*2*arraySize
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Get inlined child array
+		e, err := parentArray.Get(0)
+		require.NoError(t, err)
+		require.Equal(t, 1, getStoredDeltas(storage))
+
+		childArray, ok := e.(*Array)
+		require.True(t, ok)
+		require.True(t, childArray.Inlined())
+		require.Equal(t, SlabIDUndefined, childArray.SlabID())
+
+		valueID := childArray.ValueID()
+		require.Equal(t, address[:], valueID[:slabAddressSize])
+		require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+
+		// Get inlined grand child array
+		e, err = childArray.Get(0)
+		require.NoError(t, err)
+		require.Equal(t, 1, getStoredDeltas(storage))
+
+		gchildArray, ok := e.(*Array)
+		require.True(t, ok)
+		require.True(t, gchildArray.Inlined())
+		require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
+
+		gValueID := gchildArray.ValueID()
+		require.Equal(t, address[:], gValueID[:slabAddressSize])
+		require.NotEqual(t, SlabIndexUndefined[:], gValueID[slabAddressSize:])
+		require.NotEqual(t, valueID[slabAddressSize:], gValueID[slabAddressSize:])
+
+		v := NewStringValue(strings.Repeat("a", 9))
+		vSize := v.size
+
+		// Appending 8 elements to grand child array so that inlined grand child array reaches max inlined size as array element.
+		for i := 0; i < 8; i++ {
+			err = gchildArray.Append(v)
+			require.NoError(t, err)
+			require.Equal(t, uint64(i+1), gchildArray.Count())
+			require.Equal(t, uint64(1), childArray.Count())
+
+			require.True(t, childArray.Inlined())
+			require.True(t, gchildArray.Inlined())
+			require.Equal(t, 1, getStoredDeltas(storage))
+
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, valueID, childArray.ValueID())        // Value ID is unchanged
+
+			require.Equal(t, SlabIDUndefined, gchildArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
+
+			// Test inlined grand child slab size
+			expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+			require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+			// Test inlined child slab size
+			expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
+			require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
+
+			// Test parent slab size
+			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedChildSize
+			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// Add one more element to grand child array which triggers inlined grand child array slab (NOT child array slab) becomes standalone slab
+		largeValue := NewStringValue(strings.Repeat("b", 20))
+		largeValueSize := largeValue.ByteSize()
+		err = gchildArray.Append(largeValue)
+		require.NoError(t, err)
+
+		require.False(t, gchildArray.Inlined())
+		require.True(t, childArray.Inlined())
+		require.Equal(t, 2, getStoredDeltas(storage)) // There are 2 stored slab because child array is no longer inlined.
+
+		require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
+		require.Equal(t, valueID, childArray.ValueID())        // Value ID is unchanged
+
+		expectedSlabID := valueIDToSlabID(gValueID)
+		require.Equal(t, expectedSlabID, gchildArray.SlabID()) // Slab ID is undefined for inlined slab
+		require.Equal(t, gValueID, gchildArray.ValueID())      // Value ID is unchanged
+
+		// Test inlined grand child slab size
+		expectedInlinedGrandChildSize := arrayRootDataSlabPrefixSize + uint32(gchildArray.Count()-1)*vSize + largeValueSize
+		require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+		expectedStandaloneSlabSize := inlinedArrayDataSlabPrefixSize + SlabIDStorable(expectedSlabID).ByteSize()
+		require.Equal(t, expectedStandaloneSlabSize, childArray.root.ByteSize())
+
+		expectedParentSize = arrayRootDataSlabPrefixSize + expectedStandaloneSlabSize
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Remove elements from grand child array which triggers standalone child array slab becomes inlined slab again.
+		for gchildArray.Count() > 0 {
+			_, err := gchildArray.Remove(gchildArray.Count() - 1)
+			require.NoError(t, err)
+			// require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+
+			require.True(t, gchildArray.Inlined())
+			require.True(t, gchildArray.Inlined())
+			require.Equal(t, 1, getStoredDeltas(storage))
+
+			require.Equal(t, SlabIDUndefined, childArray.SlabID())
+			require.Equal(t, valueID, childArray.ValueID()) // value ID is unchanged
+
+			require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
+			require.Equal(t, gValueID, gchildArray.ValueID()) // value ID is unchanged
+
+			// Test inlined grand child slab size
+			expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+			require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+			// Test inlined child slab size
+			expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
+			require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
+
+			// Test parent slab size
+			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedChildSize
+			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		require.Equal(t, uint64(0), gchildArray.Count())
+		require.Equal(t, uint64(1), childArray.Count())
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+	})
+
+	t.Run("parent is root data slab, two child array, one grand child array each, changes to child array triggers child array slab to become standalone slab", func(t *testing.T) {
+		const arraySize = 2
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		v := NewStringValue(strings.Repeat("a", 9))
+		vSize := v.size
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		expectedValues := make([]Value, arraySize)
+		for i := 0; i < arraySize; i++ {
+			// Create child array
+			child, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			// Create grand child array
+			gchild, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			// Append element to grand child array
+			err = gchild.Append(v)
+			require.NoError(t, err)
+
+			// Append grand child array to child array
+			err = child.Append(gchild)
+			require.NoError(t, err)
+
+			// Append child array to parent
+			err = parentArray.Append(child)
+			require.NoError(t, err)
+
+			expectedValues[i] = child
+		}
+
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+		require.True(t, parentArray.root.IsData())
+		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
+
+		// Test parent slab size with 1 inlined child array
+		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*2*arraySize + vSize*arraySize
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		type arrayInfo struct {
+			array   *Array
+			valueID ValueID
+			child   *arrayInfo
+		}
+
+		children := make([]arrayInfo, arraySize)
+
+		for i := 0; i < arraySize; i++ {
+			e, err := parentArray.Get(uint64(i))
+			require.NoError(t, err)
+			require.Equal(t, 1, getStoredDeltas(storage))
+
+			childArray, ok := e.(*Array)
+			require.True(t, ok)
+			require.True(t, childArray.Inlined())
+			require.Equal(t, SlabIDUndefined, childArray.SlabID())
+
+			valueID := childArray.ValueID()
+			require.Equal(t, address[:], valueID[:slabAddressSize])
+			require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+
+			e, err = childArray.Get(0)
+			require.NoError(t, err)
+			require.Equal(t, 1, getStoredDeltas(storage))
+
+			gchildArray, ok := e.(*Array)
+			require.True(t, ok)
+			require.True(t, gchildArray.Inlined())
+			require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
+
+			gValueID := gchildArray.ValueID()
+			require.Equal(t, address[:], gValueID[:slabAddressSize])
+			require.NotEqual(t, SlabIndexUndefined[:], gValueID[slabAddressSize:])
+			require.NotEqual(t, valueID[slabAddressSize:], gValueID[slabAddressSize:])
+
+			children[i] = arrayInfo{
+				array:   childArray,
+				valueID: valueID,
+				child:   &arrayInfo{array: gchildArray, valueID: gValueID},
+			}
+		}
+
+		// Appending 7 elements to child array so that inlined child array reaches max inlined size as array element.
+		for i := 0; i < 7; i++ {
+			for _, child := range children {
+				childArray := child.array
+				valueID := child.valueID
+				gchildArray := child.child.array
+				gValueID := child.child.valueID
+
+				err := childArray.Append(v)
+				require.NoError(t, err)
+				require.Equal(t, uint64(i+2), childArray.Count())
+
+				require.True(t, childArray.Inlined())
+				require.True(t, gchildArray.Inlined())
+				require.Equal(t, 1, getStoredDeltas(storage))
+
+				require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+				require.Equal(t, valueID, childArray.ValueID())        // Value ID is unchanged
+
+				require.Equal(t, SlabIDUndefined, gchildArray.SlabID()) // Slab ID is undefined for inlined slab
+				require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
+
+				// Test inlined grand child slab size (1 element, unchanged)
+				expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + vSize
+				require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+				// Test inlined child slab size
+				expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize + vSize*uint32(i+1)
+				require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
+
+				// Test parent slab size
+				expectedParentSize += vSize
+				require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			}
+		}
+
+		// Add one more element to child array which triggers inlined child array slab (NOT grand child array slab) becomes standalone slab
+		for i, child := range children {
+			childArray := child.array
+			valueID := child.valueID
+			gchildArray := child.child.array
+			gValueID := child.child.valueID
+
+			err = childArray.Append(v)
+			require.NoError(t, err)
+
+			require.True(t, gchildArray.Inlined())
+			require.False(t, childArray.Inlined())
+			require.Equal(t, 2+i, getStoredDeltas(storage)) // There are >1 stored slab because child array is no longer inlined.
+
+			expectedSlabID := valueIDToSlabID(valueID)
+			require.Equal(t, expectedSlabID, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
+			require.Equal(t, valueID, childArray.ValueID())       // Value ID is unchanged
+
+			require.Equal(t, SlabIDUndefined, gchildArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
+
+			// Test inlined grand child slab size
+			expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+			require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+			expectedStandaloneSlabSize := arrayRootDataSlabPrefixSize + expectedInlinedGrandChildSize + vSize*uint32(childArray.Count()-1)
+			require.Equal(t, expectedStandaloneSlabSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		require.Equal(t, 3, getStoredDeltas(storage)) // There are 3 stored slab because child array is no longer inlined.
+
+		expectedParentSize = arrayRootDataSlabPrefixSize + SlabIDStorable(SlabID{}).ByteSize()*2
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		// Remove one elements from each child array to trigger child arrays being inlined again.
+		expectedParentSize = arrayRootDataSlabPrefixSize
+
+		for i, child := range children {
+			childArray := child.array
+			valueID := child.valueID
+			gchildArray := child.child.array
+			gValueID := child.child.valueID
+
+			_, err = childArray.Remove(childArray.Count() - 1)
+			require.NoError(t, err)
+
+			require.True(t, gchildArray.Inlined())
+			require.True(t, childArray.Inlined())
+			require.Equal(t, 2-i, getStoredDeltas(storage))
+
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
+			require.Equal(t, valueID, childArray.ValueID())        // Value ID is unchanged
+
+			require.Equal(t, SlabIDUndefined, gchildArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
+
+			// Test inlined grand child slab size
+			expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+			require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+			// Test inlined child slab size
+			expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize + vSize*uint32(childArray.Count()-1)
+			require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
+
+			expectedParentSize += expectedInlinedChildSize
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		// Remove elements from child array.
+		elementCount := children[0].array.Count()
+
+		for i := uint64(0); i < elementCount-1; i++ {
+			for _, child := range children {
+				childArray := child.array
+				valueID := child.valueID
+				gchildArray := child.child.array
+				gValueID := child.child.valueID
+
+				existingStorable, err := childArray.Remove(childArray.Count() - 1)
+				require.NoError(t, err)
+				require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+
+				require.True(t, gchildArray.Inlined())
+				require.True(t, gchildArray.Inlined())
+				require.Equal(t, 1, getStoredDeltas(storage))
+
+				require.Equal(t, SlabIDUndefined, childArray.SlabID())
+				require.Equal(t, valueID, childArray.ValueID()) // value ID is unchanged
+
+				require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
+				require.Equal(t, gValueID, gchildArray.ValueID()) // value ID is unchanged
+
+				// Test inlined grand child slab size
+				expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+				require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+				// Test inlined child slab size
+				expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize + vSize*uint32(childArray.Count()-1)
+				require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
+
+				// Test parent slab size
+				expectedParentSize -= vSize
+				require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			}
+		}
+
+		for _, child := range children {
+			require.Equal(t, uint64(1), child.child.array.Count())
+			require.Equal(t, uint64(1), child.array.Count())
+		}
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+	})
+
+	t.Run("parent is root metadata slab, with four child arrays, each child array has grand child arrays", func(t *testing.T) {
+		const arraySize = 4
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		v := NewStringValue(strings.Repeat("a", 9))
+		vSize := v.size
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		expectedValues := make([]Value, arraySize)
+		for i := 0; i < arraySize; i++ {
+			// Create child array
+			child, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			// Create grand child array
+			gchild, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			// Append grand child array to child array
+			err = child.Append(gchild)
+			require.NoError(t, err)
+
+			// Append child array to parent
+			err = parentArray.Append(child)
+			require.NoError(t, err)
+
+			expectedValues[i] = child
+		}
+
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+		require.True(t, parentArray.root.IsData())
+		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
+
+		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*2*arraySize
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		type arrayInfo struct {
+			array   *Array
+			valueID ValueID
+			child   *arrayInfo
+		}
+
+		children := make([]arrayInfo, arraySize)
+
+		for i := 0; i < arraySize; i++ {
+			e, err := parentArray.Get(uint64(i))
+			require.NoError(t, err)
+			require.Equal(t, 1, getStoredDeltas(storage))
+
+			childArray, ok := e.(*Array)
+			require.True(t, ok)
+			require.True(t, childArray.Inlined())
+			require.Equal(t, SlabIDUndefined, childArray.SlabID())
+
+			valueID := childArray.ValueID()
+			require.Equal(t, address[:], valueID[:slabAddressSize])
+			require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+
+			e, err = childArray.Get(0)
+			require.NoError(t, err)
+			require.Equal(t, 1, getStoredDeltas(storage))
+
+			gchildArray, ok := e.(*Array)
+			require.True(t, ok)
+			require.True(t, gchildArray.Inlined())
+			require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
+
+			gValueID := gchildArray.ValueID()
+			require.Equal(t, address[:], gValueID[:slabAddressSize])
+			require.NotEqual(t, SlabIndexUndefined[:], gValueID[slabAddressSize:])
+			require.NotEqual(t, valueID[slabAddressSize:], gValueID[slabAddressSize:])
+
+			children[i] = arrayInfo{
+				array:   childArray,
+				valueID: valueID,
+				child:   &arrayInfo{array: gchildArray, valueID: gValueID},
+			}
+		}
+
+		// Appending 6 elements to grand child array so that parent array root slab is metadata slab.
+		for i := uint32(0); i < 6; i++ {
+			for _, child := range children {
+				childArray := child.array
+				valueID := child.valueID
+				gchildArray := child.child.array
+				gValueID := child.child.valueID
+
+				err := gchildArray.Append(v)
+				require.NoError(t, err)
+				require.Equal(t, uint64(i+1), gchildArray.Count())
+
+				require.True(t, childArray.Inlined())
+				require.True(t, gchildArray.Inlined())
+				require.Equal(t, 1, getStoredDeltas(storage))
+
+				require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+				require.Equal(t, valueID, childArray.ValueID())        // Value ID is unchanged
+
+				require.Equal(t, SlabIDUndefined, gchildArray.SlabID()) // Slab ID is undefined for inlined slab
+				require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
+
+				// Test inlined grand child slab size
+				expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + vSize*(i+1)
+				require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+				// Test inlined child slab size
+				expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
+				require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
+
+				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			}
+		}
+
+		// Add one more element to grand child array which triggers parent array slab becomes metadata slab (all elements are still inlined).
+		for _, child := range children {
+			childArray := child.array
+			valueID := child.valueID
+			gchildArray := child.child.array
+			gValueID := child.child.valueID
+
+			err = gchildArray.Append(v)
+			require.NoError(t, err)
+
+			require.True(t, gchildArray.Inlined())
+			require.True(t, childArray.Inlined())
+			require.Equal(t, 3, getStoredDeltas(storage)) // There are 3 stored slab because parent root slab is metdata.
+
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
+			require.Equal(t, valueID, childArray.ValueID())        // Value ID is unchanged
+
+			require.Equal(t, SlabIDUndefined, gchildArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
+
+			// Test inlined grand child slab size
+			expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+			require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+			expectedInlinedChildSlabSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
+			require.Equal(t, expectedInlinedChildSlabSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		require.Equal(t, 3, getStoredDeltas(storage)) // There are 3 stored slab because child array is no longer inlined.
+		require.False(t, parentArray.root.IsData())
+
+		// Add one more element to grand child array which triggers
+		// - child arrays become standalone slab (grand child arrays are still inlined)
+		// - parent array slab becomes data slab
+		for _, child := range children {
+			childArray := child.array
+			valueID := child.valueID
+			gchildArray := child.child.array
+			gValueID := child.child.valueID
+
+			for i := 0; i < 2; i++ {
+				err = gchildArray.Append(v)
+				require.NoError(t, err)
+			}
+
+			require.True(t, gchildArray.Inlined())
+			require.False(t, childArray.Inlined())
+
+			expectedSlabID := valueIDToSlabID(valueID)
+			require.Equal(t, expectedSlabID, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
+			require.Equal(t, valueID, childArray.ValueID())       // Value ID is unchanged
+
+			require.Equal(t, SlabIDUndefined, gchildArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
+
+			// Test standalone grand child slab size
+			expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+			require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+			expectedStandaloneChildSlabSize := arrayRootDataSlabPrefixSize + expectedInlinedGrandChildSize
+			require.Equal(t, expectedStandaloneChildSlabSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// Parent array has one root data slab, 4 grand child array with standalone root data slab.
+		require.Equal(t, 1+arraySize, getStoredDeltas(storage))
+		require.True(t, parentArray.root.IsData())
+
+		// Remove elements from grand child array to trigger child array inlined again.
+		for _, child := range children {
+			childArray := child.array
+			valueID := child.valueID
+			gchildArray := child.child.array
+			gValueID := child.child.valueID
+
+			for i := 0; i < 2; i++ {
+				_, err = gchildArray.Remove(0)
+				require.NoError(t, err)
+			}
+
+			require.True(t, gchildArray.Inlined())
+			require.True(t, childArray.Inlined())
+
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
+			require.Equal(t, valueID, childArray.ValueID())        // Value ID is unchanged
+
+			require.Equal(t, SlabIDUndefined, gchildArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
+
+			// Test inlined grand child slab size
+			expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+			require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+			// Test inlined child slab size
+			expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
+			require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// Parent array has 1 metadata slab, and two data slab, all child and grand child arrays are inlined.
+		require.Equal(t, 3, getStoredDeltas(storage))
+		require.False(t, parentArray.root.IsData())
+
+		// Remove elements from grand child array.
+		elementCount := children[0].child.array.Count()
+
+		for i := uint64(0); i < elementCount; i++ {
+			for _, child := range children {
+				childArray := child.array
+				valueID := child.valueID
+				gchildArray := child.child.array
+				gValueID := child.child.valueID
+
+				existingStorable, err := gchildArray.Remove(0)
+				require.NoError(t, err)
+				require.Equal(t, v, existingStorable)
+
+				require.True(t, gchildArray.Inlined())
+				require.True(t, gchildArray.Inlined())
+
+				require.Equal(t, SlabIDUndefined, childArray.SlabID())
+				require.Equal(t, valueID, childArray.ValueID()) // value ID is unchanged
+
+				require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
+				require.Equal(t, gValueID, gchildArray.ValueID()) // value ID is unchanged
+
+				// Test inlined grand child slab size
+				expectedInlinedGrandChildSize := inlinedArrayDataSlabPrefixSize + uint32(gchildArray.Count())*vSize
+				require.Equal(t, expectedInlinedGrandChildSize, gchildArray.root.ByteSize())
+
+				// Test inlined child slab size
+				expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
+				require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
+
+				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			}
+		}
+
+		for _, child := range children {
+			require.Equal(t, uint64(0), child.child.array.Count())
+			require.Equal(t, uint64(1), child.array.Count())
+		}
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+		require.Equal(t, 1, getStoredDeltas(storage))
+
+		expectedParentSize = uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*arraySize*2
+		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+	})
+}
+
+func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
+
+	const arraySize = 2
+
+	typeInfo := testTypeInfo{42}
+	storage := newTestPersistentStorage(t)
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	// Create an array with empty child array as element.
+	parentArray, expectedValues := createArrayWithEmptyChildArray(t, storage, address, typeInfo, arraySize)
+
+	require.Equal(t, uint64(arraySize), parentArray.Count())
+	require.True(t, parentArray.root.IsData())
+	require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
+
+	// Test parent slab size with empty inlined child arrays
+	expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*arraySize
+	require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+	verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+	children := make([]struct {
+		array   *Array
+		valueID ValueID
+	}, arraySize)
+
+	for i := 0; i < arraySize; i++ {
+		e, err := parentArray.Get(uint64(i))
+		require.NoError(t, err)
+		require.Equal(t, 1, getStoredDeltas(storage))
+
+		childArray, ok := e.(*Array)
+		require.True(t, ok)
+		require.True(t, childArray.Inlined())
+		require.Equal(t, SlabIDUndefined, childArray.SlabID())
+
+		valueID := childArray.ValueID()
+		require.Equal(t, address[:], valueID[:slabAddressSize])
+		require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+
+		children[i].array = childArray
+		children[i].valueID = valueID
+	}
+
+	t.Run("insert elements in parent array", func(t *testing.T) {
+		// insert value at index 0, so all child array indexes are moved by +1
+		v := Uint64Value(0)
+		err := parentArray.Insert(0, v)
+		require.NoError(t, err)
+
+		expectedValues = append(expectedValues, nil)
+		copy(expectedValues[1:], expectedValues)
+		expectedValues[0] = v
+
+		for i, child := range children {
+			childArray := child.array
+			childValueID := child.valueID
+
+			v := Uint64Value(i)
+			vSize := v.ByteSize()
+
+			err := childArray.Append(v)
+			require.NoError(t, err)
+			require.Equal(t, uint64(1), childArray.Count())
+
+			require.True(t, childArray.Inlined())
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
+
+			// Test inlined child slab size
+			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// insert value at index 2, so only second child array index is moved by +1
+		v = Uint64Value(2)
+		err = parentArray.Insert(2, v)
+		require.NoError(t, err)
+
+		expectedValues = append(expectedValues, nil)
+		copy(expectedValues[3:], expectedValues[2:])
+		expectedValues[2] = v
+
+		for i, child := range children {
+			childArray := child.array
+			childValueID := child.valueID
+
+			v := Uint64Value(i)
+			vSize := v.ByteSize()
+
+			err := childArray.Append(v)
+			require.NoError(t, err)
+			require.Equal(t, uint64(2), childArray.Count())
+
+			require.True(t, childArray.Inlined())
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
+
+			// Test inlined child slab size
+			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// insert value at index 4, so none of child array indexes are affected.
+		v = Uint64Value(4)
+		err = parentArray.Insert(4, v)
+		require.NoError(t, err)
+
+		expectedValues = append(expectedValues, nil)
+		expectedValues[4] = v
+
+		for i, child := range children {
+			childArray := child.array
+			childValueID := child.valueID
+
+			v := Uint64Value(i)
+			vSize := v.ByteSize()
+
+			err := childArray.Append(v)
+			require.NoError(t, err)
+			require.Equal(t, uint64(3), childArray.Count())
+
+			require.True(t, childArray.Inlined())
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
+
+			// Test inlined child slab size
+			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+	})
+
+	t.Run("remove elements from parent array", func(t *testing.T) {
+		// remove value at index 0, so all child array indexes are moved by -1.
+		existingStorable, err := parentArray.Remove(0)
+		require.NoError(t, err)
+		require.Equal(t, Uint64Value(0), existingStorable)
+
+		copy(expectedValues, expectedValues[1:])
+		expectedValues[len(expectedValues)-1] = nil
+		expectedValues = expectedValues[:len(expectedValues)-1]
+
+		for i, child := range children {
+			childArray := child.array
+			childValueID := child.valueID
+
+			v := Uint64Value(i)
+			vSize := v.ByteSize()
+
+			err := childArray.Append(v)
+			require.NoError(t, err)
+			require.Equal(t, uint64(4), childArray.Count())
+
+			require.True(t, childArray.Inlined())
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
+
+			// Test inlined child slab size
+			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// Remove value at index 1, so only second child array index is moved by -1
+		existingStorable, err = parentArray.Remove(1)
+		require.NoError(t, err)
+		require.Equal(t, Uint64Value(2), existingStorable)
+
+		copy(expectedValues[1:], expectedValues[2:])
+		expectedValues[len(expectedValues)-1] = nil
+		expectedValues = expectedValues[:len(expectedValues)-1]
+
+		for i, child := range children {
+			childArray := child.array
+			childValueID := child.valueID
+
+			v := Uint64Value(i)
+			vSize := v.ByteSize()
+
+			err := childArray.Append(v)
+			require.NoError(t, err)
+			require.Equal(t, uint64(5), childArray.Count())
+
+			require.True(t, childArray.Inlined())
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
+
+			// Test inlined child slab size
+			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+
+		// Remove value at index 2 (last element), so none of child array indexes are affected.
+		existingStorable, err = parentArray.Remove(2)
+		require.NoError(t, err)
+		require.Equal(t, Uint64Value(4), existingStorable)
+
+		expectedValues[len(expectedValues)-1] = nil
+		expectedValues = expectedValues[:len(expectedValues)-1]
+
+		for i, child := range children {
+			childArray := child.array
+			childValueID := child.valueID
+
+			v := Uint64Value(i)
+			vSize := v.ByteSize()
+
+			err := childArray.Append(v)
+			require.NoError(t, err)
+			require.Equal(t, uint64(6), childArray.Count())
+
+			require.True(t, childArray.Inlined())
+			require.Equal(t, SlabIDUndefined, childArray.SlabID()) // Slab ID is undefined for inlined slab
+			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
+
+			// Test inlined child slab size
+			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
+			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		}
+	})
+}
+
+func createArrayWithEmptyChildArray(
+	t *testing.T,
+	storage SlabStorage,
+	address Address,
+	typeInfo TypeInfo,
+	arraySize int,
+) (*Array, []Value) {
+
+	// Create parent array
+	array, err := NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	expectedValues := make([]Value, arraySize)
+	for i := 0; i < arraySize; i++ {
+		// Create child array
+		child, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		// Append child array to parent
+		err = array.Append(child)
+		require.NoError(t, err)
+
+		expectedValues[i] = child
+	}
+
+	return array, expectedValues
+}
+
+func createArrayWithEmpty2LevelChildArray(
+	t *testing.T,
+	storage SlabStorage,
+	address Address,
+	typeInfo TypeInfo,
+	arraySize int,
+) (*Array, []Value) {
+
+	// Create parent array
+	array, err := NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	expectedValues := make([]Value, arraySize)
+	for i := 0; i < arraySize; i++ {
+		// Create child array
+		child, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		// Create grand child array
+		gchild, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		// Append grand child array to child array
+		err = child.Append(gchild)
+		require.NoError(t, err)
+
+		// Append child array to parent
+		err = array.Append(child)
+		require.NoError(t, err)
+
+		expectedValues[i] = child
+	}
+
+	return array, expectedValues
+}
+
+func getStoredDeltas(storage *PersistentSlabStorage) int {
+	count := 0
+	for _, slab := range storage.deltas {
+		if slab != nil {
+			count++
+		}
+	}
+	return count
 }

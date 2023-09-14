@@ -19,6 +19,7 @@
 package atree
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -57,6 +58,15 @@ const (
 
 	// 32 is faster than 24 and 40.
 	linearScanThreshold = 32
+
+	// inlined array data slab prefix size:
+	//   tag number (2 bytes) +
+	//   3-element array head (1 byte) +
+	//   extra data ref index (2 bytes) [0, 255] +
+	//   value ID index head (1 byte) +
+	//   value ID index (8 bytes) +
+	//   element array head (3 bytes)
+	inlinedArrayDataSlabPrefixSize = 2 + 1 + 2 + 1 + 8 + arrayDataSlabElementHeadSize
 )
 
 type ArraySlabHeader struct {
@@ -69,6 +79,8 @@ type ArrayExtraData struct {
 	TypeInfo TypeInfo // array type
 }
 
+var _ ExtraData = &ArrayExtraData{}
+
 // ArrayDataSlab is leaf node, implementing ArraySlab.
 type ArrayDataSlab struct {
 	next     SlabID
@@ -78,6 +90,10 @@ type ArrayDataSlab struct {
 	// extraData is data that is prepended to encoded slab data.
 	// It isn't included in slab size calculation for splitting and merging.
 	extraData *ArrayExtraData
+
+	// inlined indicates whether this slab is stored inlined in its parent slab.
+	// This flag affects Encode(), ByteSize(), etc.
+	inlined bool
 }
 
 func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
@@ -85,8 +101,9 @@ func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		return nil, NewNotValueError(a.SlabID())
 	}
 	return &Array{
-		Storage: storage,
-		root:    a,
+		Storage:             storage,
+		root:                a,
+		mutableElementIndex: make(map[ValueID]uint64),
 	}, nil
 }
 
@@ -113,8 +130,9 @@ func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		return nil, NewNotValueError(a.SlabID())
 	}
 	return &Array{
-		Storage: storage,
-		root:    a,
+		Storage:             storage,
+		root:                a,
+		mutableElementIndex: make(map[ValueID]uint64),
 	}, nil
 }
 
@@ -142,22 +160,33 @@ type ArraySlab interface {
 	SetExtraData(*ArrayExtraData)
 
 	PopIterate(SlabStorage, ArrayPopIterationFunc) error
+
+	Inlined() bool
+	Inlinable(maxInlineSize uint64) bool
 }
 
 // Array is tree
 type Array struct {
 	Storage SlabStorage
 	root    ArraySlab
+
+	// parentUpdater is a callback that notifies parent container when this array is modified.
+	// If this callback is null, this array has no parent.  Otherwise, this array has parent
+	// and this callback must be used when this array is changed by Append, Insert, Set,
+	// Remove, etc.
+	parentUpdater parentUpdater
+
+	// mutableElementIndex tracks index of mutable element, such as Array and OrderedMap.
+	// This is needed by mutable element to properly update itself through parentUpdater.
+	// TODO: maybe optimize by replacing map to get faster updates.
+	mutableElementIndex map[ValueID]uint64
 }
 
 var _ Value = &Array{}
+var _ valueNotifier = &Array{}
 
 func (a *Array) Address() Address {
 	return a.root.SlabID().address
-}
-
-func (a *Array) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
-	return SlabIDStorable(a.SlabID()), nil
 }
 
 const arrayExtraDataLength = 1
@@ -206,6 +235,10 @@ func newArrayExtraData(dec *cbor.StreamDecoder, decodeTypeInfo TypeInfoDecoder) 
 	}
 
 	return &ArrayExtraData{TypeInfo: typeInfo}, nil
+}
+
+func (a *ArrayExtraData) isExtraData() bool {
+	return true
 }
 
 // Encode encodes extra data as CBOR array:
@@ -353,25 +386,26 @@ func newArrayDataSlabFromDataV0(
 		return nil, NewDecodingError(err)
 	}
 
+	// Compute slab size for version 1.
+	slabSize := uint32(arrayDataSlabPrefixSize)
+	if h.isRoot() {
+		slabSize = arrayRootDataSlabPrefixSize
+	}
+
 	elements := make([]Storable, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		storable, err := decodeStorable(cborDec, SlabIDUndefined)
+		storable, err := decodeStorable(cborDec, id, nil)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode array element")
 		}
 		elements[i] = storable
-	}
-
-	// Compute slab size for version 1.
-	slabSize := versionAndFlagSize + cborDec.NumBytesDecoded()
-	if !h.isRoot() {
-		slabSize += slabIDSize
+		slabSize += storable.ByteSize()
 	}
 
 	header := ArraySlabHeader{
 		slabID: id,
-		size:   uint32(slabSize),
+		size:   slabSize,
 		count:  uint32(elemCount),
 	}
 
@@ -387,21 +421,22 @@ func newArrayDataSlabFromDataV0(
 //
 // Root DataSlab Header:
 //
-//	+-------------------------------+------------+
-//	| slab version + flag (2 bytes) | extra data |
-//	+-------------------------------+------------+
+//	+-------------------------------+------------+---------------------------------+
+//	| slab version + flag (2 bytes) | extra data | inlined extra data (if present) |
+//	+-------------------------------+------------+---------------------------------+
 //
-// Non-root DataSlab Header (18 bytes):
+// Non-root DataSlab Header:
 //
-//	+-------------------------------+-----------------------------+
-//	| slab version + flag (2 bytes) | next sib slab ID (16 bytes) |
-//	+-------------------------------+-----------------------------+
+//	+-------------------------------+---------------------------------+-----------------------------+
+//	| slab version + flag (2 bytes) | inlined extra data (if present) | next slab ID (if non-empty) |
+//	+-------------------------------+---------------------------------+-----------------------------+
 //
 // Content:
 //
 //	CBOR encoded array of elements
 //
 // See ArrayExtraData.Encode() for extra data section format.
+// See InlinedExtraData.Encode() for inlined extra data section format.
 func newArrayDataSlabFromDataV1(
 	id SlabID,
 	h head,
@@ -415,6 +450,7 @@ func newArrayDataSlabFromDataV1(
 ) {
 	var err error
 	var extraData *ArrayExtraData
+	var inlinedExtraData []ExtraData
 	var next SlabID
 
 	// Decode extra data
@@ -422,6 +458,20 @@ func newArrayDataSlabFromDataV1(
 		extraData, data, err = newArrayExtraDataFromData(data, decMode, decodeTypeInfo)
 		if err != nil {
 			// err is categorized already by newArrayExtraDataFromData.
+			return nil, err
+		}
+	}
+
+	// Decode inlined slab extra data
+	if h.hasInlinedSlabs() {
+		inlinedExtraData, data, err = newInlinedExtraDataFromData(
+			data,
+			decMode,
+			decodeStorable,
+			decodeTypeInfo,
+		)
+		if err != nil {
+			// err is categorized already by newInlinedExtraDataFromData.
 			return nil, err
 		}
 	}
@@ -450,14 +500,20 @@ func newArrayDataSlabFromDataV1(
 		return nil, NewDecodingError(err)
 	}
 
+	slabSize := uint32(arrayDataSlabPrefixSize)
+	if h.isRoot() {
+		slabSize = arrayRootDataSlabPrefixSize
+	}
+
 	elements := make([]Storable, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		storable, err := decodeStorable(cborDec, SlabIDUndefined)
+		storable, err := decodeStorable(cborDec, id, inlinedExtraData)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode array element")
 		}
 		elements[i] = storable
+		slabSize += storable.ByteSize()
 	}
 
 	// Check if data reached EOF
@@ -465,15 +521,9 @@ func newArrayDataSlabFromDataV1(
 		return nil, NewDecodingErrorf("data has %d bytes of extraneous data for array data slab", len(data)-cborDec.NumBytesDecoded())
 	}
 
-	// Compute slab size for version 1.
-	slabSize := versionAndFlagSize + cborDec.NumBytesDecoded()
-	if !h.isRoot() {
-		slabSize += slabIDSize
-	}
-
 	header := ArraySlabHeader{
 		slabID: id,
-		size:   uint32(slabSize),
+		size:   slabSize,
 		count:  uint32(elemCount),
 	}
 
@@ -482,29 +532,233 @@ func newArrayDataSlabFromDataV1(
 		header:    header,
 		elements:  elements,
 		extraData: extraData,
+		inlined:   false, // this function is only called when slab is not inlined.
 	}, nil
+}
+
+// DecodeInlinedArrayStorable decodes inlined array data slab. Encoding is
+// version 1 with CBOR tag having tag number CBORTagInlinedArray, and tag contant
+// as 3-element array:
+//
+// - index of inlined extra data
+// - value ID index
+// - CBOR array of elements
+//
+// NOTE: This function doesn't decode tag number because tag number is decoded
+// in the caller and decoder only contains tag content.
+func DecodeInlinedArrayStorable(
+	dec *cbor.StreamDecoder,
+	decodeStorable StorableDecoder,
+	parentSlabID SlabID,
+	inlinedExtraData []ExtraData,
+) (
+	Storable,
+	error,
+) {
+	const inlinedArrayDataSlabArrayCount = 3
+
+	arrayCount, err := dec.DecodeArrayHead()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	if arrayCount != inlinedArrayDataSlabArrayCount {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined array data slab: expect %d elements, got %d elements",
+				inlinedArrayDataSlabArrayCount,
+				arrayCount))
+	}
+
+	// element 0: extra data index
+	extraDataIndex, err := dec.DecodeUint64()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+	if extraDataIndex >= uint64(len(inlinedExtraData)) {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined array data slab: inlined extra data index %d exceeds number of inlined extra data %d",
+				extraDataIndex,
+				len(inlinedExtraData)))
+	}
+
+	extraData, ok := inlinedExtraData[extraDataIndex].(*ArrayExtraData)
+	if !ok {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined array data slab: expect *ArrayExtraData, got %T",
+				inlinedExtraData[extraDataIndex]))
+	}
+
+	// element 1: slab index
+	b, err := dec.DecodeBytes()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+	if len(b) != slabIndexSize {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined array data slab: expect %d bytes for slab index, got %d bytes",
+				slabIndexSize,
+				len(b)))
+	}
+
+	var index [8]byte
+	copy(index[:], b)
+
+	slabID := NewSlabID(parentSlabID.address, index)
+
+	// Decode array elements (CBOR array)
+	elemCount, err := dec.DecodeArrayHead()
+	if err != nil {
+		return nil, NewDecodingError(err)
+	}
+
+	size := uint32(inlinedArrayDataSlabPrefixSize)
+
+	elements := make([]Storable, elemCount)
+	for i := 0; i < int(elemCount); i++ {
+		storable, err := decodeStorable(dec, slabID, inlinedExtraData)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode array element")
+		}
+		elements[i] = storable
+
+		size += storable.ByteSize()
+	}
+
+	header := ArraySlabHeader{
+		slabID: slabID,
+		size:   size,
+		count:  uint32(elemCount),
+	}
+
+	return &ArrayDataSlab{
+		header:    header,
+		elements:  elements,
+		extraData: extraData,
+		inlined:   true,
+	}, nil
+}
+
+// encodeAsInlined encodes inlined array data slab. Encoding is
+// version 1 with CBOR tag having tag number CBORTagInlinedArray,
+// and tag contant as 3-element array:
+//
+// - index of inlined extra data
+// - value ID index
+// - CBOR array of elements
+func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
+	if a.extraData == nil {
+		return NewEncodingError(
+			fmt.Errorf("failed to encode non-root array data slab as inlined"))
+	}
+
+	if !a.inlined {
+		return NewEncodingError(
+			fmt.Errorf("failed to encode standalone array data slab as inlined"))
+	}
+
+	extraDataIndex := inlinedTypeInfo.addArrayExtraData(a.extraData)
+
+	if extraDataIndex > 255 {
+		return NewEncodingError(
+			fmt.Errorf("failed to encode inlined array data slab: extra data index %d exceeds limit 255", extraDataIndex))
+	}
+
+	var err error
+
+	// Encode tag number and array head of 3 elements
+	err = enc.CBOR.EncodeRawBytes([]byte{
+		// tag number
+		0xd8, CBORTagInlinedArray,
+		// array head of 3 elements
+		0x83,
+	})
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// element 0: extra data index
+	// NOTE: encoded extra data index is fixed sized CBOR uint
+	err = enc.CBOR.EncodeRawBytes([]byte{
+		0x18,
+		byte(extraDataIndex),
+	})
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// element 1: slab index
+	err = enc.CBOR.EncodeBytes(a.header.slabID.index[:])
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// element 2: array elements
+	err = a.encodeElements(enc, inlinedTypeInfo)
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	err = enc.CBOR.Flush()
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	return nil
 }
 
 // Encode encodes this array data slab to the given encoder.
 //
 // Root DataSlab Header:
 //
-//	+-------------------------------+------------+
-//	| slab version + flag (2 bytes) | extra data |
-//	+-------------------------------+------------+
+//	+-------------------------------+------------+---------------------------------+
+//	| slab version + flag (2 bytes) | extra data | inlined extra data (if present) |
+//	+-------------------------------+------------+---------------------------------+
 //
-// Non-root DataSlab Header (18 bytes):
+// Non-root DataSlab Header:
 //
-//	+-------------------------------+-----------------------------+
-//	| slab version + flag (2 bytes) | next sib slab ID (16 bytes) |
-//	+-------------------------------+-----------------------------+
+//	+-------------------------------+---------------------------------+-----------------------------+
+//	| slab version + flag (2 bytes) | inlined extra data (if present) | next slab ID (if non-empty) |
+//	+-------------------------------+---------------------------------+-----------------------------+
 //
 // Content:
 //
 //	CBOR encoded array of elements
 //
 // See ArrayExtraData.Encode() for extra data section format.
+// See InlinedExtraData.Encode() for inlined extra data section format.
 func (a *ArrayDataSlab) Encode(enc *Encoder) error {
+
+	if a.inlined {
+		return NewEncodingError(
+			fmt.Errorf("failed to encode inlined array data slab as standalone slab"))
+	}
+
+	// Encoding is done in two steps:
+	//
+	// 1. Encode array elements using a new buffer while collecting inlined extra data from inlined elements.
+	// 2. Encode slab with deduplicated inlined extra data and copy encoded elements from previous buffer.
+
+	inlinedTypes := newInlinedExtraData()
+
+	// TODO: maybe use a buffer pool
+	var elementBuf bytes.Buffer
+	elementEnc := NewEncoder(&elementBuf, enc.encMode)
+
+	err := a.encodeElements(elementEnc, inlinedTypes)
+	if err != nil {
+		// err is already categorized by Array.encodeElements().
+		return err
+	}
+
+	err = elementEnc.CBOR.Flush()
+	if err != nil {
+		return NewEncodingError(err)
+	}
 
 	const version = 1
 
@@ -525,18 +779,30 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 		h.setRoot()
 	}
 
+	if !inlinedTypes.empty() {
+		h.setHasInlinedSlabs()
+	}
+
 	// Encode head (version + flag)
 	_, err = enc.Write(h[:])
 	if err != nil {
 		return NewEncodingError(err)
 	}
 
-	// Encode header
+	// Encode extra data
 	if a.extraData != nil {
-		// Encode extra data
 		err = a.extraData.Encode(enc)
 		if err != nil {
 			// err is already categorized by ArrayExtraData.Encode().
+			return err
+		}
+	}
+
+	// Encode inlined extra data
+	if !inlinedTypes.empty() {
+		err = inlinedTypes.Encode(enc)
+		if err != nil {
+			// err is already categorized by inlinedExtraData.Encode().
 			return err
 		}
 	}
@@ -555,6 +821,21 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 		}
 	}
 
+	// Encode elements by copying raw bytes from previous buffer
+	err = enc.CBOR.EncodeRawBytes(elementBuf.Bytes())
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	err = enc.CBOR.Flush()
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	return nil
+}
+
+func (a *ArrayDataSlab) encodeElements(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
 	// Encode CBOR array size manually for fix-sized encoding
 
 	enc.Scratch[0] = 0x80 | 25
@@ -568,14 +849,14 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	// Write scratch content to encoder
 	totalSize := countOffset + countSize
-	_, err = enc.Write(enc.Scratch[:totalSize])
+	err := enc.CBOR.EncodeRawBytes(enc.Scratch[:totalSize])
 	if err != nil {
 		return NewEncodingError(err)
 	}
 
 	// Encode data slab content (array of elements)
 	for _, e := range a.elements {
-		err = e.Encode(enc)
+		err = encodeStorableAsElement(enc, e, inlinedTypeInfo)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
 			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode array element")
@@ -588,6 +869,35 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	}
 
 	return nil
+}
+
+func (a *ArrayDataSlab) Inlined() bool {
+	return a.inlined
+}
+
+// Inlinable returns true if
+// - array data slab is root slab
+// - size of inlined array data slab <= maxInlineSize
+func (a *ArrayDataSlab) Inlinable(maxInlineSize uint64) bool {
+	if a.extraData == nil {
+		// Non-root data slab is not inlinable.
+		return false
+	}
+
+	// At this point, this data slab is either
+	// - inlined data slab, or
+	// - not inlined root data slab
+
+	// Compute inlined size from cached slab size
+	inlinedSize := a.header.size
+	if !a.inlined {
+		inlinedSize = inlinedSize -
+			arrayRootDataSlabPrefixSize +
+			inlinedArrayDataSlabPrefixSize
+	}
+
+	// Inlined byte size must be less than max inline size.
+	return uint64(inlinedSize) <= maxInlineSize
 }
 
 func (a *ArrayDataSlab) hasPointer() bool {
@@ -606,6 +916,9 @@ func (a *ArrayDataSlab) ChildStorables() []Storable {
 }
 
 func (a *ArrayDataSlab) getPrefixSize() uint32 {
+	if a.inlined {
+		return inlinedArrayDataSlabPrefixSize
+	}
 	if a.extraData != nil {
 		return arrayRootDataSlabPrefixSize
 	}
@@ -644,10 +957,12 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, address Address, index uint64, 
 
 	a.header.size = size
 
-	err = storage.Store(a.header.slabID, a)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+	if !a.inlined {
+		err := storage.Store(a.header.slabID, a)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+		}
 	}
 
 	return oldElem, nil
@@ -675,10 +990,12 @@ func (a *ArrayDataSlab) Insert(storage SlabStorage, address Address, index uint6
 	a.header.count++
 	a.header.size += storable.ByteSize()
 
-	err = storage.Store(a.header.slabID, a)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+	if !a.inlined {
+		err := storage.Store(a.header.slabID, a)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+		}
 	}
 
 	return nil
@@ -705,10 +1022,12 @@ func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, err
 	a.header.count--
 	a.header.size -= v.ByteSize()
 
-	err := storage.Store(a.header.slabID, a)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+	if !a.inlined {
+		err := storage.Store(a.header.slabID, a)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+		}
 	}
 
 	return v, nil
@@ -2201,7 +2520,15 @@ func (a *ArrayMetaDataSlab) CanLendToRight(size uint32) bool {
 	return a.header.size-arraySlabHeaderSize*n > uint32(minThreshold)
 }
 
-func (a ArrayMetaDataSlab) IsData() bool {
+func (a *ArrayMetaDataSlab) Inlined() bool {
+	return false
+}
+
+func (a *ArrayMetaDataSlab) Inlinable(_ uint64) bool {
+	return false
+}
+
+func (a *ArrayMetaDataSlab) IsData() bool {
 	return false
 }
 
@@ -2314,8 +2641,9 @@ func NewArray(storage SlabStorage, address Address, typeInfo TypeInfo) (*Array, 
 	}
 
 	return &Array{
-		Storage: storage,
-		root:    root,
+		Storage:             storage,
+		root:                root,
+		mutableElementIndex: make(map[ValueID]uint64),
 	}, nil
 }
 
@@ -2336,9 +2664,81 @@ func NewArrayWithRootID(storage SlabStorage, rootID SlabID) (*Array, error) {
 	}
 
 	return &Array{
-		Storage: storage,
-		root:    root,
+		Storage:             storage,
+		root:                root,
+		mutableElementIndex: make(map[ValueID]uint64),
 	}, nil
+}
+
+// TODO: maybe optimize this
+func (a *Array) incrementIndexFrom(index uint64) {
+	for id, i := range a.mutableElementIndex {
+		if i >= index {
+			a.mutableElementIndex[id]++
+		}
+	}
+}
+
+// TODO: maybe optimize this
+func (a *Array) decrementIndexFrom(index uint64) {
+	for id, i := range a.mutableElementIndex {
+		if i > index {
+			a.mutableElementIndex[id]--
+		}
+	}
+}
+
+func (a *Array) getIndexByValueID(id ValueID) (uint64, bool) {
+	index, exist := a.mutableElementIndex[id]
+	return index, exist
+}
+
+func (a *Array) setParentUpdater(f parentUpdater) {
+	a.parentUpdater = f
+}
+
+// setCallbackWithChild sets up callback function with child value so
+// parent array a can be notified when child value is modified.
+func (a *Array) setCallbackWithChild(i uint64, child Value) {
+	c, ok := child.(valueNotifier)
+	if !ok {
+		return
+	}
+
+	vid := c.ValueID()
+
+	// Index i will be updated with array operations, which affects element index.
+	a.mutableElementIndex[vid] = i
+
+	c.setParentUpdater(func() error {
+
+		// Get latest index by child value ID.
+		index, exist := a.getIndexByValueID(vid)
+		if !exist {
+			return NewFatalError(fmt.Errorf("failed to get index for child element with value id %s", vid))
+		}
+
+		// Set child value with parent array using updated index.
+		// Set() calls c.Storable() which returns inlined or not-inlined child storable.
+		existingValueStorable, err := a.Set(index, c)
+		if err != nil {
+			return err
+		}
+
+		if existingValueStorable == nil {
+			return NewFatalError(fmt.Errorf("failed to reset child value in parent updater callback because previous value is nil"))
+		}
+
+		return nil
+	})
+}
+
+// notifyParentIfNeeded calls parent updater if this array is a child value.
+func (a *Array) notifyParentIfNeeded() error {
+	if a.parentUpdater == nil {
+		return nil
+	}
+	return a.parentUpdater()
 }
 
 func (a *Array) Get(i uint64) (Value, error) {
@@ -2347,11 +2747,15 @@ func (a *Array) Get(i uint64) (Value, error) {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Get().
 		return nil, err
 	}
+
 	v, err := storable.StoredValue(a.Storage)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Storable interface.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
 	}
+
+	a.setCallbackWithChild(i, v)
+
 	return v, nil
 }
 
@@ -2382,6 +2786,11 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 		}
 	}
 
+	err = a.notifyParentIfNeeded()
+	if err != nil {
+		return nil, err
+	}
+
 	return existingStorable, nil
 }
 
@@ -2402,7 +2811,9 @@ func (a *Array) Insert(index uint64, value Value) error {
 		return a.splitRoot()
 	}
 
-	return nil
+	a.incrementIndexFrom(index)
+
+	return a.notifyParentIfNeeded()
 }
 
 func (a *Array) Remove(index uint64) (Storable, error) {
@@ -2422,6 +2833,13 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 				return nil, err
 			}
 		}
+	}
+
+	a.decrementIndexFrom(index)
+
+	err = a.notifyParentIfNeeded()
+	if err != nil {
+		return nil, err
 	}
 
 	return storable, nil
@@ -2532,6 +2950,89 @@ func (a *Array) promoteChildAsNewRoot(childID SlabID) error {
 	}
 
 	return nil
+}
+
+func (a *Array) Inlined() bool {
+	return a.root.Inlined()
+}
+
+// Storable returns array a as either:
+// - SlabIDStorable, or
+// - inlined data slab storable
+func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storable, error) {
+
+	inlined := a.root.Inlined()
+	inlinable := a.root.Inlinable(maxInlineSize)
+
+	if inlinable && inlined {
+		// Root slab is inlinable and was inlined.
+		// Return root slab as storable, no size adjustment and change to storage.
+		return a.root, nil
+	}
+
+	if !inlinable && !inlined {
+		// Root slab is not inlinable and was not inlined.
+		// Return root slab ID as storable, no size adjustment and change to storage.
+		return SlabIDStorable(a.SlabID()), nil
+	}
+
+	if inlinable && !inlined {
+		// Root slab is inlinable and was NOT inlined.
+
+		// Inline root data slab.
+
+		// Inlineable root slab must be data slab.
+		rootDataSlab, ok := a.root.(*ArrayDataSlab)
+		if !ok {
+			return nil, NewFatalError(fmt.Errorf("unexpected inlinable array slab type %T", a.root))
+		}
+
+		rootID := rootDataSlab.header.slabID
+
+		// Remove root slab from storage because it is going to be inlined.
+		err := a.Storage.Remove(rootID)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", rootID))
+		}
+
+		// Update root data slab size as inlined slab.
+		rootDataSlab.header.size = rootDataSlab.header.size -
+			arrayRootDataSlabPrefixSize +
+			inlinedArrayDataSlabPrefixSize
+
+		// Update root data slab inlined status.
+		rootDataSlab.inlined = true
+
+		return rootDataSlab, nil
+	}
+
+	// here, root slab is NOT inlinable and was previously inlined.
+
+	// Un-inline root slab.
+
+	// Inlined root slab must be data slab.
+	rootDataSlab, ok := a.root.(*ArrayDataSlab)
+	if !ok {
+		return nil, NewFatalError(fmt.Errorf("unexpected inlined array slab type %T", a.root))
+	}
+
+	// Update root data slab size
+	rootDataSlab.header.size = rootDataSlab.header.size -
+		inlinedArrayDataSlabPrefixSize +
+		arrayRootDataSlabPrefixSize
+
+	// Update root data slab inlined status.
+	rootDataSlab.inlined = false
+
+	// Store root slab in storage
+	err := a.Storage.Store(rootDataSlab.header.slabID, a.root)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.SlabID()))
+	}
+
+	return SlabIDStorable(a.SlabID()), nil
 }
 
 var emptyArrayIterator = &ArrayIterator{}
@@ -2716,17 +3217,14 @@ func (a *Array) Count() uint64 {
 }
 
 func (a *Array) SlabID() SlabID {
+	if a.root.Inlined() {
+		return SlabIDUndefined
+	}
 	return a.root.SlabID()
 }
 
 func (a *Array) ValueID() ValueID {
-	sid := a.SlabID()
-
-	var id ValueID
-	copy(id[:], sid.address[:])
-	copy(id[8:], sid.index[:])
-
-	return id
+	return slabIDToValueID(a.root.SlabID())
 }
 
 func (a *Array) Type() TypeInfo {
@@ -2831,20 +3329,30 @@ func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
 
 	extraData := a.root.ExtraData()
 
+	inlined := a.root.Inlined()
+
+	size := uint32(arrayRootDataSlabPrefixSize)
+	if inlined {
+		size = inlinedArrayDataSlabPrefixSize
+	}
+
 	// Set root to empty data slab
 	a.root = &ArrayDataSlab{
 		header: ArraySlabHeader{
 			slabID: rootID,
-			size:   arrayRootDataSlabPrefixSize,
+			size:   size,
 		},
 		extraData: extraData,
+		inlined:   inlined,
 	}
 
 	// Save root slab
-	err = a.Storage.Store(a.root.SlabID(), a.root)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.root.SlabID()))
+	if !a.Inlined() {
+		err = a.Storage.Store(a.root.SlabID(), a.root)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.root.SlabID()))
+		}
 	}
 
 	return nil
@@ -3007,8 +3515,9 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 	}
 
 	return &Array{
-		Storage: storage,
-		root:    root,
+		Storage:             storage,
+		root:                root,
+		mutableElementIndex: make(map[ValueID]uint64),
 	}, nil
 }
 

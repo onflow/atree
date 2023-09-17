@@ -2725,8 +2725,39 @@ func (a *Array) setCallbackWithChild(i uint64, child Value) {
 			return err
 		}
 
-		if existingValueStorable == nil {
-			return NewFatalError(fmt.Errorf("failed to reset child value in parent updater callback because previous value is nil"))
+		// Verify overwritten storable has identical value ID.
+
+		switch x := existingValueStorable.(type) {
+		case SlabIDStorable:
+			sid := SlabID(x)
+			if !vid.equal(sid) {
+				return NewFatalError(
+					fmt.Errorf(
+						"failed to reset child value in parent updater callback: overwritten SlabIDStorable %s != value ID %s",
+						sid,
+						vid))
+			}
+
+		case Slab:
+			sid := x.SlabID()
+			if !vid.equal(sid) {
+				return NewFatalError(
+					fmt.Errorf(
+						"failed to reset child value in parent updater callback: overwritten Slab ID %s != value ID %s",
+						sid,
+						vid))
+			}
+
+		case nil:
+			return NewFatalError(
+				fmt.Errorf(
+					"failed to reset child value in parent updater callback: overwritten value is nil"))
+
+		default:
+			return NewFatalError(
+				fmt.Errorf(
+					"failed to reset child value in parent updater callback: overwritten value is wrong type %T",
+					existingValueStorable))
 		}
 
 		return nil

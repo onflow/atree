@@ -41,6 +41,19 @@ func slabIDToValueID(sid SlabID) ValueID {
 	return id
 }
 
+func (vid ValueID) equal(sid SlabID) bool {
+	return bytes.Equal(vid[:8], sid.address[:]) &&
+		bytes.Equal(vid[8:], sid.index[:])
+}
+
+func (vid ValueID) String() string {
+	return fmt.Sprintf(
+		"0x%x.%d",
+		binary.BigEndian.Uint64(vid[:8]),
+		binary.BigEndian.Uint64(vid[8:]),
+	)
+}
+
 type (
 	Address   [8]byte
 	SlabIndex [8]byte

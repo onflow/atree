@@ -28,9 +28,11 @@ type StorableComparator func(Storable, Storable) bool
 
 type parentUpdater func() error
 
-// valueNotifier is an interface that allows child value to notify and update parent.
-type valueNotifier interface {
+// mutableValueNotifier is an interface that allows mutable child value to notify and update parent.
+type mutableValueNotifier interface {
 	Value
 	ValueID() ValueID
 	setParentUpdater(parentUpdater)
+	Inlined() bool
+	Inlinable(uint64) bool
 }

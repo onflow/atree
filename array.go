@@ -183,7 +183,7 @@ type Array struct {
 }
 
 var _ Value = &Array{}
-var _ valueNotifier = &Array{}
+var _ mutableValueNotifier = &Array{}
 
 func (a *Array) Address() Address {
 	return a.root.SlabID().address
@@ -2699,8 +2699,8 @@ func (a *Array) setParentUpdater(f parentUpdater) {
 
 // setCallbackWithChild sets up callback function with child value so
 // parent array a can be notified when child value is modified.
-func (a *Array) setCallbackWithChild(i uint64, child Value) {
-	c, ok := child.(valueNotifier)
+func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64) {
+	c, ok := child.(mutableValueNotifier)
 	if !ok {
 		return
 	}
@@ -2711,6 +2711,14 @@ func (a *Array) setCallbackWithChild(i uint64, child Value) {
 	a.mutableElementIndex[vid] = i
 
 	c.setParentUpdater(func() error {
+
+		// Avoid unnecessary write operation on parent container.
+		// Child value was stored as SlabIDStorable (not inlined) in parent container,
+		// and continues to be stored as SlabIDStorable (still not inlinable),
+		// so no update to parent container is needed.
+		if !c.Inlined() && !c.Inlinable(maxInlineSize) {
+			return nil
+		}
 
 		// Get latest index by child value ID.
 		index, exist := a.getIndexByValueID(vid)
@@ -2785,7 +2793,7 @@ func (a *Array) Get(i uint64) (Value, error) {
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
 	}
 
-	a.setCallbackWithChild(i, v)
+	a.setCallbackWithChild(i, v, maxInlineArrayElementSize)
 
 	return v, nil
 }
@@ -2985,6 +2993,10 @@ func (a *Array) promoteChildAsNewRoot(childID SlabID) error {
 
 func (a *Array) Inlined() bool {
 	return a.root.Inlined()
+}
+
+func (a *Array) Inlinable(maxInlineSize uint64) bool {
+	return a.root.Inlinable(maxInlineSize)
 }
 
 // Storable returns array a as either:

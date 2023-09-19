@@ -419,17 +419,11 @@ func newArrayDataSlabFromDataV0(
 
 // newArrayDataSlabFromDataV1 decodes data in version 1:
 //
-// Root DataSlab Header:
+// DataSlab Header:
 //
-//	+-------------------------------+------------+---------------------------------+
-//	| slab version + flag (2 bytes) | extra data | inlined extra data (if present) |
-//	+-------------------------------+------------+---------------------------------+
-//
-// Non-root DataSlab Header:
-//
-//	+-------------------------------+---------------------------------+-----------------------------+
-//	| slab version + flag (2 bytes) | inlined extra data (if present) | next slab ID (if non-empty) |
-//	+-------------------------------+---------------------------------+-----------------------------+
+//	+-------------------------------+----------------------+---------------------------------+-----------------------------+
+//	| slab version + flag (2 bytes) | extra data (if root) | inlined extra data (if present) | next slab ID (if non-empty) |
+//	+-------------------------------+----------------------+---------------------------------+-----------------------------+
 //
 // Content:
 //
@@ -713,17 +707,11 @@ func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedEx
 
 // Encode encodes this array data slab to the given encoder.
 //
-// Root DataSlab Header:
+// DataSlab Header:
 //
-//	+-------------------------------+------------+---------------------------------+
-//	| slab version + flag (2 bytes) | extra data | inlined extra data (if present) |
-//	+-------------------------------+------------+---------------------------------+
-//
-// Non-root DataSlab Header:
-//
-//	+-------------------------------+---------------------------------+-----------------------------+
-//	| slab version + flag (2 bytes) | inlined extra data (if present) | next slab ID (if non-empty) |
-//	+-------------------------------+---------------------------------+-----------------------------+
+//	+-------------------------------+----------------------+---------------------------------+-----------------------------+
+//	| slab version + flag (2 bytes) | extra data (if root) | inlined extra data (if present) | next slab ID (if non-empty) |
+//	+-------------------------------+----------------------+---------------------------------+-----------------------------+
 //
 // Content:
 //

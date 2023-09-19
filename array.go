@@ -534,9 +534,9 @@ func newArrayDataSlabFromDataV1(
 // version 1 with CBOR tag having tag number CBORTagInlinedArray, and tag contant
 // as 3-element array:
 //
-// - index of inlined extra data
-// - value ID index
-// - CBOR array of elements
+//	+------------------+----------------+----------+
+//	| extra data index | value ID index | elements |
+//	+------------------+----------------+----------+
 //
 // NOTE: This function doesn't decode tag number because tag number is decoded
 // in the caller and decoder only contains tag content.
@@ -641,9 +641,9 @@ func DecodeInlinedArrayStorable(
 // version 1 with CBOR tag having tag number CBORTagInlinedArray,
 // and tag contant as 3-element array:
 //
-// - index of inlined extra data
-// - value ID index
-// - CBOR array of elements
+//	+------------------+----------------+----------+
+//	| extra data index | value ID index | elements |
+//	+------------------+----------------+----------+
 func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
 	if a.extraData == nil {
 		return NewEncodingError(

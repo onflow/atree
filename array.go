@@ -2781,6 +2781,8 @@ func (a *Array) Get(i uint64) (Value, error) {
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
 	}
 
+	// Set up notification callback in child value so
+	// when child value is modified parent a is notified.
 	a.setCallbackWithChild(i, v, maxInlineArrayElementSize)
 
 	return v, nil
@@ -2818,6 +2820,10 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 		return nil, err
 	}
 
+	// Set up notification callback in child value so
+	// when child value is modified parent a is notified.
+	a.setCallbackWithChild(index, value, maxInlineArrayElementSize)
+
 	return existingStorable, nil
 }
 
@@ -2840,7 +2846,16 @@ func (a *Array) Insert(index uint64, value Value) error {
 
 	a.incrementIndexFrom(index)
 
-	return a.notifyParentIfNeeded()
+	err = a.notifyParentIfNeeded()
+	if err != nil {
+		return err
+	}
+
+	// Set up notification callback in child value so
+	// when child value is modified parent a is notified.
+	a.setCallbackWithChild(index, value, maxInlineArrayElementSize)
+
+	return nil
 }
 
 func (a *Array) Remove(index uint64) (Storable, error) {

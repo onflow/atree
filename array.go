@@ -173,9 +173,12 @@ type Array struct {
 	root    ArraySlab
 
 	// parentUpdater is a callback that notifies parent container when this array is modified.
-	// If this callback is null, this array has no parent.  Otherwise, this array has parent
-	// and this callback must be used when this array is changed by Append, Insert, Set,
-	// Remove, etc.
+	// If this callback is nil, this array has no parent.  Otherwise, this array has parent
+	// and this callback must be used when this array is changed by Append, Insert, Set, Remove, etc.
+	//
+	// parentUpdater acts like "parent pointer".  It is not stored physically and is only in memory.
+	// It is setup when child array is returned from parent's Get.  It is also setup when
+	// new child is added to parent through Set or Insert.
 	parentUpdater parentUpdater
 
 	// mutableElementIndex tracks index of mutable element, such as Array and OrderedMap.

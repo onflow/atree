@@ -369,7 +369,15 @@ type OrderedMap struct {
 	Storage         SlabStorage
 	root            MapSlab
 	digesterBuilder DigesterBuilder
-	parentUpdater   parentUpdater
+
+	// parentUpdater is a callback that notifies parent container when this map is modified.
+	// If this callback is nil, this map has no parent.  Otherwise, this map has parent
+	// and this callback must be used when this map is changed by Set and Remove.
+	//
+	// parentUpdater acts like "parent pointer".  It is not stored physically and is only in memory.
+	// It is setup when child map is returned from parent's Get.  It is also setup when
+	// new child is added to parent through Set or Insert.
+	parentUpdater parentUpdater
 }
 
 var _ Value = &OrderedMap{}

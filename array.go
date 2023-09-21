@@ -630,10 +630,14 @@ func DecodeInlinedArrayStorable(
 	}
 
 	return &ArrayDataSlab{
-		header:    header,
-		elements:  elements,
-		extraData: extraData,
-		inlined:   true,
+		header:   header,
+		elements: elements,
+		extraData: &ArrayExtraData{
+			// Make a copy of extraData.TypeInfo because
+			// inlined extra data are shared by all inlined slabs.
+			TypeInfo: extraData.TypeInfo.Copy(),
+		},
+		inlined: true,
 	}, nil
 }
 

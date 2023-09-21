@@ -30,7 +30,7 @@ type TypeInfo interface {
 	Encode(*cbor.StreamEncoder) error
 	IsComposite() bool
 	ID() string
-	// TODO: maybe add a copy function because decoded TypeInfo can be shared by multiple slabs if not copied.
+	Copy() TypeInfo
 }
 
 type TypeInfoDecoder func(

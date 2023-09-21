@@ -2504,17 +2504,16 @@ func DecodeInlinedCompositeStorable(
 		firstKey: elements.firstKey(),
 	}
 
-	// TODO: does extra data needs to be copied?
-	copiedExtraData := &MapExtraData{
-		TypeInfo: extraData.mapExtraData.TypeInfo,
-		Count:    extraData.mapExtraData.Count,
-		Seed:     extraData.mapExtraData.Seed,
-	}
-
 	return &MapDataSlab{
-		header:         header,
-		elements:       elements,
-		extraData:      copiedExtraData,
+		header:   header,
+		elements: elements,
+		extraData: &MapExtraData{
+			// Make a copy of extraData.TypeInfo because
+			// inlined extra data are shared by all inlined slabs.
+			TypeInfo: extraData.mapExtraData.TypeInfo.Copy(),
+			Count:    extraData.mapExtraData.Count,
+			Seed:     extraData.mapExtraData.Seed,
+		},
 		anySize:        false,
 		collisionGroup: false,
 		inlined:        true,
@@ -2609,9 +2608,15 @@ func DecodeInlinedMapStorable(
 	// NOTE: extra data doesn't need to be copied because every inlined map has its own inlined extra data.
 
 	return &MapDataSlab{
-		header:         header,
-		elements:       elements,
-		extraData:      extraData,
+		header:   header,
+		elements: elements,
+		extraData: &MapExtraData{
+			// Make a copy of extraData.TypeInfo because
+			// inlined extra data are shared by all inlined slabs.
+			TypeInfo: extraData.TypeInfo.Copy(),
+			Count:    extraData.Count,
+			Seed:     extraData.Seed,
+		},
 		anySize:        false,
 		collisionGroup: false,
 		inlined:        true,

@@ -32,6 +32,10 @@ type testTypeInfo struct {
 
 var _ atree.TypeInfo = testTypeInfo{}
 
+func (i testTypeInfo) Copy() atree.TypeInfo {
+	return i
+}
+
 func (i testTypeInfo) IsComposite() bool {
 	return false
 }

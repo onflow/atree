@@ -73,25 +73,31 @@ func (v Uint64Value) String() string {
 	return fmt.Sprintf("%d", uint64(v))
 }
 
-type testTypeInfo struct{}
+type testTypeInfo struct {
+	value uint64
+}
 
 var _ atree.TypeInfo = testTypeInfo{}
+
+func (i testTypeInfo) Copy() atree.TypeInfo {
+	return i
+}
 
 func (testTypeInfo) IsComposite() bool {
 	return false
 }
 
 func (i testTypeInfo) ID() string {
-	return fmt.Sprintf("uint64(%d)", i)
+	return fmt.Sprintf("uint64(%d)", i.value)
 }
 
-func (testTypeInfo) Encode(e *cbor.StreamEncoder) error {
-	return e.EncodeUint8(42)
+func (i testTypeInfo) Encode(e *cbor.StreamEncoder) error {
+	return e.EncodeUint64(i.value)
 }
 
 func (i testTypeInfo) Equal(other atree.TypeInfo) bool {
-	_, ok := other.(testTypeInfo)
-	return ok
+	otherTestTypeInfo, ok := other.(testTypeInfo)
+	return ok && i.value == otherTestTypeInfo.value
 }
 
 func decodeStorable(dec *cbor.StreamDecoder, _ atree.SlabID, _ []atree.ExtraData) (atree.Storable, error) {

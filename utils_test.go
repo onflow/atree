@@ -93,6 +93,10 @@ type testTypeInfo struct {
 
 var _ TypeInfo = testTypeInfo{}
 
+func (i testTypeInfo) Copy() TypeInfo {
+	return i
+}
+
 func (i testTypeInfo) IsComposite() bool {
 	return false
 }
@@ -117,6 +121,10 @@ type testCompositeTypeInfo struct {
 }
 
 var _ TypeInfo = testCompositeTypeInfo{}
+
+func (i testCompositeTypeInfo) Copy() TypeInfo {
+	return i
+}
 
 func (i testCompositeTypeInfo) IsComposite() bool {
 	return true

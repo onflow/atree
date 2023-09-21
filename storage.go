@@ -54,6 +54,8 @@ func (vid ValueID) String() string {
 	)
 }
 
+// WARNING: Any changes to SlabID or its components (Address and SlabIndex)
+// require updates to ValueID definition and functions.
 type (
 	Address   [8]byte
 	SlabIndex [8]byte

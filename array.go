@@ -167,7 +167,16 @@ type ArraySlab interface {
 	Inlinable(maxInlineSize uint64) bool
 }
 
-// Array is tree
+// Array is a heterogeneous variable-size array, storing any type of values
+// into a smaller ordered list of values and provides efficient functionality
+// to lookup, insert and remove elements anywhere in the array.
+//
+// Array elements can be stored in one or more relatively fixed-sized segments.
+//
+// Array can be inlined into its parent container when the entire content fits in
+// parent container's element size limit.  Specifically, array with one segment
+// which fits in size limit can be inlined, while arrays with multiple segments
+// can't be inlined.
 type Array struct {
 	Storage SlabStorage
 	root    ArraySlab

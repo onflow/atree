@@ -365,6 +365,18 @@ type MapSlab interface {
 	Inlinable(maxInlineSize uint64) bool
 }
 
+// OrderedMap is an ordered map of key-value pairs; keys can be any hashable type
+// and values can be any serializable value type. It supports heterogeneous key
+// or value types (e.g. first key storing a boolean and second key storing a string).
+// OrderedMap keeps values in specific sorted order and operations are deterministic
+// so the state of the segments after a sequence of operations are always unique.
+//
+// OrderedMap key-value pairs can be stored in one or more relatively fixed-sized segments.
+//
+// OrderedMap can be inlined into its parent container when the entire content fits in
+// parent container's element size limit.  Specifically, OrderedMap with one segment
+// which fits in size limit can be inlined, while OrderedMap with multiple segments
+// can't be inlined.
 type OrderedMap struct {
 	Storage         SlabStorage
 	root            MapSlab

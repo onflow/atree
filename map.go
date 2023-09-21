@@ -4966,19 +4966,19 @@ func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (S
 	inlined := m.root.Inlined()
 	inlinable := m.root.Inlinable(maxInlineSize)
 
-	if inlinable && inlined {
+	switch {
+
+	case inlinable && inlined:
 		// Root slab is inlinable and was inlined.
 		// Return root slab as storable, no size adjustment and change to storage.
 		return m.root, nil
-	}
 
-	if !inlinable && !inlined {
+	case !inlinable && !inlined:
 		// Root slab is not inlinable and was not inlined.
 		// Return root slab as storable, no size adjustment and change to storage.
 		return SlabIDStorable(m.SlabID()), nil
-	}
 
-	if inlinable && !inlined {
+	case inlinable && !inlined:
 		// Root slab is inlinable and was NOT inlined.
 
 		// Inline root data slab.
@@ -5005,32 +5005,37 @@ func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (S
 		rootDataSlab.inlined = true
 
 		return rootDataSlab, nil
+
+	case !inlinable && inlined:
+
+		// Root slab is NOT inlinable and was inlined.
+
+		// Un-inline root slab.
+
+		// Inlined root slab must be data slab.
+		rootDataSlab, ok := m.root.(*MapDataSlab)
+		if !ok {
+			return nil, NewFatalError(fmt.Errorf("unexpected inlined map slab type %T", m.root))
+		}
+
+		// Update root data slab size from inlined to not inlined.
+		rootDataSlab.header.size = mapRootDataSlabPrefixSize + rootDataSlab.elements.Size()
+
+		// Update root data slab inlined status.
+		rootDataSlab.inlined = false
+
+		// Store root slab in storage
+		err := m.Storage.Store(m.SlabID(), m.root)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.SlabID()))
+		}
+
+		return SlabIDStorable(m.SlabID()), nil
+
+	default:
+		panic("not reachable")
 	}
-
-	// here, root slab is NOT inlinable and was inlined.
-
-	// Un-inline root slab.
-
-	// Inlined root slab must be data slab.
-	rootDataSlab, ok := m.root.(*MapDataSlab)
-	if !ok {
-		return nil, NewFatalError(fmt.Errorf("unexpected inlined map slab type %T", m.root))
-	}
-
-	// Update root data slab size from inlined to not inlined.
-	rootDataSlab.header.size = mapRootDataSlabPrefixSize + rootDataSlab.elements.Size()
-
-	// Update root data slab inlined status.
-	rootDataSlab.inlined = false
-
-	// Store root slab in storage
-	err := m.Storage.Store(m.SlabID(), m.root)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.SlabID()))
-	}
-
-	return SlabIDStorable(m.SlabID()), nil
 }
 
 func (m *OrderedMap) Count() uint64 {

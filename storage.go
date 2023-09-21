@@ -31,7 +31,12 @@ import (
 
 const LedgerBaseStorageSlabPrefix = "$"
 
-// ValueID identifies Array and OrderedMap.
+// ValueID identifies an Array or OrderedMap. ValueID is consistent
+// independent of inlining status, while ValueID and SlabID are used
+// differently despite having the same size and content under the hood.
+// By contrast, SlabID is affected by inlining because it identifies
+// a slab in storage.  Given this, ValueID should be used for
+// resource tracking, etc.
 type ValueID [16]byte
 
 func slabIDToValueID(sid SlabID) ValueID {

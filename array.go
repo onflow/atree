@@ -28,6 +28,8 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
+// NOTE: we use encoding size (in bytes) instead of Go type size for slab operations,
+// such as merge and split, so size constants here are related to encoding size.
 const (
 	slabAddressSize = 8
 	slabIndexSize   = 8

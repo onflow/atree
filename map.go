@@ -30,6 +30,8 @@ import (
 	"github.com/fxamacker/circlehash"
 )
 
+// NOTE: we use encoding size (in bytes) instead of Go type size for slab operations,
+// such as merge and split, so size constants here are related to encoding size.
 const (
 	digestSize = 8
 

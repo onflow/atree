@@ -37,12 +37,19 @@ type Storable interface {
 	ChildStorables() []Storable
 }
 
-// EquatableStorable is an interface that supports comparison of Storable.
+// ComparableStorable is an interface that supports comparison of Storable.
 // This is only used for composite keys.
-type EquatableStorable interface {
+type ComparableStorable interface {
 	Storable
+
 	// Equal returns true if the given storable is equal to this storable.
 	Equal(Storable) bool
+
+	// Less returns true if the given storable is less than this storable.
+	Less(Storable) bool
+
+	// ID returns a unique identifier.
+	ID() string
 }
 
 type containerStorable interface {

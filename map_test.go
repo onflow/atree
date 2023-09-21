@@ -6833,6 +6833,236 @@ func TestMapEncodeDecode(t *testing.T) {
 		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil, false)
 	})
 
+	t.Run("same composite with different fields", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		childMapTypeInfo := testCompositeTypeInfo{43}
+
+		// Create and populate map in memory
+		storage := newTestBasicStorage(t)
+
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// Create map
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		const mapSize = 3
+		keyValues := make(map[Value]Value, mapSize)
+
+		for i := uint64(0); i < mapSize; i++ {
+
+			// Create child map
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), childMapTypeInfo)
+			require.NoError(t, err)
+
+			// Insert first element "uuid" to child map
+			existingStorable, err := childMap.Set(compare, hashInputProvider, NewStringValue("uuid"), Uint64Value(i))
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			// Insert second element to child map (second element is different)
+			switch i % 3 {
+			case 0:
+				existingStorable, err = childMap.Set(compare, hashInputProvider, NewStringValue("a"), Uint64Value(i*2))
+			case 1:
+				existingStorable, err = childMap.Set(compare, hashInputProvider, NewStringValue("b"), Uint64Value(i*2))
+			case 2:
+				existingStorable, err = childMap.Set(compare, hashInputProvider, NewStringValue("c"), Uint64Value(i*2))
+			}
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			k := Uint64Value(i)
+
+			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
+
+			// Insert child map to parent map
+			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			keyValues[k] = childMap
+		}
+
+		require.Equal(t, uint64(mapSize), parentMap.Count())
+
+		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+
+		// Expected serialized slab data with slab id
+		expected := map[SlabID][]byte{
+			id1: {
+				// version, has inlined slab
+				0x11,
+				// flag: root + map data
+				0x88,
+
+				// slab extra data
+				// CBOR encoded array of 3 elements
+				0x83,
+				// type info
+				0x18, 0x2a,
+				// count: 3
+				0x03,
+				// seed
+				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
+
+				// 3 inlined slab extra data
+				0x83,
+				// element 0
+				// inlined composite extra data
+				0xd8, 0xf9,
+				0x83,
+				// map extra data
+				0x83,
+				// type info
+				0xd8, 0xf6, 0x18, 0x2b,
+				// count: 2
+				0x02,
+				// seed
+				0x1b, 0xa9, 0x3a, 0x2d, 0x6f, 0x53, 0x49, 0xaa, 0xdd,
+				// composite digests
+				0x50,
+				0x42, 0xa5, 0xa2, 0x7f, 0xb3, 0xc9, 0x0c, 0xa1,
+				0x4c, 0x1f, 0x34, 0x74, 0x38, 0x15, 0x64, 0xe5,
+				// composite keys ["a", "uuid"]
+				0x82, 0x61, 0x61, 0x64, 0x75, 0x75, 0x69, 0x64,
+
+				// element 1
+				// inlined composite extra data
+				0xd8, 0xf9,
+				0x83,
+				// map extra data
+				0x83,
+				// type info
+				0xd8, 0xf6, 0x18, 0x2b,
+				// count: 2
+				0x02,
+				// seed
+				0x1b, 0x23, 0xd4, 0xf4, 0x3f, 0x19, 0xf8, 0x95, 0xa,
+				// composite digests
+				0x50,
+				0x74, 0x0a, 0x02, 0xc1, 0x19, 0x6f, 0xb8, 0x9e,
+				0x82, 0x41, 0xee, 0xef, 0xc7, 0xb3, 0x2f, 0x28,
+				// composite keys ["uuid", "b"]
+				0x82, 0x64, 0x75, 0x75, 0x69, 0x64, 0x61, 0x62,
+
+				// element 2
+				// inlined composite extra data
+				0xd8, 0xf9,
+				0x83,
+				// map extra data
+				0x83,
+				// type info
+				0xd8, 0xf6, 0x18, 0x2b,
+				// count: 2
+				0x02,
+				// seed
+				0x1b, 0x8d, 0x99, 0xcc, 0x54, 0xc8, 0x6b, 0xab, 0x50,
+				// composite digests
+				0x50,
+				0x5a, 0x98, 0x80, 0xf4, 0xa6, 0x52, 0x9e, 0x2d,
+				0x6d, 0x8a, 0x0a, 0xe7, 0x19, 0xf1, 0xbb, 0x8b,
+				// composite keys ["uuid", "c"]
+				0x82, 0x64, 0x75, 0x75, 0x69, 0x64, 0x61, 0x63,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 3)
+				0x59, 0x00, 0x18,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// hkey: 1
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				// hkey: 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+
+				// elements (array of 3 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x99, 0x00, 0x03,
+				// element 0:
+				0x82,
+				// key: 0
+				0xd8, 0xa4, 0x00,
+				// value: inlined composite (tag: CBORTagInlinedComposite)
+				0xd8, 0xfc,
+				// array of 3 elements
+				0x83,
+				// extra data index 0
+				0x18, 0x00,
+				// inlined map slab index
+				0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// inlined composite elements (array of 2 elements)
+				0x82,
+				// value: 0
+				0xd8, 0xa4, 0x00,
+				// value: 0
+				0xd8, 0xa4, 0x00,
+
+				// element 1:
+				0x82,
+				// key: 1
+				0xd8, 0xa4, 0x01,
+				// value: inlined composite (tag: CBORTagInlinedComposite)
+				0xd8, 0xfc,
+				// array of 3 elements
+				0x83,
+				// extra data index 1
+				0x18, 0x01,
+				// inlined map slab index
+				0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				// inlined composite elements (array of 2 elements)
+				0x82,
+				// value: 1
+				0xd8, 0xa4, 0x01,
+				// value: 2
+				0xd8, 0xa4, 0x02,
+
+				// element 2:
+				0x82,
+				// key: 2
+				0xd8, 0xa4, 0x02,
+				// value: inlined composite (tag: CBORTagInlinedComposite)
+				0xd8, 0xfc,
+				// array of 3 elements
+				0x83,
+				// extra data index 2
+				0x18, 0x02,
+				// inlined map slab index
+				0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				// inlined composite elements (array of 2 elements)
+				0x82,
+				// value: 2
+				0xd8, 0xa4, 0x02,
+				// value: 4
+				0xd8, 0xa4, 0x04,
+			},
+		}
+
+		// Verify encoded data
+		stored, err := storage.Encode()
+		require.NoError(t, err)
+
+		require.Equal(t, len(expected), len(stored))
+		require.Equal(t, expected[id1], stored[id1])
+
+		// Decode data to new storage
+		storage2 := newTestPersistentStorageWithData(t, stored)
+
+		// Test new map from storage2
+		decodedMap, err := NewMapWithRootID(storage2, id1, digesterBuilder)
+		require.NoError(t, err)
+
+		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil, false)
+	})
+
 	t.Run("same composite with different number of fields", func(t *testing.T) {
 		SetThreshold(256)
 		defer SetThreshold(1024)

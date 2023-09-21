@@ -21,6 +21,7 @@ package atree
 import (
 	"encoding/binary"
 	"fmt"
+	"sort"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -50,8 +51,8 @@ type ExtraData interface {
 // all values with the same composite type and map seed.
 type compositeExtraData struct {
 	mapExtraData *MapExtraData
-	hkeys        []Digest // hkeys is ordered by mapExtraData.Seed
-	keys         []MapKey // keys is ordered by mapExtraData.Seed
+	hkeys        []Digest   // hkeys is ordered by mapExtraData.Seed
+	keys         []Storable // keys is ordered by mapExtraData.Seed
 }
 
 var _ ExtraData = &compositeExtraData{}
@@ -175,7 +176,7 @@ func newCompositeExtraData(
 		hkeys[i] = Digest(binary.BigEndian.Uint64(digestBytes[i*digestSize:]))
 	}
 
-	keys := make([]MapKey, keyCount)
+	keys := make([]Storable, keyCount)
 	for i := uint64(0); i < keyCount; i++ {
 		// Decode composite key
 		key, err := decodeStorable(dec, SlabIDUndefined, nil)
@@ -189,25 +190,20 @@ func newCompositeExtraData(
 	return &compositeExtraData{mapExtraData: mapExtraData, hkeys: hkeys, keys: keys}, nil
 }
 
-type compositeTypeID struct {
-	id         string
-	fieldCount int
-}
-
 type compositeTypeInfo struct {
 	index int
-	keys  []MapKey
+	keys  []ComparableStorable
 }
 
 type inlinedExtraData struct {
 	extraData      []ExtraData
-	compositeTypes map[compositeTypeID]compositeTypeInfo
+	compositeTypes map[string]compositeTypeInfo
 	arrayTypes     map[string]int
 }
 
 func newInlinedExtraData() *inlinedExtraData {
 	return &inlinedExtraData{
-		compositeTypes: make(map[compositeTypeID]compositeTypeInfo),
+		compositeTypes: make(map[string]compositeTypeInfo),
 		arrayTypes:     make(map[string]int),
 	}
 }
@@ -332,21 +328,28 @@ func (ied *inlinedExtraData) addMapExtraData(data *MapExtraData) int {
 }
 
 // addCompositeExtraData returns index of deduplicated composite extra data.
-// Composite extra data is deduplicated by TypeInfo.ID() and number of fields,
-// Composite fields can be removed but new fields can't be added, and existing field types can't be modified.
-// Given this, composites with same type ID and same number of fields have the same fields.
-// See https://developers.flow.com/cadence/language/contract-updatability#fields
-func (ied *inlinedExtraData) addCompositeExtraData(data *MapExtraData, digests []Digest, keys []MapKey) int {
-	id := compositeTypeID{data.TypeInfo.ID(), int(data.Count)}
+// Composite extra data is deduplicated by TypeInfo.ID() with sorted field names.
+func (ied *inlinedExtraData) addCompositeExtraData(
+	data *MapExtraData,
+	digests []Digest,
+	keys []ComparableStorable,
+) (int, []ComparableStorable) {
+
+	id := makeCompositeTypeID(data.TypeInfo, keys)
 	info, exist := ied.compositeTypes[id]
 	if exist {
-		return info.index
+		return info.index, info.keys
+	}
+
+	storableKeys := make([]Storable, len(keys))
+	for i, k := range keys {
+		storableKeys[i] = k
 	}
 
 	compositeData := &compositeExtraData{
 		mapExtraData: data,
 		hkeys:        digests,
-		keys:         keys,
+		keys:         storableKeys,
 	}
 
 	index := len(ied.extraData)
@@ -357,21 +360,63 @@ func (ied *inlinedExtraData) addCompositeExtraData(data *MapExtraData, digests [
 		index: index,
 	}
 
-	return index
-}
-
-// getCompositeTypeInfo returns index of composite type and cached keys.
-// NOTE: use this function instead of addCompositeExtraData to check if
-// composite type is already added to save some allocation.
-func (ied *inlinedExtraData) getCompositeTypeInfo(t TypeInfo, fieldCount int) (int, []MapKey, bool) {
-	id := compositeTypeID{t.ID(), fieldCount}
-	info, exist := ied.compositeTypes[id]
-	if !exist {
-		return 0, nil, false
-	}
-	return info.index, info.keys, true
+	return index, keys
 }
 
 func (ied *inlinedExtraData) empty() bool {
 	return len(ied.extraData) == 0
+}
+
+// makeCompositeTypeID returns id of concatenated t.ID() with sorted names with "," as separator.
+func makeCompositeTypeID(t TypeInfo, names []ComparableStorable) string {
+	const separator = ","
+
+	if len(names) == 1 {
+		return t.ID() + separator + names[0].ID()
+	}
+
+	sorter := newFieldNameSorter(names)
+
+	sort.Sort(sorter)
+
+	return t.ID() + separator + sorter.join(separator)
+}
+
+// fieldNameSorter sorts names by index (not in place sort).
+type fieldNameSorter struct {
+	names []ComparableStorable
+	index []int
+}
+
+func newFieldNameSorter(names []ComparableStorable) *fieldNameSorter {
+	index := make([]int, len(names))
+	for i := 0; i < len(names); i++ {
+		index[i] = i
+	}
+	return &fieldNameSorter{
+		names: names,
+		index: index,
+	}
+}
+
+func (fn *fieldNameSorter) Len() int {
+	return len(fn.names)
+}
+
+func (fn *fieldNameSorter) Less(i, j int) bool {
+	i = fn.index[i]
+	j = fn.index[j]
+	return fn.names[i].Less(fn.names[j])
+}
+
+func (fn *fieldNameSorter) Swap(i, j int) {
+	fn.index[i], fn.index[j] = fn.index[j], fn.index[i]
+}
+
+func (fn *fieldNameSorter) join(sep string) string {
+	var s string
+	for _, i := range fn.index {
+		s += sep + fn.names[i].ID()
+	}
+	return s
 }

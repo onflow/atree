@@ -211,7 +211,6 @@ type elements interface {
 	Element(int) (element, error)
 
 	Encode(*Encoder, *inlinedExtraData) error
-	EncodeCompositeValues(*Encoder, []MapKey, *inlinedExtraData) error
 
 	hasPointer() bool
 
@@ -1303,70 +1302,6 @@ func (e *hkeyElements) Encode(enc *Encoder, inlinedTypeInfo *inlinedExtraData) e
 	return nil
 }
 
-// EncodeCompositeValues encodes hkeyElements as an array of values ordered by orderedKeys.
-// Level is not encoded because it is always 0.  Digests are not encoded because
-// they are encoded with composite keys in the composite extra data section.
-func (e *hkeyElements) EncodeCompositeValues(enc *Encoder, orderedKeys []MapKey, inlinedTypeInfo *inlinedExtraData) error {
-	if e.level != 0 {
-		return NewEncodingError(fmt.Errorf("hash level must be 0 to be encoded as composite, got %d", e.level))
-	}
-
-	if len(e.elems) != len(orderedKeys) {
-		return NewEncodingError(fmt.Errorf("number of elements %d is different from number of elements in composite extra data %d", len(e.elems), len(orderedKeys)))
-	}
-
-	var err error
-
-	err = enc.CBOR.EncodeArrayHead(uint64(len(orderedKeys)))
-	if err != nil {
-		return NewEncodingError(err)
-	}
-
-	keyIndexes := make([]int, len(e.elems))
-	for i := 0; i < len(e.elems); i++ {
-		keyIndexes[i] = i
-	}
-
-	// Encode values in the same order as orderedKeys.
-	for i, k := range orderedKeys {
-		key, ok := k.(EquatableStorable)
-		if !ok {
-			return NewEncodingError(fmt.Errorf("composite keys must be implement EquableStorable"))
-		}
-
-		found := false
-		for j := i; j < len(keyIndexes); j++ {
-			index := keyIndexes[j]
-			se, ok := e.elems[index].(*singleElement)
-			if !ok {
-				return NewEncodingError(fmt.Errorf("composite element must not have collision"))
-			}
-			if key.Equal(se.key) {
-				found = true
-				keyIndexes[i], keyIndexes[j] = keyIndexes[j], keyIndexes[i]
-
-				err = encodeStorableAsElement(enc, se.value, inlinedTypeInfo)
-				if err != nil {
-					// Don't need to wrap error as external error because err is already categorized by encodeStorable().
-					return err
-				}
-
-				break
-			}
-		}
-		if !found {
-			return NewEncodingError(fmt.Errorf("failed to find key %v", k))
-		}
-	}
-
-	err = enc.CBOR.Flush()
-	if err != nil {
-		return NewEncodingError(err)
-	}
-
-	return nil
-}
-
 func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
 
 	if level >= digester.Levels() {
@@ -2004,10 +1939,6 @@ func (e *singleElements) Encode(enc *Encoder, inlinedTypeInfo *inlinedExtraData)
 	}
 
 	return nil
-}
-
-func (e *singleElements) EncodeCompositeValues(_ *Encoder, _ []MapKey, _ *inlinedExtraData) error {
-	return NewEncodingError(fmt.Errorf("singleElements can't encoded as composite value"))
 }
 
 func (e *singleElements) Get(storage SlabStorage, digester Digester, level uint, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
@@ -2842,8 +2773,8 @@ func (m *MapDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedExtr
 			fmt.Errorf("failed to encode standalone map data slab as inlined"))
 	}
 
-	if m.canBeEncodedAsComposite() {
-		return m.encodeAsInlinedComposite(enc, inlinedTypeInfo)
+	if hkeys, keys, values, ok := m.canBeEncodedAsComposite(); ok {
+		return encodeAsInlinedComposite(enc, m.header.slabID, m.extraData, hkeys, keys, values, inlinedTypeInfo)
 	}
 
 	return m.encodeAsInlinedMap(enc, inlinedTypeInfo)
@@ -2901,35 +2832,21 @@ func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder, inlinedTypeInfo *inlinedE
 	return nil
 }
 
-func (m *MapDataSlab) encodeAsInlinedComposite(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
+// encodeAsInlinedComposite encodes hkeys, keys, and values as inlined composite value.
+func encodeAsInlinedComposite(
+	enc *Encoder,
+	slabID SlabID,
+	extraData *MapExtraData,
+	hkeys []Digest,
+	keys []ComparableStorable,
+	values []Storable,
+	inlinedTypeInfo *inlinedExtraData,
+) error {
 
-	// Composite extra data is deduplicated by TypeInfo.ID() and number of fields,
-	// Composite fields can be removed but new fields can't be added, and existing field types can't be modified.
-	// Given this, composites with same type ID and same number of fields have the same fields.
-	// See https://developers.flow.com/cadence/language/contract-updatability#fields
+	extraDataIndex, cachedKeys := inlinedTypeInfo.addCompositeExtraData(extraData, hkeys, keys)
 
-	extraDataIndex, orderedKeys, exist := inlinedTypeInfo.getCompositeTypeInfo(m.extraData.TypeInfo, int(m.extraData.Count))
-
-	if !exist {
-		elements, ok := m.elements.(*hkeyElements)
-		if !ok {
-			// This should never happen because canBeEncodedAsComposite()
-			// returns false for map containing any collision elements.
-			return NewEncodingError(fmt.Errorf("singleElements can't be encoded as composite elements"))
-		}
-
-		orderedKeys = make([]MapKey, len(elements.elems))
-		for i, e := range elements.elems {
-			e, ok := e.(*singleElement)
-			if !ok {
-				// This should never happen because canBeEncodedAsComposite()
-				// returns false for map containing any collision elements.
-				return NewEncodingError(fmt.Errorf("non-singleElement can't be encoded as composite elements"))
-			}
-			orderedKeys[i] = e.key
-		}
-
-		extraDataIndex = inlinedTypeInfo.addCompositeExtraData(m.extraData, elements.hkeys, orderedKeys)
+	if len(keys) != len(cachedKeys) {
+		return NewEncodingError(fmt.Errorf("number of elements %d is different from number of elements in cached composite type %d", len(keys), len(cachedKeys)))
 	}
 
 	if extraDataIndex > 255 {
@@ -2961,13 +2878,13 @@ func (m *MapDataSlab) encodeAsInlinedComposite(enc *Encoder, inlinedTypeInfo *in
 	}
 
 	// element 1: slab id
-	err = enc.CBOR.EncodeBytes(m.header.slabID.index[:])
+	err = enc.CBOR.EncodeBytes(slabID.index[:])
 	if err != nil {
 		return NewEncodingError(err)
 	}
 
-	// element 2: map elements
-	err = m.elements.EncodeCompositeValues(enc, orderedKeys, inlinedTypeInfo)
+	// element 2: composite values in the order of cachedKeys
+	err = encodeCompositeValues(enc, cachedKeys, keys, values, inlinedTypeInfo)
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -2980,38 +2897,100 @@ func (m *MapDataSlab) encodeAsInlinedComposite(enc *Encoder, inlinedTypeInfo *in
 	return nil
 }
 
+// encodeCompositeValues encodes composite values as an array of values ordered by cachedKeys.
+func encodeCompositeValues(
+	enc *Encoder,
+	cachedKeys []ComparableStorable,
+	keys []ComparableStorable,
+	values []Storable,
+	inlinedTypeInfo *inlinedExtraData,
+) error {
+
+	var err error
+
+	err = enc.CBOR.EncodeArrayHead(uint64(len(cachedKeys)))
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	keyIndexes := make([]int, len(keys))
+	for i := 0; i < len(keys); i++ {
+		keyIndexes[i] = i
+	}
+
+	// Encode values in the same order as cachedKeys.
+	for i, cachedKey := range cachedKeys {
+		found := false
+		for j := i; j < len(keyIndexes); j++ {
+			index := keyIndexes[j]
+			key := keys[index]
+
+			if cachedKey.Equal(key) {
+				found = true
+				keyIndexes[i], keyIndexes[j] = keyIndexes[j], keyIndexes[i]
+
+				err = encodeStorableAsElement(enc, values[index], inlinedTypeInfo)
+				if err != nil {
+					// Don't need to wrap error as external error because err is already categorized by encodeStorable().
+					return err
+				}
+
+				break
+			}
+		}
+		if !found {
+			return NewEncodingError(fmt.Errorf("failed to find key %v", cachedKey))
+		}
+	}
+
+	return nil
+}
+
 // canBeEncodedAsComposite returns true if:
 // - map data slab is inlined
 // - map is composite type
 // - no collision elements
 // - keys are stored inline (not in a separate slab)
-func (m *MapDataSlab) canBeEncodedAsComposite() bool {
+func (m *MapDataSlab) canBeEncodedAsComposite() ([]Digest, []ComparableStorable, []Storable, bool) {
 	if !m.inlined {
-		return false
+		return nil, nil, nil, false
 	}
 
 	if !m.extraData.TypeInfo.IsComposite() {
-		return false
+		return nil, nil, nil, false
 	}
 
 	elements, ok := m.elements.(*hkeyElements)
 	if !ok {
-		return false
+		return nil, nil, nil, false
 	}
 
-	for _, e := range elements.elems {
+	keys := make([]ComparableStorable, m.extraData.Count)
+	values := make([]Storable, m.extraData.Count)
+
+	for i, e := range elements.elems {
 		se, ok := e.(*singleElement)
 		if !ok {
 			// Has collision element
-			return false
+			return nil, nil, nil, false
 		}
+
 		if _, ok = se.key.(SlabIDStorable); ok {
 			// Key is stored in a separate slab
-			return false
+			return nil, nil, nil, false
 		}
+
+		key, ok := se.key.(ComparableStorable)
+		if !ok {
+			// Key can't be compared (sorted)
+			return nil, nil, nil, false
+		}
+
+		keys[i] = key
+		values[i] = se.value
 	}
 
-	return true
+	return elements.hkeys, keys, values, true
 }
 
 func (m *MapDataSlab) hasPointer() bool {

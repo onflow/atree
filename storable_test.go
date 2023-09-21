@@ -333,6 +333,7 @@ type StringValue struct {
 var _ Value = StringValue{}
 var _ Storable = StringValue{}
 var _ HashableValue = StringValue{}
+var _ ComparableStorable = StringValue{}
 
 func NewStringValue(s string) StringValue {
 	size := GetUintCBORSize(uint64(len(s))) + uint32(len(s))
@@ -350,6 +351,17 @@ func (v StringValue) Equal(other Storable) bool {
 		return false
 	}
 	return v.str == other.(StringValue).str
+}
+
+func (v StringValue) Less(other Storable) bool {
+	if _, ok := other.(StringValue); !ok {
+		return false
+	}
+	return v.str < other.(StringValue).str
+}
+
+func (v StringValue) ID() string {
+	return v.str
 }
 
 func (v StringValue) Storable(storage SlabStorage, address Address, maxInlineSize uint64) (Storable, error) {

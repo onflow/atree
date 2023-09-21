@@ -2470,6 +2470,7 @@ func DecodeInlinedCompositeStorable(
 				extraData.mapExtraData.Count))
 	}
 
+	// Make a copy of digests because extraData is shared by all inlined composite referring to the same type.
 	hkeys := make([]Digest, len(extraData.hkeys))
 	copy(hkeys, extraData.hkeys)
 
@@ -2482,9 +2483,11 @@ func DecodeInlinedCompositeStorable(
 			return nil, err
 		}
 
-		elemSize := singleElementPrefixSize + extraData.keys[i].ByteSize() + value.ByteSize()
-		// TODO: does key need to be copied?
-		elem := &singleElement{extraData.keys[i], value, elemSize}
+		// Make a copy of key in case it is shared.
+		key := extraData.keys[i].Copy()
+
+		elemSize := singleElementPrefixSize + key.ByteSize() + value.ByteSize()
+		elem := &singleElement{key, value, elemSize}
 
 		elems[i] = elem
 		size += digestSize + elem.Size()

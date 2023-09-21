@@ -364,6 +364,10 @@ func (v StringValue) ID() string {
 	return v.str
 }
 
+func (v StringValue) Copy() Storable {
+	return v
+}
+
 func (v StringValue) Storable(storage SlabStorage, address Address, maxInlineSize uint64) (Storable, error) {
 	if uint64(v.ByteSize()) > maxInlineSize {
 

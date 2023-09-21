@@ -37,7 +37,7 @@ type Storable interface {
 	ChildStorables() []Storable
 }
 
-// ComparableStorable is an interface that supports comparison of Storable.
+// ComparableStorable is an interface that supports comparison and cloning of Storable.
 // This is only used for composite keys.
 type ComparableStorable interface {
 	Storable
@@ -50,6 +50,8 @@ type ComparableStorable interface {
 
 	// ID returns a unique identifier.
 	ID() string
+
+	Copy() Storable
 }
 
 type containerStorable interface {

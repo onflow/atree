@@ -51,8 +51,8 @@ type ExtraData interface {
 // all values with the same composite type and map seed.
 type compositeExtraData struct {
 	mapExtraData *MapExtraData
-	hkeys        []Digest   // hkeys is ordered by mapExtraData.Seed
-	keys         []Storable // keys is ordered by mapExtraData.Seed
+	hkeys        []Digest             // hkeys is ordered by mapExtraData.Seed
+	keys         []ComparableStorable // keys is ordered by mapExtraData.Seed
 }
 
 var _ ExtraData = &compositeExtraData{}
@@ -176,7 +176,7 @@ func newCompositeExtraData(
 		hkeys[i] = Digest(binary.BigEndian.Uint64(digestBytes[i*digestSize:]))
 	}
 
-	keys := make([]Storable, keyCount)
+	keys := make([]ComparableStorable, keyCount)
 	for i := uint64(0); i < keyCount; i++ {
 		// Decode composite key
 		key, err := decodeStorable(dec, SlabIDUndefined, nil)
@@ -184,7 +184,11 @@ func newCompositeExtraData(
 			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode key's storable")
 		}
-		keys[i] = key
+		compositeKey, ok := key.(ComparableStorable)
+		if !ok {
+			return nil, NewDecodingError(fmt.Errorf("failed to decode key's storable: got %T, expect ComparableStorable", key))
+		}
+		keys[i] = compositeKey
 	}
 
 	return &compositeExtraData{mapExtraData: mapExtraData, hkeys: hkeys, keys: keys}, nil
@@ -341,15 +345,10 @@ func (ied *inlinedExtraData) addCompositeExtraData(
 		return info.index, info.keys
 	}
 
-	storableKeys := make([]Storable, len(keys))
-	for i, k := range keys {
-		storableKeys[i] = k
-	}
-
 	compositeData := &compositeExtraData{
 		mapExtraData: data,
 		hkeys:        digests,
-		keys:         storableKeys,
+		keys:         keys,
 	}
 
 	index := len(ied.extraData)

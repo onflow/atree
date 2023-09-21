@@ -3020,19 +3020,18 @@ func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storab
 	inlined := a.root.Inlined()
 	inlinable := a.root.Inlinable(maxInlineSize)
 
-	if inlinable && inlined {
+	switch {
+	case inlinable && inlined:
 		// Root slab is inlinable and was inlined.
 		// Return root slab as storable, no size adjustment and change to storage.
 		return a.root, nil
-	}
 
-	if !inlinable && !inlined {
+	case !inlinable && !inlined:
 		// Root slab is not inlinable and was not inlined.
 		// Return root slab ID as storable, no size adjustment and change to storage.
 		return SlabIDStorable(a.SlabID()), nil
-	}
 
-	if inlinable && !inlined {
+	case inlinable && !inlined:
 		// Root slab is inlinable and was NOT inlined.
 
 		// Inline root data slab.
@@ -3061,34 +3060,39 @@ func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storab
 		rootDataSlab.inlined = true
 
 		return rootDataSlab, nil
+
+	case !inlinable && inlined:
+
+		// Root slab is NOT inlinable and was previously inlined.
+
+		// Un-inline root slab.
+
+		// Inlined root slab must be data slab.
+		rootDataSlab, ok := a.root.(*ArrayDataSlab)
+		if !ok {
+			return nil, NewFatalError(fmt.Errorf("unexpected inlined array slab type %T", a.root))
+		}
+
+		// Update root data slab size
+		rootDataSlab.header.size = rootDataSlab.header.size -
+			inlinedArrayDataSlabPrefixSize +
+			arrayRootDataSlabPrefixSize
+
+		// Update root data slab inlined status.
+		rootDataSlab.inlined = false
+
+		// Store root slab in storage
+		err := a.Storage.Store(rootDataSlab.header.slabID, a.root)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.SlabID()))
+		}
+
+		return SlabIDStorable(a.SlabID()), nil
+
+	default:
+		panic("not reachable")
 	}
-
-	// here, root slab is NOT inlinable and was previously inlined.
-
-	// Un-inline root slab.
-
-	// Inlined root slab must be data slab.
-	rootDataSlab, ok := a.root.(*ArrayDataSlab)
-	if !ok {
-		return nil, NewFatalError(fmt.Errorf("unexpected inlined array slab type %T", a.root))
-	}
-
-	// Update root data slab size
-	rootDataSlab.header.size = rootDataSlab.header.size -
-		inlinedArrayDataSlabPrefixSize +
-		arrayRootDataSlabPrefixSize
-
-	// Update root data slab inlined status.
-	rootDataSlab.inlined = false
-
-	// Store root slab in storage
-	err := a.Storage.Store(rootDataSlab.header.slabID, a.root)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.SlabID()))
-	}
-
-	return SlabIDStorable(a.SlabID()), nil
 }
 
 var emptyArrayIterator = &ArrayIterator{}

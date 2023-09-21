@@ -2664,6 +2664,9 @@ func NewArrayWithRootID(storage SlabStorage, rootID SlabID) (*Array, error) {
 
 // TODO: maybe optimize this
 func (a *Array) incrementIndexFrom(index uint64) {
+	// Although range loop over Go map is not deterministic, it is OK
+	// to use here because this operation is free of side-effect and
+	// leads to the same results independent of map order.
 	for id, i := range a.mutableElementIndex {
 		if i >= index {
 			a.mutableElementIndex[id]++
@@ -2673,6 +2676,9 @@ func (a *Array) incrementIndexFrom(index uint64) {
 
 // TODO: maybe optimize this
 func (a *Array) decrementIndexFrom(index uint64) {
+	// Although range loop over Go map is not deterministic, it is OK
+	// to use here because this operation is free of side-effect and
+	// leads to the same results independent of map order.
 	for id, i := range a.mutableElementIndex {
 		if i > index {
 			a.mutableElementIndex[id]--

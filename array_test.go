@@ -29,6 +29,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func verifyEmptyArrayV0(
+	t *testing.T,
+	storage *PersistentSlabStorage,
+	typeInfo TypeInfo,
+	address Address,
+	array *Array,
+) {
+	verifyArrayV0(t, storage, typeInfo, address, array, nil, false)
+}
+
 func verifyEmptyArray(
 	t *testing.T,
 	storage *PersistentSlabStorage,
@@ -39,7 +49,18 @@ func verifyEmptyArray(
 	verifyArray(t, storage, typeInfo, address, array, nil, false)
 }
 
-// verifyArray verifies array elements and validates serialization and in-memory slab tree.
+func verifyArrayV0(
+	t *testing.T,
+	storage *PersistentSlabStorage,
+	typeInfo TypeInfo,
+	address Address,
+	array *Array,
+	values []Value,
+	hasNestedArrayMapElement bool,
+) {
+	_verifyArray(t, storage, typeInfo, address, array, values, hasNestedArrayMapElement, false)
+}
+
 func verifyArray(
 	t *testing.T,
 	storage *PersistentSlabStorage,
@@ -48,6 +69,20 @@ func verifyArray(
 	array *Array,
 	values []Value,
 	hasNestedArrayMapElement bool,
+) {
+	_verifyArray(t, storage, typeInfo, address, array, values, hasNestedArrayMapElement, true)
+}
+
+// verifyArray verifies array elements and validates serialization and in-memory slab tree.
+func _verifyArray(
+	t *testing.T,
+	storage *PersistentSlabStorage,
+	typeInfo TypeInfo,
+	address Address,
+	array *Array,
+	values []Value,
+	hasNestedArrayMapElement bool,
+	inlineEnabled bool,
 ) {
 	require.True(t, typeInfoComparator(typeInfo, array.Type()))
 	require.Equal(t, address, array.Address())
@@ -74,7 +109,7 @@ func verifyArray(
 	require.Equal(t, len(values), i)
 
 	// Verify in-memory slabs
-	err = ValidArray(array, address, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidArray(array, address, typeInfo, typeInfoComparator, hashInputProvider, inlineEnabled)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -1552,7 +1587,7 @@ func TestArrayDecodeV0(t *testing.T) {
 		array, err := NewArrayWithRootID(storage, arraySlabID)
 		require.NoError(t, err)
 
-		verifyEmptyArray(t, storage, typeInfo, address, array)
+		verifyEmptyArrayV0(t, storage, typeInfo, address, array)
 	})
 
 	t.Run("dataslab as root", func(t *testing.T) {
@@ -1598,7 +1633,7 @@ func TestArrayDecodeV0(t *testing.T) {
 		array, err := NewArrayWithRootID(storage, arraySlabID)
 		require.NoError(t, err)
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		verifyArrayV0(t, storage, typeInfo, address, array, values, false)
 	})
 
 	t.Run("metadataslab as root", func(t *testing.T) {
@@ -1734,7 +1769,7 @@ func TestArrayDecodeV0(t *testing.T) {
 		array, err := NewArrayWithRootID(storage2, arraySlabID)
 		require.NoError(t, err)
 
-		verifyArray(t, storage2, typeInfo, address, array, values, false)
+		verifyArrayV0(t, storage2, typeInfo, address, array, values, false)
 	})
 }
 
@@ -4628,7 +4663,7 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 	expectedArrayRootDataSlabSize := arrayRootDataSlabPrefixSize + initialStorableSize*arraySize
 	require.Equal(t, uint32(expectedArrayRootDataSlabSize), array.root.ByteSize())
 
-	err = ValidArray(array, address, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidArray(array, address, typeInfo, typeInfoComparator, hashInputProvider, true)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -4645,7 +4680,7 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 	expectedArrayRootDataSlabSize = arrayRootDataSlabPrefixSize + mutatedStorableSize*arraySize
 	require.Equal(t, uint32(expectedArrayRootDataSlabSize), array.root.ByteSize())
 
-	err = ValidArray(array, address, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidArray(array, address, typeInfo, typeInfoComparator, hashInputProvider, true)
 	require.NoError(t, err)
 }
 

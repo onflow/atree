@@ -89,6 +89,16 @@ func (h *errorDigesterBuilder) Digest(_ HashInputProvider, _ Value) (Digester, e
 	return nil, h.err
 }
 
+func verifyEmptyMapV0(
+	t *testing.T,
+	storage *PersistentSlabStorage,
+	typeInfo TypeInfo,
+	address Address,
+	m *OrderedMap,
+) {
+	verifyMapV0(t, storage, typeInfo, address, m, nil, nil, false)
+}
+
 func verifyEmptyMap(
 	t *testing.T,
 	storage *PersistentSlabStorage,
@@ -99,8 +109,19 @@ func verifyEmptyMap(
 	verifyMap(t, storage, typeInfo, address, m, nil, nil, false)
 }
 
-// verifyMap verifies map elements and validates serialization and in-memory slab tree.
-// It also verifies elements ordering if sortedKeys is not nil.
+func verifyMapV0(
+	t *testing.T,
+	storage *PersistentSlabStorage,
+	typeInfo TypeInfo,
+	address Address,
+	m *OrderedMap,
+	keyValues map[Value]Value,
+	sortedKeys []Value,
+	hasNestedArrayMapElement bool,
+) {
+	_verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, hasNestedArrayMapElement, false)
+}
+
 func verifyMap(
 	t *testing.T,
 	storage *PersistentSlabStorage,
@@ -110,6 +131,22 @@ func verifyMap(
 	keyValues map[Value]Value,
 	sortedKeys []Value,
 	hasNestedArrayMapElement bool,
+) {
+	_verifyMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, hasNestedArrayMapElement, true)
+}
+
+// verifyMap verifies map elements and validates serialization and in-memory slab tree.
+// It also verifies elements ordering if sortedKeys is not nil.
+func _verifyMap(
+	t *testing.T,
+	storage *PersistentSlabStorage,
+	typeInfo TypeInfo,
+	address Address,
+	m *OrderedMap,
+	keyValues map[Value]Value,
+	sortedKeys []Value,
+	hasNestedArrayMapElement bool,
+	inlineEnabled bool,
 ) {
 	require.True(t, typeInfoComparator(typeInfo, m.Type()))
 	require.Equal(t, address, m.Address())
@@ -145,7 +182,7 @@ func verifyMap(
 	}
 
 	// Verify in-memory slabs
-	err = ValidMap(m, address, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidMap(m, address, typeInfo, typeInfoComparator, hashInputProvider, inlineEnabled)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -1577,7 +1614,7 @@ func TestMapDecodeV0(t *testing.T) {
 		decodedMap, err := NewMapWithRootID(storage, mapSlabID, NewDefaultDigesterBuilder())
 		require.NoError(t, err)
 
-		verifyEmptyMap(t, storage, typeInfo, address, decodedMap)
+		verifyEmptyMapV0(t, storage, typeInfo, address, decodedMap)
 	})
 
 	t.Run("dataslab as root", func(t *testing.T) {
@@ -1650,7 +1687,7 @@ func TestMapDecodeV0(t *testing.T) {
 		decodedMap, err := NewMapWithRootID(storage, mapSlabID, digesterBuilder)
 		require.NoError(t, err)
 
-		verifyMap(t, storage, typeInfo, address, decodedMap, keyValues, nil, false)
+		verifyMapV0(t, storage, typeInfo, address, decodedMap, keyValues, nil, false)
 	})
 
 	t.Run("has pointer no collision", func(t *testing.T) {
@@ -1863,7 +1900,7 @@ func TestMapDecodeV0(t *testing.T) {
 		decodedMap, err := NewMapWithRootID(storage2, mapSlabID, digesterBuilder)
 		require.NoError(t, err)
 
-		verifyMap(t, storage2, typeInfo, address, decodedMap, keyValues, nil, false)
+		verifyMapV0(t, storage2, typeInfo, address, decodedMap, keyValues, nil, false)
 	})
 
 	t.Run("inline collision 1 level", func(t *testing.T) {
@@ -2037,7 +2074,7 @@ func TestMapDecodeV0(t *testing.T) {
 		decodedMap, err := NewMapWithRootID(storage, mapSlabID, digesterBuilder)
 		require.NoError(t, err)
 
-		verifyMap(t, storage, typeInfo, address, decodedMap, keyValues, nil, false)
+		verifyMapV0(t, storage, typeInfo, address, decodedMap, keyValues, nil, false)
 	})
 
 	t.Run("inline collision 2 levels", func(t *testing.T) {
@@ -2261,7 +2298,7 @@ func TestMapDecodeV0(t *testing.T) {
 		decodedMap, err := NewMapWithRootID(storage, mapSlabID, digesterBuilder)
 		require.NoError(t, err)
 
-		verifyMap(t, storage, typeInfo, address, decodedMap, keyValues, nil, false)
+		verifyMapV0(t, storage, typeInfo, address, decodedMap, keyValues, nil, false)
 	})
 
 	t.Run("external collision", func(t *testing.T) {
@@ -2480,7 +2517,7 @@ func TestMapDecodeV0(t *testing.T) {
 		decodedMap, err := NewMapWithRootID(storage, mapSlabID, digesterBuilder)
 		require.NoError(t, err)
 
-		verifyMap(t, storage, typeInfo, address, decodedMap, keyValues, nil, false)
+		verifyMapV0(t, storage, typeInfo, address, decodedMap, keyValues, nil, false)
 	})
 }
 
@@ -10696,7 +10733,7 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 	expectedMapRootDataSlabSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize + expectedElementSize*mapSize
 	require.Equal(t, expectedMapRootDataSlabSize, m.root.ByteSize())
 
-	err = ValidMap(m, address, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidMap(m, address, typeInfo, typeInfoComparator, hashInputProvider, true)
 	require.NoError(t, err)
 
 	// Reset mutable values after changing its storable size
@@ -10714,7 +10751,7 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 	expectedMapRootDataSlabSize = mapRootDataSlabPrefixSize + hkeyElementsPrefixSize + expectedElementSize*mapSize
 	require.Equal(t, expectedMapRootDataSlabSize, m.root.ByteSize())
 
-	err = ValidMap(m, address, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidMap(m, address, typeInfo, typeInfoComparator, hashInputProvider, true)
 	require.NoError(t, err)
 }
 

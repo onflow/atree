@@ -167,7 +167,7 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 
 type TypeInfoComparator func(TypeInfo, TypeInfo) bool
 
-func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
+func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
 
 	// Verify array address
 	if address != a.Address() {
@@ -208,7 +208,7 @@ func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoCompar
 
 	// Verify array root slab
 	computedCount, dataSlabIDs, nextDataSlabIDs, err :=
-		validArraySlab(address, tic, hip, a.Storage, a.root, 0, nil, []SlabID{}, []SlabID{})
+		validArraySlab(address, tic, hip, a.Storage, a.root, 0, nil, []SlabID{}, []SlabID{}, inlineEnabled)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 		return err
@@ -238,6 +238,7 @@ func validArraySlab(
 	headerFromParentSlab *ArraySlabHeader,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
+	inlineEnabled bool,
 ) (
 	elementCount uint32,
 	_dataSlabIDs []SlabID,
@@ -275,10 +276,10 @@ func validArraySlab(
 
 	switch slab := slab.(type) {
 	case *ArrayDataSlab:
-		return validArrayDataSlab(address, tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs)
+		return validArrayDataSlab(address, tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs, inlineEnabled)
 
 	case *ArrayMetaDataSlab:
-		return validArrayMetaDataSlab(address, tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs)
+		return validArrayMetaDataSlab(address, tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs, inlineEnabled)
 
 	default:
 		return 0, nil, nil, NewFatalError(fmt.Errorf("ArraySlab is either *ArrayDataSlab or *ArrayMetaDataSlab, got %T", slab))
@@ -294,6 +295,7 @@ func validArrayDataSlab(
 	level int,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
+	inlineEnabled bool,
 ) (
 	elementCount uint32,
 	_dataSlabIDs []SlabID,
@@ -327,13 +329,6 @@ func validArrayDataSlab(
 	}
 
 	for _, e := range dataSlab.elements {
-
-		// Verify element size is <= inline size
-		if e.ByteSize() > uint32(maxInlineArrayElementSize) {
-			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s element %s size %d is too large, want < %d",
-				id, e, e.ByteSize(), maxInlineArrayElementSize))
-		}
-
 		computedSize += e.ByteSize()
 	}
 
@@ -348,8 +343,8 @@ func validArrayDataSlab(
 		nextDataSlabIDs = append(nextDataSlabIDs, dataSlab.next)
 	}
 
-	// Verify element
 	for _, e := range dataSlab.elements {
+
 		v, err := e.StoredValue(storage)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
@@ -359,7 +354,25 @@ func validArrayDataSlab(
 					id, e,
 				))
 		}
-		err = ValidValue(v, address, nil, tic, hip)
+
+		// Verify element size <= inline size
+		if e.ByteSize() > uint32(maxInlineArrayElementSize) {
+			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s element %s size %d is too large, want < %d",
+				id, e, e.ByteSize(), maxInlineArrayElementSize))
+		}
+
+		// Verify not-inlined array/map > inline size, or can't be inlined
+		if inlineEnabled {
+			if _, ok := e.(SlabIDStorable); ok {
+				err = validNotInlinedValueStatusAndSize(v, uint32(maxInlineArrayElementSize))
+				if err != nil {
+					return 0, nil, nil, err
+				}
+			}
+		}
+
+		// Verify element
+		err = ValidValue(v, address, nil, tic, hip, inlineEnabled)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by ValidValue().
 			return 0, nil, nil, fmt.Errorf(
@@ -381,6 +394,7 @@ func validArrayMetaDataSlab(
 	level int,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
+	inlineEnabled bool,
 ) (
 	elementCount uint32,
 	_dataSlabIDs []SlabID,
@@ -428,7 +442,7 @@ func validArrayMetaDataSlab(
 		// Verify child slabs
 		var count uint32
 		count, dataSlabIDs, nextDataSlabIDs, err =
-			validArraySlab(address, tic, hip, storage, childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs)
+			validArraySlab(address, tic, hip, storage, childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, inlineEnabled)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 			return 0, nil, nil, err
@@ -977,6 +991,55 @@ func validArraySlabID(a *Array) error {
 				"expect array slab ID same as root slab's slab ID %s, got %s",
 				rootSlabID,
 				sid))
+	}
+
+	return nil
+}
+
+func validNotInlinedValueStatusAndSize(v Value, maxInlineSize uint32) error {
+
+	switch v := v.(type) {
+	case *Array:
+		// Verify not-inlined array's inlined status
+		if v.root.Inlined() {
+			return NewFatalError(
+				fmt.Errorf(
+					"not-inlined array %s has inlined status",
+					v.root.Header().slabID))
+		}
+
+		// Verify not-inlined array size.
+		if v.root.IsData() {
+			inlinableSize := v.root.ByteSize() - arrayRootDataSlabPrefixSize + inlinedArrayDataSlabPrefixSize
+			if inlinableSize <= maxInlineSize {
+				return NewFatalError(
+					fmt.Errorf("not-inlined array root slab %s can be inlined, inlinable size %d <= max inline size %d",
+						v.root.Header().slabID,
+						inlinableSize,
+						maxInlineSize))
+			}
+		}
+
+	case *OrderedMap:
+		// Verify not-inlined map's inlined status
+		if v.Inlined() {
+			return NewFatalError(
+				fmt.Errorf(
+					"not-inlined map %s has inlined status",
+					v.root.Header().slabID))
+		}
+
+		// Verify not-inlined map size.
+		if v.root.IsData() {
+			inlinableSize := v.root.ByteSize() - mapRootDataSlabPrefixSize + inlinedMapDataSlabPrefixSize
+			if inlinableSize <= maxInlineSize {
+				return NewFatalError(
+					fmt.Errorf("not-inlined map root slab %s can be inlined, inlinable size %d <= max inline size %d",
+						v.root.Header().slabID,
+						inlinableSize,
+						maxInlineSize))
+			}
+		}
 	}
 
 	return nil

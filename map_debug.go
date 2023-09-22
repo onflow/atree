@@ -247,6 +247,19 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 
 func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
 
+	// Verify map value ID
+	err := validMapValueID(m)
+	if err != nil {
+		return err
+	}
+
+	// Verify map slab ID
+	err = validMapSlabID(m)
+	if err != nil {
+		return err
+	}
+
+	// Verify map extra data
 	extraData := m.root.ExtraData()
 	if extraData == nil {
 		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", m.root.SlabID()))
@@ -1468,6 +1481,69 @@ func mapExtraDataEqual(expected, actual *MapExtraData) error {
 
 	if !reflect.DeepEqual(*expected, *actual) {
 		return NewFatalError(fmt.Errorf("extra data %+v is wrong, want %+v", *actual, *expected))
+	}
+
+	return nil
+}
+
+// validMapValueID verifies map ValueID is always the same as
+// root slab's SlabID indepedent of map's inlined status.
+func validMapValueID(m *OrderedMap) error {
+	rootSlabID := m.root.Header().slabID
+
+	vid := m.ValueID()
+
+	if !bytes.Equal(vid[:slabAddressSize], rootSlabID.address[:]) {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect first %d bytes of array value ID as %v, got %v",
+				slabAddressSize,
+				rootSlabID.address[:],
+				vid[:slabAddressSize]))
+	}
+
+	if !bytes.Equal(vid[slabAddressSize:], rootSlabID.index[:]) {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect second %d bytes of array value ID as %v, got %v",
+				slabIndexSize,
+				rootSlabID.index[:],
+				vid[slabAddressSize:]))
+	}
+
+	return nil
+}
+
+// validMapSlabID verifies map SlabID is either empty for inlined map, or
+// same as root slab's SlabID for not-inlined map.
+func validMapSlabID(m *OrderedMap) error {
+	sid := m.SlabID()
+
+	if m.Inlined() {
+		if sid != SlabIDUndefined {
+			return NewFatalError(
+				fmt.Errorf(
+					"expect empty slab ID for inlined array, got %v",
+					sid))
+		}
+		return nil
+	}
+
+	rootSlabID := m.root.Header().slabID
+
+	if sid == SlabIDUndefined {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect non-empty slab ID for not-inlined array, got %v",
+				sid))
+	}
+
+	if sid != rootSlabID {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect array slab ID same as root slab's slab ID %s, got %s",
+				rootSlabID,
+				sid))
 	}
 
 	return nil

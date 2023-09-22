@@ -245,7 +245,16 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 	return dumps, nil
 }
 
-func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
+func ValidMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
+
+	// Verify map address
+	if address != m.Address() {
+		return NewFatalError(fmt.Errorf("map address %v, got %v", address, m.Address()))
+	}
+
+	if address != m.root.Header().slabID.address {
+		return NewFatalError(fmt.Errorf("map root slab address %v, got %v", address, m.root.Header().slabID.address))
+	}
 
 	// Verify map value ID
 	err := validMapValueID(m)
@@ -282,7 +291,7 @@ func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip Hash
 	}
 
 	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := validMapSlab(
-		m.Storage, m.digesterBuilder, tic, hip, m.root, 0, nil, []SlabID{}, []SlabID{}, []Digest{})
+		address, m.Storage, m.digesterBuilder, tic, hip, m.root, 0, nil, []SlabID{}, []SlabID{}, []Digest{})
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by validMapSlab().
 		return err
@@ -327,6 +336,7 @@ func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip Hash
 }
 
 func validMapSlab(
+	address Address,
 	storage SlabStorage,
 	digesterBuilder DigesterBuilder,
 	tic TypeInfoComparator,
@@ -376,10 +386,10 @@ func validMapSlab(
 
 	switch slab := slab.(type) {
 	case *MapDataSlab:
-		return validMapDataSlab(storage, digesterBuilder, tic, hip, slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
+		return validMapDataSlab(address, storage, digesterBuilder, tic, hip, slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
 
 	case *MapMetaDataSlab:
-		return validMapMetaDataSlab(storage, digesterBuilder, tic, hip, slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
+		return validMapMetaDataSlab(address, storage, digesterBuilder, tic, hip, slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
 
 	default:
 		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapSlab is either *MapDataSlab or *MapMetaDataSlab, got %T", slab))
@@ -387,6 +397,7 @@ func validMapSlab(
 }
 
 func validMapDataSlab(
+	address Address,
 	storage SlabStorage,
 	digesterBuilder DigesterBuilder,
 	tic TypeInfoComparator,
@@ -410,7 +421,7 @@ func validMapDataSlab(
 	}
 
 	// Verify data slab's elements
-	elementCount, elementSize, err := validMapElements(storage, digesterBuilder, tic, hip, id, dataSlab.elements, 0, nil)
+	elementCount, elementSize, err := validMapElements(address, storage, digesterBuilder, tic, hip, id, dataSlab.elements, 0, nil)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by validMapElements().
 		return 0, nil, nil, nil, err
@@ -470,6 +481,7 @@ func validMapDataSlab(
 }
 
 func validMapMetaDataSlab(
+	address Address,
 	storage SlabStorage,
 	digesterBuilder DigesterBuilder,
 	tic TypeInfoComparator,
@@ -518,7 +530,7 @@ func validMapMetaDataSlab(
 		// Verify child slabs
 		count := uint64(0)
 		count, dataSlabIDs, nextDataSlabIDs, firstKeys, err =
-			validMapSlab(storage, digesterBuilder, tic, hip, childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
+			validMapSlab(address, storage, digesterBuilder, tic, hip, childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by validMapSlab().
 			return 0, nil, nil, nil, err
@@ -567,6 +579,7 @@ func validMapMetaDataSlab(
 }
 
 func validMapElements(
+	address Address,
 	storage SlabStorage,
 	db DigesterBuilder,
 	tic TypeInfoComparator,
@@ -583,15 +596,16 @@ func validMapElements(
 
 	switch elems := elements.(type) {
 	case *hkeyElements:
-		return validMapHkeyElements(storage, db, tic, hip, id, elems, digestLevel, hkeyPrefixes)
+		return validMapHkeyElements(address, storage, db, tic, hip, id, elems, digestLevel, hkeyPrefixes)
 	case *singleElements:
-		return validMapSingleElements(storage, db, tic, hip, id, elems, digestLevel, hkeyPrefixes)
+		return validMapSingleElements(address, storage, db, tic, hip, id, elems, digestLevel, hkeyPrefixes)
 	default:
 		return 0, 0, NewFatalError(fmt.Errorf("slab %d has unknown elements type %T at digest level %d", id, elements, digestLevel))
 	}
 }
 
 func validMapHkeyElements(
+	address Address,
 	storage SlabStorage,
 	db DigesterBuilder,
 	tic TypeInfoComparator,
@@ -666,7 +680,7 @@ func validMapHkeyElements(
 			copy(hkeys, hkeyPrefixes)
 			hkeys[len(hkeys)-1] = elements.hkeys[i]
 
-			count, size, err := validMapElements(storage, db, tic, hip, id, ge, digestLevel+1, hkeys)
+			count, size, err := validMapElements(address, storage, db, tic, hip, id, ge, digestLevel+1, hkeys)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by validMapElement().
 				return 0, 0, err
@@ -699,7 +713,7 @@ func validMapHkeyElements(
 			hkeys[len(hkeys)-1] = elements.hkeys[i]
 
 			// Verify element
-			computedSize, maxDigestLevel, err := validSingleElement(storage, db, tic, hip, se, hkeys)
+			computedSize, maxDigestLevel, err := validSingleElement(address, storage, db, tic, hip, se, hkeys)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by validSingleElement().
 				return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
@@ -727,6 +741,7 @@ func validMapHkeyElements(
 }
 
 func validMapSingleElements(
+	address Address,
 	storage SlabStorage,
 	db DigesterBuilder,
 	tic TypeInfoComparator,
@@ -753,7 +768,7 @@ func validMapSingleElements(
 	for _, e := range elements.elems {
 
 		// Verify element
-		computedSize, maxDigestLevel, err := validSingleElement(storage, db, tic, hip, e, hkeyPrefixes)
+		computedSize, maxDigestLevel, err := validSingleElement(address, storage, db, tic, hip, e, hkeyPrefixes)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by validSingleElement().
 			return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
@@ -785,6 +800,7 @@ func validMapSingleElements(
 }
 
 func validSingleElement(
+	address Address,
 	storage SlabStorage,
 	db DigesterBuilder,
 	tic TypeInfoComparator,
@@ -822,7 +838,7 @@ func validSingleElement(
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("element %s key can't be converted to value", e))
 	}
 
-	err = ValidValue(kv, nil, tic, hip)
+	err = ValidValue(kv, address, nil, tic, hip)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ValidValue().
 		return 0, 0, fmt.Errorf("element %s key isn't valid: %w", e, err)
@@ -835,7 +851,7 @@ func validSingleElement(
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("element %s value can't be converted to value", e))
 	}
 
-	err = ValidValue(vv, nil, tic, hip)
+	err = ValidValue(vv, address, nil, tic, hip)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ValidValue().
 		return 0, 0, fmt.Errorf("element %s value isn't valid: %w", e, err)
@@ -867,12 +883,12 @@ func validSingleElement(
 	return computedSize, digest.Levels(), nil
 }
 
-func ValidValue(value Value, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
+func ValidValue(value Value, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
 	switch v := value.(type) {
 	case *Array:
-		return ValidArray(v, typeInfo, tic, hip)
+		return ValidArray(v, address, typeInfo, tic, hip)
 	case *OrderedMap:
-		return ValidMap(v, typeInfo, tic, hip)
+		return ValidMap(v, address, typeInfo, tic, hip)
 	}
 	return nil
 }

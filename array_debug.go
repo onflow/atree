@@ -167,7 +167,16 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 
 type TypeInfoComparator func(TypeInfo, TypeInfo) bool
 
-func ValidArray(a *Array, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
+func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
+
+	// Verify array address
+	if address != a.Address() {
+		return NewFatalError(fmt.Errorf("array address %v, got %v", address, a.Address()))
+	}
+
+	if address != a.root.Header().slabID.address {
+		return NewFatalError(fmt.Errorf("array root slab address %v, got %v", address, a.root.Header().slabID.address))
+	}
 
 	// Verify array value ID
 	err := validArrayValueID(a)
@@ -199,7 +208,7 @@ func ValidArray(a *Array, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInp
 
 	// Verify array root slab
 	computedCount, dataSlabIDs, nextDataSlabIDs, err :=
-		validArraySlab(tic, hip, a.Storage, a.root, 0, nil, []SlabID{}, []SlabID{})
+		validArraySlab(address, tic, hip, a.Storage, a.root, 0, nil, []SlabID{}, []SlabID{})
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 		return err
@@ -220,6 +229,7 @@ func ValidArray(a *Array, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInp
 }
 
 func validArraySlab(
+	address Address,
 	tic TypeInfoComparator,
 	hip HashInputProvider,
 	storage SlabStorage,
@@ -265,10 +275,10 @@ func validArraySlab(
 
 	switch slab := slab.(type) {
 	case *ArrayDataSlab:
-		return validArrayDataSlab(tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs)
+		return validArrayDataSlab(address, tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs)
 
 	case *ArrayMetaDataSlab:
-		return validArrayMetaDataSlab(tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs)
+		return validArrayMetaDataSlab(address, tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs)
 
 	default:
 		return 0, nil, nil, NewFatalError(fmt.Errorf("ArraySlab is either *ArrayDataSlab or *ArrayMetaDataSlab, got %T", slab))
@@ -276,6 +286,7 @@ func validArraySlab(
 }
 
 func validArrayDataSlab(
+	address Address,
 	tic TypeInfoComparator,
 	hip HashInputProvider,
 	storage SlabStorage,
@@ -348,7 +359,7 @@ func validArrayDataSlab(
 					id, e,
 				))
 		}
-		err = ValidValue(v, nil, tic, hip)
+		err = ValidValue(v, address, nil, tic, hip)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by ValidValue().
 			return 0, nil, nil, fmt.Errorf(
@@ -362,6 +373,7 @@ func validArrayDataSlab(
 }
 
 func validArrayMetaDataSlab(
+	address Address,
 	tic TypeInfoComparator,
 	hip HashInputProvider,
 	storage SlabStorage,
@@ -416,7 +428,7 @@ func validArrayMetaDataSlab(
 		// Verify child slabs
 		var count uint32
 		count, dataSlabIDs, nextDataSlabIDs, err =
-			validArraySlab(tic, hip, storage, childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs)
+			validArraySlab(address, tic, hip, storage, childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 			return 0, nil, nil, err

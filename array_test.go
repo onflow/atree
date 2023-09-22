@@ -74,7 +74,7 @@ func verifyArray(
 	require.Equal(t, len(values), i)
 
 	// Verify in-memory slabs
-	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidArray(array, address, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintArray(array)
 	}
@@ -4628,7 +4628,7 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 	expectedArrayRootDataSlabSize := arrayRootDataSlabPrefixSize + initialStorableSize*arraySize
 	require.Equal(t, uint32(expectedArrayRootDataSlabSize), array.root.ByteSize())
 
-	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidArray(array, address, typeInfo, typeInfoComparator, hashInputProvider)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arraySize; i++ {
@@ -4645,7 +4645,7 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 	expectedArrayRootDataSlabSize = arrayRootDataSlabPrefixSize + mutatedStorableSize*arraySize
 	require.Equal(t, uint32(expectedArrayRootDataSlabSize), array.root.ByteSize())
 
-	err = ValidArray(array, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidArray(array, address, typeInfo, typeInfoComparator, hashInputProvider)
 	require.NoError(t, err)
 }
 

@@ -145,7 +145,7 @@ func verifyMap(
 	}
 
 	// Verify in-memory slabs
-	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidMap(m, address, typeInfo, typeInfoComparator, hashInputProvider)
 	if err != nil {
 		PrintMap(m)
 	}
@@ -10696,7 +10696,7 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 	expectedMapRootDataSlabSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize + expectedElementSize*mapSize
 	require.Equal(t, expectedMapRootDataSlabSize, m.root.ByteSize())
 
-	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidMap(m, address, typeInfo, typeInfoComparator, hashInputProvider)
 	require.NoError(t, err)
 
 	// Reset mutable values after changing its storable size
@@ -10714,7 +10714,7 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 	expectedMapRootDataSlabSize = mapRootDataSlabPrefixSize + hkeyElementsPrefixSize + expectedElementSize*mapSize
 	require.Equal(t, expectedMapRootDataSlabSize, m.root.ByteSize())
 
-	err = ValidMap(m, typeInfo, typeInfoComparator, hashInputProvider)
+	err = ValidMap(m, address, typeInfo, typeInfoComparator, hashInputProvider)
 	require.NoError(t, err)
 }
 

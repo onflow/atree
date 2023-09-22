@@ -361,90 +361,140 @@ func validMapSlab(
 		}
 	}
 
-	if slab.IsData() {
+	switch slab := slab.(type) {
+	case *MapDataSlab:
+		return validMapDataSlab(storage, digesterBuilder, tic, hip, slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
 
-		dataSlab, ok := slab.(*MapDataSlab)
-		if !ok {
-			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("slab %d is not MapDataSlab", id))
-		}
+	case *MapMetaDataSlab:
+		return validMapMetaDataSlab(storage, digesterBuilder, tic, hip, slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
 
-		// Verify data slab's elements
-		elementCount, elementSize, err := validMapElements(storage, digesterBuilder, tic, hip, id, dataSlab.elements, 0, nil)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by validMapElements().
-			return 0, nil, nil, nil, err
-		}
+	default:
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapSlab is either *MapDataSlab or *MapMetaDataSlab, got %T", slab))
+	}
+}
 
-		// Verify slab's first key
-		if dataSlab.elements.firstKey() != dataSlab.header.firstKey {
-			return 0, nil, nil, nil, NewFatalError(
-				fmt.Errorf("data slab %d header first key %d is wrong, want %d",
-					id, dataSlab.header.firstKey, dataSlab.elements.firstKey()))
-		}
+func validMapDataSlab(
+	storage SlabStorage,
+	digesterBuilder DigesterBuilder,
+	tic TypeInfoComparator,
+	hip HashInputProvider,
+	dataSlab *MapDataSlab,
+	level int,
+	dataSlabIDs []SlabID,
+	nextDataSlabIDs []SlabID,
+	firstKeys []Digest,
+) (
+	elementCount uint64,
+	_dataSlabIDs []SlabID,
+	_nextDataSlabIDs []SlabID,
+	_firstKeys []Digest,
+	err error,
+) {
+	id := dataSlab.header.slabID
 
-		// Verify that only root slab can be inlined
-		if level > 0 && slab.Inlined() {
-			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
-		}
-
-		// Verify that aggregated element size + slab prefix is the same as header.size
-		computedSize := uint32(mapDataSlabPrefixSize)
-		if level == 0 {
-			computedSize = uint32(mapRootDataSlabPrefixSize)
-			if dataSlab.Inlined() {
-				computedSize = uint32(inlinedMapDataSlabPrefixSize)
-			}
-		}
-		computedSize += elementSize
-
-		if computedSize != dataSlab.header.size {
-			return 0, nil, nil, nil, NewFatalError(
-				fmt.Errorf("data slab %d header size %d is wrong, want %d",
-					id, dataSlab.header.size, computedSize))
-		}
-
-		// Verify any size flag
-		if dataSlab.anySize {
-			return 0, nil, nil, nil, NewFatalError(
-				fmt.Errorf("data slab %d anySize %t is wrong, want false",
-					id, dataSlab.anySize))
-		}
-
-		// Verify collision group flag
-		if dataSlab.collisionGroup {
-			return 0, nil, nil, nil, NewFatalError(
-				fmt.Errorf("data slab %d collisionGroup %t is wrong, want false",
-					id, dataSlab.collisionGroup))
-		}
-
-		dataSlabIDs = append(dataSlabIDs, id)
-
-		if dataSlab.next != SlabIDUndefined {
-			nextDataSlabIDs = append(nextDataSlabIDs, dataSlab.next)
-		}
-
-		firstKeys = append(firstKeys, dataSlab.header.firstKey)
-
-		return elementCount, dataSlabIDs, nextDataSlabIDs, firstKeys, nil
+	if !dataSlab.IsData() {
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapDataSlab %s is not data", id))
 	}
 
-	meta, ok := slab.(*MapMetaDataSlab)
-	if !ok {
-		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("slab %d is not MapMetaDataSlab", id))
+	// Verify data slab's elements
+	elementCount, elementSize, err := validMapElements(storage, digesterBuilder, tic, hip, id, dataSlab.elements, 0, nil)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by validMapElements().
+		return 0, nil, nil, nil, err
+	}
+
+	// Verify slab's first key
+	if dataSlab.elements.firstKey() != dataSlab.header.firstKey {
+		return 0, nil, nil, nil, NewFatalError(
+			fmt.Errorf("data slab %d header first key %d is wrong, want %d",
+				id, dataSlab.header.firstKey, dataSlab.elements.firstKey()))
+	}
+
+	// Verify that only root slab can be inlined
+	if level > 0 && dataSlab.Inlined() {
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
+	}
+
+	// Verify that aggregated element size + slab prefix is the same as header.size
+	computedSize := uint32(mapDataSlabPrefixSize)
+	if level == 0 {
+		computedSize = uint32(mapRootDataSlabPrefixSize)
+		if dataSlab.Inlined() {
+			computedSize = uint32(inlinedMapDataSlabPrefixSize)
+		}
+	}
+	computedSize += elementSize
+
+	if computedSize != dataSlab.header.size {
+		return 0, nil, nil, nil, NewFatalError(
+			fmt.Errorf("data slab %d header size %d is wrong, want %d",
+				id, dataSlab.header.size, computedSize))
+	}
+
+	// Verify any size flag
+	if dataSlab.anySize {
+		return 0, nil, nil, nil, NewFatalError(
+			fmt.Errorf("data slab %d anySize %t is wrong, want false",
+				id, dataSlab.anySize))
+	}
+
+	// Verify collision group flag
+	if dataSlab.collisionGroup {
+		return 0, nil, nil, nil, NewFatalError(
+			fmt.Errorf("data slab %d collisionGroup %t is wrong, want false",
+				id, dataSlab.collisionGroup))
+	}
+
+	dataSlabIDs = append(dataSlabIDs, id)
+
+	if dataSlab.next != SlabIDUndefined {
+		nextDataSlabIDs = append(nextDataSlabIDs, dataSlab.next)
+	}
+
+	firstKeys = append(firstKeys, dataSlab.header.firstKey)
+
+	return elementCount, dataSlabIDs, nextDataSlabIDs, firstKeys, nil
+}
+
+func validMapMetaDataSlab(
+	storage SlabStorage,
+	digesterBuilder DigesterBuilder,
+	tic TypeInfoComparator,
+	hip HashInputProvider,
+	metaSlab *MapMetaDataSlab,
+	level int,
+	dataSlabIDs []SlabID,
+	nextDataSlabIDs []SlabID,
+	firstKeys []Digest,
+) (
+	elementCount uint64,
+	_dataSlabIDs []SlabID,
+	_nextDataSlabIDs []SlabID,
+	_firstKeys []Digest,
+	err error,
+) {
+	id := metaSlab.header.slabID
+
+	if metaSlab.IsData() {
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapMetaDataSlab %s is data", id))
+	}
+
+	if metaSlab.Inlined() {
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapMetaDataSlab %s can't be inlined", id))
 	}
 
 	if level == 0 {
 		// Verify that root slab has more than one child slabs
-		if len(meta.childrenHeaders) < 2 {
+		if len(metaSlab.childrenHeaders) < 2 {
 			return 0, nil, nil, nil, NewFatalError(
 				fmt.Errorf("root metadata slab %d has %d children, want at least 2 children ",
-					id, len(meta.childrenHeaders)))
+					id, len(metaSlab.childrenHeaders)))
 		}
 	}
 
 	elementCount = 0
-	for i := 0; i < len(meta.childrenHeaders); i++ {
-		h := meta.childrenHeaders[i]
+	for i := 0; i < len(metaSlab.childrenHeaders); i++ {
+		h := metaSlab.childrenHeaders[i]
 
 		childSlab, err := getMapSlab(storage, h.slabID)
 		if err != nil {
@@ -465,39 +515,39 @@ func validMapSlab(
 	}
 
 	// Verify slab header first key
-	if meta.childrenHeaders[0].firstKey != meta.header.firstKey {
+	if metaSlab.childrenHeaders[0].firstKey != metaSlab.header.firstKey {
 		return 0, nil, nil, nil, NewFatalError(
 			fmt.Errorf("metadata slab %d header first key %d is wrong, want %d",
-				id, meta.header.firstKey, meta.childrenHeaders[0].firstKey))
+				id, metaSlab.header.firstKey, metaSlab.childrenHeaders[0].firstKey))
 	}
 
 	// Verify that child slab's first keys are sorted.
-	sortedHKey := sort.SliceIsSorted(meta.childrenHeaders, func(i, j int) bool {
-		return meta.childrenHeaders[i].firstKey < meta.childrenHeaders[j].firstKey
+	sortedHKey := sort.SliceIsSorted(metaSlab.childrenHeaders, func(i, j int) bool {
+		return metaSlab.childrenHeaders[i].firstKey < metaSlab.childrenHeaders[j].firstKey
 	})
 	if !sortedHKey {
-		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d child slab's first key isn't sorted %+v", id, meta.childrenHeaders))
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d child slab's first key isn't sorted %+v", id, metaSlab.childrenHeaders))
 	}
 
 	// Verify that child slab's first keys are unique.
-	if len(meta.childrenHeaders) > 1 {
-		prev := meta.childrenHeaders[0].firstKey
-		for _, h := range meta.childrenHeaders[1:] {
+	if len(metaSlab.childrenHeaders) > 1 {
+		prev := metaSlab.childrenHeaders[0].firstKey
+		for _, h := range metaSlab.childrenHeaders[1:] {
 			if prev == h.firstKey {
 				return 0, nil, nil, nil, NewFatalError(
 					fmt.Errorf("metadata slab %d child header first key isn't unique %v",
-						id, meta.childrenHeaders))
+						id, metaSlab.childrenHeaders))
 			}
 			prev = h.firstKey
 		}
 	}
 
 	// Verify slab header's size
-	computedSize := uint32(len(meta.childrenHeaders)*mapSlabHeaderSize) + mapMetaDataSlabPrefixSize
-	if computedSize != meta.header.size {
+	computedSize := uint32(len(metaSlab.childrenHeaders)*mapSlabHeaderSize) + mapMetaDataSlabPrefixSize
+	if computedSize != metaSlab.header.size {
 		return 0, nil, nil, nil, NewFatalError(
 			fmt.Errorf("metadata slab %d header size %d is wrong, want %d",
-				id, meta.header.size, computedSize))
+				id, metaSlab.header.size, computedSize))
 	}
 
 	return elementCount, dataSlabIDs, nextDataSlabIDs, firstKeys, nil
@@ -733,6 +783,24 @@ func validSingleElement(
 	digestMaxLevel uint,
 	err error,
 ) {
+	// Verify key storable's size is less than size limit
+	if e.key.ByteSize() > uint32(maxInlineMapKeySize) {
+		return 0, 0, NewFatalError(
+			fmt.Errorf(
+				"map element key %s size %d exceeds size limit %d",
+				e.key, e.key.ByteSize(), maxInlineMapKeySize,
+			))
+	}
+
+	// Verify value storable's size is less than size limit
+	valueSizeLimit := maxInlineMapValueSize(uint64(e.key.ByteSize()))
+	if e.value.ByteSize() > uint32(valueSizeLimit) {
+		return 0, 0, NewFatalError(
+			fmt.Errorf(
+				"map element value %s size %d exceeds size limit %d",
+				e.value, e.value.ByteSize(), valueSizeLimit,
+			))
+	}
 
 	// Verify key
 	kv, err := e.key.StoredValue(storage)

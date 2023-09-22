@@ -169,6 +169,19 @@ type TypeInfoComparator func(TypeInfo, TypeInfo) bool
 
 func ValidArray(a *Array, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
 
+	// Verify array value ID
+	err := validArrayValueID(a)
+	if err != nil {
+		return err
+	}
+
+	// Verify array slab ID
+	err = validArraySlabID(a)
+	if err != nil {
+		return err
+	}
+
+	// Verify array extra data
 	extraData := a.root.ExtraData()
 	if extraData == nil {
 		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", a.root.SlabID()))
@@ -184,6 +197,7 @@ func ValidArray(a *Array, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInp
 		))
 	}
 
+	// Verify array root slab
 	computedCount, dataSlabIDs, nextDataSlabIDs, err :=
 		validArraySlab(tic, hip, a.Storage, a.root, 0, nil, []SlabID{}, []SlabID{})
 	if err != nil {
@@ -249,95 +263,140 @@ func validArraySlab(
 		}
 	}
 
-	if slab.IsData() {
-		dataSlab, ok := slab.(*ArrayDataSlab)
-		if !ok {
-			return 0, nil, nil, NewFatalError(fmt.Errorf("slab %s is not ArrayDataSlab", id))
-		}
+	switch slab := slab.(type) {
+	case *ArrayDataSlab:
+		return validArrayDataSlab(tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs)
 
-		// Verify that element count is the same as header.count
-		if uint32(len(dataSlab.elements)) != dataSlab.header.count {
-			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s header count %d is wrong, want %d",
-				id, dataSlab.header.count, len(dataSlab.elements)))
-		}
+	case *ArrayMetaDataSlab:
+		return validArrayMetaDataSlab(tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs)
 
-		// Verify that only root slab can be inlined
-		if level > 0 && slab.Inlined() {
-			return 0, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
-		}
+	default:
+		return 0, nil, nil, NewFatalError(fmt.Errorf("ArraySlab is either *ArrayDataSlab or *ArrayMetaDataSlab, got %T", slab))
+	}
+}
 
-		// Verify that aggregated element size + slab prefix is the same as header.size
-		computedSize := uint32(arrayDataSlabPrefixSize)
-		if level == 0 {
-			computedSize = uint32(arrayRootDataSlabPrefixSize)
-			if slab.Inlined() {
-				computedSize = uint32(inlinedArrayDataSlabPrefixSize)
-			}
-		}
+func validArrayDataSlab(
+	tic TypeInfoComparator,
+	hip HashInputProvider,
+	storage SlabStorage,
+	dataSlab *ArrayDataSlab,
+	level int,
+	dataSlabIDs []SlabID,
+	nextDataSlabIDs []SlabID,
+) (
+	elementCount uint32,
+	_dataSlabIDs []SlabID,
+	_nextDataSlabIDs []SlabID,
+	err error,
+) {
+	id := dataSlab.header.slabID
 
-		for _, e := range dataSlab.elements {
-
-			// Verify element size is <= inline size
-			if e.ByteSize() > uint32(maxInlineArrayElementSize) {
-				return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s element %s size %d is too large, want < %d",
-					id, e, e.ByteSize(), maxInlineArrayElementSize))
-			}
-
-			computedSize += e.ByteSize()
-		}
-
-		if computedSize != dataSlab.header.size {
-			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s header size %d is wrong, want %d",
-				id, dataSlab.header.size, computedSize))
-		}
-
-		dataSlabIDs = append(dataSlabIDs, id)
-
-		if dataSlab.next != SlabIDUndefined {
-			nextDataSlabIDs = append(nextDataSlabIDs, dataSlab.next)
-		}
-
-		// Verify element
-		for _, e := range dataSlab.elements {
-			v, err := e.StoredValue(storage)
-			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by Storable interface.
-				return 0, nil, nil, wrapErrorfAsExternalErrorIfNeeded(err,
-					fmt.Sprintf(
-						"data slab %s element %s can't be converted to value",
-						id, e,
-					))
-			}
-			err = ValidValue(v, nil, tic, hip)
-			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by ValidValue().
-				return 0, nil, nil, fmt.Errorf(
-					"data slab %s element %q isn't valid: %w",
-					id, e, err,
-				)
-			}
-		}
-
-		return dataSlab.header.count, dataSlabIDs, nextDataSlabIDs, nil
+	if !dataSlab.IsData() {
+		return 0, nil, nil, NewFatalError(fmt.Errorf("ArrayDataSlab %s is not data", id))
 	}
 
-	meta, ok := slab.(*ArrayMetaDataSlab)
-	if !ok {
-		return 0, nil, nil, NewFatalError(fmt.Errorf("slab %d is not ArrayMetaDataSlab", id))
+	// Verify that element count is the same as header.count
+	if uint32(len(dataSlab.elements)) != dataSlab.header.count {
+		return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s header count %d is wrong, want %d",
+			id, dataSlab.header.count, len(dataSlab.elements)))
+	}
+
+	// Verify that only root data slab can be inlined
+	if level > 0 && dataSlab.Inlined() {
+		return 0, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
+	}
+
+	// Verify that aggregated element size + slab prefix is the same as header.size
+	computedSize := uint32(arrayDataSlabPrefixSize)
+	if level == 0 {
+		computedSize = uint32(arrayRootDataSlabPrefixSize)
+		if dataSlab.Inlined() {
+			computedSize = uint32(inlinedArrayDataSlabPrefixSize)
+		}
+	}
+
+	for _, e := range dataSlab.elements {
+
+		// Verify element size is <= inline size
+		if e.ByteSize() > uint32(maxInlineArrayElementSize) {
+			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s element %s size %d is too large, want < %d",
+				id, e, e.ByteSize(), maxInlineArrayElementSize))
+		}
+
+		computedSize += e.ByteSize()
+	}
+
+	if computedSize != dataSlab.header.size {
+		return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s header size %d is wrong, want %d",
+			id, dataSlab.header.size, computedSize))
+	}
+
+	dataSlabIDs = append(dataSlabIDs, id)
+
+	if dataSlab.next != SlabIDUndefined {
+		nextDataSlabIDs = append(nextDataSlabIDs, dataSlab.next)
+	}
+
+	// Verify element
+	for _, e := range dataSlab.elements {
+		v, err := e.StoredValue(storage)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by Storable interface.
+			return 0, nil, nil, wrapErrorfAsExternalErrorIfNeeded(err,
+				fmt.Sprintf(
+					"data slab %s element %s can't be converted to value",
+					id, e,
+				))
+		}
+		err = ValidValue(v, nil, tic, hip)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by ValidValue().
+			return 0, nil, nil, fmt.Errorf(
+				"data slab %s element %q isn't valid: %w",
+				id, e, err,
+			)
+		}
+	}
+
+	return dataSlab.header.count, dataSlabIDs, nextDataSlabIDs, nil
+}
+
+func validArrayMetaDataSlab(
+	tic TypeInfoComparator,
+	hip HashInputProvider,
+	storage SlabStorage,
+	metaSlab *ArrayMetaDataSlab,
+	level int,
+	dataSlabIDs []SlabID,
+	nextDataSlabIDs []SlabID,
+) (
+	elementCount uint32,
+	_dataSlabIDs []SlabID,
+	_nextDataSlabIDs []SlabID,
+	err error,
+) {
+	id := metaSlab.header.slabID
+
+	if metaSlab.IsData() {
+		return 0, nil, nil, NewFatalError(fmt.Errorf("ArrayMetaDataSlab %s is data", id))
+	}
+
+	if metaSlab.Inlined() {
+		return 0, nil, nil, NewFatalError(fmt.Errorf("ArrayMetaDataSlab %s shouldn't be inlined", id))
 	}
 
 	if level == 0 {
 		// Verify that root slab has more than one child slabs
-		if len(meta.childrenHeaders) < 2 {
+		if len(metaSlab.childrenHeaders) < 2 {
 			return 0, nil, nil, NewFatalError(fmt.Errorf("root metadata slab %d has %d children, want at least 2 children ",
-				id, len(meta.childrenHeaders)))
+				id, len(metaSlab.childrenHeaders)))
 		}
 	}
 
 	// Verify childrenCountSum
-	if len(meta.childrenCountSum) != len(meta.childrenHeaders) {
+	if len(metaSlab.childrenCountSum) != len(metaSlab.childrenHeaders) {
 		return 0, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d has %d childrenCountSum, want %d",
-			id, len(meta.childrenCountSum), len(meta.childrenHeaders)))
+			id, len(metaSlab.childrenCountSum), len(metaSlab.childrenHeaders)))
 	}
 
 	computedCount := uint32(0)
@@ -345,8 +404,8 @@ func validArraySlab(
 	// If we use range, then h would be a temporary object and we'd be passing address of
 	// temporary object to function, which can lead to bugs depending on usage. It's not a bug
 	// with the current usage but it's less fragile to future changes by not using range here.
-	for i := 0; i < len(meta.childrenHeaders); i++ {
-		h := meta.childrenHeaders[i]
+	for i := 0; i < len(metaSlab.childrenHeaders); i++ {
+		h := metaSlab.childrenHeaders[i]
 
 		childSlab, err := getArraySlab(storage, h.slabID)
 		if err != nil {
@@ -366,26 +425,26 @@ func validArraySlab(
 		computedCount += count
 
 		// Verify childrenCountSum
-		if meta.childrenCountSum[i] != computedCount {
+		if metaSlab.childrenCountSum[i] != computedCount {
 			return 0, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d childrenCountSum[%d] is %d, want %d",
-				id, i, meta.childrenCountSum[i], computedCount))
+				id, i, metaSlab.childrenCountSum[i], computedCount))
 		}
 	}
 
 	// Verify that aggregated element count is the same as header.count
-	if computedCount != meta.header.count {
+	if computedCount != metaSlab.header.count {
 		return 0, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d header count %d is wrong, want %d",
-			id, meta.header.count, computedCount))
+			id, metaSlab.header.count, computedCount))
 	}
 
 	// Verify that aggregated header size + slab prefix is the same as header.size
-	computedSize := uint32(len(meta.childrenHeaders)*arraySlabHeaderSize) + arrayMetaDataSlabPrefixSize
-	if computedSize != meta.header.size {
+	computedSize := uint32(len(metaSlab.childrenHeaders)*arraySlabHeaderSize) + arrayMetaDataSlabPrefixSize
+	if computedSize != metaSlab.header.size {
 		return 0, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d header size %d is wrong, want %d",
-			id, meta.header.size, computedSize))
+			id, metaSlab.header.size, computedSize))
 	}
 
-	return meta.header.count, dataSlabIDs, nextDataSlabIDs, nil
+	return metaSlab.header.count, dataSlabIDs, nextDataSlabIDs, nil
 }
 
 // ValidArraySerialization traverses array tree and verifies serialization
@@ -846,4 +905,67 @@ func getSlabIDFromStorable(storable Storable, ids []SlabID) []SlabID {
 	}
 
 	return ids
+}
+
+// validArrayValueID verifies array ValueID is always the same as
+// root slab's SlabID indepedent of array's inlined status.
+func validArrayValueID(a *Array) error {
+	rootSlabID := a.root.Header().slabID
+
+	vid := a.ValueID()
+
+	if !bytes.Equal(vid[:slabAddressSize], rootSlabID.address[:]) {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect first %d bytes of array value ID as %v, got %v",
+				slabAddressSize,
+				rootSlabID.address[:],
+				vid[:slabAddressSize]))
+	}
+
+	if !bytes.Equal(vid[slabAddressSize:], rootSlabID.index[:]) {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect second %d bytes of array value ID as %v, got %v",
+				slabIndexSize,
+				rootSlabID.index[:],
+				vid[slabAddressSize:]))
+	}
+
+	return nil
+}
+
+// validArraySlabID verifies array SlabID is either empty for inlined array, or
+// same as root slab's SlabID for not-inlined array.
+func validArraySlabID(a *Array) error {
+	sid := a.SlabID()
+
+	if a.Inlined() {
+		if sid != SlabIDUndefined {
+			return NewFatalError(
+				fmt.Errorf(
+					"expect empty slab ID for inlined array, got %v",
+					sid))
+		}
+		return nil
+	}
+
+	rootSlabID := a.root.Header().slabID
+
+	if sid == SlabIDUndefined {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect non-empty slab ID for not-inlined array, got %v",
+				sid))
+	}
+
+	if sid != rootSlabID {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect array slab ID same as root slab's slab ID %s, got %s",
+				rootSlabID,
+				sid))
+	}
+
+	return nil
 }

@@ -169,22 +169,18 @@ type TypeInfoComparator func(TypeInfo, TypeInfo) bool
 
 func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
 
-	// Verify array address
+	// Verify array address (independent of array inlined status)
 	if address != a.Address() {
 		return NewFatalError(fmt.Errorf("array address %v, got %v", address, a.Address()))
 	}
 
-	if address != a.root.Header().slabID.address {
-		return NewFatalError(fmt.Errorf("array root slab address %v, got %v", address, a.root.Header().slabID.address))
-	}
-
-	// Verify array value ID
+	// Verify array value ID (independent of array inlined status)
 	err := validArrayValueID(a)
 	if err != nil {
 		return err
 	}
 
-	// Verify array slab ID
+	// Verify array slab ID (dependent of array inlined status)
 	err = validArraySlabID(a)
 	if err != nil {
 		return err
@@ -206,9 +202,16 @@ func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoCompar
 		))
 	}
 
-	// Verify array root slab
-	computedCount, dataSlabIDs, nextDataSlabIDs, err :=
-		validArraySlab(address, tic, hip, a.Storage, a.root, 0, nil, []SlabID{}, []SlabID{}, inlineEnabled)
+	v := &verification{
+		storage:       a.Storage,
+		address:       address,
+		tic:           tic,
+		hip:           hip,
+		inlineEnabled: inlineEnabled,
+	}
+
+	// Verify array slabs
+	computedCount, dataSlabIDs, nextDataSlabIDs, err := v.verifyArraySlab(a.root, 0, nil, []SlabID{}, []SlabID{})
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 		return err
@@ -228,25 +231,32 @@ func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoCompar
 	return nil
 }
 
-func validArraySlab(
-	address Address,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
-	storage SlabStorage,
+type verification struct {
+	storage       SlabStorage
+	address       Address
+	tic           TypeInfoComparator
+	hip           HashInputProvider
+	inlineEnabled bool
+}
+
+func (v *verification) verifyArraySlab(
 	slab ArraySlab,
 	level int,
 	headerFromParentSlab *ArraySlabHeader,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
-	inlineEnabled bool,
 ) (
 	elementCount uint32,
 	_dataSlabIDs []SlabID,
 	_nextDataSlabIDs []SlabID,
 	err error,
 ) {
-
 	id := slab.Header().slabID
+
+	// Verify slab address (independent of array inlined status)
+	if v.address != id.address {
+		return 0, nil, nil, NewFatalError(fmt.Errorf("array slab address %v, got %v", v.address, id.address))
+	}
 
 	if level > 0 {
 		// Verify that non-root slab doesn't have extra data
@@ -276,26 +286,21 @@ func validArraySlab(
 
 	switch slab := slab.(type) {
 	case *ArrayDataSlab:
-		return validArrayDataSlab(address, tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs, inlineEnabled)
+		return v.verifyArrayDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs)
 
 	case *ArrayMetaDataSlab:
-		return validArrayMetaDataSlab(address, tic, hip, storage, slab, level, dataSlabIDs, nextDataSlabIDs, inlineEnabled)
+		return v.verifyArrayMetaDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs)
 
 	default:
 		return 0, nil, nil, NewFatalError(fmt.Errorf("ArraySlab is either *ArrayDataSlab or *ArrayMetaDataSlab, got %T", slab))
 	}
 }
 
-func validArrayDataSlab(
-	address Address,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
-	storage SlabStorage,
+func (v *verification) verifyArrayDataSlab(
 	dataSlab *ArrayDataSlab,
 	level int,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
-	inlineEnabled bool,
 ) (
 	elementCount uint32,
 	_dataSlabIDs []SlabID,
@@ -345,7 +350,7 @@ func validArrayDataSlab(
 
 	for _, e := range dataSlab.elements {
 
-		v, err := e.StoredValue(storage)
+		value, err := e.StoredValue(v.storage)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
 			return 0, nil, nil, wrapErrorfAsExternalErrorIfNeeded(err,
@@ -362,9 +367,9 @@ func validArrayDataSlab(
 		}
 
 		// Verify not-inlined array/map > inline size, or can't be inlined
-		if inlineEnabled {
+		if v.inlineEnabled {
 			if _, ok := e.(SlabIDStorable); ok {
-				err = validNotInlinedValueStatusAndSize(v, uint32(maxInlineArrayElementSize))
+				err = verifyNotInlinedValueStatusAndSize(value, uint32(maxInlineArrayElementSize))
 				if err != nil {
 					return 0, nil, nil, err
 				}
@@ -372,7 +377,7 @@ func validArrayDataSlab(
 		}
 
 		// Verify element
-		err = ValidValue(v, address, nil, tic, hip, inlineEnabled)
+		err = ValidValue(value, v.address, nil, v.tic, v.hip, v.inlineEnabled)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by ValidValue().
 			return 0, nil, nil, fmt.Errorf(
@@ -385,16 +390,11 @@ func validArrayDataSlab(
 	return dataSlab.header.count, dataSlabIDs, nextDataSlabIDs, nil
 }
 
-func validArrayMetaDataSlab(
-	address Address,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
-	storage SlabStorage,
+func (v *verification) verifyArrayMetaDataSlab(
 	metaSlab *ArrayMetaDataSlab,
 	level int,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
-	inlineEnabled bool,
 ) (
 	elementCount uint32,
 	_dataSlabIDs []SlabID,
@@ -433,7 +433,7 @@ func validArrayMetaDataSlab(
 	for i := 0; i < len(metaSlab.childrenHeaders); i++ {
 		h := metaSlab.childrenHeaders[i]
 
-		childSlab, err := getArraySlab(storage, h.slabID)
+		childSlab, err := getArraySlab(v.storage, h.slabID)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by getArraySlab().
 			return 0, nil, nil, err
@@ -442,7 +442,7 @@ func validArrayMetaDataSlab(
 		// Verify child slabs
 		var count uint32
 		count, dataSlabIDs, nextDataSlabIDs, err =
-			validArraySlab(address, tic, hip, storage, childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, inlineEnabled)
+			v.verifyArraySlab(childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by validArraySlab().
 			return 0, nil, nil, err
@@ -996,7 +996,7 @@ func validArraySlabID(a *Array) error {
 	return nil
 }
 
-func validNotInlinedValueStatusAndSize(v Value, maxInlineSize uint32) error {
+func verifyNotInlinedValueStatusAndSize(v Value, maxInlineSize uint32) error {
 
 	switch v := v.(type) {
 	case *Array:

@@ -867,7 +867,7 @@ func validSingleElement(
 	// Verify not-inlined array/map > inline size, or can't be inlined
 	if inlineEnabled {
 		if _, ok := e.value.(SlabIDStorable); ok {
-			err = validNotInlinedValueStatusAndSize(vv, uint32(valueSizeLimit))
+			err = verifyNotInlinedValueStatusAndSize(vv, uint32(valueSizeLimit))
 			if err != nil {
 				return 0, 0, err
 			}

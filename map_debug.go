@@ -252,10 +252,6 @@ func ValidMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoCom
 		return NewFatalError(fmt.Errorf("map address %v, got %v", address, m.Address()))
 	}
 
-	if address != m.root.Header().slabID.address {
-		return NewFatalError(fmt.Errorf("map root slab address %v, got %v", address, m.root.Header().slabID.address))
-	}
-
 	// Verify map value ID
 	err := validMapValueID(m)
 	if err != nil {
@@ -369,6 +365,23 @@ func (v *mapVerifier) verifyMapSlab(
 ) {
 
 	id := slab.Header().slabID
+
+	// Verify slab address (independent of map inlined status)
+	if v.address != id.address {
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("map slab address %v, got %v", v.address, id.address))
+	}
+
+	// Verify that inlined slab is not in storage
+	if slab.Inlined() {
+		_, exist, err := v.storage.Retrieve(id)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by Storage interface.
+			return 0, nil, nil, nil, wrapErrorAsExternalErrorIfNeeded(err)
+		}
+		if exist {
+			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s is in storage", id))
+		}
+	}
 
 	if level > 0 {
 		// Verify that non-root slab doesn't have extra data.

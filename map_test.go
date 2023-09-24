@@ -189,7 +189,7 @@ func _verifyMap(
 	require.NoError(t, err)
 
 	// Verify slab serializations
-	err = ValidMapSerialization(
+	err = VerifyMapSerialization(
 		m,
 		storage.cborDecMode,
 		storage.cborEncMode,

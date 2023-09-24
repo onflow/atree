@@ -899,11 +899,11 @@ func verifyValue(value Value, address Address, typeInfo TypeInfo, tic TypeInfoCo
 	return nil
 }
 
-// ValidMapSerialization traverses ordered map tree and verifies serialization
+// VerifyMapSerialization traverses ordered map tree and verifies serialization
 // by encoding, decoding, and re-encoding slabs.
 // It compares in-memory objects of original slab with decoded slab.
 // It also compares encoded data of original slab with encoded data of decoded slab.
-func ValidMapSerialization(
+func VerifyMapSerialization(
 	m *OrderedMap,
 	cborDecMode cbor.DecMode,
 	cborEncMode cbor.EncMode,
@@ -911,52 +911,46 @@ func ValidMapSerialization(
 	decodeTypeInfo TypeInfoDecoder,
 	compare StorableComparator,
 ) error {
-	return validMapSlabSerialization(
-		m.Storage,
-		m.root.SlabID(),
-		cborDecMode,
-		cborEncMode,
-		decodeStorable,
-		decodeTypeInfo,
-		compare,
-	)
+	v := &serializationVerifier{
+		storage:        m.Storage,
+		cborDecMode:    cborDecMode,
+		cborEncMode:    cborEncMode,
+		decodeStorable: decodeStorable,
+		decodeTypeInfo: decodeTypeInfo,
+		compare:        compare,
+	}
+	return v.verifyMapSlab(m.root)
 }
 
-func validMapSlabSerialization(
-	storage SlabStorage,
-	id SlabID,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) verifyMapSlab(slab MapSlab) error {
 
-	slab, err := getMapSlab(storage, id)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getMapSlab().
-		return err
-	}
+	id := slab.SlabID()
 
 	// Encode slab
-	data, err := Encode(slab, cborEncMode)
+	data, err := Encode(slab, v.cborEncMode)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err
 	}
 
 	// Decode encoded slab
-	decodedSlab, err := DecodeSlab(id, data, cborDecMode, decodeStorable, decodeTypeInfo)
+	decodedSlab, err := DecodeSlab(id, data, v.cborDecMode, v.decodeStorable, v.decodeTypeInfo)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by DecodeSlab().
 		return err
 	}
 
 	// Re-encode decoded slab
-	dataFromDecodedSlab, err := Encode(decodedSlab, cborEncMode)
+	dataFromDecodedSlab, err := Encode(decodedSlab, v.cborEncMode)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err
+	}
+
+	// Verify encoding is deterministic (encoded data of original slab is same as encoded data of decoded slab)
+	if !bytes.Equal(data, dataFromDecodedSlab) {
+		return NewFatalError(fmt.Errorf("encoded data of original slab %s is different from encoded data of decoded slab, got %v, want %v",
+			id, dataFromDecodedSlab, data))
 	}
 
 	// Extra check: encoded data size == header.size
@@ -987,90 +981,58 @@ func validMapSlabSerialization(
 		}
 	}
 
-	// Compare encoded data of original slab with encoded data of decoded slab
-	if !bytes.Equal(data, dataFromDecodedSlab) {
-		return NewFatalError(
-			fmt.Errorf("slab %d encoded data is different from decoded slab's encoded data, got %v, want %v",
-				id, dataFromDecodedSlab, data))
-	}
-
-	if slab.IsData() {
-		dataSlab, ok := slab.(*MapDataSlab)
-		if !ok {
-			return NewFatalError(fmt.Errorf("slab %d is not MapDataSlab", id))
-		}
-
+	switch slab := slab.(type) {
+	case *MapDataSlab:
 		decodedDataSlab, ok := decodedSlab.(*MapDataSlab)
 		if !ok {
 			return NewFatalError(fmt.Errorf("decoded slab %d is not MapDataSlab", id))
 		}
 
 		// Compare slabs
-		err = mapDataSlabEqual(
-			dataSlab,
-			decodedDataSlab,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		err = v.mapDataSlabEqual(slab, decodedDataSlab)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by mapDataSlabEqual().
 			return fmt.Errorf("data slab %d round-trip serialization failed: %w", id, err)
 		}
 
 		return nil
-	}
 
-	metaSlab, ok := slab.(*MapMetaDataSlab)
-	if !ok {
-		return NewFatalError(fmt.Errorf("slab %d is not MapMetaDataSlab", id))
-	}
-
-	decodedMetaSlab, ok := decodedSlab.(*MapMetaDataSlab)
-	if !ok {
-		return NewFatalError(fmt.Errorf("decoded slab %d is not MapMetaDataSlab", id))
-	}
-
-	// Compare slabs
-	err = mapMetaDataSlabEqual(metaSlab, decodedMetaSlab)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by mapMetaDataSlabEqual().
-		return fmt.Errorf("metadata slab %d round-trip serialization failed: %w", id, err)
-	}
-
-	for _, h := range metaSlab.childrenHeaders {
-		// Verify child slabs
-		err = validMapSlabSerialization(
-			storage,
-			h.slabID,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by validMapSlabSerialization().
-			return err
+	case *MapMetaDataSlab:
+		decodedMetaSlab, ok := decodedSlab.(*MapMetaDataSlab)
+		if !ok {
+			return NewFatalError(fmt.Errorf("decoded slab %d is not MapMetaDataSlab", id))
 		}
-	}
 
-	return nil
+		// Compare slabs
+		err = v.mapMetaDataSlabEqual(slab, decodedMetaSlab)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by mapMetaDataSlabEqual().
+			return fmt.Errorf("metadata slab %d round-trip serialization failed: %w", id, err)
+		}
+
+		for _, h := range slab.childrenHeaders {
+			slab, err := getMapSlab(v.storage, h.slabID)
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by getMapSlab().
+				return err
+			}
+
+			// Verify child slabs
+			err = v.verifyMapSlab(slab)
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by verifyMapSlab().
+				return err
+			}
+		}
+
+		return nil
+
+	default:
+		return NewFatalError(fmt.Errorf("MapSlab is either *MapDataSlab or *MapMetaDataSlab, got %T", slab))
+	}
 }
 
-func mapDataSlabEqual(
-	expected *MapDataSlab,
-	actual *MapDataSlab,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapDataSlabEqual(expected, actual *MapDataSlab) error {
 
 	// Compare extra data
 	err := mapExtraDataEqual(expected.extraData, actual.extraData)
@@ -1105,16 +1067,7 @@ func mapDataSlabEqual(
 	}
 
 	// Compare elements
-	err = mapElementsEqual(
-		expected.elements,
-		actual.elements,
-		storage,
-		cborDecMode,
-		cborEncMode,
-		decodeStorable,
-		decodeTypeInfo,
-		compare,
-	)
+	err = v.mapElementsEqual(expected.elements, actual.elements)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by mapElementsEqual().
 		return err
@@ -1123,16 +1076,7 @@ func mapDataSlabEqual(
 	return nil
 }
 
-func mapElementsEqual(
-	expected elements,
-	actual elements,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapElementsEqual(expected, actual elements) error {
 	switch expectedElems := expected.(type) {
 
 	case *hkeyElements:
@@ -1140,48 +1084,21 @@ func mapElementsEqual(
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return mapHkeyElementsEqual(
-			expectedElems,
-			actualElems,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		return v.mapHkeyElementsEqual(expectedElems, actualElems)
 
 	case *singleElements:
 		actualElems, ok := actual.(*singleElements)
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return mapSingleElementsEqual(
-			expectedElems,
-			actualElems,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		return v.mapSingleElementsEqual(expectedElems, actualElems)
 
 	}
 
 	return nil
 }
 
-func mapHkeyElementsEqual(
-	expected *hkeyElements,
-	actual *hkeyElements,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapHkeyElementsEqual(expected, actual *hkeyElements) error {
 
 	if expected.level != actual.level {
 		return NewFatalError(fmt.Errorf("hkeyElements level %d is wrong, want %d", actual.level, expected.level))
@@ -1209,16 +1126,7 @@ func mapHkeyElementsEqual(
 		expectedEle := expected.elems[i]
 		actualEle := actual.elems[i]
 
-		err := mapElementEqual(
-			expectedEle,
-			actualEle,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		err := v.mapElementEqual(expectedEle, actualEle)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by mapElementEqual().
 			return err
@@ -1228,16 +1136,7 @@ func mapHkeyElementsEqual(
 	return nil
 }
 
-func mapSingleElementsEqual(
-	expected *singleElements,
-	actual *singleElements,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapSingleElementsEqual(expected, actual *singleElements) error {
 
 	if expected.level != actual.level {
 		return NewFatalError(fmt.Errorf("singleElements level %d is wrong, want %d", actual.level, expected.level))
@@ -1255,16 +1154,7 @@ func mapSingleElementsEqual(
 		expectedElem := expected.elems[i]
 		actualElem := actual.elems[i]
 
-		err := mapSingleElementEqual(
-			expectedElem,
-			actualElem,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		err := v.mapSingleElementEqual(expectedElem, actualElem)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by mapSingleElementEqual().
 			return err
@@ -1274,16 +1164,7 @@ func mapSingleElementsEqual(
 	return nil
 }
 
-func mapElementEqual(
-	expected element,
-	actual element,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapElementEqual(expected, actual element) error {
 	switch expectedElem := expected.(type) {
 
 	case *singleElement:
@@ -1291,64 +1172,27 @@ func mapElementEqual(
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return mapSingleElementEqual(
-			expectedElem,
-			actualElem,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		return v.mapSingleElementEqual(expectedElem, actualElem)
 
 	case *inlineCollisionGroup:
 		actualElem, ok := actual.(*inlineCollisionGroup)
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return mapElementsEqual(
-			expectedElem.elements,
-			actualElem.elements,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		return v.mapElementsEqual(expectedElem.elements, actualElem.elements)
 
 	case *externalCollisionGroup:
 		actualElem, ok := actual.(*externalCollisionGroup)
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return mapExternalCollisionElementsEqual(
-			expectedElem,
-			actualElem,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
-
+		return v.mapExternalCollisionElementsEqual(expectedElem, actualElem)
 	}
 
 	return nil
 }
 
-func mapExternalCollisionElementsEqual(
-	expected *externalCollisionGroup,
-	actual *externalCollisionGroup,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapExternalCollisionElementsEqual(expected, actual *externalCollisionGroup) error {
 
 	if expected.size != actual.size {
 		return NewFatalError(fmt.Errorf("externalCollisionGroup size %d is wrong, want %d", actual.size, expected.size))
@@ -1358,62 +1202,44 @@ func mapExternalCollisionElementsEqual(
 		return NewFatalError(fmt.Errorf("externalCollisionGroup id %d is wrong, want %d", actual.slabID, expected.slabID))
 	}
 
-	// Compare external collision slab
-	err := validMapSlabSerialization(
-		storage,
-		expected.slabID,
-		cborDecMode,
-		cborEncMode,
-		decodeStorable,
-		decodeTypeInfo,
-		compare,
-	)
+	slab, err := getMapSlab(v.storage, expected.slabID)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by validMapSlabSerialization().
+		// Don't need to wrap error as external error because err is already categorized by getMapSlab().
+		return err
+	}
+
+	// Compare external collision slab
+	err = v.verifyMapSlab(slab)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by verifyMapSlab().
 		return err
 	}
 
 	return nil
 }
 
-func mapSingleElementEqual(
-	expected *singleElement,
-	actual *singleElement,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapSingleElementEqual(expected, actual *singleElement) error {
 
 	if expected.size != actual.size {
 		return NewFatalError(fmt.Errorf("singleElement size %d is wrong, want %d", actual.size, expected.size))
 	}
 
-	if !compare(expected.key, actual.key) {
+	if !v.compare(expected.key, actual.key) {
 		return NewFatalError(fmt.Errorf("singleElement key %v is wrong, want %v", actual.key, expected.key))
 	}
 
 	// Compare key stored in a separate slab
 	if idStorable, ok := expected.key.(SlabIDStorable); ok {
 
-		v, err := idStorable.StoredValue(storage)
+		value, err := idStorable.StoredValue(v.storage)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
 			return err
 		}
 
-		err = ValidValueSerialization(
-			v,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		err = v.verifyValue(value)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ValidValueSerialization().
+			// Don't need to wrap error as external error because err is already categorized by verifyValue().
 			return err
 		}
 	}
@@ -1421,26 +1247,19 @@ func mapSingleElementEqual(
 	// Compare nested element
 	switch ee := expected.value.(type) {
 	case SlabIDStorable:
-		if !compare(expected.value, actual.value) {
+		if !v.compare(expected.value, actual.value) {
 			return NewFatalError(fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value))
 		}
 
-		v, err := ee.StoredValue(storage)
+		value, err := ee.StoredValue(v.storage)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
 			return err
 		}
 
-		err = ValidValueSerialization(
-			v,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		err = v.verifyValue(value)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ValidValueSerialization().
+			// Don't need to wrap error as external error because err is already categorized by verifyVaue().
 			return err
 		}
 
@@ -1450,7 +1269,7 @@ func mapSingleElementEqual(
 			return NewFatalError(fmt.Errorf("expect element as *ArrayDataSlab, actual %T", ae))
 		}
 
-		return arrayDataSlabEqual(ee, ae, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo, compare)
+		return v.arrayDataSlabEqual(ee, ae)
 
 	case *MapDataSlab:
 		ae, ok := actual.value.(*MapDataSlab)
@@ -1458,10 +1277,10 @@ func mapSingleElementEqual(
 			return NewFatalError(fmt.Errorf("expect element as *MapDataSlab, actual %T", ae))
 		}
 
-		return mapDataSlabEqual(ee, ae, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo, compare)
+		return v.mapDataSlabEqual(ee, ae)
 
 	default:
-		if !compare(expected.value, actual.value) {
+		if !v.compare(expected.value, actual.value) {
 			return NewFatalError(fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value))
 		}
 	}
@@ -1469,7 +1288,7 @@ func mapSingleElementEqual(
 	return nil
 }
 
-func mapMetaDataSlabEqual(expected, actual *MapMetaDataSlab) error {
+func (v *serializationVerifier) mapMetaDataSlabEqual(expected, actual *MapMetaDataSlab) error {
 
 	// Compare extra data
 	err := mapExtraDataEqual(expected.extraData, actual.extraData)

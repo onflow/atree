@@ -116,7 +116,7 @@ func _verifyArray(
 	require.NoError(t, err)
 
 	// Verify slab serializations
-	err = ValidArraySerialization(
+	err = VerifyArraySerialization(
 		array,
 		storage.cborDecMode,
 		storage.cborEncMode,

@@ -239,6 +239,7 @@ type arrayVerifier struct {
 	inlineEnabled bool
 }
 
+// verifySlab verifies ArraySlab in memory which can be inlined or not inlined.
 func (v *arrayVerifier) verifySlab(
 	slab ArraySlab,
 	level int,
@@ -485,11 +486,11 @@ func (v *arrayVerifier) verifyMetaDataSlab(
 	return metaSlab.header.count, dataSlabIDs, nextDataSlabIDs, nil
 }
 
-// ValidArraySerialization traverses array tree and verifies serialization
+// VerifyArraySerialization traverses array tree and verifies serialization
 // by encoding, decoding, and re-encoding slabs.
 // It compares in-memory objects of original slab with decoded slab.
 // It also compares encoded data of original slab with encoded data of decoded slab.
-func ValidArraySerialization(
+func VerifyArraySerialization(
 	a *Array,
 	cborDecMode cbor.DecMode,
 	cborEncMode cbor.EncMode,
@@ -497,52 +498,56 @@ func ValidArraySerialization(
 	decodeTypeInfo TypeInfoDecoder,
 	compare StorableComparator,
 ) error {
-	return validArraySlabSerialization(
-		a.Storage,
-		a.root.SlabID(),
-		cborDecMode,
-		cborEncMode,
-		decodeStorable,
-		decodeTypeInfo,
-		compare,
-	)
+	v := &serializationVerifier{
+		storage:        a.Storage,
+		cborDecMode:    cborDecMode,
+		cborEncMode:    cborEncMode,
+		decodeStorable: decodeStorable,
+		decodeTypeInfo: decodeTypeInfo,
+		compare:        compare,
+	}
+	return v.verifyArraySlab(a.root)
 }
 
-func validArraySlabSerialization(
-	storage SlabStorage,
-	id SlabID,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+type serializationVerifier struct {
+	storage        SlabStorage
+	cborDecMode    cbor.DecMode
+	cborEncMode    cbor.EncMode
+	decodeStorable StorableDecoder
+	decodeTypeInfo TypeInfoDecoder
+	compare        StorableComparator
+}
 
-	slab, err := getArraySlab(storage, id)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getArraySlab().
-		return err
-	}
+// verifySlab verifies serialization of not inlined ArraySlab.
+func (v *serializationVerifier) verifyArraySlab(slab ArraySlab) error {
+
+	id := slab.SlabID()
 
 	// Encode slab
-	data, err := Encode(slab, cborEncMode)
+	data, err := Encode(slab, v.cborEncMode)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err
 	}
 
 	// Decode encoded slab
-	decodedSlab, err := DecodeSlab(id, data, cborDecMode, decodeStorable, decodeTypeInfo)
+	decodedSlab, err := DecodeSlab(id, data, v.cborDecMode, v.decodeStorable, v.decodeTypeInfo)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by DecodeSlab().
 		return err
 	}
 
 	// Re-encode decoded slab
-	dataFromDecodedSlab, err := Encode(decodedSlab, cborEncMode)
+	dataFromDecodedSlab, err := Encode(decodedSlab, v.cborEncMode)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err
+	}
+
+	// Verify encoding is deterministic (encoded data of original slab is same as encoded data of decoded slab)
+	if !bytes.Equal(data, dataFromDecodedSlab) {
+		return NewFatalError(fmt.Errorf("encoded data of original slab %s is different from encoded data of decoded slab, got %v, want %v",
+			id, dataFromDecodedSlab, data))
 	}
 
 	// Extra check: encoded data size == header.size
@@ -572,89 +577,58 @@ func validArraySlabSerialization(
 		}
 	}
 
-	// Compare encoded data of original slab with encoded data of decoded slab
-	if !bytes.Equal(data, dataFromDecodedSlab) {
-		return NewFatalError(fmt.Errorf("slab %d encoded data is different from decoded slab's encoded data, got %v, want %v",
-			id, dataFromDecodedSlab, data))
-	}
-
-	if slab.IsData() {
-		dataSlab, ok := slab.(*ArrayDataSlab)
-		if !ok {
-			return NewFatalError(fmt.Errorf("slab %d is not ArrayDataSlab", id))
-		}
-
+	switch slab := slab.(type) {
+	case *ArrayDataSlab:
 		decodedDataSlab, ok := decodedSlab.(*ArrayDataSlab)
 		if !ok {
 			return NewFatalError(fmt.Errorf("decoded slab %d is not ArrayDataSlab", id))
 		}
 
 		// Compare slabs
-		err = arrayDataSlabEqual(
-			dataSlab,
-			decodedDataSlab,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		err = v.arrayDataSlabEqual(slab, decodedDataSlab)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by arrayDataSlabEqual().
 			return fmt.Errorf("data slab %d round-trip serialization failed: %w", id, err)
 		}
 
 		return nil
-	}
 
-	metaSlab, ok := slab.(*ArrayMetaDataSlab)
-	if !ok {
-		return NewFatalError(fmt.Errorf("slab %d is not ArrayMetaDataSlab", id))
-	}
-
-	decodedMetaSlab, ok := decodedSlab.(*ArrayMetaDataSlab)
-	if !ok {
-		return NewFatalError(fmt.Errorf("decoded slab %d is not ArrayMetaDataSlab", id))
-	}
-
-	// Compare slabs
-	err = arrayMetaDataSlabEqual(metaSlab, decodedMetaSlab)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by arrayMetaDataSlabEqual().
-		return fmt.Errorf("metadata slab %d round-trip serialization failed: %w", id, err)
-	}
-
-	for _, h := range metaSlab.childrenHeaders {
-		// Verify child slabs
-		err = validArraySlabSerialization(
-			storage,
-			h.slabID,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by validArraySlabSerialization().
-			return err
+	case *ArrayMetaDataSlab:
+		decodedMetaSlab, ok := decodedSlab.(*ArrayMetaDataSlab)
+		if !ok {
+			return NewFatalError(fmt.Errorf("decoded slab %d is not ArrayMetaDataSlab", id))
 		}
-	}
 
-	return nil
+		// Compare slabs
+		err = v.arrayMetaDataSlabEqual(slab, decodedMetaSlab)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by arrayMetaDataSlabEqual().
+			return fmt.Errorf("metadata slab %d round-trip serialization failed: %w", id, err)
+		}
+
+		for _, h := range slab.childrenHeaders {
+			childSlab, err := getArraySlab(v.storage, h.slabID)
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by getArraySlab().
+				return err
+			}
+
+			// Verify child slabs
+			err = v.verifyArraySlab(childSlab)
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by verifyArraySlab().
+				return err
+			}
+		}
+
+		return nil
+
+	default:
+		return NewFatalError(fmt.Errorf("ArraySlab is either *ArrayDataSlab or *ArrayMetaDataSlab, got %T", slab))
+	}
 }
 
-func arrayDataSlabEqual(
-	expected *ArrayDataSlab,
-	actual *ArrayDataSlab,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) arrayDataSlabEqual(expected, actual *ArrayDataSlab) error {
 
 	// Compare extra data
 	err := arrayExtraDataEqual(expected.extraData, actual.extraData)
@@ -663,7 +637,7 @@ func arrayDataSlabEqual(
 		return err
 	}
 
-	// Compare inlined
+	// Compare inlined status
 	if expected.inlined != actual.inlined {
 		return NewFatalError(fmt.Errorf("inlined %t is wrong, want %t", actual.inlined, expected.inlined))
 	}
@@ -689,44 +663,38 @@ func arrayDataSlabEqual(
 		ae := actual.elements[i]
 
 		switch ee := ee.(type) {
-		case SlabIDStorable:
-			if !compare(ee, ae) {
+
+		case SlabIDStorable: // Compare not-inlined element
+			if !v.compare(ee, ae) {
 				return NewFatalError(fmt.Errorf("element %d %+v is wrong, want %+v", i, ae, ee))
 			}
 
-			ev, err := ee.StoredValue(storage)
+			ev, err := ee.StoredValue(v.storage)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
 				return err
 			}
 
-			return ValidValueSerialization(
-				ev,
-				cborDecMode,
-				cborEncMode,
-				decodeStorable,
-				decodeTypeInfo,
-				compare,
-			)
+			return v.verifyValue(ev)
 
-		case *ArrayDataSlab:
+		case *ArrayDataSlab: // Compare inlined array
 			ae, ok := ae.(*ArrayDataSlab)
 			if !ok {
-				return NewFatalError(fmt.Errorf("expect element as *ArrayDataSlab, actual %T", ae))
+				return NewFatalError(fmt.Errorf("expect element as inlined *ArrayDataSlab, actual %T", ae))
 			}
 
-			return arrayDataSlabEqual(ee, ae, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo, compare)
+			return v.arrayDataSlabEqual(ee, ae)
 
-		case *MapDataSlab:
+		case *MapDataSlab: // Compare inlined map
 			ae, ok := ae.(*MapDataSlab)
 			if !ok {
-				return NewFatalError(fmt.Errorf("expect element as *MapDataSlab, actual %T", ae))
+				return NewFatalError(fmt.Errorf("expect element as inlined *MapDataSlab, actual %T", ae))
 			}
 
-			return mapDataSlabEqual(ee, ae, storage, cborDecMode, cborEncMode, decodeStorable, decodeTypeInfo, compare)
+			return v.mapDataSlabEqual(ee, ae)
 
 		default:
-			if !compare(ee, ae) {
+			if !v.compare(ee, ae) {
 				return NewFatalError(fmt.Errorf("element %d %+v is wrong, want %+v", i, ae, ee))
 			}
 		}
@@ -735,7 +703,7 @@ func arrayDataSlabEqual(
 	return nil
 }
 
-func arrayMetaDataSlabEqual(expected, actual *ArrayMetaDataSlab) error {
+func (v *serializationVerifier) arrayMetaDataSlabEqual(expected, actual *ArrayMetaDataSlab) error {
 
 	// Compare extra data
 	err := arrayExtraDataEqual(expected.extraData, actual.extraData)
@@ -779,34 +747,14 @@ func arrayExtraDataEqual(expected, actual *ArrayExtraData) error {
 	return nil
 }
 
-func ValidValueSerialization(
-	value Value,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) verifyValue(value Value) error {
 
-	switch v := value.(type) {
+	switch value := value.(type) {
 	case *Array:
-		return ValidArraySerialization(
-			v,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		return v.verifyArraySlab(value.root)
+
 	case *OrderedMap:
-		return ValidMapSerialization(
-			v,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		return v.verifyMapSlab(value.root)
 	}
 	return nil
 }

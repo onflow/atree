@@ -290,8 +290,17 @@ func ValidMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoCom
 		return NewFatalError(fmt.Errorf("root slab %d seed is uninitialized", m.root.SlabID()))
 	}
 
-	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := validMapSlab(
-		address, m.Storage, m.digesterBuilder, tic, hip, m.root, 0, nil, []SlabID{}, []SlabID{}, []Digest{}, inlineEnabled)
+	v := &mapVerifier{
+		storage:         m.Storage,
+		address:         address,
+		digesterBuilder: m.digesterBuilder,
+		tic:             tic,
+		hip:             hip,
+		inlineEnabled:   inlineEnabled,
+	}
+
+	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := v.verifyMapSlab(
+		m.root, 0, nil, []SlabID{}, []SlabID{}, []Digest{})
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by validMapSlab().
 		return err
@@ -335,19 +344,22 @@ func ValidMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoCom
 	return nil
 }
 
-func validMapSlab(
-	address Address,
-	storage SlabStorage,
-	digesterBuilder DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
+type mapVerifier struct {
+	storage         SlabStorage
+	address         Address
+	digesterBuilder DigesterBuilder
+	tic             TypeInfoComparator
+	hip             HashInputProvider
+	inlineEnabled   bool
+}
+
+func (v *mapVerifier) verifyMapSlab(
 	slab MapSlab,
 	level int,
 	headerFromParentSlab *MapSlabHeader,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
 	firstKeys []Digest,
-	inlineEnabled bool,
 ) (
 	elementCount uint64,
 	_dataSlabIDs []SlabID,
@@ -387,28 +399,22 @@ func validMapSlab(
 
 	switch slab := slab.(type) {
 	case *MapDataSlab:
-		return validMapDataSlab(address, storage, digesterBuilder, tic, hip, slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys, inlineEnabled)
+		return v.verifyMapDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
 
 	case *MapMetaDataSlab:
-		return validMapMetaDataSlab(address, storage, digesterBuilder, tic, hip, slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys, inlineEnabled)
+		return v.verifyMapMetaDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
 
 	default:
 		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapSlab is either *MapDataSlab or *MapMetaDataSlab, got %T", slab))
 	}
 }
 
-func validMapDataSlab(
-	address Address,
-	storage SlabStorage,
-	digesterBuilder DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
+func (v *mapVerifier) verifyMapDataSlab(
 	dataSlab *MapDataSlab,
 	level int,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
 	firstKeys []Digest,
-	inlineEnabled bool,
 ) (
 	elementCount uint64,
 	_dataSlabIDs []SlabID,
@@ -423,7 +429,7 @@ func validMapDataSlab(
 	}
 
 	// Verify data slab's elements
-	elementCount, elementSize, err := validMapElements(address, storage, digesterBuilder, tic, hip, id, dataSlab.elements, 0, nil, inlineEnabled)
+	elementCount, elementSize, err := v.verifyMapElements(id, dataSlab.elements, 0, nil)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by validMapElements().
 		return 0, nil, nil, nil, err
@@ -482,18 +488,12 @@ func validMapDataSlab(
 	return elementCount, dataSlabIDs, nextDataSlabIDs, firstKeys, nil
 }
 
-func validMapMetaDataSlab(
-	address Address,
-	storage SlabStorage,
-	digesterBuilder DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
+func (v *mapVerifier) verifyMapMetaDataSlab(
 	metaSlab *MapMetaDataSlab,
 	level int,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
 	firstKeys []Digest,
-	inlineEnabled bool,
 ) (
 	elementCount uint64,
 	_dataSlabIDs []SlabID,
@@ -524,7 +524,7 @@ func validMapMetaDataSlab(
 	for i := 0; i < len(metaSlab.childrenHeaders); i++ {
 		h := metaSlab.childrenHeaders[i]
 
-		childSlab, err := getMapSlab(storage, h.slabID)
+		childSlab, err := getMapSlab(v.storage, h.slabID)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by getMapSlab().
 			return 0, nil, nil, nil, err
@@ -533,7 +533,7 @@ func validMapMetaDataSlab(
 		// Verify child slabs
 		count := uint64(0)
 		count, dataSlabIDs, nextDataSlabIDs, firstKeys, err =
-			validMapSlab(address, storage, digesterBuilder, tic, hip, childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys, inlineEnabled)
+			v.verifyMapSlab(childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by validMapSlab().
 			return 0, nil, nil, nil, err
@@ -581,17 +581,11 @@ func validMapMetaDataSlab(
 	return elementCount, dataSlabIDs, nextDataSlabIDs, firstKeys, nil
 }
 
-func validMapElements(
-	address Address,
-	storage SlabStorage,
-	db DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
+func (v *mapVerifier) verifyMapElements(
 	id SlabID,
 	elements elements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
-	inlineEnabled bool,
 ) (
 	elementCount uint64,
 	elementSize uint32,
@@ -600,25 +594,19 @@ func validMapElements(
 
 	switch elems := elements.(type) {
 	case *hkeyElements:
-		return validMapHkeyElements(address, storage, db, tic, hip, id, elems, digestLevel, hkeyPrefixes, inlineEnabled)
+		return v.verifyMapHkeyElements(id, elems, digestLevel, hkeyPrefixes)
 	case *singleElements:
-		return validMapSingleElements(address, storage, db, tic, hip, id, elems, digestLevel, hkeyPrefixes, inlineEnabled)
+		return v.verifyMapSingleElements(id, elems, digestLevel, hkeyPrefixes)
 	default:
 		return 0, 0, NewFatalError(fmt.Errorf("slab %d has unknown elements type %T at digest level %d", id, elements, digestLevel))
 	}
 }
 
-func validMapHkeyElements(
-	address Address,
-	storage SlabStorage,
-	db DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
+func (v *mapVerifier) verifyMapHkeyElements(
 	id SlabID,
 	elements *hkeyElements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
-	inlineEnabled bool,
 ) (
 	elementCount uint64,
 	elementSize uint32,
@@ -675,7 +663,7 @@ func validMapHkeyElements(
 
 		if group, ok := e.(elementGroup); ok {
 
-			ge, err := group.Elements(storage)
+			ge, err := group.Elements(v.storage)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by elementGroup.Elements().
 				return 0, 0, err
@@ -685,7 +673,7 @@ func validMapHkeyElements(
 			copy(hkeys, hkeyPrefixes)
 			hkeys[len(hkeys)-1] = elements.hkeys[i]
 
-			count, size, err := validMapElements(address, storage, db, tic, hip, id, ge, digestLevel+1, hkeys, inlineEnabled)
+			count, size, err := v.verifyMapElements(id, ge, digestLevel+1, hkeys)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by validMapElement().
 				return 0, 0, err
@@ -718,9 +706,9 @@ func validMapHkeyElements(
 			hkeys[len(hkeys)-1] = elements.hkeys[i]
 
 			// Verify element
-			computedSize, maxDigestLevel, err := validSingleElement(address, storage, db, tic, hip, se, hkeys, inlineEnabled)
+			computedSize, maxDigestLevel, err := v.verifySingleElement(se, hkeys)
 			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by validSingleElement().
+				// Don't need to wrap error as external error because err is already categorized by verifySingleElement().
 				return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
 			}
 
@@ -745,17 +733,11 @@ func validMapHkeyElements(
 	return elementCount, elementSize, nil
 }
 
-func validMapSingleElements(
-	address Address,
-	storage SlabStorage,
-	db DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
+func (v *mapVerifier) verifyMapSingleElements(
 	id SlabID,
 	elements *singleElements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
-	inlineEnabled bool,
 ) (
 	elementCount uint64,
 	elementSize uint32,
@@ -774,7 +756,7 @@ func validMapSingleElements(
 	for _, e := range elements.elems {
 
 		// Verify element
-		computedSize, maxDigestLevel, err := validSingleElement(address, storage, db, tic, hip, e, hkeyPrefixes, inlineEnabled)
+		computedSize, maxDigestLevel, err := v.verifySingleElement(e, hkeyPrefixes)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by validSingleElement().
 			return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
@@ -805,15 +787,9 @@ func validMapSingleElements(
 	return uint64(len(elements.elems)), elementSize, nil
 }
 
-func validSingleElement(
-	address Address,
-	storage SlabStorage,
-	db DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
+func (v *mapVerifier) verifySingleElement(
 	e *singleElement,
 	digests []Digest,
-	inlineEnabled bool,
 ) (
 	size uint32,
 	digestMaxLevel uint,
@@ -839,33 +815,33 @@ func validSingleElement(
 	}
 
 	// Verify key
-	kv, err := e.key.StoredValue(storage)
+	kv, err := e.key.StoredValue(v.storage)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Stroable interface.
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("element %s key can't be converted to value", e))
 	}
 
-	err = ValidValue(kv, address, nil, tic, hip, inlineEnabled)
+	err = ValidValue(kv, v.address, nil, v.tic, v.hip, v.inlineEnabled)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ValidValue().
 		return 0, 0, fmt.Errorf("element %s key isn't valid: %w", e, err)
 	}
 
 	// Verify value
-	vv, err := e.value.StoredValue(storage)
+	vv, err := e.value.StoredValue(v.storage)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Stroable interface.
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("element %s value can't be converted to value", e))
 	}
 
-	err = ValidValue(vv, address, nil, tic, hip, inlineEnabled)
+	err = ValidValue(vv, v.address, nil, v.tic, v.hip, v.inlineEnabled)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ValidValue().
 		return 0, 0, fmt.Errorf("element %s value isn't valid: %w", e, err)
 	}
 
 	// Verify not-inlined array/map > inline size, or can't be inlined
-	if inlineEnabled {
+	if v.inlineEnabled {
 		if _, ok := e.value.(SlabIDStorable); ok {
 			err = verifyNotInlinedValueStatusAndSize(vv, uint32(valueSizeLimit))
 			if err != nil {
@@ -881,7 +857,7 @@ func validSingleElement(
 	}
 
 	// Verify digest
-	digest, err := db.Digest(hip, kv)
+	digest, err := v.digesterBuilder.Digest(v.hip, kv)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by DigesterBuilder interface.
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, "failed to create digester")

@@ -245,7 +245,7 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 	return dumps, nil
 }
 
-func ValidMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
+func VerifyMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
 
 	// Verify map address
 	if address != m.Address() {
@@ -253,13 +253,13 @@ func ValidMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoCom
 	}
 
 	// Verify map value ID
-	err := validMapValueID(m)
+	err := verifyMapValueID(m)
 	if err != nil {
 		return err
 	}
 
 	// Verify map slab ID
-	err = validMapSlabID(m)
+	err = verifyMapSlabID(m)
 	if err != nil {
 		return err
 	}
@@ -295,10 +295,10 @@ func ValidMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoCom
 		inlineEnabled:   inlineEnabled,
 	}
 
-	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := v.verifyMapSlab(
+	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := v.verifySlab(
 		m.root, 0, nil, []SlabID{}, []SlabID{}, []Digest{})
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by validMapSlab().
+		// Don't need to wrap error as external error because err is already categorized by verifySlab().
 		return err
 	}
 
@@ -349,7 +349,7 @@ type mapVerifier struct {
 	inlineEnabled   bool
 }
 
-func (v *mapVerifier) verifyMapSlab(
+func (v *mapVerifier) verifySlab(
 	slab MapSlab,
 	level int,
 	headerFromParentSlab *MapSlabHeader,
@@ -412,17 +412,17 @@ func (v *mapVerifier) verifyMapSlab(
 
 	switch slab := slab.(type) {
 	case *MapDataSlab:
-		return v.verifyMapDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
+		return v.verifyDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
 
 	case *MapMetaDataSlab:
-		return v.verifyMapMetaDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
+		return v.verifyMetaDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
 
 	default:
 		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapSlab is either *MapDataSlab or *MapMetaDataSlab, got %T", slab))
 	}
 }
 
-func (v *mapVerifier) verifyMapDataSlab(
+func (v *mapVerifier) verifyDataSlab(
 	dataSlab *MapDataSlab,
 	level int,
 	dataSlabIDs []SlabID,
@@ -442,9 +442,9 @@ func (v *mapVerifier) verifyMapDataSlab(
 	}
 
 	// Verify data slab's elements
-	elementCount, elementSize, err := v.verifyMapElements(id, dataSlab.elements, 0, nil)
+	elementCount, elementSize, err := v.verifyElements(id, dataSlab.elements, 0, nil)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by validMapElements().
+		// Don't need to wrap error as external error because err is already categorized by verifyElements().
 		return 0, nil, nil, nil, err
 	}
 
@@ -501,7 +501,7 @@ func (v *mapVerifier) verifyMapDataSlab(
 	return elementCount, dataSlabIDs, nextDataSlabIDs, firstKeys, nil
 }
 
-func (v *mapVerifier) verifyMapMetaDataSlab(
+func (v *mapVerifier) verifyMetaDataSlab(
 	metaSlab *MapMetaDataSlab,
 	level int,
 	dataSlabIDs []SlabID,
@@ -546,9 +546,9 @@ func (v *mapVerifier) verifyMapMetaDataSlab(
 		// Verify child slabs
 		count := uint64(0)
 		count, dataSlabIDs, nextDataSlabIDs, firstKeys, err =
-			v.verifyMapSlab(childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
+			v.verifySlab(childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by validMapSlab().
+			// Don't need to wrap error as external error because err is already categorized by verifySlab().
 			return 0, nil, nil, nil, err
 		}
 
@@ -594,7 +594,7 @@ func (v *mapVerifier) verifyMapMetaDataSlab(
 	return elementCount, dataSlabIDs, nextDataSlabIDs, firstKeys, nil
 }
 
-func (v *mapVerifier) verifyMapElements(
+func (v *mapVerifier) verifyElements(
 	id SlabID,
 	elements elements,
 	digestLevel uint,
@@ -607,15 +607,15 @@ func (v *mapVerifier) verifyMapElements(
 
 	switch elems := elements.(type) {
 	case *hkeyElements:
-		return v.verifyMapHkeyElements(id, elems, digestLevel, hkeyPrefixes)
+		return v.verifyHkeyElements(id, elems, digestLevel, hkeyPrefixes)
 	case *singleElements:
-		return v.verifyMapSingleElements(id, elems, digestLevel, hkeyPrefixes)
+		return v.verifySingleElements(id, elems, digestLevel, hkeyPrefixes)
 	default:
 		return 0, 0, NewFatalError(fmt.Errorf("slab %d has unknown elements type %T at digest level %d", id, elements, digestLevel))
 	}
 }
 
-func (v *mapVerifier) verifyMapHkeyElements(
+func (v *mapVerifier) verifyHkeyElements(
 	id SlabID,
 	elements *hkeyElements,
 	digestLevel uint,
@@ -686,9 +686,9 @@ func (v *mapVerifier) verifyMapHkeyElements(
 			copy(hkeys, hkeyPrefixes)
 			hkeys[len(hkeys)-1] = elements.hkeys[i]
 
-			count, size, err := v.verifyMapElements(id, ge, digestLevel+1, hkeys)
+			count, size, err := v.verifyElements(id, ge, digestLevel+1, hkeys)
 			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by validMapElement().
+				// Don't need to wrap error as external error because err is already categorized by verifyElements().
 				return 0, 0, err
 			}
 
@@ -746,7 +746,7 @@ func (v *mapVerifier) verifyMapHkeyElements(
 	return elementCount, elementSize, nil
 }
 
-func (v *mapVerifier) verifyMapSingleElements(
+func (v *mapVerifier) verifySingleElements(
 	id SlabID,
 	elements *singleElements,
 	digestLevel uint,
@@ -771,7 +771,7 @@ func (v *mapVerifier) verifyMapSingleElements(
 		// Verify element
 		computedSize, maxDigestLevel, err := v.verifySingleElement(e, hkeyPrefixes)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by validSingleElement().
+			// Don't need to wrap error as external error because err is already categorized by verifySingleElement().
 			return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
 		}
 
@@ -834,9 +834,9 @@ func (v *mapVerifier) verifySingleElement(
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("element %s key can't be converted to value", e))
 	}
 
-	err = ValidValue(kv, v.address, nil, v.tic, v.hip, v.inlineEnabled)
+	err = verifyValue(kv, v.address, nil, v.tic, v.hip, v.inlineEnabled)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by ValidValue().
+		// Don't need to wrap error as external error because err is already categorized by verifyValue().
 		return 0, 0, fmt.Errorf("element %s key isn't valid: %w", e, err)
 	}
 
@@ -847,9 +847,9 @@ func (v *mapVerifier) verifySingleElement(
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("element %s value can't be converted to value", e))
 	}
 
-	err = ValidValue(vv, v.address, nil, v.tic, v.hip, v.inlineEnabled)
+	err = verifyValue(vv, v.address, nil, v.tic, v.hip, v.inlineEnabled)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by ValidValue().
+		// Don't need to wrap error as external error because err is already categorized by verifyValue().
 		return 0, 0, fmt.Errorf("element %s value isn't valid: %w", e, err)
 	}
 
@@ -889,12 +889,12 @@ func (v *mapVerifier) verifySingleElement(
 	return computedSize, digest.Levels(), nil
 }
 
-func ValidValue(value Value, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
+func verifyValue(value Value, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
 	switch v := value.(type) {
 	case *Array:
-		return ValidArray(v, address, typeInfo, tic, hip, inlineEnabled)
+		return VerifyArray(v, address, typeInfo, tic, hip, inlineEnabled)
 	case *OrderedMap:
-		return ValidMap(v, address, typeInfo, tic, hip, inlineEnabled)
+		return VerifyMap(v, address, typeInfo, tic, hip, inlineEnabled)
 	}
 	return nil
 }
@@ -1508,9 +1508,9 @@ func mapExtraDataEqual(expected, actual *MapExtraData) error {
 	return nil
 }
 
-// validMapValueID verifies map ValueID is always the same as
+// verifyMapValueID verifies map ValueID is always the same as
 // root slab's SlabID indepedent of map's inlined status.
-func validMapValueID(m *OrderedMap) error {
+func verifyMapValueID(m *OrderedMap) error {
 	rootSlabID := m.root.Header().slabID
 
 	vid := m.ValueID()
@@ -1536,9 +1536,9 @@ func validMapValueID(m *OrderedMap) error {
 	return nil
 }
 
-// validMapSlabID verifies map SlabID is either empty for inlined map, or
+// verifyMapSlabID verifies map SlabID is either empty for inlined map, or
 // same as root slab's SlabID for not-inlined map.
-func validMapSlabID(m *OrderedMap) error {
+func verifyMapSlabID(m *OrderedMap) error {
 	sid := m.SlabID()
 
 	if m.Inlined() {

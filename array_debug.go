@@ -167,7 +167,7 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 
 type TypeInfoComparator func(TypeInfo, TypeInfo) bool
 
-func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
+func VerifyArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
 
 	// Verify array address (independent of array inlined status)
 	if address != a.Address() {
@@ -175,13 +175,13 @@ func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoCompar
 	}
 
 	// Verify array value ID (independent of array inlined status)
-	err := validArrayValueID(a)
+	err := verifyArrayValueID(a)
 	if err != nil {
 		return err
 	}
 
 	// Verify array slab ID (dependent of array inlined status)
-	err = validArraySlabID(a)
+	err = verifyArraySlabID(a)
 	if err != nil {
 		return err
 	}
@@ -211,9 +211,9 @@ func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoCompar
 	}
 
 	// Verify array slabs
-	computedCount, dataSlabIDs, nextDataSlabIDs, err := v.verifyArraySlab(a.root, 0, nil, []SlabID{}, []SlabID{})
+	computedCount, dataSlabIDs, nextDataSlabIDs, err := v.verifySlab(a.root, 0, nil, []SlabID{}, []SlabID{})
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by validArraySlab().
+		// Don't need to wrap error as external error because err is already categorized by verifySlab().
 		return err
 	}
 
@@ -239,7 +239,7 @@ type arrayVerifier struct {
 	inlineEnabled bool
 }
 
-func (v *arrayVerifier) verifyArraySlab(
+func (v *arrayVerifier) verifySlab(
 	slab ArraySlab,
 	level int,
 	headerFromParentSlab *ArraySlabHeader,
@@ -298,17 +298,17 @@ func (v *arrayVerifier) verifyArraySlab(
 
 	switch slab := slab.(type) {
 	case *ArrayDataSlab:
-		return v.verifyArrayDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs)
+		return v.verifyDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs)
 
 	case *ArrayMetaDataSlab:
-		return v.verifyArrayMetaDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs)
+		return v.verifyMetaDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs)
 
 	default:
 		return 0, nil, nil, NewFatalError(fmt.Errorf("ArraySlab is either *ArrayDataSlab or *ArrayMetaDataSlab, got %T", slab))
 	}
 }
 
-func (v *arrayVerifier) verifyArrayDataSlab(
+func (v *arrayVerifier) verifyDataSlab(
 	dataSlab *ArrayDataSlab,
 	level int,
 	dataSlabIDs []SlabID,
@@ -389,9 +389,9 @@ func (v *arrayVerifier) verifyArrayDataSlab(
 		}
 
 		// Verify element
-		err = ValidValue(value, v.address, nil, v.tic, v.hip, v.inlineEnabled)
+		err = verifyValue(value, v.address, nil, v.tic, v.hip, v.inlineEnabled)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ValidValue().
+			// Don't need to wrap error as external error because err is already categorized by verifyValue().
 			return 0, nil, nil, fmt.Errorf(
 				"data slab %s element %q isn't valid: %w",
 				id, e, err,
@@ -402,7 +402,7 @@ func (v *arrayVerifier) verifyArrayDataSlab(
 	return dataSlab.header.count, dataSlabIDs, nextDataSlabIDs, nil
 }
 
-func (v *arrayVerifier) verifyArrayMetaDataSlab(
+func (v *arrayVerifier) verifyMetaDataSlab(
 	metaSlab *ArrayMetaDataSlab,
 	level int,
 	dataSlabIDs []SlabID,
@@ -454,9 +454,9 @@ func (v *arrayVerifier) verifyArrayMetaDataSlab(
 		// Verify child slabs
 		var count uint32
 		count, dataSlabIDs, nextDataSlabIDs, err =
-			v.verifyArraySlab(childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs)
+			v.verifySlab(childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by validArraySlab().
+			// Don't need to wrap error as external error because err is already categorized by verifySlab().
 			return 0, nil, nil, err
 		}
 
@@ -945,9 +945,9 @@ func getSlabIDFromStorable(storable Storable, ids []SlabID) []SlabID {
 	return ids
 }
 
-// validArrayValueID verifies array ValueID is always the same as
+// verifyArrayValueID verifies array ValueID is always the same as
 // root slab's SlabID indepedent of array's inlined status.
-func validArrayValueID(a *Array) error {
+func verifyArrayValueID(a *Array) error {
 	rootSlabID := a.root.Header().slabID
 
 	vid := a.ValueID()
@@ -973,9 +973,9 @@ func validArrayValueID(a *Array) error {
 	return nil
 }
 
-// validArraySlabID verifies array SlabID is either empty for inlined array, or
+// verifyArraySlabID verifies array SlabID is either empty for inlined array, or
 // same as root slab's SlabID for not-inlined array.
-func validArraySlabID(a *Array) error {
+func verifyArraySlabID(a *Array) error {
 	sid := a.SlabID()
 
 	if a.Inlined() {

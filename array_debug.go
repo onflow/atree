@@ -202,7 +202,7 @@ func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoCompar
 		))
 	}
 
-	v := &verification{
+	v := &arrayVerifier{
 		storage:       a.Storage,
 		address:       address,
 		tic:           tic,
@@ -231,7 +231,7 @@ func ValidArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoCompar
 	return nil
 }
 
-type verification struct {
+type arrayVerifier struct {
 	storage       SlabStorage
 	address       Address
 	tic           TypeInfoComparator
@@ -239,7 +239,7 @@ type verification struct {
 	inlineEnabled bool
 }
 
-func (v *verification) verifyArraySlab(
+func (v *arrayVerifier) verifyArraySlab(
 	slab ArraySlab,
 	level int,
 	headerFromParentSlab *ArraySlabHeader,
@@ -256,6 +256,18 @@ func (v *verification) verifyArraySlab(
 	// Verify slab address (independent of array inlined status)
 	if v.address != id.address {
 		return 0, nil, nil, NewFatalError(fmt.Errorf("array slab address %v, got %v", v.address, id.address))
+	}
+
+	// Verify that inlined slab is not in storage
+	if slab.Inlined() {
+		_, exist, err := v.storage.Retrieve(id)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by Storage interface.
+			return 0, nil, nil, wrapErrorAsExternalErrorIfNeeded(err)
+		}
+		if exist {
+			return 0, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s is in storage", id))
+		}
 	}
 
 	if level > 0 {
@@ -296,7 +308,7 @@ func (v *verification) verifyArraySlab(
 	}
 }
 
-func (v *verification) verifyArrayDataSlab(
+func (v *arrayVerifier) verifyArrayDataSlab(
 	dataSlab *ArrayDataSlab,
 	level int,
 	dataSlabIDs []SlabID,
@@ -390,7 +402,7 @@ func (v *verification) verifyArrayDataSlab(
 	return dataSlab.header.count, dataSlabIDs, nextDataSlabIDs, nil
 }
 
-func (v *verification) verifyArrayMetaDataSlab(
+func (v *arrayVerifier) verifyArrayMetaDataSlab(
 	metaSlab *ArrayMetaDataSlab,
 	level int,
 	dataSlabIDs []SlabID,

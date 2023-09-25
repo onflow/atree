@@ -66,41 +66,41 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 				return MapStats{}, err
 			}
 
-			if slab.IsData() {
+			switch slab := slab.(type) {
+			case *MapDataSlab:
 				dataSlabCount++
 
-				leaf := slab.(*MapDataSlab)
-				elementGroups := []elements{leaf.elements}
+				elementGroups := []elements{slab.elements}
 
 				for len(elementGroups) > 0 {
 
 					var nestedElementGroups []elements
 
-					for i := 0; i < len(elementGroups); i++ {
-
-						elems := elementGroups[i]
-
-						for j := 0; j < int(elems.Count()); j++ {
-							elem, err := elems.Element(j)
+					for _, group := range elementGroups {
+						for i := 0; i < int(group.Count()); i++ {
+							elem, err := group.Element(i)
 							if err != nil {
 								// Don't need to wrap error as external error because err is already categorized by elements.Element().
 								return MapStats{}, err
 							}
 
-							if group, ok := elem.(elementGroup); ok {
-								if !group.Inline() {
+							switch e := elem.(type) {
+							case elementGroup:
+								nestedGroup := e
+
+								if !nestedGroup.Inline() {
 									collisionDataSlabCount++
 								}
 
-								nested, err := group.Elements(m.Storage)
+								nested, err := nestedGroup.Elements(m.Storage)
 								if err != nil {
 									// Don't need to wrap error as external error because err is already categorized by elementGroup.Elements().
 									return MapStats{}, err
 								}
+
 								nestedElementGroups = append(nestedElementGroups, nested)
 
-							} else {
-								e := elem.(*singleElement)
+							case *singleElement:
 								if _, ok := e.key.(SlabIDStorable); ok {
 									storableDataSlabCount++
 								}
@@ -113,9 +113,11 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 							}
 						}
 					}
+
 					elementGroups = nestedElementGroups
 				}
-			} else {
+
+			case *MapMetaDataSlab:
 				metaDataSlabCount++
 
 				for _, storable := range slab.ChildStorables() {
@@ -173,12 +175,12 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 				return nil, err
 			}
 
-			if slab.IsData() {
-				dataSlab := slab.(*MapDataSlab)
-				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, dataSlab))
+			switch slab := slab.(type) {
+			case *MapDataSlab:
+				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, slab))
 
-				for i := 0; i < int(dataSlab.elements.Count()); i++ {
-					elem, err := dataSlab.elements.Element(i)
+				for i := 0; i < int(slab.elements.Count()); i++ {
+					elem, err := slab.elements.Element(i)
 					if err != nil {
 						// Don't need to wrap error as external error because err is already categorized by elements.Element().
 						return nil, err
@@ -191,11 +193,10 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 					}
 				}
 
-				overflowIDs = getSlabIDFromStorable(dataSlab, overflowIDs)
+				overflowIDs = getSlabIDFromStorable(slab, overflowIDs)
 
-			} else {
-				meta := slab.(*MapMetaDataSlab)
-				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, meta))
+			case *MapMetaDataSlab:
+				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, slab))
 
 				for _, storable := range slab.ChildStorables() {
 					id, ok := storable.(SlabIDStorable)
@@ -247,18 +248,18 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 
 func VerifyMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
 
-	// Verify map address
+	// Verify map address (independent of array inlined status)
 	if address != m.Address() {
 		return NewFatalError(fmt.Errorf("map address %v, got %v", address, m.Address()))
 	}
 
-	// Verify map value ID
+	// Verify map value ID (independent of array inlined status)
 	err := verifyMapValueID(m)
 	if err != nil {
 		return err
 	}
 
-	// Verify map slab ID
+	// Verify map slab ID (dependent of array inlined status)
 	err = verifyMapSlabID(m)
 	if err != nil {
 		return err
@@ -663,6 +664,10 @@ func (v *mapVerifier) verifyHkeyElements(
 	for i := 0; i < len(elements.elems); i++ {
 		e := elements.elems[i]
 
+		hkeys := make([]Digest, len(hkeyPrefixes)+1)
+		copy(hkeys, hkeyPrefixes)
+		hkeys[len(hkeys)-1] = elements.hkeys[i]
+
 		elementSize += digestSize
 
 		// Verify element size is <= inline size
@@ -674,19 +679,15 @@ func (v *mapVerifier) verifyHkeyElements(
 			}
 		}
 
-		if group, ok := e.(elementGroup); ok {
-
-			ge, err := group.Elements(v.storage)
+		switch e := e.(type) {
+		case elementGroup:
+			group, err := e.Elements(v.storage)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by elementGroup.Elements().
 				return 0, 0, err
 			}
 
-			hkeys := make([]Digest, len(hkeyPrefixes)+1)
-			copy(hkeys, hkeyPrefixes)
-			hkeys[len(hkeys)-1] = elements.hkeys[i]
-
-			count, size, err := v.verifyElements(id, ge, digestLevel+1, hkeys)
+			count, size, err := v.verifyElements(id, group, digestLevel+1, hkeys)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by verifyElements().
 				return 0, 0, err
@@ -707,19 +708,9 @@ func (v *mapVerifier) verifyHkeyElements(
 
 			elementCount += count
 
-		} else {
-
-			se, ok := e.(*singleElement)
-			if !ok {
-				return 0, 0, NewFatalError(fmt.Errorf("data slab %d element type %T is wrong, want *singleElement", id, e))
-			}
-
-			hkeys := make([]Digest, len(hkeyPrefixes)+1)
-			copy(hkeys, hkeyPrefixes)
-			hkeys[len(hkeys)-1] = elements.hkeys[i]
-
+		case *singleElement:
 			// Verify element
-			computedSize, maxDigestLevel, err := v.verifySingleElement(se, hkeys)
+			computedSize, maxDigestLevel, err := v.verifySingleElement(e, hkeys)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by verifySingleElement().
 				return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
@@ -735,6 +726,9 @@ func (v *mapVerifier) verifyHkeyElements(
 			elementSize += computedSize
 
 			elementCount++
+
+		default:
+			return 0, 0, NewFatalError(fmt.Errorf("data slab %d element type %T is wrong, want either elementGroup or *singleElement", id, e))
 		}
 	}
 
@@ -834,6 +828,12 @@ func (v *mapVerifier) verifySingleElement(
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("element %s key can't be converted to value", e))
 	}
 
+	switch e.key.(type) {
+	case *ArrayDataSlab, *MapDataSlab:
+		// Verify key can't be inlined array or map
+		return 0, 0, NewFatalError(fmt.Errorf("element %s key shouldn't be inlined array or map", e))
+	}
+
 	err = verifyValue(kv, v.address, nil, v.tic, v.hip, v.inlineEnabled)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by verifyValue().
@@ -847,20 +847,33 @@ func (v *mapVerifier) verifySingleElement(
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("element %s value can't be converted to value", e))
 	}
 
-	err = verifyValue(vv, v.address, nil, v.tic, v.hip, v.inlineEnabled)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by verifyValue().
-		return 0, 0, fmt.Errorf("element %s value isn't valid: %w", e, err)
-	}
-
-	// Verify not-inlined array/map > inline size, or can't be inlined
-	if v.inlineEnabled {
-		if _, ok := e.value.(SlabIDStorable); ok {
+	switch e := e.value.(type) {
+	case SlabIDStorable:
+		// Verify not-inlined value > inline size, or can't be inlined
+		if v.inlineEnabled {
 			err = verifyNotInlinedValueStatusAndSize(vv, uint32(valueSizeLimit))
 			if err != nil {
 				return 0, 0, err
 			}
 		}
+
+	case *ArrayDataSlab:
+		// Verify inlined element's inlined status
+		if !e.Inlined() {
+			return 0, 0, NewFatalError(fmt.Errorf("inlined array inlined status is false"))
+		}
+
+	case *MapDataSlab:
+		// Verify inlined element's inlined status
+		if !e.Inlined() {
+			return 0, 0, NewFatalError(fmt.Errorf("inlined map inlined status is false"))
+		}
+	}
+
+	err = verifyValue(vv, v.address, nil, v.tic, v.hip, v.inlineEnabled)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by verifyValue().
+		return 0, 0, fmt.Errorf("element %s value isn't valid: %w", e, err)
 	}
 
 	// Verify size
@@ -1246,7 +1259,7 @@ func (v *serializationVerifier) mapSingleElementEqual(expected, actual *singleEl
 
 	// Compare nested element
 	switch ee := expected.value.(type) {
-	case SlabIDStorable:
+	case SlabIDStorable: // Compare not-inlined element
 		if !v.compare(expected.value, actual.value) {
 			return NewFatalError(fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value))
 		}
@@ -1263,7 +1276,7 @@ func (v *serializationVerifier) mapSingleElementEqual(expected, actual *singleEl
 			return err
 		}
 
-	case *ArrayDataSlab:
+	case *ArrayDataSlab: // Compare inlined array element
 		ae, ok := actual.value.(*ArrayDataSlab)
 		if !ok {
 			return NewFatalError(fmt.Errorf("expect element as *ArrayDataSlab, actual %T", ae))
@@ -1271,7 +1284,7 @@ func (v *serializationVerifier) mapSingleElementEqual(expected, actual *singleEl
 
 		return v.arrayDataSlabEqual(ee, ae)
 
-	case *MapDataSlab:
+	case *MapDataSlab: // Compare inlined map element
 		ae, ok := actual.value.(*MapDataSlab)
 		if !ok {
 			return NewFatalError(fmt.Errorf("expect element as *MapDataSlab, actual %T", ae))

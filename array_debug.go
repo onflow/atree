@@ -63,13 +63,14 @@ func GetArrayStats(a *Array) (ArrayStats, error) {
 				return ArrayStats{}, err
 			}
 
-			if slab.IsData() {
+			switch slab.(type) {
+			case *ArrayDataSlab:
 				dataSlabCount++
 
 				ids := getSlabIDFromStorable(slab, nil)
 				storableSlabCount += uint64(len(ids))
 
-			} else {
+			case *ArrayMetaDataSlab:
 				metaDataSlabCount++
 
 				for _, storable := range slab.ChildStorables() {
@@ -127,15 +128,14 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 				return nil, err
 			}
 
-			if slab.IsData() {
-				dataSlab := slab.(*ArrayDataSlab)
-				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, dataSlab))
+			switch slab := slab.(type) {
+			case *ArrayDataSlab:
+				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, slab))
 
-				overflowIDs = getSlabIDFromStorable(dataSlab, overflowIDs)
+				overflowIDs = getSlabIDFromStorable(slab, overflowIDs)
 
-			} else {
-				meta := slab.(*ArrayMetaDataSlab)
-				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, meta))
+			case *ArrayMetaDataSlab:
+				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, slab))
 
 				for _, storable := range slab.ChildStorables() {
 					id, ok := storable.(SlabIDStorable)
@@ -168,7 +168,6 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 type TypeInfoComparator func(TypeInfo, TypeInfo) bool
 
 func VerifyArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
-
 	// Verify array address (independent of array inlined status)
 	if address != a.Address() {
 		return NewFatalError(fmt.Errorf("array address %v, got %v", address, a.Address()))
@@ -379,13 +378,26 @@ func (v *arrayVerifier) verifyDataSlab(
 				id, e, e.ByteSize(), maxInlineArrayElementSize))
 		}
 
-		// Verify not-inlined array/map > inline size, or can't be inlined
-		if v.inlineEnabled {
-			if _, ok := e.(SlabIDStorable); ok {
+		switch e := e.(type) {
+		case SlabIDStorable:
+			// Verify not-inlined element > inline size, or can't be inlined
+			if v.inlineEnabled {
 				err = verifyNotInlinedValueStatusAndSize(value, uint32(maxInlineArrayElementSize))
 				if err != nil {
 					return 0, nil, nil, err
 				}
+			}
+
+		case *ArrayDataSlab:
+			// Verify inlined element's inlined status
+			if !e.Inlined() {
+				return 0, nil, nil, NewFatalError(fmt.Errorf("inlined array inlined status is false"))
+			}
+
+		case *MapDataSlab:
+			// Verify inlined element's inlined status
+			if !e.Inlined() {
+				return 0, nil, nil, NewFatalError(fmt.Errorf("inlined map inlined status is false"))
 			}
 		}
 

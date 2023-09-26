@@ -143,42 +143,42 @@ func _verifyMap(
 	typeInfo TypeInfo,
 	address Address,
 	m *OrderedMap,
-	keyValues map[Value]Value,
+	expectedKeyValues map[Value]Value,
 	sortedKeys []Value,
 	hasNestedArrayMapElement bool,
 	inlineEnabled bool,
 ) {
 	require.True(t, typeInfoComparator(typeInfo, m.Type()))
 	require.Equal(t, address, m.Address())
-	require.Equal(t, uint64(len(keyValues)), m.Count())
+	require.Equal(t, uint64(len(expectedKeyValues)), m.Count())
 
 	var err error
 
 	// Verify map elements
-	for k, v := range keyValues {
-		e, err := m.Get(compare, hashInputProvider, k)
+	for k, expected := range expectedKeyValues {
+		actual, err := m.Get(compare, hashInputProvider, k)
 		require.NoError(t, err)
 
-		valueEqual(t, typeInfoComparator, v, e)
+		valueEqual(t, expected, actual)
 	}
 
 	// Verify map elements ordering
 	if len(sortedKeys) > 0 {
-		require.Equal(t, len(keyValues), len(sortedKeys))
+		require.Equal(t, len(expectedKeyValues), len(sortedKeys))
 
 		i := 0
 		err = m.Iterate(func(k, v Value) (bool, error) {
 			expectedKey := sortedKeys[i]
-			expectedValue := keyValues[expectedKey]
+			expectedValue := expectedKeyValues[expectedKey]
 
-			valueEqual(t, typeInfoComparator, expectedKey, k)
-			valueEqual(t, typeInfoComparator, expectedValue, v)
+			valueEqual(t, expectedKey, k)
+			valueEqual(t, expectedValue, v)
 
 			i++
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, len(keyValues), i)
+		require.Equal(t, len(expectedKeyValues), i)
 	}
 
 	// Verify in-memory slabs
@@ -224,7 +224,7 @@ func _verifyMap(
 		require.NoError(t, err)
 		require.Equal(t, stats.SlabCount(), uint64(storage.Count()))
 
-		if len(keyValues) == 0 {
+		if len(expectedKeyValues) == 0 {
 			// Verify slab count for empty map
 			require.Equal(t, uint64(1), stats.DataSlabCount)
 			require.Equal(t, uint64(0), stats.MetaDataSlabCount)
@@ -358,7 +358,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, typeInfoComparator, oldValue, existingValue)
+			valueEqual(t, oldValue, existingValue)
 
 			keyValues[k] = newValue
 		}
@@ -506,7 +506,7 @@ func TestMapSetAndGet(t *testing.T) {
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, typeInfoComparator, oldValue, existingValue)
+			valueEqual(t, oldValue, existingValue)
 
 			keyValues[k] = newValue
 		}
@@ -719,11 +719,11 @@ func testMapRemoveElement(t *testing.T, m *OrderedMap, k Value, expectedV Value)
 
 	removedKey, err := removedKeyStorable.StoredValue(m.Storage)
 	require.NoError(t, err)
-	valueEqual(t, typeInfoComparator, k, removedKey)
+	valueEqual(t, k, removedKey)
 
 	removedValue, err := removedValueStorable.StoredValue(m.Storage)
 	require.NoError(t, err)
-	valueEqual(t, typeInfoComparator, expectedV, removedValue)
+	valueEqual(t, expectedV, removedValue)
 
 	if id, ok := removedKeyStorable.(SlabIDStorable); ok {
 		err = m.Storage.Remove(SlabID(id))
@@ -1124,8 +1124,8 @@ func TestMapIterate(t *testing.T) {
 		// Iterate key value pairs
 		i = uint64(0)
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
-			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
-			valueEqual(t, typeInfoComparator, keyValues[k], v)
+			valueEqual(t, sortedKeys[i], k)
+			valueEqual(t, keyValues[k], v)
 			i++
 			return true, nil
 		})
@@ -1136,7 +1136,7 @@ func TestMapIterate(t *testing.T) {
 		// Iterate keys
 		i = uint64(0)
 		err = m.IterateKeys(func(k Value) (resume bool, err error) {
-			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
+			valueEqual(t, sortedKeys[i], k)
 			i++
 			return true, nil
 		})
@@ -1148,7 +1148,7 @@ func TestMapIterate(t *testing.T) {
 		i = uint64(0)
 		err = m.IterateValues(func(v Value) (resume bool, err error) {
 			k := sortedKeys[i]
-			valueEqual(t, typeInfoComparator, keyValues[k], v)
+			valueEqual(t, keyValues[k], v)
 			i++
 			return true, nil
 		})
@@ -1210,8 +1210,8 @@ func TestMapIterate(t *testing.T) {
 		// Iterate key value pairs
 		i := uint64(0)
 		err = m.Iterate(func(k Value, v Value) (resume bool, err error) {
-			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
-			valueEqual(t, typeInfoComparator, keyValues[k], v)
+			valueEqual(t, sortedKeys[i], k)
+			valueEqual(t, keyValues[k], v)
 			i++
 			return true, nil
 		})
@@ -1223,7 +1223,7 @@ func TestMapIterate(t *testing.T) {
 		// Iterate keys
 		i = uint64(0)
 		err = m.IterateKeys(func(k Value) (resume bool, err error) {
-			valueEqual(t, typeInfoComparator, sortedKeys[i], k)
+			valueEqual(t, sortedKeys[i], k)
 			i++
 			return true, nil
 		})
@@ -1235,7 +1235,7 @@ func TestMapIterate(t *testing.T) {
 		// Iterate values
 		i = uint64(0)
 		err = m.IterateValues(func(v Value) (resume bool, err error) {
-			valueEqual(t, typeInfoComparator, keyValues[sortedKeys[i]], v)
+			valueEqual(t, keyValues[sortedKeys[i]], v)
 			i++
 			return true, nil
 		})
@@ -1323,11 +1323,11 @@ func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLeve
 
 		removedKey, err := removedKeyStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, typeInfoComparator, k, removedKey)
+		valueEqual(t, k, removedKey)
 
 		removedValue, err := removedValueStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, typeInfoComparator, v, removedValue)
+		valueEqual(t, v, removedValue)
 
 		if id, ok := removedKeyStorable.(SlabIDStorable); ok {
 			err = storage.Remove(SlabID(id))
@@ -1391,11 +1391,11 @@ func testMapRandomHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) 
 
 		removedKey, err := removedKeyStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, typeInfoComparator, k, removedKey)
+		valueEqual(t, k, removedKey)
 
 		removedValue, err := removedValueStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, typeInfoComparator, v, removedValue)
+		valueEqual(t, v, removedValue)
 
 		if id, ok := removedKeyStorable.(SlabIDStorable); ok {
 			err = storage.Remove(SlabID(id))
@@ -1492,7 +1492,7 @@ func testMapSetRemoveRandomValues(
 
 				existingValue, err := existingStorable.StoredValue(storage)
 				require.NoError(t, err)
-				valueEqual(t, typeInfoComparator, oldv, existingValue)
+				valueEqual(t, oldv, existingValue)
 
 				if id, ok := existingStorable.(SlabIDStorable); ok {
 					err = storage.Remove(SlabID(id))
@@ -1515,11 +1515,11 @@ func testMapSetRemoveRandomValues(
 
 			removedKey, err := removedKeyStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, typeInfoComparator, k, removedKey)
+			valueEqual(t, k, removedKey)
 
 			removedValue, err := removedValueStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, typeInfoComparator, keyValues[k], removedValue)
+			valueEqual(t, keyValues[k], removedValue)
 
 			if id, ok := removedKeyStorable.(SlabIDStorable); ok {
 				err := storage.Remove(SlabID(id))
@@ -1721,16 +1721,16 @@ func TestMapDecodeV0(t *testing.T) {
 		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 		nestedSlabID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
 
-		nested, err := NewArray(storage, address, typeInfo2)
-		nested.root.SetSlabID(nestedSlabID)
+		childArray, err := NewArray(storage, address, typeInfo2)
+		childArray.root.SetSlabID(nestedSlabID)
 		require.NoError(t, err)
 
-		err = nested.Append(Uint64Value(0))
+		err = childArray.Append(Uint64Value(0))
 		require.NoError(t, err)
 
 		k := NewStringValue(strings.Repeat(string(r), 22))
-		v := nested
-		keyValues[k] = v
+
+		keyValues[k] = arrayValue{Uint64Value(0)}
 
 		digests := []Digest{Digest(mapSize - 1), Digest((mapSize - 1) * 2)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
@@ -2708,18 +2708,19 @@ func TestMapEncodeDecode(t *testing.T) {
 			r++
 		}
 
-		// Create nested array
+		// Create child array
 		typeInfo2 := testTypeInfo{43}
 
-		nested, err := NewArray(storage, address, typeInfo2)
+		childArray, err := NewArray(storage, address, typeInfo2)
 		require.NoError(t, err)
 
-		err = nested.Append(Uint64Value(0))
+		err = childArray.Append(Uint64Value(0))
 		require.NoError(t, err)
 
 		k := NewStringValue(strings.Repeat(string(r), 22))
-		v := nested
-		keyValues[k] = v
+		v := childArray
+
+		keyValues[k] = arrayValue{Uint64Value(0)}
 
 		digests := []Digest{Digest(mapSize - 1), Digest((mapSize - 1) * 2)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
@@ -5837,21 +5838,27 @@ func TestMapEncodeDecode(t *testing.T) {
 			r++
 		}
 
-		// Create nested array
+		// Create child array
+		const childArraySize = 5
+
 		typeInfo2 := testTypeInfo{43}
 
-		nestedArray, err := NewArray(storage, address, typeInfo2)
+		childArray, err := NewArray(storage, address, typeInfo2)
 		require.NoError(t, err)
 
-		for i := 0; i < 5; i++ {
+		expectedChildValues := make([]Value, childArraySize)
+		for i := 0; i < childArraySize; i++ {
 			v := NewStringValue(strings.Repeat("b", 22))
-			err = nestedArray.Append(v)
+			err = childArray.Append(v)
 			require.NoError(t, err)
+
+			expectedChildValues[i] = v
 		}
 
 		k := NewStringValue(strings.Repeat(string(r), 22))
-		v := nestedArray
-		keyValues[k] = v
+		v := childArray
+
+		keyValues[k] = arrayValue(expectedChildValues)
 
 		digests := []Digest{Digest(mapSize - 1), Digest((mapSize - 1) * 2)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
@@ -6087,15 +6094,20 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create grand child array
+		const gchildArraySize = 5
+
 		gchildTypeInfo := testTypeInfo{44}
 
 		gchildArray, err := NewArray(storage, address, gchildTypeInfo)
 		require.NoError(t, err)
 
-		for i := 0; i < 5; i++ {
+		expectedGChildValues := make([]Value, gchildArraySize)
+		for i := 0; i < gchildArraySize; i++ {
 			v := NewStringValue(strings.Repeat("b", 22))
 			err = gchildArray.Append(v)
 			require.NoError(t, err)
+
+			expectedGChildValues[i] = v
 		}
 
 		// Insert grand child array to child array
@@ -6104,7 +6116,8 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		k := NewStringValue(strings.Repeat(string(r), 22))
 		v := childArray
-		keyValues[k] = v
+
+		keyValues[k] = arrayValue{arrayValue(expectedGChildValues)}
 
 		digests := []Digest{Digest(mapSize - 1), Digest((mapSize - 1) * 2)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
@@ -6307,7 +6320,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		existingValue, err := existingStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, typeInfoComparator, v, existingValue)
+		valueEqual(t, v, existingValue)
 
 		expectedHasPointer := []byte{
 
@@ -7677,11 +7690,11 @@ func TestMapPopIterate(t *testing.T) {
 
 			kv, err := k.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, typeInfoComparator, sortedKeys[i], kv)
+			valueEqual(t, sortedKeys[i], kv)
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, typeInfoComparator, keyValues[sortedKeys[i]], vv)
+			valueEqual(t, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
@@ -7733,11 +7746,11 @@ func TestMapPopIterate(t *testing.T) {
 
 			kv, err := k.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, typeInfoComparator, sortedKeys[i], kv)
+			valueEqual(t, sortedKeys[i], kv)
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, typeInfoComparator, keyValues[sortedKeys[i]], vv)
+			valueEqual(t, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
@@ -7802,11 +7815,11 @@ func TestMapPopIterate(t *testing.T) {
 
 			kv, err := k.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, typeInfoComparator, sortedKeys[i], kv)
+			valueEqual(t, sortedKeys[i], kv)
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, typeInfoComparator, keyValues[sortedKeys[i]], vv)
+			valueEqual(t, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
@@ -8442,23 +8455,23 @@ func TestMapNestedStorables(t *testing.T) {
 		keyValues := make(map[Value]Value)
 		for i := uint64(0); i < mapSize; i++ {
 
-			// Create a nested array with one element
-			array, err := NewArray(storage, address, typeInfo)
+			// Create a child array with one element
+			childArray, err := NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
 			vs := strings.Repeat("b", int(i))
 			v := SomeValue{Value: NewStringValue(vs)}
 
-			err = array.Append(v)
+			err = childArray.Append(v)
 			require.NoError(t, err)
 
 			// Insert nested array into map
 			ks := strings.Repeat("a", int(i))
 			k := SomeValue{Value: NewStringValue(ks)}
 
-			keyValues[k] = array
+			keyValues[k] = arrayValue{v}
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, array)
+			existingStorable, err := m.Set(compare, hashInputProvider, k, childArray)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -8940,7 +8953,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 3
-		m, values := createMapWithCompositeValues(
+		m, values, _ := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -8962,7 +8975,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Create parent map with 3 collision groups, 2 elements in each group.
 		const mapSize = 6
-		m, values := createMapWithCompositeValues(
+		m, values, _ := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -8984,7 +8997,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Create parent map with 3 external collision group, 4 elements in the group.
 		const mapSize = 12
-		m, values := createMapWithCompositeValues(
+		m, values, _ := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9005,7 +9018,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 3
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9023,12 +9036,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload composite element from front to back.
 		for i := 0; i < len(values); i++ {
-			v := values[i][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[i])
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
@@ -9084,7 +9092,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Create parent map with 3 collision groups, 2 elements in each group.
 		const mapSize = 6
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9102,12 +9110,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload composite element from front to back.
 		for i := 0; i < len(values); i++ {
-			v := values[i][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[i])
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
@@ -9120,7 +9123,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Create parent map with 3 external collision groups, 4 elements in the group.
 		const mapSize = 12
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9138,12 +9141,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload composite element from front to back
 		for i := 0; i < len(values); i++ {
-			v := values[i][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[i])
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
@@ -9156,7 +9154,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Create parent map with 3 external collision groups, 4 elements in the group.
 		const mapSize = 12
-		m, values := createMapWithCompositeValues(
+		m, values, _ := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9206,7 +9204,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 3
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9224,12 +9222,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload composite element from back to front.
 		for i := len(values) - 1; i >= 0; i-- {
-			v := values[i][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[i])
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
@@ -9285,7 +9278,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Create parent map with 3 collision groups, 2 elements in each group.
 		const mapSize = 6
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9303,12 +9296,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload composite element from back to front
 		for i := len(values) - 1; i >= 0; i-- {
-			v := values[i][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[i])
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
@@ -9321,7 +9309,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Create parent map with 3 external collision groups, 4 elements in the group.
 		const mapSize = 12
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9339,12 +9327,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload composite element from back to front
 		for i := len(values) - 1; i >= 0; i-- {
-			v := values[i][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[i])
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
@@ -9357,7 +9340,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Create parent map with 3 external collision groups, 4 elements in the group.
 		const mapSize = 12
-		m, values := createMapWithCompositeValues(
+		m, values, _ := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9406,7 +9389,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 3
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9425,12 +9408,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		// Unload value in the middle
 		unloadValueIndex := 1
 
-		v := values[unloadValueIndex][1]
-
-		nestedArray, ok := v.(*Array)
-		require.True(t, ok)
-
-		err := storage.Remove(nestedArray.SlabID())
+		err := storage.Remove(childSlabIDs[unloadValueIndex])
 		require.NoError(t, err)
 
 		copy(values[unloadValueIndex:], values[unloadValueIndex+1:])
@@ -9489,7 +9467,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Create parent map with 3 collision groups, 2 elements in each group.
 		const mapSize = 6
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9507,12 +9485,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload composite element in the middle
 		for _, unloadValueIndex := range []int{1, 3, 5} {
-			v := values[unloadValueIndex][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[unloadValueIndex])
 			require.NoError(t, err)
 		}
 
@@ -9529,7 +9502,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Create parent map with 3 external collision groups, 4 elements in the group.
 		const mapSize = 12
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9547,12 +9520,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload composite value in the middle.
 		for _, unloadValueIndex := range []int{1, 3, 5, 7, 9, 11} {
-			v := values[unloadValueIndex][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[unloadValueIndex])
 			require.NoError(t, err)
 		}
 
@@ -9572,7 +9540,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Create parent map with 3 external collision groups, 4 elements in the group.
 		const mapSize = 12
-		m, values := createMapWithCompositeValues(
+		m, values, _ := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9622,7 +9590,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 3
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9643,18 +9611,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			// At this point, iterator returned first element (v).
 
 			// Remove all other nested composite elements (except first element) from storage.
-			for _, element := range values[1:] {
-				value := element[1]
-				nestedArray, ok := value.(*Array)
-				require.True(t, ok)
-
-				err := storage.Remove(nestedArray.SlabID())
+			for _, slabID := range childSlabIDs[1:] {
+				err := storage.Remove(slabID)
 				require.NoError(t, err)
 			}
 
 			require.Equal(t, 0, i)
-			valueEqual(t, typeInfoComparator, values[0][0], k)
-			valueEqual(t, typeInfoComparator, values[0][1], v)
+			valueEqual(t, values[0][0], k)
+			valueEqual(t, values[0][1], v)
 			i++
 			return true, nil
 		})
@@ -9667,16 +9631,16 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		const mapSize = 3
 
 		// Create a map with nested composite value at specified index
-		for nestedCompositeIndex := 0; nestedCompositeIndex < mapSize; nestedCompositeIndex++ {
+		for childArrayIndex := 0; childArrayIndex < mapSize; childArrayIndex++ {
 			storage := newTestPersistentStorage(t)
 
-			m, values := createMapWithSimpleAndCompositeValues(
+			m, values, childSlabID := createMapWithSimpleAndChildArrayValues(
 				t,
 				storage,
 				address,
 				typeInfo,
 				mapSize,
-				nestedCompositeIndex,
+				childArrayIndex,
 				func(i int) []Digest { return []Digest{Digest(i)} },
 			)
 
@@ -9688,12 +9652,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			verifyMapLoadedElements(t, m, values)
 
 			// Unload composite value
-			v := values[nestedCompositeIndex][1].(*Array)
-
-			err := storage.Remove(v.SlabID())
+			err := storage.Remove(childSlabID)
 			require.NoError(t, err)
 
-			copy(values[nestedCompositeIndex:], values[nestedCompositeIndex+1:])
+			copy(values[childArrayIndex:], values[childArrayIndex+1:])
 			values = values[:len(values)-1]
 
 			verifyMapLoadedElements(t, m, values)
@@ -9724,7 +9686,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 20
-		m, values := createMapWithCompositeValues(
+		m, values, _ := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9745,7 +9707,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 20
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9763,12 +9725,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload composite element from front to back
 		for i := 0; i < len(values); i++ {
-			v := values[i][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[i])
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
@@ -9780,7 +9737,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 20
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9798,12 +9755,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload composite element from back to front
 		for i := len(values) - 1; i >= 0; i-- {
-			v := values[i][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[i])
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
@@ -9815,7 +9767,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 20
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -9833,17 +9785,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Unload composite element in the middle
 		for _, index := range []int{4, 14} {
-
-			v := values[index][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[index])
 			require.NoError(t, err)
 
 			copy(values[index:], values[index+1:])
 			values = values[:len(values)-1]
+
+			copy(childSlabIDs[index:], childSlabIDs[index+1:])
+			childSlabIDs = childSlabIDs[:len(childSlabIDs)-1]
 
 			verifyMapLoadedElements(t, m, values)
 		}
@@ -9853,16 +9802,16 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		const mapSize = 20
 
 		// Create a map with nested composite value at specified index
-		for nestedCompositeIndex := 0; nestedCompositeIndex < mapSize; nestedCompositeIndex++ {
+		for childArrayIndex := 0; childArrayIndex < mapSize; childArrayIndex++ {
 			storage := newTestPersistentStorage(t)
 
-			m, values := createMapWithSimpleAndCompositeValues(
+			m, values, childSlabID := createMapWithSimpleAndChildArrayValues(
 				t,
 				storage,
 				address,
 				typeInfo,
 				mapSize,
-				nestedCompositeIndex,
+				childArrayIndex,
 				func(i int) []Digest { return []Digest{Digest(i)} },
 			)
 
@@ -9873,12 +9822,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			verifyMapLoadedElements(t, m, values)
 
-			v := values[nestedCompositeIndex][1].(*Array)
-
-			err := storage.Remove(v.SlabID())
+			err := storage.Remove(childSlabID)
 			require.NoError(t, err)
 
-			copy(values[nestedCompositeIndex:], values[nestedCompositeIndex+1:])
+			copy(values[childArrayIndex:], values[childArrayIndex+1:])
 			values = values[:len(values)-1]
 
 			verifyMapLoadedElements(t, m, values)
@@ -10101,7 +10048,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 500
-		m, values := createMapWithCompositeValues(
+		m, values, childSlabIDs := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -10124,16 +10071,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			i := r.Intn(len(values))
 
-			v := values[i][1]
-
-			nestedArray, ok := v.(*Array)
-			require.True(t, ok)
-
-			err := storage.Remove(nestedArray.SlabID())
+			err := storage.Remove(childSlabIDs[i])
 			require.NoError(t, err)
 
 			copy(values[i:], values[i+1:])
 			values = values[:len(values)-1]
+
+			copy(childSlabIDs[i:], childSlabIDs[i+1:])
+			childSlabIDs = childSlabIDs[:len(childSlabIDs)-1]
 
 			verifyMapLoadedElements(t, m, values)
 		}
@@ -10144,7 +10089,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 500
-		m, values := createMapWithCompositeValues(
+		m, values, _ := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -10223,7 +10168,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		const mapSize = 500
-		m, values := createMapWithCompositeValues(
+		m, values, _ := createMapWithChildArrayValues(
 			t,
 			storage,
 			address,
@@ -10450,14 +10395,15 @@ func createMapWithSimpleValues(
 	return m, expectedValues
 }
 
-func createMapWithCompositeValues(
+func createMapWithChildArrayValues(
 	t *testing.T,
 	storage SlabStorage,
 	address Address,
 	typeInfo TypeInfo,
 	size int,
 	newDigests func(i int) []Digest,
-) (*OrderedMap, [][2]Value) {
+) (*OrderedMap, [][2]Value, []SlabID) {
+	const childArraySize = 50
 
 	// Use mockDigesterBuilder to guarantee element order.
 	digesterBuilder := &mockDigesterBuilder{}
@@ -10466,35 +10412,42 @@ func createMapWithCompositeValues(
 	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
 
+	slabIDs := make([]SlabID, size)
 	expectedValues := make([][2]Value, size)
 	for i := 0; i < size; i++ {
-		// Create nested array
-		nested, err := NewArray(storage, address, typeInfo)
+		// Create child array
+		childArray, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		for j := 0; j < 50; j++ {
-			err = nested.Append(Uint64Value(j))
+		expectedChildValues := make([]Value, childArraySize)
+		for j := 0; j < childArraySize; j++ {
+			v := Uint64Value(j)
+
+			err = childArray.Append(v)
 			require.NoError(t, err)
+
+			expectedChildValues[j] = v
 		}
 
 		k := Uint64Value(i)
-		v := nested
+		v := childArray
 
-		expectedValues[i] = [2]Value{k, v}
+		expectedValues[i] = [2]Value{k, arrayValue(expectedChildValues)}
+		slabIDs[i] = childArray.SlabID()
 
 		digests := newDigests(i)
 		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-		// Set nested array to parent
+		// Set child array to parent
 		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
 
-	return m, expectedValues
+	return m, expectedValues, slabIDs
 }
 
-func createMapWithSimpleAndCompositeValues(
+func createMapWithSimpleAndChildArrayValues(
 	t *testing.T,
 	storage SlabStorage,
 	address Address,
@@ -10502,7 +10455,8 @@ func createMapWithSimpleAndCompositeValues(
 	size int,
 	compositeValueIndex int,
 	newDigests func(i int) []Digest,
-) (*OrderedMap, [][2]Value) {
+) (*OrderedMap, [][2]Value, SlabID) {
+	const childArraySize = 50
 
 	digesterBuilder := &mockDigesterBuilder{}
 
@@ -10510,6 +10464,7 @@ func createMapWithSimpleAndCompositeValues(
 	m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
 
+	var slabID SlabID
 	values := make([][2]Value, size)
 	r := 'a'
 	for i := 0; i < size; i++ {
@@ -10520,34 +10475,46 @@ func createMapWithSimpleAndCompositeValues(
 		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 		if compositeValueIndex == i {
-			// Create nested array with one element
-			a, err := NewArray(storage, address, typeInfo)
+			// Create child array with one element
+			childArray, err := NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			for j := 0; j < 50; j++ {
-				err = a.Append(Uint64Value(j))
+			expectedChildValues := make([]Value, childArraySize)
+			for j := 0; j < childArraySize; j++ {
+				v := Uint64Value(j)
+				err = childArray.Append(v)
 				require.NoError(t, err)
+
+				expectedChildValues[j] = v
 			}
 
-			values[i] = [2]Value{k, a}
-		} else {
-			values[i] = [2]Value{k, NewStringValue(strings.Repeat(string(r), 18))}
-		}
+			values[i] = [2]Value{k, arrayValue(expectedChildValues)}
 
-		existingStorable, err := m.Set(compare, hashInputProvider, values[i][0], values[i][1])
-		require.NoError(t, err)
-		require.Nil(t, existingStorable)
+			existingStorable, err := m.Set(compare, hashInputProvider, k, childArray)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			slabID = childArray.SlabID()
+
+		} else {
+			v := NewStringValue(strings.Repeat(string(r), 18))
+			values[i] = [2]Value{k, v}
+
+			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
 	}
 
-	return m, values
+	return m, values, slabID
 }
 
 func verifyMapLoadedElements(t *testing.T, m *OrderedMap, expectedValues [][2]Value) {
 	i := 0
 	err := m.IterateLoadedValues(func(k Value, v Value) (bool, error) {
 		require.True(t, i < len(expectedValues))
-		valueEqual(t, typeInfoComparator, expectedValues[i][0], k)
-		valueEqual(t, typeInfoComparator, expectedValues[i][1], v)
+		valueEqual(t, expectedValues[i][0], k)
+		valueEqual(t, expectedValues[i][1], v)
 		i++
 		return true, nil
 	})

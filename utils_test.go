@@ -315,68 +315,61 @@ func (s *InMemBaseStorage) ResetReporter() {
 	s.segmentsTouched = make(map[SlabID]struct{})
 }
 
-func valueEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
-	switch a.(type) {
+func valueEqual(t *testing.T, expected Value, actual Value) {
+	switch expected := expected.(type) {
+	case arrayValue:
+		actual, ok := actual.(*Array)
+		require.True(t, ok)
+
+		arrayEqual(t, expected, actual)
+
 	case *Array:
-		arrayEqual(t, tic, a, b)
+		require.FailNow(t, "expected value shouldn't be *Array")
+
 	case *OrderedMap:
-		mapEqual(t, tic, a, b)
+		mapEqual(t, expected, actual)
+
 	default:
-		require.Equal(t, a, b)
+		require.Equal(t, expected, actual)
 	}
 }
 
-func arrayEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
-	array1, ok := a.(*Array)
-	require.True(t, ok)
+func arrayEqual(t *testing.T, expected arrayValue, actual *Array) {
+	require.Equal(t, uint64(len(expected)), actual.Count())
 
-	array2, ok := b.(*Array)
-	require.True(t, ok)
-
-	require.True(t, tic(array1.Type(), array2.Type()))
-	require.Equal(t, array1.Address(), array2.Address())
-	require.Equal(t, array1.Count(), array2.Count())
-	require.Equal(t, array1.SlabID(), array2.SlabID())
-
-	iterator1, err := array1.Iterator()
+	iterator, err := actual.Iterator()
 	require.NoError(t, err)
 
-	iterator2, err := array2.Iterator()
-	require.NoError(t, err)
-
+	i := 0
 	for {
-		value1, err := iterator1.Next()
+		actualValue, err := iterator.Next()
 		require.NoError(t, err)
 
-		value2, err := iterator2.Next()
-		require.NoError(t, err)
-
-		valueEqual(t, tic, value1, value2)
-
-		if value1 == nil || value2 == nil {
+		if actualValue == nil {
 			break
 		}
+
+		valueEqual(t, expected[i], actualValue)
+		i++
 	}
+	require.Equal(t, len(expected), i)
 }
 
-func mapEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
-	m1, ok := a.(*OrderedMap)
+func mapEqual(t *testing.T, expected Value, actual Value) {
+	m1, ok := expected.(*OrderedMap)
 	require.True(t, ok)
 
-	m2, ok := b.(*OrderedMap)
+	m2, ok := actual.(*OrderedMap)
 	require.True(t, ok)
 
-	require.True(t, tic(m1.Type(), m2.Type()))
 	require.Equal(t, m1.Address(), m2.Address())
 	require.Equal(t, m1.Count(), m2.Count())
 	require.Equal(t, m1.SlabID(), m2.SlabID())
 
-	iterator1, err := m1.Iterator()
-	require.NoError(t, err)
+	if m1.Seed() != m2.Seed() {
 
-	if m1.Type().IsComposite() {
-		// Check element by key for composite type because
-		// composite fields can be rearranged to reuse seed and digests.
+		iterator1, err := m1.Iterator()
+		require.NoError(t, err)
 
 		for {
 			key1, value1, err := iterator1.Next()
@@ -389,21 +382,22 @@ func mapEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
 			iterator2, err := m2.Iterator()
 			require.NoError(t, err)
 
-			var value2 Value
 			for {
-				key, value, err := iterator2.Next()
+				key2, value2, err := iterator2.Next()
 				require.NoError(t, err)
-				require.NotNil(t, key)
+				require.NotNil(t, key2)
 
-				if reflect.DeepEqual(key, key1) {
-					value2 = value
+				if reflect.DeepEqual(key1, key2) {
+					valueEqual(t, value1, value2)
 					break
 				}
 			}
-
-			valueEqual(t, tic, value1, value2)
 		}
+
 	} else {
+
+		iterator1, err := m1.Iterator()
+		require.NoError(t, err)
 
 		iterator2, err := m2.Iterator()
 		require.NoError(t, err)
@@ -415,8 +409,8 @@ func mapEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
 			key2, value2, err := iterator2.Next()
 			require.NoError(t, err)
 
-			valueEqual(t, tic, key1, key2)
-			valueEqual(t, tic, value1, value2)
+			valueEqual(t, key1, key2)
+			valueEqual(t, value1, value2)
 
 			if key1 == nil || key2 == nil {
 				break
@@ -453,4 +447,20 @@ func testNotInlinedSlabIDAndValueID(t *testing.T, expectedAddress Address, slabI
 
 	require.Equal(t, slabID.address[:], valueID[:slabAddressSize])
 	require.Equal(t, slabID.index[:], valueID[slabAddressSize:])
+}
+
+type arrayValue []Value
+
+var _ Value = &arrayValue{}
+
+func (v arrayValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+	panic("not reachable")
+}
+
+type mapValue map[Value]Value
+
+var _ Value = &mapValue{}
+
+func (v mapValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+	panic("not reachable")
 }

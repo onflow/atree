@@ -2922,21 +2922,20 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		r := 'a'
 		for i := uint64(0); i < mapSize; i++ {
-			var k, v Value
 
 			// Create child map
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			k = Uint64Value(i)
-			v = Uint64Value(i * 2)
+			ck := Uint64Value(i)
+			cv := Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = NewStringValue(string(r))
+			k := NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
@@ -2946,7 +2945,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = mapValue{ck: cv}
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -3105,7 +3104,6 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		r := 'a'
 		for i := uint64(0); i < mapSize; i++ {
-			var k, v Value
 
 			var ti TypeInfo
 			if i%2 == 0 {
@@ -3118,15 +3116,15 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), ti)
 			require.NoError(t, err)
 
-			k = Uint64Value(i)
-			v = Uint64Value(i * 2)
+			ck := Uint64Value(i)
+			cv := Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = NewStringValue(string(r))
+			k := NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
@@ -3136,7 +3134,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = mapValue{ck: cv}
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -3294,17 +3292,15 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		r := 'a'
 		for i := uint64(0); i < mapSize; i++ {
-			var k, v Value
-
 			// Create grand child map
 			gchildMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			k = Uint64Value(i)
-			v = Uint64Value(i * 2)
+			gck := Uint64Value(i)
+			gcv := Uint64Value(i * 2)
 
 			// Insert element to grand child map
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := gchildMap.Set(compare, hashInputProvider, gck, gcv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -3312,14 +3308,14 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			k = Uint64Value(i)
+			ck := Uint64Value(i)
 
 			// Insert grand child map to child map
-			existingStorable, err = childMap.Set(compare, hashInputProvider, k, gchildMap)
+			existingStorable, err = childMap.Set(compare, hashInputProvider, ck, gchildMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = NewStringValue(string(r))
+			k := NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
@@ -3329,7 +3325,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = mapValue{ck: mapValue{gck: gcv}}
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -3552,8 +3548,6 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		r := 'a'
 		for i := uint64(0); i < mapSize; i++ {
-			var k, v Value
-
 			var gti TypeInfo
 			if i%2 == 0 {
 				gti = gchildMapTypeInfo2
@@ -3565,11 +3559,11 @@ func TestMapEncodeDecode(t *testing.T) {
 			gchildMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), gti)
 			require.NoError(t, err)
 
-			k = Uint64Value(i)
-			v = Uint64Value(i * 2)
+			gck := Uint64Value(i)
+			gcv := Uint64Value(i * 2)
 
 			// Insert element to grand child map
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := gchildMap.Set(compare, hashInputProvider, gck, gcv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -3584,14 +3578,14 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), cti)
 			require.NoError(t, err)
 
-			k = Uint64Value(i)
+			ck := Uint64Value(i)
 
 			// Insert grand child map to child map
-			existingStorable, err = childMap.Set(compare, hashInputProvider, k, gchildMap)
+			existingStorable, err = childMap.Set(compare, hashInputProvider, ck, gchildMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = NewStringValue(string(r))
+			k := NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
@@ -3601,7 +3595,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = mapValue{ck: mapValue{gck: gcv}}
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -3823,21 +3817,20 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		r := 'a'
 		for i := uint64(0); i < mapSize; i++ {
-			var k, v Value
 
 			// Create child map
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			k = Uint64Value(i)
-			v = Uint64Value(i * 2)
+			ck := Uint64Value(i)
+			cv := Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = NewStringValue(string(r))
+			k := NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
@@ -3847,7 +3840,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = mapValue{ck: cv}
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -4293,7 +4286,6 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		r := 'a'
 		for i := uint64(0); i < mapSize; i++ {
-			var k, v Value
 
 			var ti TypeInfo
 			switch i % 4 {
@@ -4311,15 +4303,15 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), ti)
 			require.NoError(t, err)
 
-			k = Uint64Value(i)
-			v = Uint64Value(i * 2)
+			ck := Uint64Value(i)
+			cv := Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = NewStringValue(string(r))
+			k := NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
@@ -4329,7 +4321,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = mapValue{ck: cv}
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -5444,6 +5436,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo2)
 		require.NoError(t, err)
 
+		expectedChildMapValues := mapValue{}
 		for i := 0; i < 2; i++ {
 			k := Uint64Value(i)
 			v := NewStringValue(strings.Repeat("b", 22))
@@ -5451,11 +5444,13 @@ func TestMapEncodeDecode(t *testing.T) {
 			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedChildMapValues[k] = v
 		}
 
 		k := NewStringValue(strings.Repeat(string(r), 22))
 		v := childMap
-		keyValues[k] = v
+		keyValues[k] = expectedChildMapValues
 
 		digests := []Digest{Digest(mapSize - 1), Digest((mapSize - 1) * 2)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
@@ -5623,6 +5618,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		gchildMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), gchildTypeInfo)
 		require.NoError(t, err)
 
+		expectedGChildMapValues := mapValue{}
 		r := 'a'
 		for i := 0; i < 2; i++ {
 			k := NewStringValue(strings.Repeat(string(r), 22))
@@ -5631,6 +5627,8 @@ func TestMapEncodeDecode(t *testing.T) {
 			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedGChildMapValues[k] = v
 
 			r++
 		}
@@ -5642,7 +5640,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		k := Uint64Value(mapSize - 1)
 		v := childMap
-		keyValues[k] = v
+		keyValues[k] = mapValue{Uint64Value(0): expectedGChildMapValues}
 
 		digests := []Digest{Digest(mapSize - 1), Digest((mapSize - 1) * 2)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
@@ -6402,21 +6400,20 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapSize = 2
 		keyValues := make(map[Value]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
-			var k, v Value
 
 			// Create child map, composite with one field "uuid"
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			k = NewStringValue("uuid")
-			v = Uint64Value(i)
+			ck := NewStringValue("uuid")
+			cv := Uint64Value(i)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = Uint64Value(i)
+			k := Uint64Value(i)
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
 
@@ -6425,7 +6422,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = mapValue{ck: cv}
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -6558,29 +6555,33 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapSize = 2
 		keyValues := make(map[Value]Value, mapSize)
 		for i := uint64(0); i < mapSize; i++ {
-			var k, v Value
+			expectedChildMapVaues := mapValue{}
 
 			// Create child map, composite with one field "uuid"
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			k = NewStringValue("uuid")
-			v = Uint64Value(i)
+			ck := NewStringValue("uuid")
+			cv := Uint64Value(i)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = NewStringValue("amount")
-			v = Uint64Value(i * 2)
+			expectedChildMapVaues[ck] = cv
+
+			ck = NewStringValue("amount")
+			cv = Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err = childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = Uint64Value(i)
+			expectedChildMapVaues[ck] = cv
+
+			k := Uint64Value(i)
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
 
@@ -6589,7 +6590,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = expectedChildMapVaues
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -6729,29 +6730,33 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		// fields are ordered differently because of different seed.
 		for i := uint64(0); i < mapSize; i++ {
-			var k, v Value
+			expectedChildMapValues := mapValue{}
 
 			// Create child map, composite with one field "uuid"
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			k = NewStringValue("uuid")
-			v = Uint64Value(i)
+			ck := NewStringValue("uuid")
+			cv := Uint64Value(i)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = NewStringValue("a")
-			v = Uint64Value(i * 2)
+			expectedChildMapValues[ck] = cv
+
+			ck = NewStringValue("a")
+			cv = Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err = childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = Uint64Value(i)
+			expectedChildMapValues[ck] = cv
+
+			k := Uint64Value(i)
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
 
@@ -6760,7 +6765,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = expectedChildMapValues
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -6902,27 +6907,44 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 
 		for i := uint64(0); i < mapSize; i++ {
+			expectedChildMapValues := mapValue{}
 
 			// Create child map
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
+			ck := NewStringValue("uuid")
+			cv := Uint64Value(i)
+
 			// Insert first element "uuid" to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, NewStringValue("uuid"), Uint64Value(i))
+			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedChildMapValues[ck] = cv
 
 			// Insert second element to child map (second element is different)
 			switch i % 3 {
 			case 0:
-				existingStorable, err = childMap.Set(compare, hashInputProvider, NewStringValue("a"), Uint64Value(i*2))
+				ck = NewStringValue("a")
+				cv = Uint64Value(i * 2)
+				existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
+
 			case 1:
-				existingStorable, err = childMap.Set(compare, hashInputProvider, NewStringValue("b"), Uint64Value(i*2))
+				ck = NewStringValue("b")
+				cv = Uint64Value(i * 2)
+				existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
+
 			case 2:
-				existingStorable, err = childMap.Set(compare, hashInputProvider, NewStringValue("c"), Uint64Value(i*2))
+				ck = NewStringValue("c")
+				cv = Uint64Value(i * 2)
+				existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
 			}
+
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedChildMapValues[ck] = cv
 
 			k := Uint64Value(i)
 
@@ -6933,7 +6955,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = expectedChildMapValues
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -7132,31 +7154,35 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		// fields are ordered differently because of different seed.
 		for i := uint64(0); i < mapSize; i++ {
-			var k, v Value
+			expectedChildMapValues := mapValue{}
 
 			// Create child map, composite with one field "uuid"
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			k = NewStringValue("uuid")
-			v = Uint64Value(i)
+			ck := NewStringValue("uuid")
+			cv := Uint64Value(i)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
+			expectedChildMapValues[ck] = cv
+
 			if i == 0 {
-				k = NewStringValue("a")
-				v = Uint64Value(i * 2)
+				ck = NewStringValue("a")
+				cv = Uint64Value(i * 2)
 
 				// Insert element to child map
-				existingStorable, err = childMap.Set(compare, hashInputProvider, k, v)
+				existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
+
+				expectedChildMapValues[ck] = cv
 			}
 
-			k = Uint64Value(i)
+			k := Uint64Value(i)
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
 
@@ -7165,7 +7191,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = expectedChildMapValues
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -7321,6 +7347,8 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		// fields are ordered differently because of different seed.
 		for i := uint64(0); i < mapSize; i++ {
+			expectedChildMapValues := mapValue{}
+
 			var ti TypeInfo
 			if i%2 == 0 {
 				ti = childMapTypeInfo1
@@ -7328,29 +7356,31 @@ func TestMapEncodeDecode(t *testing.T) {
 				ti = childMapTypeInfo2
 			}
 
-			var k, v Value
-
 			// Create child map, composite with two field "uuid" and "a"
 			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), ti)
 			require.NoError(t, err)
 
-			k = NewStringValue("uuid")
-			v = Uint64Value(i)
+			ck := NewStringValue("uuid")
+			cv := Uint64Value(i)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = NewStringValue("a")
-			v = Uint64Value(i * 2)
+			expectedChildMapValues[ck] = cv
+
+			ck = NewStringValue("a")
+			cv = Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err = childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k = Uint64Value(i)
+			expectedChildMapValues[ck] = cv
+
+			k := Uint64Value(i)
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(i)}})
 
@@ -7359,7 +7389,7 @@ func TestMapEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = childMap
+			keyValues[k] = expectedChildMapValues
 		}
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
@@ -10760,19 +10790,22 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 
 		// Appending 3 elements to child map so that inlined child map reaches max inlined size as map element.
 		for i := 0; i < 3; i++ {
-			for _, child := range children {
+			for childKey, child := range children {
 				childMap := child.m
 				valueID := child.valueID
 
+				expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+				require.True(t, ok)
+
 				k := NewStringValue(randStr(r, keyStringSize))
 				v := NewStringValue(randStr(r, valueStringSize))
-
-				child.keys = append(child.keys, k)
 
 				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 				require.Equal(t, uint64(i+1), childMap.Count())
+
+				expectedChildMapValues[k] = v
 
 				require.True(t, childMap.Inlined())
 				require.Equal(t, SlabIDUndefined, childMap.SlabID()) // Slab ID is undefined for inlined slab
@@ -10796,21 +10829,27 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		}
 
 		// Add one more element to child array which triggers inlined child array slab becomes standalone slab
-		for i, child := range children {
+		i := 0
+		for childKey, child := range children {
 			childMap := child.m
 			valueID := child.valueID
 
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, valueStringSize))
-
-			child.keys = append(child.keys, k)
 
 			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
+			expectedChildMapValues[k] = v
+
 			require.False(t, childMap.Inlined())
 			require.Equal(t, 1+1+i, getStoredDeltas(storage)) // There are >1 stored slab because child map is no longer inlined.
+
+			i++
 
 			expectedSlabID := valueIDToSlabID(valueID)
 			require.Equal(t, expectedSlabID, childMap.SlabID()) // Storage ID is the same bytewise as value ID.
@@ -10830,16 +10869,25 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		}
 
 		// Remove elements from child map which triggers standalone map slab becomes inlined slab again.
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			valueID := child.valueID
-			keys := child.keys
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			keys := make([]Value, 0, len(expectedChildMapValues))
+			for k := range expectedChildMapValues {
+				keys = append(keys, k)
+			}
 
 			for _, k := range keys {
 				existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingKey)
 				require.NotNil(t, existingValue)
+
+				delete(expectedChildMapValues, k)
 
 				require.True(t, childMap.Inlined())
 				require.Equal(t, SlabIDUndefined, childMap.SlabID())
@@ -10898,19 +10946,22 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 
 		// Appending 3 elements to child map so that inlined child map reaches max inlined size as map element.
 		for i := 0; i < 3; i++ {
-			for _, child := range children {
+			for childKey, child := range children {
 				childMap := child.m
 				valueID := child.valueID
 
+				expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+				require.True(t, ok)
+
 				k := NewStringValue(randStr(r, keyStringSize))
 				v := NewStringValue(randStr(r, valueStringSize))
-
-				child.keys = append(child.keys, k)
 
 				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 				require.Equal(t, uint64(i+1), childMap.Count())
+
+				expectedChildMapValues[k] = v
 
 				require.True(t, childMap.Inlined())
 				require.Equal(t, SlabIDUndefined, childMap.SlabID()) // Slab ID is undefined for inlined slab
@@ -10932,21 +10983,27 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		}
 
 		// Add one more element to child array which triggers inlined child array slab becomes standalone slab
-		for i, child := range children {
+		i := 0
+		for childKey, child := range children {
 			childMap := child.m
 			valueID := child.valueID
 
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, valueStringSize))
-
-			child.keys = append(child.keys, k)
 
 			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
+			expectedChildMapValues[k] = v
+
 			require.False(t, childMap.Inlined())
 			require.Equal(t, 1+1+i, getStoredDeltas(storage)) // There are >1 stored slab because child map is no longer inlined.
+
+			i++
 
 			expectedSlabID := valueIDToSlabID(valueID)
 			require.Equal(t, expectedSlabID, childMap.SlabID()) // Storage ID is the same bytewise as value ID.
@@ -10970,20 +11027,30 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		require.Equal(t, 1+mapSize, getStoredDeltas(storage)) // There are >1 stored slab because child map is no longer inlined.
 
 		// Remove one element from each child map which triggers standalone map slab becomes inlined slab again.
-		for i, child := range children {
+		i = 0
+		for childKey, child := range children {
 			childMap := child.m
 			valueID := child.valueID
-			keys := child.keys
 
-			lastKey := keys[len(keys)-1]
-			child.keys = child.keys[:len(keys)-1]
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
 
-			existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, lastKey)
+			var aKey Value
+			for k := range expectedChildMapValues {
+				aKey = k
+				break
+			}
+
+			existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, aKey)
 			require.NoError(t, err)
-			require.Equal(t, lastKey, existingKey)
+			require.Equal(t, aKey, existingKey)
 			require.NotNil(t, existingValue)
 
+			delete(expectedChildMapValues, aKey)
+
 			require.Equal(t, 1+mapSize-1-i, getStoredDeltas(storage))
+
+			i++
 
 			require.True(t, childMap.Inlined())
 			require.Equal(t, SlabIDUndefined, childMap.SlabID())
@@ -11004,16 +11071,25 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		}
 
 		// Remove remaining elements from each inlined child map.
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			valueID := child.valueID
-			keys := child.keys
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			keys := make([]Value, 0, len(expectedChildMapValues))
+			for k := range expectedChildMapValues {
+				keys = append(keys, k)
+			}
 
 			for _, k := range keys {
 				existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingKey)
 				require.NotNil(t, existingValue)
+
+				delete(expectedChildMapValues, k)
 
 				require.Equal(t, 1, getStoredDeltas(storage))
 
@@ -11069,19 +11145,22 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 
 		// Appending 3 elements to child map so that inlined child map reaches max inlined size as map element.
 		for i := 0; i < 3; i++ {
-			for _, child := range children {
+			for childKey, child := range children {
 				childMap := child.m
 				valueID := child.valueID
 
+				expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+				require.True(t, ok)
+
 				k := NewStringValue(randStr(r, keyStringSize))
 				v := NewStringValue(randStr(r, valueStringSize))
-
-				child.keys = append(child.keys, k)
 
 				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 				require.Equal(t, uint64(i+1), childMap.Count())
+
+				expectedChildMapValues[k] = v
 
 				require.True(t, childMap.Inlined())
 				require.Equal(t, SlabIDUndefined, childMap.SlabID()) // Slab ID is undefined for inlined slab
@@ -11103,18 +11182,21 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		require.False(t, parentMap.root.IsData())
 
 		// Add one more element to child array which triggers inlined child array slab becomes standalone slab
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			valueID := child.valueID
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
 
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, valueStringSize))
 
-			child.keys = append(child.keys, k)
-
 			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedChildMapValues[k] = v
 
 			require.False(t, childMap.Inlined())
 
@@ -11136,18 +11218,25 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		require.True(t, parentMap.root.IsData())
 
 		// Remove one element from each child map which triggers standalone map slab becomes inlined slab again.
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			valueID := child.valueID
-			keys := child.keys
 
-			lastKey := keys[len(keys)-1]
-			child.keys = child.keys[:len(keys)-1]
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
 
-			existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, lastKey)
+			var aKey Value
+			for k := range expectedChildMapValues {
+				aKey = k
+				break
+			}
+
+			existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, aKey)
 			require.NoError(t, err)
-			require.Equal(t, lastKey, existingKey)
+			require.Equal(t, aKey, existingKey)
 			require.NotNil(t, existingValue)
+
+			delete(expectedChildMapValues, aKey)
 
 			require.True(t, childMap.Inlined())
 			require.Equal(t, SlabIDUndefined, childMap.SlabID())
@@ -11166,16 +11255,25 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		require.False(t, parentMap.root.IsData())
 
 		// Remove remaining elements from each inlined child map.
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			valueID := child.valueID
-			keys := child.keys
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			keys := make([]Value, 0, len(expectedChildMapValues))
+			for k := range expectedChildMapValues {
+				keys = append(keys, k)
+			}
 
 			for _, k := range keys {
 				existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingKey)
 				require.NotNil(t, existingValue)
+
+				delete(expectedChildMapValues, k)
 
 				require.True(t, childMap.Inlined())
 				require.Equal(t, SlabIDUndefined, childMap.SlabID())
@@ -11247,24 +11345,37 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		expectedParentSize := parentMap.root.ByteSize()
 
 		// Inserting 1 elements to grand child map so that inlined grand child map reaches max inlined size as map element.
-		for _, child := range children {
+		for childKey, child := range children {
 			require.Equal(t, 1, len(child.children))
 
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
+
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			require.True(t, ok)
 
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, valueStringSize))
 
-			gchild.keys = append(gchild.keys, k)
-
 			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedGChildMapValues[k] = v
 
 			// Grand child map is still inlined
 			require.True(t, gchildMap.Inlined())
@@ -11305,24 +11416,37 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		verifyMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
 		// Add one more element to grand child map which triggers inlined child map slab (NOT grand child map slab) becomes standalone slab
-		for _, child := range children {
+		for childKey, child := range children {
 			require.Equal(t, 1, len(child.children))
 
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
+
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			require.True(t, ok)
 
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, valueStringSize))
 
-			gchild.keys = append(gchild.keys, k)
-
 			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedGChildMapValues[k] = v
 
 			// Grand child map is inlined
 			require.True(t, gchildMap.Inlined())
@@ -11364,19 +11488,39 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		verifyMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
 		// Remove elements from grand child map which triggers standalone child map slab becomes inlined slab again.
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
+
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			for _, k := range gchild.keys {
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			require.True(t, ok)
+
+			gchildKeys := make([]Value, 0, len(expectedGChildMapValues))
+			for k := range expectedGChildMapValues {
+				gchildKeys = append(gchildKeys, k)
+			}
+
+			for _, k := range gchildKeys {
 				existingKey, existingValue, err := gchildMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingKey)
 				require.NotNil(t, existingValue)
+
+				delete(expectedGChildMapValues, k)
 
 				// Child map is inlined
 				require.True(t, childMap.Inlined())
@@ -11459,24 +11603,37 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		expectedParentSize := parentMap.root.ByteSize()
 
 		// Inserting 1 elements to grand child map so that inlined grand child map reaches max inlined size as map element.
-		for _, child := range children {
+		for childKey, child := range children {
 			require.Equal(t, 1, len(child.children))
 
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
+
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			require.True(t, ok)
 
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, valueStringSize))
 
-			gchild.keys = append(gchild.keys, k)
-
 			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedGChildMapValues[k] = v
 
 			// Grand child map is still inlined
 			require.True(t, gchildMap.Inlined())
@@ -11516,25 +11673,41 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 
 		verifyMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
+		gchildLargeElementKeys := make(map[Value]Value) // key: child map key, value: gchild map key
 		// Add one large element to grand child map which triggers inlined grand child map slab (NOT child map slab) becomes standalone slab
-		for _, child := range children {
+		for childKey, child := range children {
 			require.Equal(t, 1, len(child.children))
 
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
+
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			require.True(t, ok)
 
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, largeValueStringSize))
 
-			gchild.keys = append(gchild.keys, k)
-
 			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedGChildMapValues[k] = v
+
+			gchildLargeElementKeys[childKey] = k
 
 			// Grand child map is NOT inlined
 			require.False(t, gchildMap.Inlined())
@@ -11576,22 +11749,45 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		verifyMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
 		// Remove elements from grand child map which triggers standalone child map slab becomes inlined slab again.
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
+
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			// Remove the last element (large element) first to trigger grand child map being inlined again.
-			for i := len(gchild.keys) - 1; i >= 0; i-- {
-				k := gchild.keys[i]
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			require.True(t, ok)
+
+			// Get all grand child map keys with large element key first
+			keys := make([]Value, 0, len(expectedGChildMapValues))
+			keys = append(keys, gchildLargeElementKeys[childKey])
+			for k := range expectedGChildMapValues {
+				if k != gchildLargeElementKeys[childKey] {
+					keys = append(keys, k)
+				}
+			}
+
+			// Remove all elements (large element first) to trigger grand child map being inlined again.
+			for _, k := range keys {
 
 				existingKey, existingValue, err := gchildMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingKey)
 				require.NotNil(t, existingValue)
+
+				delete(expectedGChildMapValues, k)
 
 				// Child map is inlined
 				require.True(t, childMap.Inlined())
@@ -11672,22 +11868,35 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		expectedParentSize := parentMap.root.ByteSize()
 
 		// Insert 1 elements to grand child map (both child map and grand child map are still inlined).
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
+
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			require.True(t, ok)
 
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, valueStringSize))
 
-			gchild.keys = append(gchild.keys, k)
-
 			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedGChildMapValues[k] = v
 
 			// Grand child map is still inlined
 			require.True(t, gchildMap.Inlined())
@@ -11730,23 +11939,31 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		expectedParentSize = parentMap.root.ByteSize()
 
 		// Add 1 element to each child map so child map reaches its max size
-		for _, child := range children {
+		for childKey, child := range children {
 
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchild *mapInfo
+			for _, gv := range child.children {
+				gchild = gv
+				break
+			}
+
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
 
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, valueStringSize))
 
-			child.keys = append(child.keys, k)
-
 			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedChildMapValues[k] = v
 
 			// Grand child map is inlined
 			require.True(t, gchildMap.Inlined())
@@ -11787,23 +12004,32 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		verifyMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
 		// Add 1 more element to each child map so child map reaches its max size
-		for i, child := range children {
+		i := 0
+		for childKey, child := range children {
 
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchild *mapInfo
+			for _, gv := range child.children {
+				gchild = gv
+				break
+			}
+
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
 
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, valueStringSize))
 
-			child.keys = append(child.keys, k)
-
 			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedChildMapValues[k] = v
 
 			// Grand child map is inlined
 			require.True(t, gchildMap.Inlined())
@@ -11818,6 +12044,8 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			// Parent map is standalone
 			require.False(t, parentMap.Inlined())
 			require.Equal(t, (1 + i + 1), getStoredDeltas(storage))
+
+			i++
 
 			// Test inlined grand child slab size
 			expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
@@ -11847,22 +12075,38 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		expectedParentMapSize := parentMap.root.ByteSize()
 
 		// Remove one element from child map which triggers standalone child map slab becomes inlined slab again.
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			// Remove one element
-			k := child.keys[len(child.keys)-1]
-			child.keys = child.keys[:len(child.keys)-1]
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
 
-			existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, k)
+			var aKey Value
+			for k := range expectedChildMapValues {
+				if k != gchildKey {
+					aKey = k
+					break
+				}
+			}
+
+			// Remove one element
+			existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, aKey)
 			require.NoError(t, err)
-			require.Equal(t, k, existingKey)
+			require.Equal(t, aKey, existingKey)
 			require.NotNil(t, existingValue)
+
+			delete(expectedChildMapValues, aKey)
 
 			// Child map is inlined
 			require.True(t, childMap.Inlined())
@@ -11901,20 +12145,38 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		verifyMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
 		// remove remaining elements from child map, except for grand child map
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			// Remove all elements, except grand child map (first element in child.keys)
-			for _, k := range child.keys[1:] {
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			keys := make([]Value, 0, len(expectedChildMapValues)-1)
+			for k := range expectedChildMapValues {
+				if k != gchildKey {
+					keys = append(keys, k)
+				}
+			}
+
+			// Remove all elements, except grand child map
+			for _, k := range keys {
 				existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingKey)
 				require.NotNil(t, existingValue)
+
+				delete(expectedChildMapValues, k)
 
 				// Child map is inlined
 				require.True(t, childMap.Inlined())
@@ -11993,22 +12255,34 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 
 		// Insert 1 element to grand child map
 		// Both child map and grand child map are still inlined, but parent map's root slab is metadata slab.
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			require.True(t, ok)
 
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, valueStringSize))
 
-			gchild.keys = append(gchild.keys, k)
-
 			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedGChildMapValues[k] = v
 
 			// Grand child map is still inlined
 			require.True(t, gchildMap.Inlined())
@@ -12046,22 +12320,34 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		// - grand child maps are inlined
 		// - child maps are standalone
 		// - parent map's root slab is data slab.
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
+
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			require.True(t, ok)
 
 			k := NewStringValue(randStr(r, keyStringSize))
 			v := NewStringValue(randStr(r, valueStringSize))
 
-			gchild.keys = append(gchild.keys, k)
-
 			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
+
+			expectedGChildMapValues[k] = v
 
 			// Grand child map is still inlined
 			require.True(t, gchildMap.Inlined())
@@ -12104,22 +12390,39 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		// - grand child maps are inlined
 		// - child maps are inlined
 		// - parent map root slab is metadata slab
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			cValueID := child.valueID
 
-			gchild := child.children[0]
+			var gchildKey Value
+			var gchild *mapInfo
+			for gk, gv := range child.children {
+				gchildKey = gk
+				gchild = gv
+				break
+			}
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			// Remove one element from grand child map
-			k := gchild.keys[len(gchild.keys)-1]
-			gchild.keys = gchild.keys[:len(gchild.keys)-1]
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
 
-			existingKey, existingValue, err := gchildMap.Remove(compare, hashInputProvider, k)
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			require.True(t, ok)
+
+			var aKey Value
+			for k := range expectedGChildMapValues {
+				aKey = k
+				break
+			}
+
+			// Remove one element from grand child map
+			existingKey, existingValue, err := gchildMap.Remove(compare, hashInputProvider, aKey)
 			require.NoError(t, err)
-			require.Equal(t, k, existingKey)
+			require.Equal(t, aKey, existingKey)
 			require.NotNil(t, existingValue)
+
+			delete(expectedGChildMapValues, aKey)
 
 			// Child map is inlined
 			require.True(t, childMap.Inlined())
@@ -12156,16 +12459,26 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		// Remove all grand child element to trigger
 		// - child maps are inlined
 		// - parent map root slab is data slab
-		for _, child := range children {
+		for childKey, child := range children {
 			childMap := child.m
 			cValueID := child.valueID
 
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			require.True(t, ok)
+
+			keys := make([]Value, 0, len(expectedChildMapValues))
+			for k := range expectedChildMapValues {
+				keys = append(keys, k)
+			}
+
 			// Remove grand children
-			for _, k := range child.keys {
+			for _, k := range keys {
 				existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingKey)
 				require.NotNil(t, existingValue)
+
+				delete(expectedChildMapValues, k)
 
 				// Child map is inlined
 				require.True(t, childMap.Inlined())
@@ -12239,7 +12552,7 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedKeyValues[k] = childMap
+		expectedKeyValues[k] = mapValue{}
 
 		require.True(t, childMap.Inlined())
 		testInlinedMapIDs(t, address, childMap)
@@ -12288,16 +12601,24 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 			expectedKeyValues[k] = v
 			keysForNonChildMaps = append(keysForNonChildMaps, k)
 
-			for i, child := range children {
+			i := 0
+			for childKey, child := range children {
 				childMap := child.m
 				childValueID := child.valueID
+
+				expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+				require.True(t, ok)
 
 				k := NewStringValue(randStr(r, keyStringSize))
 				v := Uint64Value(i)
 
+				i++
+
 				existingStorable, err = childMap.Set(compare, hashInputProvider, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
+
+				expectedChildMapValues[k] = v
 
 				require.True(t, childMap.Inlined())
 				require.Equal(t, SlabIDUndefined, childMap.SlabID()) // Slab ID is undefined for inlined slab
@@ -12327,16 +12648,24 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 
 				delete(expectedKeyValues, k)
 
-				for i, child := range children {
+				i := 0
+				for childKey, child := range children {
 					childMap := child.m
 					childValueID := child.valueID
+
+					expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+					require.True(t, ok)
 
 					k := NewStringValue(randStr(r, keyStringSize))
 					v := Uint64Value(i)
 
+					i++
+
 					existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
 					require.NoError(t, err)
 					require.Nil(t, existingStorable)
+
+					expectedChildMapValues[k] = v
 
 					require.True(t, childMap.Inlined())
 					require.Equal(t, SlabIDUndefined, childMap.SlabID()) // Slab ID is undefined for inlined slab
@@ -12387,7 +12716,7 @@ func createMapWithEmptyChildMap(
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedKeyValues[k] = childMap
+		expectedKeyValues[k] = mapValue{}
 
 		require.True(t, childMap.Inlined())
 		testInlinedMapIDs(t, address, childMap)
@@ -12449,7 +12778,7 @@ func createMapWithEmpty2LevelChildMap(
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedKeyValues[k] = childMap
+		expectedKeyValues[k] = mapValue{k: mapValue{}}
 
 		require.True(t, childMap.Inlined())
 		testInlinedMapIDs(t, address, childMap)
@@ -12478,13 +12807,12 @@ func createMapWithEmpty2LevelChildMap(
 type mapInfo struct {
 	m        *OrderedMap
 	valueID  ValueID
-	keys     []Value
-	children []*mapInfo
+	children map[Value]*mapInfo
 }
 
-func getInlinedChildMapsFromParentMap(t *testing.T, address Address, parentMap *OrderedMap) []*mapInfo {
+func getInlinedChildMapsFromParentMap(t *testing.T, address Address, parentMap *OrderedMap) map[Value]*mapInfo {
 
-	children := make([]*mapInfo, 0, parentMap.Count())
+	children := make(map[Value]*mapInfo)
 
 	err := parentMap.IterateKeys(func(k Value) (bool, error) {
 		if k == nil {
@@ -12505,22 +12833,11 @@ func getInlinedChildMapsFromParentMap(t *testing.T, address Address, parentMap *
 			testNotInlinedMapIDs(t, address, childMap)
 		}
 
-		var childKeys []Value
-		err = childMap.IterateKeys(func(key Value) (bool, error) {
-			if key == nil {
-				return false, nil
-			}
-			childKeys = append(childKeys, key)
-			return true, nil
-		})
-		require.NoError(t, err)
-
-		children = append(children, &mapInfo{
+		children[k] = &mapInfo{
 			m:        childMap,
 			valueID:  childMap.ValueID(),
-			keys:     childKeys,
 			children: getInlinedChildMapsFromParentMap(t, address, childMap),
-		})
+		}
 
 		return true, nil
 	})

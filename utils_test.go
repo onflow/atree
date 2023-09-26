@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
-	"reflect"
 	"testing"
 	"time"
 
@@ -326,8 +325,14 @@ func valueEqual(t *testing.T, expected Value, actual Value) {
 	case *Array:
 		require.FailNow(t, "expected value shouldn't be *Array")
 
-	case *OrderedMap:
+	case mapValue:
+		actual, ok := actual.(*OrderedMap)
+		require.True(t, ok)
+
 		mapEqual(t, expected, actual)
+
+	case *OrderedMap:
+		require.FailNow(t, "expected value shouldn't be *OrderedMap")
 
 	default:
 		require.Equal(t, expected, actual)
@@ -355,68 +360,28 @@ func arrayEqual(t *testing.T, expected arrayValue, actual *Array) {
 	require.Equal(t, len(expected), i)
 }
 
-func mapEqual(t *testing.T, expected Value, actual Value) {
-	m1, ok := expected.(*OrderedMap)
-	require.True(t, ok)
+func mapEqual(t *testing.T, expected mapValue, actual *OrderedMap) {
+	require.Equal(t, uint64(len(expected)), actual.Count())
 
-	m2, ok := actual.(*OrderedMap)
-	require.True(t, ok)
+	iterator, err := actual.Iterator()
+	require.NoError(t, err)
 
-	require.Equal(t, m1.Address(), m2.Address())
-	require.Equal(t, m1.Count(), m2.Count())
-	require.Equal(t, m1.SlabID(), m2.SlabID())
-
-	if m1.Seed() != m2.Seed() {
-
-		iterator1, err := m1.Iterator()
+	i := 0
+	for {
+		actualKey, actualValue, err := iterator.Next()
 		require.NoError(t, err)
 
-		for {
-			key1, value1, err := iterator1.Next()
-			require.NoError(t, err)
-
-			if key1 == nil {
-				break
-			}
-
-			iterator2, err := m2.Iterator()
-			require.NoError(t, err)
-
-			for {
-				key2, value2, err := iterator2.Next()
-				require.NoError(t, err)
-				require.NotNil(t, key2)
-
-				if reflect.DeepEqual(key1, key2) {
-					valueEqual(t, value1, value2)
-					break
-				}
-			}
+		if actualKey == nil {
+			break
 		}
 
-	} else {
+		expectedValue, exist := expected[actualKey]
+		require.True(t, exist)
 
-		iterator1, err := m1.Iterator()
-		require.NoError(t, err)
-
-		iterator2, err := m2.Iterator()
-		require.NoError(t, err)
-
-		for {
-			key1, value1, err := iterator1.Next()
-			require.NoError(t, err)
-
-			key2, value2, err := iterator2.Next()
-			require.NoError(t, err)
-
-			valueEqual(t, key1, key2)
-			valueEqual(t, value1, value2)
-
-			if key1 == nil || key2 == nil {
-				break
-			}
-		}
+		valueEqual(t, expectedValue, actualValue)
+		i++
 	}
+	require.Equal(t, len(expected), i)
 }
 
 func valueIDToSlabID(vid ValueID) SlabID {

@@ -1482,73 +1482,75 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 
 		const arraySize = 4096
 
-		nestedTypeInfo := testTypeInfo{43}
-
-		storage := newTestPersistentStorage(t)
-
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-
-		nestedMaps := make([]Value, arraySize)
-		for i := uint64(0); i < arraySize; i++ {
-			nested, err := NewMap(storage, address, NewDefaultDigesterBuilder(), nestedTypeInfo)
-			require.NoError(t, err)
-
-			storable, err := nested.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*2))
-			require.NoError(t, err)
-			require.Nil(t, storable)
-
-			require.True(t, nested.root.IsData())
-
-			nestedMaps[i] = nested
-		}
-
 		typeInfo := testTypeInfo{42}
+		childArayTypeInfo := testTypeInfo{43}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		for _, a := range nestedMaps {
-			err := array.Append(a)
+		expectedValues := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), childArayTypeInfo)
 			require.NoError(t, err)
+
+			k := Uint64Value(i)
+			v := Uint64Value(i * 2)
+			storable, err := childMap.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, storable)
+
+			require.True(t, childMap.root.IsData())
+
+			err = array.Append(childMap)
+			require.NoError(t, err)
+
+			expectedValues[i] = mapValue{k: v}
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, nestedMaps, false)
+		verifyArray(t, storage, typeInfo, address, array, expectedValues, false)
 	})
 
 	t.Run("big map", func(t *testing.T) {
 
 		const arraySize = 4096
 
+		typeInfo := testTypeInfo{42}
 		nestedTypeInfo := testTypeInfo{43}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		values := make([]Value, arraySize)
-		for i := uint64(0); i < arraySize; i++ {
-			nested, err := NewMap(storage, address, NewDefaultDigesterBuilder(), nestedTypeInfo)
-			require.NoError(t, err)
-
-			for i := uint64(0); i < 25; i++ {
-				storable, err := nested.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*2))
-				require.NoError(t, err)
-				require.Nil(t, storable)
-			}
-
-			require.False(t, nested.root.IsData())
-
-			values[i] = nested
-		}
-
-		typeInfo := testTypeInfo{42}
-
 		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
-		for _, a := range values {
-			err := array.Append(a)
+
+		expectedValues := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), nestedTypeInfo)
 			require.NoError(t, err)
+
+			expectedChildMapValues := mapValue{}
+			for i := uint64(0); i < 25; i++ {
+				k := Uint64Value(i)
+				v := Uint64Value(i * 2)
+
+				storable, err := childMap.Set(compare, hashInputProvider, k, v)
+				require.NoError(t, err)
+				require.Nil(t, storable)
+
+				expectedChildMapValues[k] = v
+			}
+
+			require.False(t, childMap.root.IsData())
+
+			err = array.Append(childMap)
+			require.NoError(t, err)
+
+			expectedValues[i] = expectedChildMapValues
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, true)
+		verifyArray(t, storage, typeInfo, address, array, expectedValues, true)
 	})
 }
 

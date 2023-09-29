@@ -3112,12 +3112,13 @@ func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storab
 var emptyArrayIterator = &ArrayIterator{}
 
 type ArrayIterator struct {
-	storage        SlabStorage
-	id             SlabID
-	dataSlab       *ArrayDataSlab
-	index          int
-	remainingCount int
-	readOnly       bool
+	array           *Array
+	id              SlabID
+	dataSlab        *ArrayDataSlab
+	indexInArray    int
+	indexInDataSlab int
+	remainingCount  int
+	readOnly        bool
 }
 
 func (i *ArrayIterator) Next() (Value, error) {
@@ -3130,7 +3131,7 @@ func (i *ArrayIterator) Next() (Value, error) {
 			return nil, nil
 		}
 
-		slab, found, err := i.storage.Retrieve(i.id)
+		slab, found, err := i.array.Storage.Retrieve(i.id)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", i.id))
@@ -3140,22 +3141,29 @@ func (i *ArrayIterator) Next() (Value, error) {
 		}
 
 		i.dataSlab = slab.(*ArrayDataSlab)
-		i.index = 0
+		i.indexInDataSlab = 0
 	}
 
 	var element Value
 	var err error
-	if i.index < len(i.dataSlab.elements) {
-		element, err = i.dataSlab.elements[i.index].StoredValue(i.storage)
+	if i.indexInDataSlab < len(i.dataSlab.elements) {
+		element, err = i.dataSlab.elements[i.indexInDataSlab].StoredValue(i.array.Storage)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
 		}
 
-		i.index++
+		if !i.readOnly {
+			// Set up notification callback in child value so
+			// when child value is modified parent a is notified.
+			i.array.setCallbackWithChild(uint64(i.indexInArray), element, maxInlineArrayElementSize)
+		}
+
+		i.indexInDataSlab++
+		i.indexInArray++
 	}
 
-	if i.index >= len(i.dataSlab.elements) {
+	if i.indexInDataSlab >= len(i.dataSlab.elements) {
 		i.id = i.dataSlab.next
 		i.dataSlab = nil
 	}
@@ -3173,7 +3181,7 @@ func (a *Array) Iterator() (*ArrayIterator, error) {
 	}
 
 	return &ArrayIterator{
-		storage:        a.Storage,
+		array:          a,
 		id:             slab.SlabID(),
 		dataSlab:       slab,
 		remainingCount: int(a.Count()),
@@ -3235,11 +3243,12 @@ func (a *Array) RangeIterator(startIndex uint64, endIndex uint64) (*ArrayIterato
 	}
 
 	return &ArrayIterator{
-		storage:        a.Storage,
-		id:             dataSlab.SlabID(),
-		dataSlab:       dataSlab,
-		index:          int(index),
-		remainingCount: int(numberOfElements),
+		array:           a,
+		id:              dataSlab.SlabID(),
+		dataSlab:        dataSlab,
+		indexInArray:    int(startIndex),
+		indexInDataSlab: int(index),
+		remainingCount:  int(numberOfElements),
 	}, nil
 }
 
@@ -3254,7 +3263,7 @@ func (a *Array) ReadOnlyRangeIterator(startIndex uint64, endIndex uint64) (*Arra
 
 type ArrayIterationFunc func(element Value) (resume bool, err error)
 
-func iterate(iterator *ArrayIterator, fn ArrayIterationFunc) error {
+func iterateArray(iterator *ArrayIterator, fn ArrayIterationFunc) error {
 	for {
 		value, err := iterator.Next()
 		if err != nil {
@@ -3281,7 +3290,7 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 		// Don't need to wrap error as external error because err is already categorized by Array.Iterator().
 		return err
 	}
-	return iterate(iterator, fn)
+	return iterateArray(iterator, fn)
 }
 
 func (a *Array) IterateReadOnly(fn ArrayIterationFunc) error {
@@ -3290,7 +3299,7 @@ func (a *Array) IterateReadOnly(fn ArrayIterationFunc) error {
 		// Don't need to wrap error as external error because err is already categorized by Array.ReadOnlyIterator().
 		return err
 	}
-	return iterate(iterator, fn)
+	return iterateArray(iterator, fn)
 }
 
 func (a *Array) IterateRange(startIndex uint64, endIndex uint64, fn ArrayIterationFunc) error {
@@ -3299,7 +3308,7 @@ func (a *Array) IterateRange(startIndex uint64, endIndex uint64, fn ArrayIterati
 		// Don't need to wrap error as external error because err is already categorized by Array.RangeIterator().
 		return err
 	}
-	return iterate(iterator, fn)
+	return iterateArray(iterator, fn)
 }
 
 func (a *Array) IterateReadOnlyRange(startIndex uint64, endIndex uint64, fn ArrayIterationFunc) error {
@@ -3308,7 +3317,7 @@ func (a *Array) IterateReadOnlyRange(startIndex uint64, endIndex uint64, fn Arra
 		// Don't need to wrap error as external error because err is already categorized by Array.ReadOnlyRangeIterator().
 		return err
 	}
-	return iterate(iterator, fn)
+	return iterateArray(iterator, fn)
 }
 
 func (a *Array) Count() uint64 {

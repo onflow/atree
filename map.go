@@ -5196,7 +5196,7 @@ type MapEntryIterationFunc func(Value, Value) (resume bool, err error)
 type MapElementIterationFunc func(Value) (resume bool, err error)
 
 type MapIterator struct {
-	storage      SlabStorage
+	m            *OrderedMap
 	comparator   ValueComparator // TODO: use comparator and hip to update child element in parent map in register inlining.
 	hip          HashInputProvider
 	id           SlabID
@@ -5223,16 +5223,21 @@ func (i *MapIterator) Next() (key Value, value Value, err error) {
 		return nil, nil, err
 	}
 	if ks != nil {
-		key, err = ks.StoredValue(i.storage)
+		key, err = ks.StoredValue(i.m.Storage)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
 			return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get map key's stored value")
 		}
 
-		value, err = vs.StoredValue(i.storage)
+		value, err = vs.StoredValue(i.m.Storage)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
 			return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get map value's stored value")
+		}
+
+		if i.comparator != nil && i.hip != nil {
+			maxInlineSize := maxInlineMapValueSize(uint64(ks.ByteSize()))
+			i.m.setCallbackWithChild(i.comparator, i.hip, key, value, maxInlineSize)
 		}
 
 		return key, value, nil
@@ -5264,7 +5269,7 @@ func (i *MapIterator) NextKey() (key Value, err error) {
 		return nil, err
 	}
 	if ks != nil {
-		key, err = ks.StoredValue(i.storage)
+		key, err = ks.StoredValue(i.m.Storage)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get map key's stored value")
@@ -5292,17 +5297,28 @@ func (i *MapIterator) NextValue() (value Value, err error) {
 		}
 	}
 
-	var vs Storable
-	_, vs, err = i.elemIterator.next()
+	var ks, vs Storable
+	ks, vs, err = i.elemIterator.next()
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapElementIterator.Next().
 		return nil, err
 	}
 	if vs != nil {
-		value, err = vs.StoredValue(i.storage)
+		value, err = vs.StoredValue(i.m.Storage)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get map value's stored value")
+		}
+
+		if i.comparator != nil && i.hip != nil {
+			key, err := ks.StoredValue(i.m.Storage)
+			if err != nil {
+				// Wrap err as external error (if needed) because err is returned by Storable interface.
+				return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get map value's stored value")
+			}
+
+			maxInlineSize := maxInlineMapValueSize(uint64(ks.ByteSize()))
+			i.m.setCallbackWithChild(i.comparator, i.hip, key, value, maxInlineSize)
 		}
 
 		return value, nil
@@ -5315,7 +5331,7 @@ func (i *MapIterator) NextValue() (value Value, err error) {
 }
 
 func (i *MapIterator) advance() error {
-	slab, found, err := i.storage.Retrieve(i.id)
+	slab, found, err := i.m.Storage.Retrieve(i.id)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
 		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", i.id))
@@ -5332,14 +5348,14 @@ func (i *MapIterator) advance() error {
 	i.id = dataSlab.next
 
 	i.elemIterator = &mapElementIterator{
-		storage:  i.storage,
+		storage:  i.m.Storage,
 		elements: dataSlab.elements,
 	}
 
 	return nil
 }
 
-func (m *OrderedMap) Iterator(comparator ValueComparator, hip HashInputProvider) (*MapIterator, error) {
+func (m *OrderedMap) iterator(comparator ValueComparator, hip HashInputProvider) (*MapIterator, error) {
 	slab, err := firstMapDataSlab(m.Storage, m.root)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by firstMapDataSlab().
@@ -5349,7 +5365,7 @@ func (m *OrderedMap) Iterator(comparator ValueComparator, hip HashInputProvider)
 	dataSlab := slab.(*MapDataSlab)
 
 	return &MapIterator{
-		storage:    m.Storage,
+		m:          m,
 		comparator: comparator,
 		hip:        hip,
 		id:         dataSlab.next,
@@ -5360,21 +5376,22 @@ func (m *OrderedMap) Iterator(comparator ValueComparator, hip HashInputProvider)
 	}, nil
 }
 
+func (m *OrderedMap) Iterator(comparator ValueComparator, hip HashInputProvider) (*MapIterator, error) {
+	if comparator == nil || hip == nil {
+		return nil, NewUserError(fmt.Errorf("failed to create MapIterator: ValueComparator or HashInputProvider is nil"))
+	}
+	return m.iterator(comparator, hip)
+}
+
 // ReadOnlyIterator returns readonly iterator for map elements.
 // If elements of child containers are mutated, those changes
 // are not guaranteed to persist.
 func (m *OrderedMap) ReadOnlyIterator() (*MapIterator, error) {
-	return m.Iterator(nil, nil)
+	return m.iterator(nil, nil)
 }
 
-func (m *OrderedMap) Iterate(comparator ValueComparator, hip HashInputProvider, fn MapEntryIterationFunc) error {
-
-	iterator, err := m.Iterator(comparator, hip)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by OrderedMap.Iterator().
-		return err
-	}
-
+func iterateMap(iterator *MapIterator, fn MapEntryIterationFunc) error {
+	var err error
 	var key, value Value
 	for {
 		key, value, err = iterator.Next()
@@ -5396,8 +5413,22 @@ func (m *OrderedMap) Iterate(comparator ValueComparator, hip HashInputProvider, 
 	}
 }
 
+func (m *OrderedMap) Iterate(comparator ValueComparator, hip HashInputProvider, fn MapEntryIterationFunc) error {
+	iterator, err := m.Iterator(comparator, hip)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by OrderedMap.Iterator().
+		return err
+	}
+	return iterateMap(iterator, fn)
+}
+
 func (m *OrderedMap) IterateReadOnly(fn MapEntryIterationFunc) error {
-	return m.Iterate(nil, nil, fn)
+	iterator, err := m.ReadOnlyIterator()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by OrderedMap.ReadOnlyIterator().
+		return err
+	}
+	return iterateMap(iterator, fn)
 }
 
 func (m *OrderedMap) IterateReadOnlyKeys(fn MapElementIterationFunc) error {
@@ -5429,14 +5460,8 @@ func (m *OrderedMap) IterateReadOnlyKeys(fn MapElementIterationFunc) error {
 	}
 }
 
-func (m *OrderedMap) IterateValues(comparator ValueComparator, hip HashInputProvider, fn MapElementIterationFunc) error {
-
-	iterator, err := m.Iterator(comparator, hip)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by OrderedMap.Iterator().
-		return err
-	}
-
+func iterateMapValues(iterator *MapIterator, fn MapElementIterationFunc) error {
+	var err error
 	var value Value
 	for {
 		value, err = iterator.NextValue()
@@ -5458,8 +5483,22 @@ func (m *OrderedMap) IterateValues(comparator ValueComparator, hip HashInputProv
 	}
 }
 
+func (m *OrderedMap) IterateValues(comparator ValueComparator, hip HashInputProvider, fn MapElementIterationFunc) error {
+	iterator, err := m.Iterator(comparator, hip)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by OrderedMap.Iterator().
+		return err
+	}
+	return iterateMapValues(iterator, fn)
+}
+
 func (m *OrderedMap) IterateReadOnlyValues(fn MapElementIterationFunc) error {
-	return m.IterateValues(nil, nil, fn)
+	iterator, err := m.ReadOnlyIterator()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by OrderedMap.ReadOnlyIterator().
+		return err
+	}
+	return iterateMapValues(iterator, fn)
 }
 
 type MapPopIterationFunc func(Storable, Storable)

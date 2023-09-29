@@ -882,6 +882,67 @@ func TestArrayIterate(t *testing.T) {
 
 		require.Equal(t, count/2, i)
 	})
+
+	t.Run("mutation", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		const arraySize = 15
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		expectedValues := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			childArray, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			v := Uint64Value(i)
+			err = childArray.Append(v)
+			require.NoError(t, err)
+
+			err = array.Append(childArray)
+			require.NoError(t, err)
+
+			expectedValues[i] = arrayValue{v}
+		}
+		require.True(t, array.root.IsData())
+
+		sizeBeforeMutation := array.root.Header().size
+
+		i := 0
+		newElement := Uint64Value(0)
+		err = array.Iterate(func(v Value) (bool, error) {
+			childArray, ok := v.(*Array)
+			require.True(t, ok)
+			require.Equal(t, uint64(1), childArray.Count())
+			require.True(t, childArray.Inlined())
+
+			err := childArray.Append(newElement)
+			require.NoError(t, err)
+
+			expectedChildArrayValues, ok := expectedValues[i].(arrayValue)
+			require.True(t, ok)
+
+			expectedChildArrayValues = append(expectedChildArrayValues, newElement)
+			expectedValues[i] = expectedChildArrayValues
+
+			i++
+
+			require.Equal(t, array.root.Header().size, sizeBeforeMutation+uint32(i)*newElement.ByteSize())
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, arraySize, i)
+		require.True(t, array.root.IsData())
+
+		verifyArray(t, storage, typeInfo, address, array, expectedValues, false)
+	})
 }
 
 func testArrayIterateRange(t *testing.T, array *Array, values []Value) {
@@ -1057,6 +1118,70 @@ func TestArrayIterateRange(t *testing.T) {
 		require.ErrorAs(t, err, &externalError)
 		require.Equal(t, testErr, externalError.Unwrap())
 		require.Equal(t, count/2, i)
+	})
+
+	t.Run("mutation", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		const arraySize = 15
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		expectedValues := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			childArray, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			v := Uint64Value(i)
+			err = childArray.Append(v)
+			require.NoError(t, err)
+
+			err = array.Append(childArray)
+			require.NoError(t, err)
+
+			expectedValues[i] = arrayValue{v}
+		}
+		require.True(t, array.root.IsData())
+
+		sizeBeforeMutation := array.root.Header().size
+
+		i := 0
+		startIndex := uint64(1)
+		endIndex := array.Count() - 2
+		newElement := Uint64Value(0)
+		err = array.IterateRange(startIndex, endIndex, func(v Value) (bool, error) {
+			childArray, ok := v.(*Array)
+			require.True(t, ok)
+			require.Equal(t, uint64(1), childArray.Count())
+			require.True(t, childArray.Inlined())
+
+			err := childArray.Append(newElement)
+			require.NoError(t, err)
+
+			index := int(startIndex) + i
+			expectedChildArrayValues, ok := expectedValues[index].(arrayValue)
+			require.True(t, ok)
+
+			expectedChildArrayValues = append(expectedChildArrayValues, newElement)
+			expectedValues[index] = expectedChildArrayValues
+
+			i++
+
+			require.Equal(t, array.root.Header().size, sizeBeforeMutation+uint32(i)*newElement.ByteSize())
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, endIndex-startIndex, uint64(i))
+		require.True(t, array.root.IsData())
+
+		verifyArray(t, storage, typeInfo, address, array, expectedValues, false)
 	})
 }
 

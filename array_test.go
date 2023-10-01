@@ -6520,3 +6520,481 @@ func getStoredDeltas(storage *PersistentSlabStorage) int {
 	}
 	return count
 }
+
+func TestArraySetReturnedValue(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	t.Run("child array is not inlined", func(t *testing.T) {
+		const arraySize = 2
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		var expectedValues arrayValue
+
+		for i := 0; i < arraySize; i++ {
+			// Create child array
+			childArray, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			err = parentArray.Append(childArray)
+			require.NoError(t, err)
+
+			var expectedChildValues arrayValue
+			for {
+				v := NewStringValue(strings.Repeat("a", 10))
+
+				err = childArray.Append(v)
+				require.NoError(t, err)
+
+				expectedChildValues = append(expectedChildValues, v)
+
+				if !childArray.Inlined() {
+					break
+				}
+			}
+
+			expectedValues = append(expectedValues, expectedChildValues)
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Overwrite existing child array value
+		for i := 0; i < arraySize; i++ {
+			existingStorable, err := parentArray.Set(uint64(i), Uint64Value(0))
+			require.NoError(t, err)
+			require.NotNil(t, existingStorable)
+
+			id, ok := existingStorable.(SlabIDStorable)
+			require.True(t, ok)
+
+			child, err := id.StoredValue(storage)
+			require.NoError(t, err)
+
+			valueEqual(t, expectedValues[i], child)
+
+			err = storage.Remove(SlabID(id))
+			require.NoError(t, err)
+
+			expectedValues[i] = Uint64Value(0)
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+	})
+
+	t.Run("child array is inlined", func(t *testing.T) {
+		const arraySize = 2
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		var expectedValues arrayValue
+
+		for i := 0; i < arraySize; i++ {
+			// Create child array
+			childArray, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			err = parentArray.Append(childArray)
+			require.NoError(t, err)
+
+			// Insert one element to child array
+			v := NewStringValue(strings.Repeat("a", 10))
+
+			err = childArray.Append(v)
+			require.NoError(t, err)
+			require.True(t, childArray.Inlined())
+
+			expectedValues = append(expectedValues, arrayValue{v})
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Overwrite existing child array value
+		for i := 0; i < arraySize; i++ {
+			existingStorable, err := parentArray.Set(uint64(i), Uint64Value(0))
+			require.NoError(t, err)
+			require.NotNil(t, existingStorable)
+
+			id, ok := existingStorable.(SlabIDStorable)
+			require.True(t, ok)
+
+			child, err := id.StoredValue(storage)
+			require.NoError(t, err)
+
+			valueEqual(t, expectedValues[i], child)
+
+			expectedValues[i] = Uint64Value(0)
+
+			err = storage.Remove(SlabID(id))
+			require.NoError(t, err)
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+	})
+
+	t.Run("child map is not inlined", func(t *testing.T) {
+		const arraySize = 2
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		var expectedValues arrayValue
+
+		for i := 0; i < arraySize; i++ {
+			// Create child map
+			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			require.NoError(t, err)
+
+			err = parentArray.Append(childMap)
+			require.NoError(t, err)
+
+			expectedChildValues := make(mapValue)
+			expectedValues = append(expectedValues, expectedChildValues)
+
+			// Insert into child map until child map is not inlined
+			j := 0
+			for {
+				k := Uint64Value(j)
+				v := NewStringValue(strings.Repeat("a", 10))
+				j++
+
+				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+				require.NoError(t, err)
+				require.Nil(t, existingStorable)
+
+				expectedChildValues[k] = v
+
+				if !childMap.Inlined() {
+					break
+				}
+			}
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Overwrite existing child map value
+		for i := 0; i < arraySize; i++ {
+			existingStorable, err := parentArray.Set(uint64(i), Uint64Value(0))
+			require.NoError(t, err)
+			require.NotNil(t, existingStorable)
+
+			id, ok := existingStorable.(SlabIDStorable)
+			require.True(t, ok)
+
+			child, err := id.StoredValue(storage)
+			require.NoError(t, err)
+
+			valueEqual(t, expectedValues[i], child)
+
+			expectedValues[i] = Uint64Value(0)
+
+			err = storage.Remove(SlabID(id))
+			require.NoError(t, err)
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+	})
+
+	t.Run("child map is inlined", func(t *testing.T) {
+		const arraySize = 2
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		var expectedValues arrayValue
+
+		for i := 0; i < arraySize; i++ {
+			// Create child map
+			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			require.NoError(t, err)
+
+			k := Uint64Value(i)
+
+			err = parentArray.Append(childMap)
+			require.NoError(t, err)
+
+			expectedChildValues := make(mapValue)
+			expectedValues = append(expectedValues, expectedChildValues)
+
+			// Insert into child map until child map is not inlined
+			v := NewStringValue(strings.Repeat("a", 10))
+
+			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			expectedChildValues[k] = v
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Overwrite existing child map value
+		for i := 0; i < arraySize; i++ {
+			existingStorable, err := parentArray.Set(uint64(i), Uint64Value(0))
+			require.NoError(t, err)
+			require.NotNil(t, existingStorable)
+
+			id, ok := existingStorable.(SlabIDStorable)
+			require.True(t, ok)
+
+			child, err := id.StoredValue(storage)
+			require.NoError(t, err)
+
+			valueEqual(t, expectedValues[i], child)
+
+			expectedValues[i] = Uint64Value(0)
+
+			err = storage.Remove(SlabID(id))
+			require.NoError(t, err)
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+	})
+}
+
+func TestArrayRemoveReturnedValue(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	t.Run("child array is not inlined", func(t *testing.T) {
+		const arraySize = 2
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		var expectedValues arrayValue
+
+		for i := 0; i < arraySize; i++ {
+			// Create child array
+			childArray, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			err = parentArray.Append(childArray)
+			require.NoError(t, err)
+
+			var expectedChildValues arrayValue
+			for {
+				v := NewStringValue(strings.Repeat("a", 10))
+
+				err = childArray.Append(v)
+				require.NoError(t, err)
+
+				expectedChildValues = append(expectedChildValues, v)
+
+				if !childArray.Inlined() {
+					break
+				}
+			}
+
+			expectedValues = append(expectedValues, expectedChildValues)
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Remove child array value
+		for i := 0; i < arraySize; i++ {
+			valueStorable, err := parentArray.Remove(uint64(0))
+			require.NoError(t, err)
+
+			id, ok := valueStorable.(SlabIDStorable)
+			require.True(t, ok)
+
+			child, err := id.StoredValue(storage)
+			require.NoError(t, err)
+
+			valueEqual(t, expectedValues[i], child)
+
+			err = storage.Remove(SlabID(id))
+			require.NoError(t, err)
+		}
+
+		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
+	})
+
+	t.Run("child array is inlined", func(t *testing.T) {
+		const arraySize = 2
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		var expectedValues arrayValue
+
+		for i := 0; i < arraySize; i++ {
+			// Create child array
+			childArray, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			err = parentArray.Append(childArray)
+			require.NoError(t, err)
+
+			// Insert one element to child array
+			v := NewStringValue(strings.Repeat("a", 10))
+
+			err = childArray.Append(v)
+			require.NoError(t, err)
+			require.True(t, childArray.Inlined())
+
+			expectedValues = append(expectedValues, arrayValue{v})
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Remove child array value
+		for i := 0; i < arraySize; i++ {
+			valueStorable, err := parentArray.Remove(uint64(0))
+			require.NoError(t, err)
+
+			id, ok := valueStorable.(SlabIDStorable)
+			require.True(t, ok)
+
+			child, err := id.StoredValue(storage)
+			require.NoError(t, err)
+
+			valueEqual(t, expectedValues[i], child)
+
+			err = storage.Remove(SlabID(id))
+			require.NoError(t, err)
+		}
+
+		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
+	})
+
+	t.Run("child map is not inlined", func(t *testing.T) {
+		const arraySize = 2
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		var expectedValues arrayValue
+
+		for i := 0; i < arraySize; i++ {
+			// Create child map
+			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			require.NoError(t, err)
+
+			err = parentArray.Append(childMap)
+			require.NoError(t, err)
+
+			expectedChildValues := make(mapValue)
+			expectedValues = append(expectedValues, expectedChildValues)
+
+			// Insert into child map until child map is not inlined
+			j := 0
+			for {
+				k := Uint64Value(j)
+				v := NewStringValue(strings.Repeat("a", 10))
+				j++
+
+				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+				require.NoError(t, err)
+				require.Nil(t, existingStorable)
+
+				expectedChildValues[k] = v
+
+				if !childMap.Inlined() {
+					break
+				}
+			}
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Remove child map value
+		for i := 0; i < arraySize; i++ {
+			valueStorable, err := parentArray.Remove(uint64(0))
+			require.NoError(t, err)
+
+			id, ok := valueStorable.(SlabIDStorable)
+			require.True(t, ok)
+
+			child, err := id.StoredValue(storage)
+			require.NoError(t, err)
+
+			valueEqual(t, expectedValues[i], child)
+
+			err = storage.Remove(SlabID(id))
+			require.NoError(t, err)
+		}
+
+		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
+	})
+
+	t.Run("child map is inlined", func(t *testing.T) {
+		const arraySize = 2
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		var expectedValues arrayValue
+
+		for i := 0; i < arraySize; i++ {
+			// Create child map
+			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			require.NoError(t, err)
+
+			k := Uint64Value(i)
+
+			err = parentArray.Append(childMap)
+			require.NoError(t, err)
+
+			expectedChildValues := make(mapValue)
+			expectedValues = append(expectedValues, expectedChildValues)
+
+			// Insert into child map until child map is not inlined
+			v := NewStringValue(strings.Repeat("a", 10))
+
+			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			expectedChildValues[k] = v
+		}
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Remove child map value
+		for i := 0; i < arraySize; i++ {
+			valueStorable, err := parentArray.Remove(uint64(0))
+			require.NoError(t, err)
+
+			id, ok := valueStorable.(SlabIDStorable)
+			require.True(t, ok)
+
+			child, err := id.StoredValue(storage)
+			require.NoError(t, err)
+
+			valueEqual(t, expectedValues[i], child)
+
+			err = storage.Remove(SlabID(id))
+			require.NoError(t, err)
+		}
+
+		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
+	})
+}

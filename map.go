@@ -3060,6 +3060,52 @@ func (m *MapDataSlab) Inlinable(maxInlineSize uint64) bool {
 	return uint64(inlinedSize) <= maxInlineSize
 }
 
+// inline converts not-inlined MapDataSlab to inlined MapDataSlab and removes it from storage.
+func (m *MapDataSlab) inline(storage SlabStorage) error {
+	if m.inlined {
+		return NewFatalError(fmt.Errorf("failed to inline MapDataSlab %s: it is inlined already", m.header.slabID))
+	}
+
+	id := m.header.slabID
+
+	// Remove slab from storage because it is going to be inlined.
+	err := storage.Remove(id)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", id))
+	}
+
+	// Update data slab size from not inlined to inlined
+	m.header.size = inlinedMapDataSlabPrefixSize + m.elements.Size()
+
+	// Update data slab inlined status.
+	m.inlined = true
+
+	return nil
+}
+
+// uninline converts an inlined MapDataSlab to uninlined MapDataSlab and stores it in storage.
+func (m *MapDataSlab) uninline(storage SlabStorage) error {
+	if !m.inlined {
+		return NewFatalError(fmt.Errorf("failed to uninline MapDataSlab %s: it is not inlined", m.header.slabID))
+	}
+
+	// Update data slab size from inlined to not inlined.
+	m.header.size = mapRootDataSlabPrefixSize + m.elements.Size()
+
+	// Update data slab inlined status.
+	m.inlined = false
+
+	// Store slab in storage
+	err := storage.Store(m.header.slabID, m)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.slabID))
+	}
+
+	return nil
+}
+
 func elementsStorables(elems elements, childStorables []Storable) []Storable {
 
 	switch v := elems.(type) {
@@ -4646,7 +4692,7 @@ func (m *OrderedMap) setCallbackWithChild(
 
 		// Set child value with parent map using same key.
 		// Set() calls c.Storable() which returns inlined or not-inlined child storable.
-		existingValueStorable, err := m.Set(comparator, hip, key, c)
+		existingValueStorable, err := m.set(comparator, hip, key, c)
 		if err != nil {
 			return err
 		}
@@ -4755,6 +4801,34 @@ func (m *OrderedMap) get(comparator ValueComparator, hip HashInputProvider, key 
 }
 
 func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key Value, value Value) (Storable, error) {
+	storable, err := m.set(comparator, hip, key, value)
+	if err != nil {
+		return nil, err
+	}
+
+	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
+	// This is to prevent potential data loss because the overwritten inlined slab was not in
+	// storage and any future changes to it would have been lost.
+	switch s := storable.(type) {
+	case *ArrayDataSlab:
+		err = s.uninline(m.Storage)
+		if err != nil {
+			return nil, err
+		}
+		storable = SlabIDStorable(s.header.slabID)
+
+	case *MapDataSlab:
+		err = s.uninline(m.Storage)
+		if err != nil {
+			return nil, err
+		}
+		storable = SlabIDStorable(s.header.slabID)
+	}
+
+	return storable, nil
+}
+
+func (m *OrderedMap) set(comparator ValueComparator, hip HashInputProvider, key Value, value Value) (Storable, error) {
 
 	keyDigest, err := m.digesterBuilder.Digest(hip, key)
 	if err != nil {
@@ -4790,7 +4864,6 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 				// Don't need to wrap error as external error because err is already categorized by OrderedMap.promoteChildAsNewRoot().
 				return nil, err
 			}
-			return existingValue, nil
 		}
 	}
 
@@ -4831,6 +4904,34 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 }
 
 func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, key Value) (Storable, Storable, error) {
+	keyStorable, valueStorable, err := m.remove(comparator, hip, key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
+	// This is to prevent potential data loss because the overwritten inlined slab was not in
+	// storage and any future changes to it would have been lost.
+	switch s := valueStorable.(type) {
+	case *ArrayDataSlab:
+		err = s.uninline(m.Storage)
+		if err != nil {
+			return nil, nil, err
+		}
+		valueStorable = SlabIDStorable(s.header.slabID)
+
+	case *MapDataSlab:
+		err = s.uninline(m.Storage)
+		if err != nil {
+			return nil, nil, err
+		}
+		valueStorable = SlabIDStorable(s.header.slabID)
+	}
+
+	return keyStorable, valueStorable, nil
+}
+
+func (m *OrderedMap) remove(comparator ValueComparator, hip HashInputProvider, key Value) (Storable, Storable, error) {
 
 	keyDigest, err := m.digesterBuilder.Digest(hip, key)
 	if err != nil {
@@ -4864,7 +4965,6 @@ func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, k
 				// Don't need to wrap error as external error because err is already categorized by OrderedMap.promoteChildAsNewRoot().
 				return nil, nil, err
 			}
-			return k, v, nil
 		}
 	}
 
@@ -5031,20 +5131,10 @@ func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (S
 			return nil, NewFatalError(fmt.Errorf("unexpected inlinable map slab type %T", m.root))
 		}
 
-		rootID := rootDataSlab.header.slabID
-
-		// Remove root slab from storage because it is going to be inlined.
-		err := m.Storage.Remove(rootID)
+		err := rootDataSlab.inline(m.Storage)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", rootID))
+			return nil, err
 		}
-
-		// Update root data slab size from not inlined to inlined
-		rootDataSlab.header.size = inlinedMapDataSlabPrefixSize + rootDataSlab.elements.Size()
-
-		// Update root data slab inlined status.
-		rootDataSlab.inlined = true
 
 		return rootDataSlab, nil
 
@@ -5060,17 +5150,9 @@ func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (S
 			return nil, NewFatalError(fmt.Errorf("unexpected inlined map slab type %T", m.root))
 		}
 
-		// Update root data slab size from inlined to not inlined.
-		rootDataSlab.header.size = mapRootDataSlabPrefixSize + rootDataSlab.elements.Size()
-
-		// Update root data slab inlined status.
-		rootDataSlab.inlined = false
-
-		// Store root slab in storage
-		err := m.Storage.Store(m.SlabID(), m.root)
+		err := rootDataSlab.uninline(m.Storage)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.SlabID()))
+			return nil, err
 		}
 
 		return SlabIDStorable(m.SlabID()), nil

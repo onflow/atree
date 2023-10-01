@@ -4618,8 +4618,8 @@ func (m *OrderedMap) setParentUpdater(f parentUpdater) {
 	m.parentUpdater = f
 }
 
-// setCallbackWithChild sets up callback function with child value so
-// parent map m can be notified when child value is modified.
+// setCallbackWithChild sets up callback function with child value (child)
+// so parent map (m) can be notified when child value is modified.
 func (m *OrderedMap) setCallbackWithChild(
 	comparator ValueComparator,
 	hip HashInputProvider,
@@ -4689,7 +4689,8 @@ func (m *OrderedMap) setCallbackWithChild(
 	})
 }
 
-// notifyParentIfNeeded calls parent updater if this map is a child value.
+// notifyParentIfNeeded calls parent updater if this map (m) is a child
+// element in another container.
 func (m *OrderedMap) notifyParentIfNeeded() error {
 	if m.parentUpdater == nil {
 		return nil
@@ -4724,8 +4725,9 @@ func (m *OrderedMap) Get(comparator ValueComparator, hip HashInputProvider, key 
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
 	}
 
+	// As a parent, this map (m) sets up notification callback with child
+	// value (v) so this map can be notified when child value is modified.
 	maxInlineSize := maxInlineMapValueSize(uint64(keyStorable.ByteSize()))
-
 	m.setCallbackWithChild(comparator, hip, key, v, maxInlineSize)
 
 	return v, nil
@@ -4800,13 +4802,29 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 		}
 	}
 
+	// This map (m) is a parent to the new child (value), and this map
+	// can also be a child in another container.
+	//
+	// As a parent, this map needs to setup notification callback with
+	// the new child value, so it can be notified when child is modified.
+	//
+	// If this map is a child, it needs to notify its parent because its
+	// content (maybe also its size) is changed by this "Set" operation.
+
+	// If this map is a child, it notifies parent by invoking callback because
+	// this map is changed by setting new child.
 	err = m.notifyParentIfNeeded()
 	if err != nil {
 		return nil, err
 	}
 
+	// As a parent, this map sets up notification callback with child value
+	// so this map can be notified when child value is modified.
+	//
+	// Setting up notification with new child value can happen at any time
+	// (either before or after this map notifies its parent) because
+	// setting up notification doesn't trigger any read/write ops on parent or child.
 	maxInlineSize := maxInlineMapValueSize(uint64(keyStorable.ByteSize()))
-
 	m.setCallbackWithChild(comparator, hip, key, value, maxInlineSize)
 
 	return existingValue, nil
@@ -4858,6 +4876,8 @@ func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, k
 		}
 	}
 
+	// If this map is a child, it notifies parent by invoking callback because
+	// this map is changed by removing element.
 	err = m.notifyParentIfNeeded()
 	if err != nil {
 		return nil, nil, err

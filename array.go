@@ -2709,8 +2709,8 @@ func (a *Array) setParentUpdater(f parentUpdater) {
 	a.parentUpdater = f
 }
 
-// setCallbackWithChild sets up callback function with child value so
-// parent array a can be notified when child value is modified.
+// setCallbackWithChild sets up callback function with child value (child)
+// so parent array (a) can be notified when child value is modified.
 func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64) {
 	c, ok := child.(mutableValueNotifier)
 	if !ok {
@@ -2784,7 +2784,7 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 	})
 }
 
-// notifyParentIfNeeded calls parent updater if this array is a child value.
+// notifyParentIfNeeded calls parent updater if this array (a) is a child element in another container.
 func (a *Array) notifyParentIfNeeded() error {
 	if a.parentUpdater == nil {
 		return nil
@@ -2805,8 +2805,8 @@ func (a *Array) Get(i uint64) (Value, error) {
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
 	}
 
-	// Set up notification callback in child value so
-	// when child value is modified parent a is notified.
+	// As a parent, this array (a) sets up notification callback with child
+	// value (v) so this array can be notified when child value is modified.
 	a.setCallbackWithChild(i, v, maxInlineArrayElementSize)
 
 	return v, nil
@@ -2839,13 +2839,28 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 		}
 	}
 
+	// This array (a) is a parent to the new child (value), and this array
+	// can also be a child in another container.
+	//
+	// As a parent, this array needs to setup notification callback with
+	// the new child value, so it can be notified when child is modified.
+	//
+	// If this array is a child, it needs to notify its parent because its
+	// content (maybe also its size) is changed by this "Set" operation.
+
+	// If this array is a child, it notifies parent by invoking callback because
+	// this array is changed by setting new child.
 	err = a.notifyParentIfNeeded()
 	if err != nil {
 		return nil, err
 	}
 
-	// Set up notification callback in child value so
-	// when child value is modified parent a is notified.
+	// As a parent, this array sets up notification callback with child value
+	// so this array can be notified when child value is modified.
+	//
+	// Setting up notification with new child value can happen at any time
+	// (either before or after this array notifies its parent) because
+	// setting up notification doesn't trigger any read/write ops on parent or child.
 	a.setCallbackWithChild(index, value, maxInlineArrayElementSize)
 
 	return existingStorable, nil
@@ -2870,13 +2885,28 @@ func (a *Array) Insert(index uint64, value Value) error {
 
 	a.incrementIndexFrom(index)
 
+	// This array (a) is a parent to the new child (value), and this array
+	// can also be a child in another container.
+	//
+	// As a parent, this array needs to setup notification callback with
+	// the new child value, so it can be notified when child is modified.
+	//
+	// If this array is a child, it needs to notify its parent because its
+	// content (also its size) is changed by this "Insert" operation.
+
+	// If this array is a child, it notifies parent by invoking callback because
+	// this array is changed by inserting new child.
 	err = a.notifyParentIfNeeded()
 	if err != nil {
 		return err
 	}
 
-	// Set up notification callback in child value so
-	// when child value is modified parent a is notified.
+	// As a parent, this array sets up notification callback with child value
+	// so this array can be notified when child value is modified.
+	//
+	// Setting up notification with new child value can happen at any time
+	// (either before or after this array notifies its parent) because
+	// setting up notification doesn't trigger any read/write ops on parent or child.
 	a.setCallbackWithChild(index, value, maxInlineArrayElementSize)
 
 	return nil
@@ -2903,6 +2933,8 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 
 	a.decrementIndexFrom(index)
 
+	// If this array is a child, it notifies parent by invoking callback because
+	// this array is changed by removing element.
 	err = a.notifyParentIfNeeded()
 	if err != nil {
 		return nil, err

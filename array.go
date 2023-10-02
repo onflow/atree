@@ -165,6 +165,8 @@ type ArraySlab interface {
 
 	Inlined() bool
 	Inlinable(maxInlineSize uint64) bool
+	Inline(SlabStorage) error
+	Uninline(SlabStorage) error
 }
 
 // Array is a heterogeneous variable-size array, storing any type of values
@@ -906,8 +908,8 @@ func (a *ArrayDataSlab) Inlinable(maxInlineSize uint64) bool {
 	return uint64(inlinedSize) <= maxInlineSize
 }
 
-// inline converts not-inlined ArrayDataSlab to inlined ArrayDataSlab and removes it from storage.
-func (a *ArrayDataSlab) inline(storage SlabStorage) error {
+// Inline converts not-inlined ArrayDataSlab to inlined ArrayDataSlab and removes it from storage.
+func (a *ArrayDataSlab) Inline(storage SlabStorage) error {
 	if a.inlined {
 		return NewFatalError(fmt.Errorf("failed to inline ArrayDataSlab %s: it is inlined already", a.header.slabID))
 	}
@@ -932,8 +934,8 @@ func (a *ArrayDataSlab) inline(storage SlabStorage) error {
 	return nil
 }
 
-// uninline converts an inlined ArrayDataSlab to uninlined ArrayDataSlab and stores it in storage.
-func (a *ArrayDataSlab) uninline(storage SlabStorage) error {
+// Uninline converts an inlined ArrayDataSlab to uninlined ArrayDataSlab and stores it in storage.
+func (a *ArrayDataSlab) Uninline(storage SlabStorage) error {
 	if !a.inlined {
 		return NewFatalError(fmt.Errorf("failed to un-inline ArrayDataSlab %s: it is not inlined", a.header.slabID))
 	}
@@ -2584,6 +2586,14 @@ func (a *ArrayMetaDataSlab) Inlinable(_ uint64) bool {
 	return false
 }
 
+func (a *ArrayMetaDataSlab) Inline(_ SlabStorage) error {
+	return NewFatalError(fmt.Errorf("failed to inline ArrayMetaDataSlab %s: ArrayMetaDataSlab can't be inlined", a.header.slabID))
+}
+
+func (a *ArrayMetaDataSlab) Uninline(_ SlabStorage) error {
+	return NewFatalError(fmt.Errorf("failed to uninline ArrayMetaDataSlab %s: ArrayMetaDataSlab is already unlined", a.header.slabID))
+}
+
 func (a *ArrayMetaDataSlab) IsData() bool {
 	return false
 }
@@ -2872,19 +2882,19 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
 	switch s := existingStorable.(type) {
-	case *ArrayDataSlab:
-		err = s.uninline(a.Storage)
+	case ArraySlab:
+		err = s.Uninline(a.Storage)
 		if err != nil {
 			return nil, err
 		}
-		existingStorable = SlabIDStorable(s.header.slabID)
+		existingStorable = SlabIDStorable(s.SlabID())
 
-	case *MapDataSlab:
-		err = s.uninline(a.Storage)
+	case MapSlab:
+		err = s.Uninline(a.Storage)
 		if err != nil {
 			return nil, err
 		}
-		existingStorable = SlabIDStorable(s.header.slabID)
+		existingStorable = SlabIDStorable(s.SlabID())
 	}
 
 	return existingStorable, nil
@@ -3002,19 +3012,19 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
 	switch s := storable.(type) {
-	case *ArrayDataSlab:
-		err = s.uninline(a.Storage)
+	case ArraySlab:
+		err = s.Uninline(a.Storage)
 		if err != nil {
 			return nil, err
 		}
-		storable = SlabIDStorable(s.header.slabID)
+		storable = SlabIDStorable(s.SlabID())
 
-	case *MapDataSlab:
-		err = s.uninline(a.Storage)
+	case MapSlab:
+		err = s.Uninline(a.Storage)
 		if err != nil {
 			return nil, err
 		}
-		storable = SlabIDStorable(s.header.slabID)
+		storable = SlabIDStorable(s.SlabID())
 	}
 
 	return storable, nil
@@ -3189,33 +3199,19 @@ func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storab
 		// Root slab is inlinable and was NOT inlined.
 
 		// Inline root data slab.
-
-		// Inlineable root slab must be data slab.
-		rootDataSlab, ok := a.root.(*ArrayDataSlab)
-		if !ok {
-			return nil, NewFatalError(fmt.Errorf("unexpected inlinable array slab type %T", a.root))
-		}
-
-		err := rootDataSlab.inline(a.Storage)
+		err := a.root.Inline(a.Storage)
 		if err != nil {
 			return nil, err
 		}
 
-		return rootDataSlab, nil
+		return a.root, nil
 
 	case !inlinable && inlined:
 
 		// Root slab is NOT inlinable and was previously inlined.
 
-		// Un-inline root slab.
-
-		// Inlined root slab must be data slab.
-		rootDataSlab, ok := a.root.(*ArrayDataSlab)
-		if !ok {
-			return nil, NewFatalError(fmt.Errorf("unexpected inlined array slab type %T", a.root))
-		}
-
-		err := rootDataSlab.uninline(a.Storage)
+		// Uninline root slab.
+		err := a.root.Uninline(a.Storage)
 		if err != nil {
 			return nil, err
 		}

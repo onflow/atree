@@ -363,6 +363,8 @@ type MapSlab interface {
 
 	Inlined() bool
 	Inlinable(maxInlineSize uint64) bool
+	Inline(SlabStorage) error
+	Uninline(SlabStorage) error
 }
 
 // OrderedMap is an ordered map of key-value pairs; keys can be any hashable type
@@ -3061,7 +3063,7 @@ func (m *MapDataSlab) Inlinable(maxInlineSize uint64) bool {
 }
 
 // inline converts not-inlined MapDataSlab to inlined MapDataSlab and removes it from storage.
-func (m *MapDataSlab) inline(storage SlabStorage) error {
+func (m *MapDataSlab) Inline(storage SlabStorage) error {
 	if m.inlined {
 		return NewFatalError(fmt.Errorf("failed to inline MapDataSlab %s: it is inlined already", m.header.slabID))
 	}
@@ -3085,7 +3087,7 @@ func (m *MapDataSlab) inline(storage SlabStorage) error {
 }
 
 // uninline converts an inlined MapDataSlab to uninlined MapDataSlab and stores it in storage.
-func (m *MapDataSlab) uninline(storage SlabStorage) error {
+func (m *MapDataSlab) Uninline(storage SlabStorage) error {
 	if !m.inlined {
 		return NewFatalError(fmt.Errorf("failed to uninline MapDataSlab %s: it is not inlined", m.header.slabID))
 	}
@@ -3779,6 +3781,14 @@ func (m *MapMetaDataSlab) Inlined() bool {
 
 func (m *MapMetaDataSlab) Inlinable(_ uint64) bool {
 	return false
+}
+
+func (m *MapMetaDataSlab) Inline(_ SlabStorage) error {
+	return NewFatalError(fmt.Errorf("failed to inline MapMetaDataSlab %s: MapMetaDataSlab can't be inlined", m.header.slabID))
+}
+
+func (m *MapMetaDataSlab) Uninline(_ SlabStorage) error {
+	return NewFatalError(fmt.Errorf("failed to uninline MapMetaDataSlab %s: MapMetaDataSlab is already unlined", m.header.slabID))
 }
 
 func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
@@ -4810,19 +4820,19 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
 	switch s := storable.(type) {
-	case *ArrayDataSlab:
-		err = s.uninline(m.Storage)
+	case ArraySlab:
+		err = s.Uninline(m.Storage)
 		if err != nil {
 			return nil, err
 		}
-		storable = SlabIDStorable(s.header.slabID)
+		storable = SlabIDStorable(s.SlabID())
 
-	case *MapDataSlab:
-		err = s.uninline(m.Storage)
+	case MapSlab:
+		err = s.Uninline(m.Storage)
 		if err != nil {
 			return nil, err
 		}
-		storable = SlabIDStorable(s.header.slabID)
+		storable = SlabIDStorable(s.SlabID())
 	}
 
 	return storable, nil
@@ -4913,19 +4923,19 @@ func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, k
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
 	switch s := valueStorable.(type) {
-	case *ArrayDataSlab:
-		err = s.uninline(m.Storage)
+	case ArraySlab:
+		err = s.Uninline(m.Storage)
 		if err != nil {
 			return nil, nil, err
 		}
-		valueStorable = SlabIDStorable(s.header.slabID)
+		valueStorable = SlabIDStorable(s.SlabID())
 
-	case *MapDataSlab:
-		err = s.uninline(m.Storage)
+	case MapSlab:
+		err = s.Uninline(m.Storage)
 		if err != nil {
 			return nil, nil, err
 		}
-		valueStorable = SlabIDStorable(s.header.slabID)
+		valueStorable = SlabIDStorable(s.SlabID())
 	}
 
 	return keyStorable, valueStorable, nil
@@ -5124,33 +5134,18 @@ func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (S
 		// Root slab is inlinable and was NOT inlined.
 
 		// Inline root data slab.
-
-		// Inlineable root slab must be data slab.
-		rootDataSlab, ok := m.root.(*MapDataSlab)
-		if !ok {
-			return nil, NewFatalError(fmt.Errorf("unexpected inlinable map slab type %T", m.root))
-		}
-
-		err := rootDataSlab.inline(m.Storage)
+		err := m.root.Inline(m.Storage)
 		if err != nil {
 			return nil, err
 		}
 
-		return rootDataSlab, nil
+		return m.root, nil
 
 	case !inlinable && inlined:
-
 		// Root slab is NOT inlinable and was inlined.
 
-		// Un-inline root slab.
-
-		// Inlined root slab must be data slab.
-		rootDataSlab, ok := m.root.(*MapDataSlab)
-		if !ok {
-			return nil, NewFatalError(fmt.Errorf("unexpected inlined map slab type %T", m.root))
-		}
-
-		err := rootDataSlab.uninline(m.Storage)
+		// Uninline root slab.
+		err := m.root.Uninline(m.Storage)
 		if err != nil {
 			return nil, err
 		}

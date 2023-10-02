@@ -123,9 +123,8 @@ func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		return nil, NewNotValueError(a.SlabID())
 	}
 	return &Array{
-		Storage:             storage,
-		root:                a,
-		mutableElementIndex: make(map[ValueID]uint64),
+		Storage: storage,
+		root:    a,
 	}, nil
 }
 
@@ -152,9 +151,8 @@ func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		return nil, NewNotValueError(a.SlabID())
 	}
 	return &Array{
-		Storage:             storage,
-		root:                a,
-		mutableElementIndex: make(map[ValueID]uint64),
+		Storage: storage,
+		root:    a,
 	}, nil
 }
 
@@ -214,6 +212,8 @@ type Array struct {
 
 	// mutableElementIndex tracks index of mutable element, such as Array and OrderedMap.
 	// This is needed by mutable element to properly update itself through parentUpdater.
+	// WARNING: since mutableElementIndex is created lazily, we need to create mutableElementIndex
+	// if it is nil before adding/updating elements.  Range, delete, and read are no-ops on nil Go map.
 	// TODO: maybe optimize by replacing map to get faster updates.
 	mutableElementIndex map[ValueID]uint64
 }
@@ -2727,9 +2727,8 @@ func NewArray(storage SlabStorage, address Address, typeInfo TypeInfo) (*Array, 
 	}
 
 	return &Array{
-		Storage:             storage,
-		root:                root,
-		mutableElementIndex: make(map[ValueID]uint64),
+		Storage: storage,
+		root:    root,
 	}, nil
 }
 
@@ -2750,9 +2749,8 @@ func NewArrayWithRootID(storage SlabStorage, rootID SlabID) (*Array, error) {
 	}
 
 	return &Array{
-		Storage:             storage,
-		root:                root,
-		mutableElementIndex: make(map[ValueID]uint64),
+		Storage: storage,
+		root:    root,
 	}, nil
 }
 
@@ -2806,6 +2804,11 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 	}
 
 	vid := c.ValueID()
+
+	// mutableElementIndex is lazily initialized.
+	if a.mutableElementIndex == nil {
+		a.mutableElementIndex = make(map[ValueID]uint64)
+	}
 
 	// Index i will be updated with array operations, which affects element index.
 	a.mutableElementIndex[vid] = i
@@ -3802,9 +3805,8 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 	}
 
 	return &Array{
-		Storage:             storage,
-		root:                root,
-		mutableElementIndex: make(map[ValueID]uint64),
+		Storage: storage,
+		root:    root,
 	}, nil
 }
 

@@ -67,6 +67,11 @@ func hasPointer(storable Storable) bool {
 }
 
 const (
+	// WARNING: tag numbers defined in here in github.com/onflow/atree
+	// MUST not overlap with tag numbers used by Cadence internal value encoding.
+	// As of Oct. 2, 2023, Cadence uses tag numbers from 128 to 224.
+	// See runtime/interpreter/encode.go at github.com/onflow/cadence.
+
 	CBORTagInlinedArrayExtraData     = 247
 	CBORTagInlinedMapExtraData       = 248
 	CBORTagInlinedCompositeExtraData = 249

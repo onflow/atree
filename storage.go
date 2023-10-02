@@ -39,6 +39,8 @@ const LedgerBaseStorageSlabPrefix = "$"
 // resource tracking, etc.
 type ValueID [16]byte
 
+var emptyValueID = ValueID{}
+
 func slabIDToValueID(sid SlabID) ValueID {
 	var id ValueID
 	copy(id[:], sid.address[:])

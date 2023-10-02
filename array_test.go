@@ -4726,6 +4726,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Create an array with empty child array as element.
 		parentArray, expectedValues := createArrayWithEmptyChildArray(t, storage, address, typeInfo, arraySize)
 
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 		require.Equal(t, uint64(arraySize), parentArray.Count())
 		require.True(t, parentArray.root.IsData())
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
@@ -4778,6 +4779,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedSize
 			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
+			// Test parent array's mutableElementIndex
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -4801,6 +4805,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		expectedParentSize = arrayRootDataSlabPrefixSize + SlabIDStorable(expectedSlabID).ByteSize()
 		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
+		// Test parent array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove elements from child array which triggers standalone array slab becomes inlined slab again.
@@ -4822,6 +4829,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 
 			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedSize
 			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+			// Test parent array's mutableElementIndex
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
@@ -4846,6 +4856,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent slab size with 2 empty inlined child arrays
 		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*arraySize
 		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		// Test parent array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
@@ -4904,6 +4917,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				expectedParentSize += vSize
 				require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
+				// Test parent array's mutableElementIndex
+				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
@@ -4940,6 +4956,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			expectedParentSize += SlabIDStorable(expectedSlabID).ByteSize()
 			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
+			// Test parent array's mutableElementIndex
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -4973,6 +4992,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			expectedParentSize += expectedInlinedSize
 			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
+			// Test parent array's mutableElementIndex
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -5004,6 +5026,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				expectedParentSize -= vSize
 				require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
+				// Test parent array's mutableElementIndex
+				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
@@ -5031,6 +5056,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent slab size with 4 empty inlined child arrays
 		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*arraySize
 		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		// Test parent array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
@@ -5084,6 +5112,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
 				require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
 
+				// Test parent array's mutableElementIndex
+				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
@@ -5115,6 +5146,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			expectedStandaloneSlabSize := arrayRootDataSlabPrefixSize + uint32(childArray.Count())*vSize
 			require.Equal(t, expectedStandaloneSlabSize, childArray.root.ByteSize())
 
+			// Test parent array's mutableElementIndex
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -5143,6 +5177,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 
 			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
 			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			// Test parent array's mutableElementIndex
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
@@ -5175,6 +5212,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 
 				expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
 				require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+				// Test parent array's mutableElementIndex
+				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
@@ -5214,6 +5254,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent slab size with 1 inlined child array
 		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*2*arraySize
 		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		// Test parent array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
@@ -5288,6 +5331,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedChildSize
 			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -5325,6 +5373,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 		expectedParentSize = arrayRootDataSlabPrefixSize + SlabIDStorable(expectedSlabID).ByteSize()
 		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+		require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
@@ -5366,6 +5419,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedChildSize
 			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -5391,6 +5449,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent slab size with 1 inlined child array
 		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*2*arraySize
 		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		// Test parent array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
@@ -5465,6 +5526,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedChildSize
 			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -5505,6 +5571,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		expectedParentSize = arrayRootDataSlabPrefixSize + expectedStandaloneSlabSize
 		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+		require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove elements from grand child array which triggers standalone child array slab becomes inlined slab again.
@@ -5543,6 +5614,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			// Test parent slab size
 			expectedParentSize := arrayRootDataSlabPrefixSize + expectedInlinedChildSize
 			require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
@@ -5598,6 +5674,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent slab size with 1 inlined child array
 		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*2*arraySize + vSize*arraySize
 		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		// Test parent array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
@@ -5685,6 +5764,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				expectedParentSize += vSize
 				require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
+				// Test array's mutableElementIndex
+				require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+				require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
@@ -5723,6 +5807,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 			expectedStandaloneSlabSize := arrayRootDataSlabPrefixSize + expectedInlinedGrandChildSize + vSize*uint32(childArray.Count()-1)
 			require.Equal(t, expectedStandaloneSlabSize, childArray.root.ByteSize())
+
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
@@ -5771,6 +5860,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 			expectedParentSize += expectedInlinedChildSize
 
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -5818,6 +5912,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				// Test parent slab size
 				expectedParentSize -= vSize
 				require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+				// Test array's mutableElementIndex
+				require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+				require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
@@ -5871,6 +5970,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*2*arraySize
 		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+		// Test parent array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
@@ -5958,6 +6060,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
 				require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
 
+				// Test array's mutableElementIndex
+				require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+				require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
@@ -5999,6 +6106,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 			expectedInlinedChildSlabSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
 			require.Equal(t, expectedInlinedChildSlabSize, childArray.root.ByteSize())
+
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
@@ -6048,6 +6160,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			expectedStandaloneChildSlabSize := arrayRootDataSlabPrefixSize + expectedInlinedGrandChildSize
 			require.Equal(t, expectedStandaloneChildSlabSize, childArray.root.ByteSize())
 
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -6094,6 +6211,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			// Test inlined child slab size
 			expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
 			require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
+
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
@@ -6144,6 +6266,11 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				expectedInlinedChildSize := inlinedArrayDataSlabPrefixSize + expectedInlinedGrandChildSize
 				require.Equal(t, expectedInlinedChildSize, childArray.root.ByteSize())
 
+				// Test array's mutableElementIndex
+				require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+				require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
+				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
@@ -6178,6 +6305,9 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 	// Test parent slab size with empty inlined child arrays
 	expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*arraySize
 	require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
+
+	// Test array's mutableElementIndex
+	require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 	verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
@@ -6247,6 +6377,10 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
 			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
 
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -6288,6 +6422,10 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
 			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
 
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -6323,6 +6461,10 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			// Test inlined child slab size
 			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
 			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
@@ -6365,6 +6507,10 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
 			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
 
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -6406,6 +6552,10 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
 			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
 
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
@@ -6441,6 +6591,10 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			// Test inlined child slab size
 			expectedInlinedSize := inlinedArrayDataSlabPrefixSize + uint32(childArray.Count())*vSize
 			require.Equal(t, expectedInlinedSize, childArray.root.ByteSize())
+
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
@@ -6561,6 +6715,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			expectedValues = append(expectedValues, expectedChildValues)
 		}
 
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Overwrite existing child array value
@@ -6581,6 +6738,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedValues[i] = Uint64Value(0)
+
+			// Test array's mutableElementIndex
+			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 		}
 
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
@@ -6615,6 +6775,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			expectedValues = append(expectedValues, arrayValue{v})
 		}
 
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Overwrite existing child array value
@@ -6636,6 +6799,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
+
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 	})
@@ -6681,6 +6847,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			}
 		}
 
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Overwrite existing child map value
@@ -6702,6 +6871,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
+
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 	})
@@ -6740,6 +6912,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			expectedChildValues[k] = v
 		}
 
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Overwrite existing child map value
@@ -6761,6 +6936,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
+
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 	})
@@ -6806,6 +6984,9 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			expectedValues = append(expectedValues, expectedChildValues)
 		}
 
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove child array value
@@ -6824,6 +7005,9 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
+
+		// Test array's mutableElementIndex
+		require.Equal(t, 0, len(parentArray.mutableElementIndex))
 
 		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
 	})
@@ -6857,6 +7041,9 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			expectedValues = append(expectedValues, arrayValue{v})
 		}
 
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove child array value
@@ -6875,6 +7062,9 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
+
+		// Test array's mutableElementIndex
+		require.Equal(t, 0, len(parentArray.mutableElementIndex))
 
 		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
 	})
@@ -6920,6 +7110,9 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			}
 		}
 
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove child map value
@@ -6938,6 +7131,9 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
+
+		// Test array's mutableElementIndex
+		require.Equal(t, 0, len(parentArray.mutableElementIndex))
 
 		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
 	})
@@ -6976,6 +7172,9 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			expectedChildValues[k] = v
 		}
 
+		// Test array's mutableElementIndex
+		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
+
 		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove child map value
@@ -6994,6 +7193,9 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			err = storage.Remove(SlabID(id))
 			require.NoError(t, err)
 		}
+
+		// Test array's mutableElementIndex
+		require.Equal(t, 0, len(parentArray.mutableElementIndex))
 
 		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
 	})

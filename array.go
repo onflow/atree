@@ -2737,27 +2737,35 @@ func NewArrayWithRootID(storage SlabStorage, rootID SlabID) (*Array, error) {
 }
 
 // TODO: maybe optimize this
-func (a *Array) incrementIndexFrom(index uint64) {
+func (a *Array) incrementIndexFrom(index uint64) error {
 	// Although range loop over Go map is not deterministic, it is OK
 	// to use here because this operation is free of side-effect and
 	// leads to the same results independent of map order.
 	for id, i := range a.mutableElementIndex {
 		if i >= index {
+			if a.mutableElementIndex[id]+1 >= a.Count() {
+				return NewFatalError(fmt.Errorf("failed to increment index of ValueID %s in array %s: new index exceeds array count", id, a.ValueID()))
+			}
 			a.mutableElementIndex[id]++
 		}
 	}
+	return nil
 }
 
 // TODO: maybe optimize this
-func (a *Array) decrementIndexFrom(index uint64) {
+func (a *Array) decrementIndexFrom(index uint64) error {
 	// Although range loop over Go map is not deterministic, it is OK
 	// to use here because this operation is free of side-effect and
 	// leads to the same results independent of map order.
 	for id, i := range a.mutableElementIndex {
 		if i > index {
+			if a.mutableElementIndex[id] <= 0 {
+				return NewFatalError(fmt.Errorf("failed to decrement index of ValueID %s in array %s: new index < 0", id, a.ValueID()))
+			}
 			a.mutableElementIndex[id]--
 		}
 	}
+	return nil
 }
 
 func (a *Array) getIndexByValueID(id ValueID) (uint64, bool) {
@@ -2878,6 +2886,8 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 		return nil, err
 	}
 
+	var existingValueID ValueID
+
 	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
@@ -2888,6 +2898,7 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 			return nil, err
 		}
 		existingStorable = SlabIDStorable(s.SlabID())
+		existingValueID = slabIDToValueID(s.SlabID())
 
 	case MapSlab:
 		err = s.Uninline(a.Storage)
@@ -2895,6 +2906,20 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 			return nil, err
 		}
 		existingStorable = SlabIDStorable(s.SlabID())
+		existingValueID = slabIDToValueID(s.SlabID())
+
+	case SlabIDStorable:
+		existingValueID = slabIDToValueID(SlabID(s))
+	}
+
+	// Remove overwritten array/map's ValueID from mutableElementIndex if:
+	// - new value isn't array/map, or
+	// - new value is array/map with different value ID
+	if existingValueID != emptyValueID {
+		newValue, ok := value.(mutableValueNotifier)
+		if !ok || existingValueID != newValue.ValueID() {
+			delete(a.mutableElementIndex, existingValueID)
+		}
 	}
 
 	return existingStorable, nil
@@ -2973,7 +2998,10 @@ func (a *Array) Insert(index uint64, value Value) error {
 		}
 	}
 
-	a.incrementIndexFrom(index)
+	err = a.incrementIndexFrom(index)
+	if err != nil {
+		return err
+	}
 
 	// This array (a) is a parent to the new child (value), and this array
 	// can also be a child in another container.
@@ -3019,12 +3047,25 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 		}
 		storable = SlabIDStorable(s.SlabID())
 
+		// Delete removed element ValueID from mutableElementIndex
+		removedValueID := slabIDToValueID(s.SlabID())
+		delete(a.mutableElementIndex, removedValueID)
+
 	case MapSlab:
 		err = s.Uninline(a.Storage)
 		if err != nil {
 			return nil, err
 		}
 		storable = SlabIDStorable(s.SlabID())
+
+		// Delete removed element ValueID from mutableElementIndex
+		removedValueID := slabIDToValueID(s.SlabID())
+		delete(a.mutableElementIndex, removedValueID)
+
+	case SlabIDStorable:
+		// Delete removed element ValueID from mutableElementIndex
+		removedValueID := slabIDToValueID(SlabID(s))
+		delete(a.mutableElementIndex, removedValueID)
 	}
 
 	return storable, nil
@@ -3049,7 +3090,10 @@ func (a *Array) remove(index uint64) (Storable, error) {
 		}
 	}
 
-	a.decrementIndexFrom(index)
+	err = a.decrementIndexFrom(index)
+	if err != nil {
+		return nil, err
+	}
 
 	// If this array is a child, it notifies parent by invoking callback because
 	// this array is changed by removing element.

@@ -13373,3 +13373,125 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 		verifyMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 	})
 }
+
+func TestMapWithOutdatedCallback(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	t.Run("overwritten child array", func(t *testing.T) {
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map
+		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		expectedKeyValues := make(mapValue)
+
+		// Create child array
+		childArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		k := Uint64Value(0)
+
+		// Insert child array to parent map
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childArray)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+
+		v := NewStringValue(strings.Repeat("a", 10))
+
+		err = childArray.Append(v)
+		require.NoError(t, err)
+
+		expectedKeyValues[k] = arrayValue{v}
+
+		verifyMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
+
+		// Overwrite child array value from parent
+		valueStorable, err := parentMap.Set(compare, hashInputProvider, k, Uint64Value(0))
+		require.NoError(t, err)
+
+		id, ok := valueStorable.(SlabIDStorable)
+		require.True(t, ok)
+
+		child, err := id.StoredValue(storage)
+		require.NoError(t, err)
+
+		valueEqual(t, expectedKeyValues[k], child)
+
+		expectedKeyValues[k] = Uint64Value(0)
+
+		// childArray.parentUpdater isn't nil before callback is invoked.
+		require.NotNil(t, childArray.parentUpdater)
+
+		// modify overwritten child array
+		err = childArray.Append(Uint64Value(0))
+		require.NoError(t, err)
+
+		// childArray.parentUpdater is nil after callback is invoked.
+		require.Nil(t, childArray.parentUpdater)
+
+		// No-op on parent
+		valueEqual(t, expectedKeyValues, parentMap)
+	})
+
+	t.Run("removed child array", func(t *testing.T) {
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent map
+		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		expectedKeyValues := make(mapValue)
+
+		// Create child array
+		childArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		k := Uint64Value(0)
+
+		// Insert child array to parent map
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childArray)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+
+		v := NewStringValue(strings.Repeat("a", 10))
+
+		err = childArray.Append(v)
+		require.NoError(t, err)
+
+		expectedKeyValues[k] = arrayValue{v}
+
+		verifyMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
+
+		// Remove child array value from parent
+		keyStorable, valueStorable, err := parentMap.Remove(compare, hashInputProvider, k)
+		require.NoError(t, err)
+		require.Equal(t, keyStorable, k)
+
+		id, ok := valueStorable.(SlabIDStorable)
+		require.True(t, ok)
+
+		child, err := id.StoredValue(storage)
+		require.NoError(t, err)
+
+		valueEqual(t, expectedKeyValues[k], child)
+
+		delete(expectedKeyValues, k)
+
+		// childArray.parentUpdater isn't nil before callback is invoked.
+		require.NotNil(t, childArray.parentUpdater)
+
+		// modify removed child array
+		err = childArray.Append(Uint64Value(0))
+		require.NoError(t, err)
+
+		// childArray.parentUpdater is nil after callback is invoked.
+		require.Nil(t, childArray.parentUpdater)
+
+		// No-op on parent
+		valueEqual(t, expectedKeyValues, parentMap)
+	})
+}

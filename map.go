@@ -4690,21 +4690,51 @@ func (m *OrderedMap) setCallbackWithChild(
 
 	vid := c.ValueID()
 
-	c.setParentUpdater(func() error {
+	c.setParentUpdater(func() (found bool, err error) {
 
 		// Avoid unnecessary write operation on parent container.
 		// Child value was stored as SlabIDStorable (not inlined) in parent container,
 		// and continues to be stored as SlabIDStorable (still not inlinable),
 		// so no update to parent container is needed.
 		if !c.Inlined() && !c.Inlinable(maxInlineSize) {
-			return nil
+			return true, nil
+		}
+
+		// Retrieve element value under the same key and
+		// verify retrieved value is this child (c).
+		_, valueStorable, err := m.get(comparator, hip, key)
+		if err != nil {
+			var knf *KeyNotFoundError
+			if errors.As(err, &knf) {
+				return false, nil
+			}
+			// Don't need to wrap error as external error because err is already categorized by OrderedMap.Get().
+			return false, err
+		}
+
+		// Verify retrieved element value is either SlabIDStorable or Slab, with identical value ID.
+		switch x := valueStorable.(type) {
+		case SlabIDStorable:
+			sid := SlabID(x)
+			if !vid.equal(sid) {
+				return false, nil
+			}
+
+		case Slab:
+			sid := x.SlabID()
+			if !vid.equal(sid) {
+				return false, nil
+			}
+
+		default:
+			return false, nil
 		}
 
 		// Set child value with parent map using same key.
 		// Set() calls c.Storable() which returns inlined or not-inlined child storable.
 		existingValueStorable, err := m.set(comparator, hip, key, c)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		// Verify overwritten storable has identical value ID.
@@ -4713,7 +4743,7 @@ func (m *OrderedMap) setCallbackWithChild(
 		case SlabIDStorable:
 			sid := SlabID(x)
 			if !vid.equal(sid) {
-				return NewFatalError(
+				return false, NewFatalError(
 					fmt.Errorf(
 						"failed to reset child value in parent updater callback: overwritten SlabIDStorable %s != value ID %s",
 						sid,
@@ -4723,7 +4753,7 @@ func (m *OrderedMap) setCallbackWithChild(
 		case Slab:
 			sid := x.SlabID()
 			if !vid.equal(sid) {
-				return NewFatalError(
+				return false, NewFatalError(
 					fmt.Errorf(
 						"failed to reset child value in parent updater callback: overwritten Slab ID %s != value ID %s",
 						sid,
@@ -4731,17 +4761,18 @@ func (m *OrderedMap) setCallbackWithChild(
 			}
 
 		case nil:
-			return NewFatalError(
+			return false, NewFatalError(
 				fmt.Errorf(
 					"failed to reset child value in parent updater callback: overwritten value is nil"))
 
 		default:
-			return NewFatalError(
+			return false, NewFatalError(
 				fmt.Errorf(
 					"failed to reset child value in parent updater callback: overwritten value is wrong type %T",
 					existingValueStorable))
 		}
-		return nil
+
+		return true, nil
 	})
 }
 
@@ -4751,7 +4782,18 @@ func (m *OrderedMap) notifyParentIfNeeded() error {
 	if m.parentUpdater == nil {
 		return nil
 	}
-	return m.parentUpdater()
+
+	// If parentUpdater() doesn't find child map (m), then no-op on parent container
+	// and unset parentUpdater callback in child map.  This can happen when child
+	// map is an outdated reference (removed or overwritten in parent container).
+	found, err := m.parentUpdater()
+	if err != nil {
+		return err
+	}
+	if !found {
+		m.parentUpdater = nil
+	}
+	return nil
 }
 
 func (m *OrderedMap) Has(comparator ValueComparator, hip HashInputProvider, key Value) (bool, error) {

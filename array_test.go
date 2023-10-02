@@ -7200,3 +7200,118 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
 	})
 }
+
+func TestArrayWithOutdatedCallback(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	t.Run("overwritten child array", func(t *testing.T) {
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		var expectedValues arrayValue
+
+		// Create child array
+		childArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		// Insert child array to parent array
+		err = parentArray.Append(childArray)
+		require.NoError(t, err)
+
+		v := NewStringValue(strings.Repeat("a", 10))
+
+		err = childArray.Append(v)
+		require.NoError(t, err)
+
+		expectedValues = append(expectedValues, arrayValue{v})
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Overwrite child array value from parent
+		valueStorable, err := parentArray.Set(0, Uint64Value(0))
+		require.NoError(t, err)
+
+		id, ok := valueStorable.(SlabIDStorable)
+		require.True(t, ok)
+
+		child, err := id.StoredValue(storage)
+		require.NoError(t, err)
+
+		valueEqual(t, expectedValues[0], child)
+
+		expectedValues[0] = Uint64Value(0)
+
+		// childArray.parentUpdater isn't nil before callback is invoked.
+		require.NotNil(t, childArray.parentUpdater)
+
+		// modify overwritten child array
+		err = childArray.Append(Uint64Value(0))
+		require.NoError(t, err)
+
+		// childArray.parentUpdater is nil after callback is invoked.
+		require.Nil(t, childArray.parentUpdater)
+
+		// No-op on parent
+		valueEqual(t, expectedValues, parentArray)
+	})
+
+	t.Run("removed child array", func(t *testing.T) {
+
+		storage := newTestPersistentStorage(t)
+
+		// Create parent array
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		var expectedValues arrayValue
+
+		// Create child array
+		childArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		// Insert child array to parent array
+		err = parentArray.Append(childArray)
+		require.NoError(t, err)
+
+		v := NewStringValue(strings.Repeat("a", 10))
+
+		err = childArray.Append(v)
+		require.NoError(t, err)
+
+		expectedValues = append(expectedValues, arrayValue{v})
+
+		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+
+		// Remove child array value from parent
+		valueStorable, err := parentArray.Remove(0)
+		require.NoError(t, err)
+
+		id, ok := valueStorable.(SlabIDStorable)
+		require.True(t, ok)
+
+		child, err := id.StoredValue(storage)
+		require.NoError(t, err)
+
+		valueEqual(t, expectedValues[0], child)
+
+		expectedValues = arrayValue{}
+
+		// childArray.parentUpdater isn't nil before callback is invoked.
+		require.NotNil(t, childArray.parentUpdater)
+
+		// modify removed child array
+		err = childArray.Append(Uint64Value(0))
+		require.NoError(t, err)
+
+		// childArray.parentUpdater is nil after callback is invoked.
+		require.Nil(t, childArray.parentUpdater)
+
+		// No-op on parent
+		valueEqual(t, expectedValues, parentArray)
+	})
+}

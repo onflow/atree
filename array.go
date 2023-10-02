@@ -2790,27 +2790,51 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 	// Index i will be updated with array operations, which affects element index.
 	a.mutableElementIndex[vid] = i
 
-	c.setParentUpdater(func() error {
+	c.setParentUpdater(func() (found bool, err error) {
 
 		// Avoid unnecessary write operation on parent container.
 		// Child value was stored as SlabIDStorable (not inlined) in parent container,
 		// and continues to be stored as SlabIDStorable (still not inlinable),
 		// so no update to parent container is needed.
 		if !c.Inlined() && !c.Inlinable(maxInlineSize) {
-			return nil
+			return true, nil
 		}
 
-		// Get latest index by child value ID.
-		index, exist := a.getIndexByValueID(vid)
+		// Get latest adjusted index by child value ID.
+		adjustedIndex, exist := a.getIndexByValueID(vid)
 		if !exist {
-			return NewFatalError(fmt.Errorf("failed to get index for child element with value id %s", vid))
+			return false, nil
+		}
+
+		storable, err := a.root.Get(a.Storage, adjustedIndex)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by ArraySlab.Get().
+			return false, err
+		}
+
+		// Verify retrieved element is either SlabIDStorable or Slab, with identical value ID.
+		switch x := storable.(type) {
+		case SlabIDStorable:
+			sid := SlabID(x)
+			if !vid.equal(sid) {
+				return false, nil
+			}
+
+		case Slab:
+			sid := x.SlabID()
+			if !vid.equal(sid) {
+				return false, nil
+			}
+
+		default:
+			return false, nil
 		}
 
 		// Set child value with parent array using updated index.
 		// Set() calls c.Storable() which returns inlined or not-inlined child storable.
-		existingValueStorable, err := a.set(index, c)
+		existingValueStorable, err := a.set(adjustedIndex, c)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		// Verify overwritten storable has identical value ID.
@@ -2819,7 +2843,7 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 		case SlabIDStorable:
 			sid := SlabID(x)
 			if !vid.equal(sid) {
-				return NewFatalError(
+				return false, NewFatalError(
 					fmt.Errorf(
 						"failed to reset child value in parent updater callback: overwritten SlabIDStorable %s != value ID %s",
 						sid,
@@ -2829,7 +2853,7 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 		case Slab:
 			sid := x.SlabID()
 			if !vid.equal(sid) {
-				return NewFatalError(
+				return false, NewFatalError(
 					fmt.Errorf(
 						"failed to reset child value in parent updater callback: overwritten Slab ID %s != value ID %s",
 						sid,
@@ -2837,18 +2861,18 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 			}
 
 		case nil:
-			return NewFatalError(
+			return false, NewFatalError(
 				fmt.Errorf(
 					"failed to reset child value in parent updater callback: overwritten value is nil"))
 
 		default:
-			return NewFatalError(
+			return false, NewFatalError(
 				fmt.Errorf(
 					"failed to reset child value in parent updater callback: overwritten value is wrong type %T",
 					existingValueStorable))
 		}
 
-		return nil
+		return true, nil
 	})
 }
 
@@ -2857,7 +2881,18 @@ func (a *Array) notifyParentIfNeeded() error {
 	if a.parentUpdater == nil {
 		return nil
 	}
-	return a.parentUpdater()
+
+	// If parentUpdater() doesn't find child array (a), then no-op on parent container
+	// and unset parentUpdater callback in child array.  This can happen when child
+	// array is an outdated reference (removed or overwritten in parent container).
+	found, err := a.parentUpdater()
+	if err != nil {
+		return err
+	}
+	if !found {
+		a.parentUpdater = nil
+	}
+	return nil
 }
 
 func (a *Array) Get(i uint64) (Value, error) {

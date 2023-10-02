@@ -2838,15 +2838,15 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 		}
 
 		// Verify retrieved element is either SlabIDStorable or Slab, with identical value ID.
-		switch x := storable.(type) {
+		switch storable := storable.(type) {
 		case SlabIDStorable:
-			sid := SlabID(x)
+			sid := SlabID(storable)
 			if !vid.equal(sid) {
 				return false, nil
 			}
 
 		case Slab:
-			sid := x.SlabID()
+			sid := storable.SlabID()
 			if !vid.equal(sid) {
 				return false, nil
 			}
@@ -2864,9 +2864,9 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 
 		// Verify overwritten storable has identical value ID.
 
-		switch x := existingValueStorable.(type) {
+		switch existingValueStorable := existingValueStorable.(type) {
 		case SlabIDStorable:
-			sid := SlabID(x)
+			sid := SlabID(existingValueStorable)
 			if !vid.equal(sid) {
 				return false, NewFatalError(
 					fmt.Errorf(
@@ -2876,7 +2876,7 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 			}
 
 		case Slab:
-			sid := x.SlabID()
+			sid := existingValueStorable.SlabID()
 			if !vid.equal(sid) {
 				return false, NewFatalError(
 					fmt.Errorf(

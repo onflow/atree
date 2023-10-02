@@ -4717,15 +4717,15 @@ func (m *OrderedMap) setCallbackWithChild(
 		}
 
 		// Verify retrieved element value is either SlabIDStorable or Slab, with identical value ID.
-		switch x := valueStorable.(type) {
+		switch valueStorable := valueStorable.(type) {
 		case SlabIDStorable:
-			sid := SlabID(x)
+			sid := SlabID(valueStorable)
 			if !vid.equal(sid) {
 				return false, nil
 			}
 
 		case Slab:
-			sid := x.SlabID()
+			sid := valueStorable.SlabID()
 			if !vid.equal(sid) {
 				return false, nil
 			}
@@ -4743,9 +4743,9 @@ func (m *OrderedMap) setCallbackWithChild(
 
 		// Verify overwritten storable has identical value ID.
 
-		switch x := existingValueStorable.(type) {
+		switch existingValueStorable := existingValueStorable.(type) {
 		case SlabIDStorable:
-			sid := SlabID(x)
+			sid := SlabID(existingValueStorable)
 			if !vid.equal(sid) {
 				return false, NewFatalError(
 					fmt.Errorf(
@@ -4755,7 +4755,7 @@ func (m *OrderedMap) setCallbackWithChild(
 			}
 
 		case Slab:
-			sid := x.SlabID()
+			sid := existingValueStorable.SlabID()
 			if !vid.equal(sid) {
 				return false, NewFatalError(
 					fmt.Errorf(

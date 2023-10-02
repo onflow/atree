@@ -2820,8 +2820,8 @@ func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder, inlinedTypeInfo *inlinedE
 
 	extraDataIndex := inlinedTypeInfo.addMapExtraData(m.extraData)
 
-	if extraDataIndex > 255 {
-		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit 255", extraDataIndex))
+	if extraDataIndex > maxInlinedExtraDataIndex {
+		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit %d", extraDataIndex, maxInlinedExtraDataIndex))
 	}
 
 	var err error
@@ -2885,9 +2885,9 @@ func encodeAsInlinedComposite(
 		return NewEncodingError(fmt.Errorf("number of elements %d is different from number of elements in cached composite type %d", len(keys), len(cachedKeys)))
 	}
 
-	if extraDataIndex > 255 {
+	if extraDataIndex > maxInlinedExtraDataIndex {
 		// This should never happen because of slab size.
-		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit 255", extraDataIndex))
+		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit %d", extraDataIndex, maxInlinedExtraDataIndex))
 	}
 
 	var err error

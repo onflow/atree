@@ -89,6 +89,8 @@ const (
 		inlinedCBORValueIDHeadSize +
 		inlinedValueIDSize +
 		arrayDataSlabElementHeadSize
+
+	maxInlinedExtraDataIndex = 255
 )
 
 type ArraySlabHeader struct {
@@ -697,9 +699,9 @@ func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedEx
 
 	extraDataIndex := inlinedTypeInfo.addArrayExtraData(a.extraData)
 
-	if extraDataIndex > 255 {
+	if extraDataIndex > maxInlinedExtraDataIndex {
 		return NewEncodingError(
-			fmt.Errorf("failed to encode inlined array data slab: extra data index %d exceeds limit 255", extraDataIndex))
+			fmt.Errorf("failed to encode inlined array data slab: extra data index %d exceeds limit %d", extraDataIndex, maxInlinedExtraDataIndex))
 	}
 
 	var err error

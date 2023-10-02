@@ -2479,10 +2479,10 @@ func DecodeInlinedCompositeStorable(
 				len(b)))
 	}
 
-	var index [8]byte
+	var index SlabIndex
 	copy(index[:], b)
 
-	slabID := NewSlabID(parentSlabID.address, SlabIndex(index))
+	slabID := NewSlabID(parentSlabID.address, index)
 
 	// Decode values
 	elemCount, err := dec.DecodeArrayHead()
@@ -2618,10 +2618,10 @@ func DecodeInlinedMapStorable(
 				len(b)))
 	}
 
-	var index [8]byte
+	var index SlabIndex
 	copy(index[:], b)
 
-	slabID := NewSlabID(parentSlabID.address, SlabIndex(index))
+	slabID := NewSlabID(parentSlabID.address, index)
 
 	// Decode elements
 	elements, err := newElementsFromData(dec, decodeStorable, parentSlabID, inlinedExtraData)

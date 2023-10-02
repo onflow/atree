@@ -634,7 +634,7 @@ func DecodeInlinedArrayStorable(
 				len(b)))
 	}
 
-	var index [8]byte
+	var index SlabIndex
 	copy(index[:], b)
 
 	slabID := NewSlabID(parentSlabID.address, index)

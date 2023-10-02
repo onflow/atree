@@ -61,14 +61,34 @@ const (
 	// 32 is faster than 24 and 40.
 	linearScanThreshold = 32
 
+	// inlined tag number size: CBOR tag number CBORTagInlinedArray or CBORTagInlinedMap
+	inlinedTagNumSize = 2
+
+	// inlined CBOR array head size: CBOR array head of 3 elements (extra data index, value id, elements)
+	inlinedCBORArrayHeadSize = 1
+
+	// inlined extra data index size: CBOR positive number encoded in 2 bytes [0, 255] (fixed-size for easy computation)
+	inlinedExtraDataIndexSize = 2
+
+	// inlined CBOR byte string head size for value ID: CBOR byte string head for byte string of 8 bytes
+	inlinedCBORValueIDHeadSize = 1
+
+	// inlined value id size: encoded in 8 bytes
+	inlinedValueIDSize = 8
+
 	// inlined array data slab prefix size:
 	//   tag number (2 bytes) +
 	//   3-element array head (1 byte) +
-	//   extra data ref index (2 bytes) [0, 255] +
+	//   extra data index (2 bytes) [0, 255] +
 	//   value ID index head (1 byte) +
 	//   value ID index (8 bytes) +
 	//   element array head (3 bytes)
-	inlinedArrayDataSlabPrefixSize = 2 + 1 + 2 + 1 + 8 + arrayDataSlabElementHeadSize
+	inlinedArrayDataSlabPrefixSize = inlinedTagNumSize +
+		inlinedCBORArrayHeadSize +
+		inlinedExtraDataIndexSize +
+		inlinedCBORValueIDHeadSize +
+		inlinedValueIDSize +
+		arrayDataSlabElementHeadSize
 )
 
 type ArraySlabHeader struct {

@@ -93,7 +93,11 @@ const (
 	//   extra data ref index (2 bytes) [0, 255] +
 	//   value index head (1 byte) +
 	//   value index (8 bytes)
-	inlinedMapDataSlabPrefixSize = 2 + 1 + 2 + 1 + 8
+	inlinedMapDataSlabPrefixSize = inlinedTagNumSize +
+		inlinedCBORArrayHeadSize +
+		inlinedExtraDataIndexSize +
+		inlinedCBORValueIDHeadSize +
+		inlinedValueIDSize
 )
 
 // MaxCollisionLimitPerDigest is the noncryptographic hash collision limit

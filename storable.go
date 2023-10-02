@@ -38,7 +38,7 @@ type Storable interface {
 }
 
 // ComparableStorable is an interface that supports comparison and cloning of Storable.
-// This is only used for composite keys.
+// This is only used for compact keys.
 type ComparableStorable interface {
 	Storable
 
@@ -72,13 +72,13 @@ const (
 	// As of Oct. 2, 2023, Cadence uses tag numbers from 128 to 224.
 	// See runtime/interpreter/encode.go at github.com/onflow/cadence.
 
-	CBORTagInlinedArrayExtraData     = 247
-	CBORTagInlinedMapExtraData       = 248
-	CBORTagInlinedCompositeExtraData = 249
+	CBORTagInlinedArrayExtraData      = 247
+	CBORTagInlinedMapExtraData        = 248
+	CBORTagInlinedCompactMapExtraData = 249
 
-	CBORTagInlinedArray     = 250
-	CBORTagInlinedMap       = 251
-	CBORTagInlinedComposite = 252
+	CBORTagInlinedArray      = 250
+	CBORTagInlinedMap        = 251
+	CBORTagInlinedCompactMap = 252
 
 	CBORTagInlineCollisionGroup   = 253
 	CBORTagExternalCollisionGroup = 254

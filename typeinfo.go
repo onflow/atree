@@ -45,26 +45,26 @@ type ExtraData interface {
 	Encode(enc *Encoder) error
 }
 
-// compositeExtraData is used for inlining composite values.
-// compositeExtraData includes hkeys and keys with map extra data
+// compactMapExtraData is used for inlining compact values.
+// compactMapExtraData includes hkeys and keys with map extra data
 // because hkeys and keys are the same in order and content for
-// all values with the same composite type and map seed.
-type compositeExtraData struct {
+// all values with the same compact type and map seed.
+type compactMapExtraData struct {
 	mapExtraData *MapExtraData
 	hkeys        []Digest             // hkeys is ordered by mapExtraData.Seed
 	keys         []ComparableStorable // keys is ordered by mapExtraData.Seed
 }
 
-var _ ExtraData = &compositeExtraData{}
+var _ ExtraData = &compactMapExtraData{}
 
-const compositeExtraDataLength = 3
+const compactMapExtraDataLength = 3
 
-func (c *compositeExtraData) isExtraData() bool {
+func (c *compactMapExtraData) isExtraData() bool {
 	return true
 }
 
-func (c *compositeExtraData) Encode(enc *Encoder) error {
-	err := enc.CBOR.EncodeArrayHead(compositeExtraDataLength)
+func (c *compactMapExtraData) Encode(enc *Encoder) error {
+	err := enc.CBOR.EncodeArrayHead(compactMapExtraDataLength)
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -115,21 +115,21 @@ func (c *compositeExtraData) Encode(enc *Encoder) error {
 	return nil
 }
 
-func newCompositeExtraData(
+func newCompactMapExtraData(
 	dec *cbor.StreamDecoder,
 	decodeTypeInfo TypeInfoDecoder,
 	decodeStorable StorableDecoder,
-) (*compositeExtraData, error) {
+) (*compactMapExtraData, error) {
 
 	length, err := dec.DecodeArrayHead()
 	if err != nil {
 		return nil, NewDecodingError(err)
 	}
 
-	if length != compositeExtraDataLength {
+	if length != compactMapExtraDataLength {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"composite extra data has invalid length %d, want %d",
+				"compact extra data has invalid length %d, want %d",
 				length,
 				arrayExtraDataLength,
 			))
@@ -166,7 +166,7 @@ func newCompositeExtraData(
 	if keyCount != uint64(digestCount) {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"decoding composite key failed: number of keys %d is different from number of digests %d",
+				"decoding compact map key failed: number of keys %d is different from number of digests %d",
 				keyCount,
 				digestCount))
 	}
@@ -178,37 +178,37 @@ func newCompositeExtraData(
 
 	keys := make([]ComparableStorable, keyCount)
 	for i := uint64(0); i < keyCount; i++ {
-		// Decode composite key
+		// Decode compact map key
 		key, err := decodeStorable(dec, SlabIDUndefined, nil)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode key's storable")
 		}
-		compositeKey, ok := key.(ComparableStorable)
+		compactMapKey, ok := key.(ComparableStorable)
 		if !ok {
 			return nil, NewDecodingError(fmt.Errorf("failed to decode key's storable: got %T, expect ComparableStorable", key))
 		}
-		keys[i] = compositeKey
+		keys[i] = compactMapKey
 	}
 
-	return &compositeExtraData{mapExtraData: mapExtraData, hkeys: hkeys, keys: keys}, nil
+	return &compactMapExtraData{mapExtraData: mapExtraData, hkeys: hkeys, keys: keys}, nil
 }
 
-type compositeTypeInfo struct {
+type compactMapTypeInfo struct {
 	index int
 	keys  []ComparableStorable
 }
 
 type inlinedExtraData struct {
-	extraData      []ExtraData
-	compositeTypes map[string]compositeTypeInfo
-	arrayTypes     map[string]int
+	extraData       []ExtraData
+	compactMapTypes map[string]compactMapTypeInfo
+	arrayTypes      map[string]int
 }
 
 func newInlinedExtraData() *inlinedExtraData {
 	return &inlinedExtraData{
-		compositeTypes: make(map[string]compositeTypeInfo),
-		arrayTypes:     make(map[string]int),
+		compactMapTypes: make(map[string]compactMapTypeInfo),
+		arrayTypes:      make(map[string]int),
 	}
 }
 
@@ -229,8 +229,8 @@ func (ied *inlinedExtraData) Encode(enc *Encoder) error {
 		case *MapExtraData:
 			tagNum = CBORTagInlinedMapExtraData
 
-		case *compositeExtraData:
-			tagNum = CBORTagInlinedCompositeExtraData
+		case *compactMapExtraData:
+			tagNum = CBORTagInlinedCompactMapExtraData
 
 		default:
 			return NewEncodingError(fmt.Errorf("failed to encode unsupported extra data type %T", extraData))
@@ -293,8 +293,8 @@ func newInlinedExtraDataFromData(
 				return nil, nil, err
 			}
 
-		case CBORTagInlinedCompositeExtraData:
-			inlinedExtraData[i], err = newCompositeExtraData(dec, decodeTypeInfo, decodeStorable)
+		case CBORTagInlinedCompactMapExtraData:
+			inlinedExtraData[i], err = newCompactMapExtraData(dec, decodeTypeInfo, decodeStorable)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -331,30 +331,30 @@ func (ied *inlinedExtraData) addMapExtraData(data *MapExtraData) int {
 	return index
 }
 
-// addCompositeExtraData returns index of deduplicated composite extra data.
-// Composite extra data is deduplicated by TypeInfo.ID() with sorted field names.
-func (ied *inlinedExtraData) addCompositeExtraData(
+// addCompactMapExtraData returns index of deduplicated compact map extra data.
+// Compact map extra data is deduplicated by TypeInfo.ID() with sorted field names.
+func (ied *inlinedExtraData) addCompactMapExtraData(
 	data *MapExtraData,
 	digests []Digest,
 	keys []ComparableStorable,
 ) (int, []ComparableStorable) {
 
-	id := makeCompositeTypeID(data.TypeInfo, keys)
-	info, exist := ied.compositeTypes[id]
+	id := makeCompactMapTypeID(data.TypeInfo, keys)
+	info, exist := ied.compactMapTypes[id]
 	if exist {
 		return info.index, info.keys
 	}
 
-	compositeData := &compositeExtraData{
+	compactMapData := &compactMapExtraData{
 		mapExtraData: data,
 		hkeys:        digests,
 		keys:         keys,
 	}
 
 	index := len(ied.extraData)
-	ied.extraData = append(ied.extraData, compositeData)
+	ied.extraData = append(ied.extraData, compactMapData)
 
-	ied.compositeTypes[id] = compositeTypeInfo{
+	ied.compactMapTypes[id] = compactMapTypeInfo{
 		keys:  keys,
 		index: index,
 	}
@@ -366,8 +366,8 @@ func (ied *inlinedExtraData) empty() bool {
 	return len(ied.extraData) == 0
 }
 
-// makeCompositeTypeID returns id of concatenated t.ID() with sorted names with "," as separator.
-func makeCompositeTypeID(t TypeInfo, names []ComparableStorable) string {
+// makeCompactMapTypeID returns id of concatenated t.ID() with sorted names with "," as separator.
+func makeCompactMapTypeID(t TypeInfo, names []ComparableStorable) string {
 	const separator = ","
 
 	if len(names) == 1 {

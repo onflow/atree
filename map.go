@@ -2410,8 +2410,8 @@ func newMapDataSlabFromDataV1(
 	}, nil
 }
 
-// DecodeInlinedCompositeStorable decodes inlined composite data. Encoding is
-// version 1 with CBOR tag having tag number CBORTagInlinedComposite, and tag contant
+// DecodeInlinedCompactMapStorable decodes inlined compact map data. Encoding is
+// version 1 with CBOR tag having tag number CBORTagInlinedCompactMap, and tag contant
 // as 3-element array:
 //
 // - index of inlined extra data
@@ -2420,7 +2420,7 @@ func newMapDataSlabFromDataV1(
 //
 // NOTE: This function doesn't decode tag number because tag number is decoded
 // in the caller and decoder only contains tag content.
-func DecodeInlinedCompositeStorable(
+func DecodeInlinedCompactMapStorable(
 	dec *cbor.StreamDecoder,
 	decodeStorable StorableDecoder,
 	parentSlabID SlabID,
@@ -2439,7 +2439,7 @@ func DecodeInlinedCompositeStorable(
 	if arrayCount != inlinedMapDataSlabArrayCount {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite, expect array of %d elements, got %d elements",
+				"failed to decode inlined compact map data, expect array of %d elements, got %d elements",
 				inlinedMapDataSlabArrayCount,
 				arrayCount))
 	}
@@ -2452,16 +2452,16 @@ func DecodeInlinedCompositeStorable(
 	if extraDataIndex >= uint64(len(inlinedExtraData)) {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite: inlined extra data index %d exceeds number of inlined extra data %d",
+				"failed to decode inlined compact map data: inlined extra data index %d exceeds number of inlined extra data %d",
 				extraDataIndex,
 				len(inlinedExtraData)))
 	}
 
-	extraData, ok := inlinedExtraData[extraDataIndex].(*compositeExtraData)
+	extraData, ok := inlinedExtraData[extraDataIndex].(*compactMapExtraData)
 	if !ok {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite: expect *compositeExtraData, got %T",
+				"failed to decode inlined compact map data: expect *compactMapExtraData, got %T",
 				inlinedExtraData[extraDataIndex]))
 	}
 
@@ -2473,7 +2473,7 @@ func DecodeInlinedCompositeStorable(
 	if len(b) != slabIndexSize {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite: expect %d bytes for slab index, got %d bytes",
+				"failed to decode inlined compact map data: expect %d bytes for slab index, got %d bytes",
 				slabIndexSize,
 				len(b)))
 	}
@@ -2492,12 +2492,12 @@ func DecodeInlinedCompositeStorable(
 	if elemCount != uint64(len(extraData.keys)) {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode composite values: got %d, expect %d",
+				"failed to decode compact map values: got %d, expect %d",
 				elemCount,
 				extraData.mapExtraData.Count))
 	}
 
-	// Make a copy of digests because extraData is shared by all inlined composite referring to the same type.
+	// Make a copy of digests because extraData is shared by all inlined compact map data referring to the same type.
 	hkeys := make([]Digest, len(extraData.hkeys))
 	copy(hkeys, extraData.hkeys)
 
@@ -2592,7 +2592,7 @@ func DecodeInlinedMapStorable(
 	if extraDataIndex >= uint64(len(inlinedExtraData)) {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite: inlined extra data index %d exceeds number of inlined extra data %d",
+				"failed to decode inlined compact map data: inlined extra data index %d exceeds number of inlined extra data %d",
 				extraDataIndex,
 				len(inlinedExtraData)))
 	}
@@ -2612,7 +2612,7 @@ func DecodeInlinedMapStorable(
 	if len(b) != slabIndexSize {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite: expect %d bytes for slab index, got %d bytes",
+				"failed to decode inlined compact map data: expect %d bytes for slab index, got %d bytes",
 				slabIndexSize,
 				len(b)))
 	}
@@ -2810,8 +2810,8 @@ func (m *MapDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedExtr
 			fmt.Errorf("failed to encode standalone map data slab as inlined"))
 	}
 
-	if hkeys, keys, values, ok := m.canBeEncodedAsComposite(); ok {
-		return encodeAsInlinedComposite(enc, m.header.slabID, m.extraData, hkeys, keys, values, inlinedTypeInfo)
+	if hkeys, keys, values, ok := m.canBeEncodedAsCompactMap(); ok {
+		return encodeAsInlinedCompactMap(enc, m.header.slabID, m.extraData, hkeys, keys, values, inlinedTypeInfo)
 	}
 
 	return m.encodeAsInlinedMap(enc, inlinedTypeInfo)
@@ -2869,8 +2869,8 @@ func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder, inlinedTypeInfo *inlinedE
 	return nil
 }
 
-// encodeAsInlinedComposite encodes hkeys, keys, and values as inlined composite value.
-func encodeAsInlinedComposite(
+// encodeAsInlinedCompactMap encodes hkeys, keys, and values as inlined compact map value.
+func encodeAsInlinedCompactMap(
 	enc *Encoder,
 	slabID SlabID,
 	extraData *MapExtraData,
@@ -2880,10 +2880,10 @@ func encodeAsInlinedComposite(
 	inlinedTypeInfo *inlinedExtraData,
 ) error {
 
-	extraDataIndex, cachedKeys := inlinedTypeInfo.addCompositeExtraData(extraData, hkeys, keys)
+	extraDataIndex, cachedKeys := inlinedTypeInfo.addCompactMapExtraData(extraData, hkeys, keys)
 
 	if len(keys) != len(cachedKeys) {
-		return NewEncodingError(fmt.Errorf("number of elements %d is different from number of elements in cached composite type %d", len(keys), len(cachedKeys)))
+		return NewEncodingError(fmt.Errorf("number of elements %d is different from number of elements in cached compact map type %d", len(keys), len(cachedKeys)))
 	}
 
 	if extraDataIndex > maxInlinedExtraDataIndex {
@@ -2896,7 +2896,7 @@ func encodeAsInlinedComposite(
 	// Encode tag number and array head of 3 elements
 	err = enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
-		0xd8, CBORTagInlinedComposite,
+		0xd8, CBORTagInlinedCompactMap,
 		// array head of 3 elements
 		0x83,
 	})
@@ -2920,8 +2920,8 @@ func encodeAsInlinedComposite(
 		return NewEncodingError(err)
 	}
 
-	// element 2: composite values in the order of cachedKeys
-	err = encodeCompositeValues(enc, cachedKeys, keys, values, inlinedTypeInfo)
+	// element 2: compact map values in the order of cachedKeys
+	err = encodeCompactMapValues(enc, cachedKeys, keys, values, inlinedTypeInfo)
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -2934,8 +2934,8 @@ func encodeAsInlinedComposite(
 	return nil
 }
 
-// encodeCompositeValues encodes composite values as an array of values ordered by cachedKeys.
-func encodeCompositeValues(
+// encodeCompactMapValues encodes compact values as an array of values ordered by cachedKeys.
+func encodeCompactMapValues(
 	enc *Encoder,
 	cachedKeys []ComparableStorable,
 	keys []ComparableStorable,
@@ -2983,12 +2983,12 @@ func encodeCompositeValues(
 	return nil
 }
 
-// canBeEncodedAsComposite returns true if:
+// canBeEncodedAsCompactMap returns true if:
 // - map data slab is inlined
-// - map is composite type
+// - map type is composite type
 // - no collision elements
 // - keys are stored inline (not in a separate slab)
-func (m *MapDataSlab) canBeEncodedAsComposite() ([]Digest, []ComparableStorable, []Storable, bool) {
+func (m *MapDataSlab) canBeEncodedAsCompactMap() ([]Digest, []ComparableStorable, []Storable, bool) {
 	if !m.inlined {
 		return nil, nil, nil, false
 	}

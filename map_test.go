@@ -6488,7 +6488,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 0
 				0xd8, 0xa4, 0x00,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -6505,7 +6505,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 2
 				0xd8, 0xa4, 0x01,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -6658,7 +6658,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 0
 				0xd8, 0xa4, 0x00,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -6677,7 +6677,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 2
 				0xd8, 0xa4, 0x01,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -6835,7 +6835,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 0
 				0xd8, 0xa4, 0x00,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -6854,7 +6854,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 2
 				0xd8, 0xa4, 0x01,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -7063,7 +7063,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 0
 				0xd8, 0xa4, 0x00,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -7082,7 +7082,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 1
 				0xd8, 0xa4, 0x01,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -7101,7 +7101,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 2
 				0xd8, 0xa4, 0x02,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -7276,7 +7276,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 0
 				0xd8, 0xa4, 0x00,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -7295,7 +7295,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 2
 				0xd8, 0xa4, 0x01,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -7479,7 +7479,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 0
 				0xd8, 0xa4, 0x00,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -7498,7 +7498,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 1
 				0xd8, 0xa4, 0x01,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -7517,7 +7517,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 2
 				0xd8, 0xa4, 0x02,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,
@@ -7536,7 +7536,7 @@ func TestMapEncodeDecode(t *testing.T) {
 				0x82,
 				// key: 3
 				0xd8, 0xa4, 0x03,
-				// value: inlined composite (tag: CBORTagInlinedComposite)
+				// value: inlined composite (tag: CBORTagInlinedCompactMap)
 				0xd8, 0xfc,
 				// array of 3 elements
 				0x83,

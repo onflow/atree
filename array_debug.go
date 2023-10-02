@@ -563,14 +563,14 @@ func (v *serializationVerifier) verifyArraySlab(slab ArraySlab) error {
 	}
 
 	// Extra check: encoded data size == header.size
-	// This check is skipped for slabs with inlined composite because
+	// This check is skipped for slabs with inlined compact map because
 	// encoded size and slab size differ for inlined composites.
 	// For inlined composites, digests and field keys are encoded in
-	// composite extra data section for reuse, and only composite field
+	// compact map extra data section for reuse, and only compact map field
 	// values are encoded in non-extra data section.
-	// This reduces encoding size because composite values of the same
-	// composite type can reuse encoded type info, seed, digests, and field names.
-	// TODO: maybe add size check for slabs with inlined composite by decoding entire slab.
+	// This reduces encoding size because compact map values of the same
+	// compact map type can reuse encoded type info, seed, digests, and field names.
+	// TODO: maybe add size check for slabs with inlined compact map by decoding entire slab.
 	inlinedComposite, err := hasInlinedComposite(data)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by hasInlinedComposite().
@@ -832,7 +832,7 @@ func hasInlinedComposite(data []byte) (bool, error) {
 		data = data[len(b):]
 	}
 
-	// Parse inlined extra data to find composite extra data.
+	// Parse inlined extra data to find compact map extra data.
 	dec := cbor.NewStreamDecoder(bytes.NewBuffer(data))
 	count, err := dec.DecodeArrayHead()
 	if err != nil {
@@ -844,7 +844,7 @@ func hasInlinedComposite(data []byte) (bool, error) {
 		if err != nil {
 			return false, NewDecodingError(err)
 		}
-		if tagNum == CBORTagInlinedCompositeExtraData {
+		if tagNum == CBORTagInlinedCompactMapExtraData {
 			return true, nil
 		}
 		err = dec.Skip()

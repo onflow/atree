@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -218,6 +219,23 @@ type Array struct {
 	// if it is nil before adding/updating elements.  Range, delete, and read are no-ops on nil Go map.
 	// TODO: maybe optimize by replacing map to get faster updates.
 	mutableElementIndex map[ValueID]uint64
+}
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		e := new(bytes.Buffer)
+		e.Grow(int(maxThreshold))
+		return e
+	},
+}
+
+func getBuffer() *bytes.Buffer {
+	return bufferPool.Get().(*bytes.Buffer)
+}
+
+func putBuffer(e *bytes.Buffer) {
+	e.Reset()
+	bufferPool.Put(e)
 }
 
 var _ Value = &Array{}
@@ -775,9 +793,11 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	inlinedTypes := newInlinedExtraData()
 
-	// TODO: maybe use a buffer pool
-	var elementBuf bytes.Buffer
-	elementEnc := NewEncoder(&elementBuf, enc.encMode)
+	// Get a buffer from a pool to encode elements.
+	elementBuf := getBuffer()
+	defer putBuffer(elementBuf)
+
+	elementEnc := NewEncoder(elementBuf, enc.encMode)
 
 	err := a.encodeElements(elementEnc, inlinedTypes)
 	if err != nil {

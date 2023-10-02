@@ -19,7 +19,6 @@
 package atree
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -2683,9 +2682,11 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 
 	inlinedTypes := newInlinedExtraData()
 
-	// TODO: maybe use a buffer pool
-	var buf bytes.Buffer
-	elemEnc := NewEncoder(&buf, enc.encMode)
+	// Get a buffer from a pool to encode elements.
+	elementBuf := getBuffer()
+	defer putBuffer(elementBuf)
+
+	elemEnc := NewEncoder(elementBuf, enc.encMode)
 
 	err := m.encodeElements(elemEnc, inlinedTypes)
 	if err != nil {
@@ -2763,7 +2764,7 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode elements
-	err = enc.CBOR.EncodeRawBytes(buf.Bytes())
+	err = enc.CBOR.EncodeRawBytes(elementBuf.Bytes())
 	if err != nil {
 		return NewEncodingError(err)
 	}

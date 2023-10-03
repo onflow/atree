@@ -2502,7 +2502,7 @@ func DecodeInlinedCompactMapStorable(
 	copy(hkeys, extraData.hkeys)
 
 	// Decode values
-	size := uint32(hkeyElementsPrefixSize)
+	elementsSize := uint32(hkeyElementsPrefixSize)
 	elems := make([]element, elemCount)
 	for i := 0; i < int(elemCount); i++ {
 		value, err := decodeStorable(dec, slabID, inlinedExtraData)
@@ -2517,7 +2517,7 @@ func DecodeInlinedCompactMapStorable(
 		elem := &singleElement{key, value, elemSize}
 
 		elems[i] = elem
-		size += digestSize + elem.Size()
+		elementsSize += digestSize + elem.Size()
 	}
 
 	// Create hkeyElements
@@ -2525,7 +2525,7 @@ func DecodeInlinedCompactMapStorable(
 		hkeys: hkeys,
 		elems: elems,
 		level: 0,
-		size:  size,
+		size:  elementsSize,
 	}
 
 	header := MapSlabHeader{

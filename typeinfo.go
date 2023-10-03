@@ -206,10 +206,7 @@ type inlinedExtraData struct {
 }
 
 func newInlinedExtraData() *inlinedExtraData {
-	return &inlinedExtraData{
-		compactMapTypes: make(map[string]compactMapTypeInfo),
-		arrayTypes:      make(map[string]int),
-	}
+	return &inlinedExtraData{}
 }
 
 // Encode encodes inlined extra data as CBOR array.
@@ -311,6 +308,10 @@ func newInlinedExtraDataFromData(
 // Array extra data is deduplicated by array type info ID because array
 // extra data only contains type info.
 func (ied *inlinedExtraData) addArrayExtraData(data *ArrayExtraData) int {
+	if ied.arrayTypes == nil {
+		ied.arrayTypes = make(map[string]int)
+	}
+
 	id := data.TypeInfo.ID()
 	index, exist := ied.arrayTypes[id]
 	if exist {
@@ -338,6 +339,10 @@ func (ied *inlinedExtraData) addCompactMapExtraData(
 	digests []Digest,
 	keys []ComparableStorable,
 ) (int, []ComparableStorable) {
+
+	if ied.compactMapTypes == nil {
+		ied.compactMapTypes = make(map[string]compactMapTypeInfo)
+	}
 
 	id := makeCompactMapTypeID(data.TypeInfo, keys)
 	info, exist := ied.compactMapTypes[id]

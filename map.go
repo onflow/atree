@@ -4867,14 +4867,14 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
 	switch s := storable.(type) {
-	case ArraySlab:
+	case ArraySlab: // inlined array slab
 		err = s.Uninline(m.Storage)
 		if err != nil {
 			return nil, err
 		}
 		storable = SlabIDStorable(s.SlabID())
 
-	case MapSlab:
+	case MapSlab: // inlined map slab
 		err = s.Uninline(m.Storage)
 		if err != nil {
 			return nil, err

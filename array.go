@@ -2972,7 +2972,7 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
 	switch s := existingStorable.(type) {
-	case ArraySlab:
+	case ArraySlab: // inlined array slab
 		err = s.Uninline(a.Storage)
 		if err != nil {
 			return nil, err
@@ -2980,7 +2980,7 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 		existingStorable = SlabIDStorable(s.SlabID())
 		existingValueID = slabIDToValueID(s.SlabID())
 
-	case MapSlab:
+	case MapSlab: // inlined map slab
 		err = s.Uninline(a.Storage)
 		if err != nil {
 			return nil, err
@@ -2988,7 +2988,7 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 		existingStorable = SlabIDStorable(s.SlabID())
 		existingValueID = slabIDToValueID(s.SlabID())
 
-	case SlabIDStorable:
+	case SlabIDStorable: // uninlined slab
 		existingValueID = slabIDToValueID(SlabID(s))
 	}
 

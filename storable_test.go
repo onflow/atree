@@ -480,8 +480,8 @@ func decodeStorable(dec *cbor.StreamDecoder, id SlabID, inlinedExtraData []Extra
 		case CBORTagInlinedMap:
 			return DecodeInlinedMapStorable(dec, decodeStorable, id, inlinedExtraData)
 
-		case CBORTagInlinedComposite:
-			return DecodeInlinedCompositeStorable(dec, decodeStorable, id, inlinedExtraData)
+		case CBORTagInlinedCompactMap:
+			return DecodeInlinedCompactMapStorable(dec, decodeStorable, id, inlinedExtraData)
 
 		case CBORTagSlabID:
 			return DecodeSlabIDStorable(dec)

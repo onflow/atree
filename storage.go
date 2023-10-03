@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -37,18 +38,20 @@ const LedgerBaseStorageSlabPrefix = "$"
 // By contrast, SlabID is affected by inlining because it identifies
 // a slab in storage.  Given this, ValueID should be used for
 // resource tracking, etc.
-type ValueID [16]byte
+type ValueID [unsafe.Sizeof(Address{}) + unsafe.Sizeof(SlabIndex{})]byte
+
+var emptyValueID = ValueID{}
 
 func slabIDToValueID(sid SlabID) ValueID {
 	var id ValueID
-	copy(id[:], sid.address[:])
-	copy(id[8:], sid.index[:])
+	n := copy(id[:], sid.address[:])
+	copy(id[n:], sid.index[:])
 	return id
 }
 
 func (vid ValueID) equal(sid SlabID) bool {
-	return bytes.Equal(vid[:8], sid.address[:]) &&
-		bytes.Equal(vid[8:], sid.index[:])
+	return bytes.Equal(vid[:len(sid.address)], sid.address[:]) &&
+		bytes.Equal(vid[len(sid.address):], sid.index[:])
 }
 
 func (vid ValueID) String() string {

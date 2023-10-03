@@ -168,6 +168,10 @@ func DumpArraySlabs(a *Array) ([]string, error) {
 type TypeInfoComparator func(TypeInfo, TypeInfo) bool
 
 func VerifyArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
+	return verifyArray(a, address, typeInfo, tic, hip, inlineEnabled, map[SlabID]struct{}{})
+}
+
+func verifyArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool, slabIDs map[SlabID]struct{}) error {
 	// Verify array address (independent of array inlined status)
 	if address != a.Address() {
 		return NewFatalError(fmt.Errorf("array address %v, got %v", address, a.Address()))
@@ -210,7 +214,7 @@ func VerifyArray(a *Array, address Address, typeInfo TypeInfo, tic TypeInfoCompa
 	}
 
 	// Verify array slabs
-	computedCount, dataSlabIDs, nextDataSlabIDs, err := v.verifySlab(a.root, 0, nil, []SlabID{}, []SlabID{})
+	computedCount, dataSlabIDs, nextDataSlabIDs, err := v.verifySlab(a.root, 0, nil, []SlabID{}, []SlabID{}, slabIDs)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by verifySlab().
 		return err
@@ -245,6 +249,7 @@ func (v *arrayVerifier) verifySlab(
 	headerFromParentSlab *ArraySlabHeader,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint32,
 	_dataSlabIDs []SlabID,
@@ -252,6 +257,13 @@ func (v *arrayVerifier) verifySlab(
 	err error,
 ) {
 	id := slab.Header().slabID
+
+	// Verify SlabID is unique
+	if _, exist := slabIDs[id]; exist {
+		return 0, nil, nil, NewFatalError(fmt.Errorf("found duplicate slab ID %s", id))
+	}
+
+	slabIDs[id] = struct{}{}
 
 	// Verify slab address (independent of array inlined status)
 	if v.address != id.address {
@@ -298,10 +310,10 @@ func (v *arrayVerifier) verifySlab(
 
 	switch slab := slab.(type) {
 	case *ArrayDataSlab:
-		return v.verifyDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs)
+		return v.verifyDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, slabIDs)
 
 	case *ArrayMetaDataSlab:
-		return v.verifyMetaDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs)
+		return v.verifyMetaDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, slabIDs)
 
 	default:
 		return 0, nil, nil, NewFatalError(fmt.Errorf("ArraySlab is either *ArrayDataSlab or *ArrayMetaDataSlab, got %T", slab))
@@ -313,6 +325,7 @@ func (v *arrayVerifier) verifyDataSlab(
 	level int,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint32,
 	_dataSlabIDs []SlabID,
@@ -402,7 +415,7 @@ func (v *arrayVerifier) verifyDataSlab(
 		}
 
 		// Verify element
-		err = verifyValue(value, v.address, nil, v.tic, v.hip, v.inlineEnabled)
+		err = verifyValue(value, v.address, nil, v.tic, v.hip, v.inlineEnabled, slabIDs)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by verifyValue().
 			return 0, nil, nil, fmt.Errorf(
@@ -420,6 +433,7 @@ func (v *arrayVerifier) verifyMetaDataSlab(
 	level int,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint32,
 	_dataSlabIDs []SlabID,
@@ -467,7 +481,7 @@ func (v *arrayVerifier) verifyMetaDataSlab(
 		// Verify child slabs
 		var count uint32
 		count, dataSlabIDs, nextDataSlabIDs, err =
-			v.verifySlab(childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs)
+			v.verifySlab(childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, slabIDs)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by verifySlab().
 			return 0, nil, nil, err
@@ -563,14 +577,14 @@ func (v *serializationVerifier) verifyArraySlab(slab ArraySlab) error {
 	}
 
 	// Extra check: encoded data size == header.size
-	// This check is skipped for slabs with inlined composite because
+	// This check is skipped for slabs with inlined compact map because
 	// encoded size and slab size differ for inlined composites.
 	// For inlined composites, digests and field keys are encoded in
-	// composite extra data section for reuse, and only composite field
+	// compact map extra data section for reuse, and only compact map field
 	// values are encoded in non-extra data section.
-	// This reduces encoding size because composite values of the same
-	// composite type can reuse encoded type info, seed, digests, and field names.
-	// TODO: maybe add size check for slabs with inlined composite by decoding entire slab.
+	// This reduces encoding size because compact map values of the same
+	// compact map type can reuse encoded type info, seed, digests, and field names.
+	// TODO: maybe add size check for slabs with inlined compact map by decoding entire slab.
 	inlinedComposite, err := hasInlinedComposite(data)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by hasInlinedComposite().
@@ -832,7 +846,7 @@ func hasInlinedComposite(data []byte) (bool, error) {
 		data = data[len(b):]
 	}
 
-	// Parse inlined extra data to find composite extra data.
+	// Parse inlined extra data to find compact map extra data.
 	dec := cbor.NewStreamDecoder(bytes.NewBuffer(data))
 	count, err := dec.DecodeArrayHead()
 	if err != nil {
@@ -844,7 +858,7 @@ func hasInlinedComposite(data []byte) (bool, error) {
 		if err != nil {
 			return false, NewDecodingError(err)
 		}
-		if tagNum == CBORTagInlinedCompositeExtraData {
+		if tagNum == CBORTagInlinedCompactMapExtraData {
 			return true, nil
 		}
 		err = dec.Skip()

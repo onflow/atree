@@ -19,7 +19,6 @@
 package atree
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -93,7 +92,11 @@ const (
 	//   extra data ref index (2 bytes) [0, 255] +
 	//   value index head (1 byte) +
 	//   value index (8 bytes)
-	inlinedMapDataSlabPrefixSize = 2 + 1 + 2 + 1 + 8
+	inlinedMapDataSlabPrefixSize = inlinedTagNumSize +
+		inlinedCBORArrayHeadSize +
+		inlinedExtraDataIndexSize +
+		inlinedCBORValueIDHeadSize +
+		inlinedValueIDSize
 )
 
 // MaxCollisionLimitPerDigest is the noncryptographic hash collision limit
@@ -132,7 +135,7 @@ type element interface {
 		hip HashInputProvider,
 		key Value,
 		value Value,
-	) (newElem element, keyStorable MapKey, existingValue MapValue, err error)
+	) (newElem element, keyStorable MapKey, existingMapValueStorable MapValue, err error)
 
 	// Remove returns matched key, value, and updated element.
 	// Updated element may be nil, modified, or a different type of element.
@@ -363,6 +366,8 @@ type MapSlab interface {
 
 	Inlined() bool
 	Inlinable(maxInlineSize uint64) bool
+	Inline(SlabStorage) error
+	Uninline(SlabStorage) error
 }
 
 // OrderedMap is an ordered map of key-value pairs; keys can be any hashable type
@@ -649,7 +654,7 @@ func (e *singleElement) Set(
 
 	// Key matches, overwrite existing value
 	if equal {
-		existingValue := e.value
+		existingMapValueStorable := e.value
 
 		valueStorable, err := value.Storable(storage, address, maxInlineMapValueSize(uint64(e.key.ByteSize())))
 		if err != nil {
@@ -659,7 +664,7 @@ func (e *singleElement) Set(
 
 		e.value = valueStorable
 		e.size = singleElementPrefixSize + e.key.ByteSize() + e.value.ByteSize()
-		return e, e.key, existingValue, nil
+		return e, e.key, existingMapValueStorable, nil
 	}
 
 	// Hash collision detected
@@ -817,7 +822,7 @@ func (e *inlineCollisionGroup) Set(
 	}
 	hkey, _ := digester.Digest(level)
 
-	keyStorable, existingValue, err := e.elements.Set(storage, address, b, digester, level, hkey, comparator, hip, key, value)
+	keyStorable, existingMapValueStorable, err := e.elements.Set(storage, address, b, digester, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by elements.Set().
 		return nil, nil, nil, err
@@ -858,11 +863,11 @@ func (e *inlineCollisionGroup) Set(
 			return &externalCollisionGroup{
 				slabID: id,
 				size:   externalCollisionGroupPrefixSize + SlabIDStorable(id).ByteSize(),
-			}, keyStorable, existingValue, nil
+			}, keyStorable, existingMapValueStorable, nil
 		}
 	}
 
-	return e, keyStorable, existingValue, nil
+	return e, keyStorable, existingMapValueStorable, nil
 }
 
 // Remove returns key, value, and updated element if key is found.
@@ -1016,12 +1021,12 @@ func (e *externalCollisionGroup) Set(
 	}
 	hkey, _ := digester.Digest(level)
 
-	keyStorable, existingValue, err := slab.Set(storage, b, digester, level, hkey, comparator, hip, key, value)
+	keyStorable, existingMapValueStorable, err := slab.Set(storage, b, digester, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapSlab.Set().
 		return nil, nil, nil, err
 	}
-	return e, keyStorable, existingValue, nil
+	return e, keyStorable, existingMapValueStorable, nil
 }
 
 // Remove returns key, value, and updated element if key is found.
@@ -1493,7 +1498,7 @@ func (e *hkeyElements) Set(
 			}
 		}
 
-		elem, keyStorable, existingValue, err := elem.Set(storage, address, b, digester, level, hkey, comparator, hip, key, value)
+		elem, keyStorable, existingMapValueStorable, err := elem.Set(storage, address, b, digester, level, hkey, comparator, hip, key, value)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by element.Set().
 			return nil, nil, err
@@ -1510,7 +1515,7 @@ func (e *hkeyElements) Set(
 		}
 		e.size = size
 
-		return keyStorable, existingValue, nil
+		return keyStorable, existingMapValueStorable, nil
 	}
 
 	// No matching hkey
@@ -2012,8 +2017,8 @@ func (e *singleElements) Set(
 		}
 
 		if equal {
-			existingKey := elem.key
-			existingValue := elem.value
+			existingKeyStorable := elem.key
+			existingValueStorable := elem.value
 
 			vs, err := value.Storable(storage, address, maxInlineMapValueSize(uint64(elem.key.ByteSize())))
 			if err != nil {
@@ -2033,7 +2038,7 @@ func (e *singleElements) Set(
 			}
 			e.size = size
 
-			return existingKey, existingValue, nil
+			return existingKeyStorable, existingValueStorable, nil
 		}
 	}
 
@@ -2405,8 +2410,8 @@ func newMapDataSlabFromDataV1(
 	}, nil
 }
 
-// DecodeInlinedCompositeStorable decodes inlined composite data. Encoding is
-// version 1 with CBOR tag having tag number CBORTagInlinedComposite, and tag contant
+// DecodeInlinedCompactMapStorable decodes inlined compact map data. Encoding is
+// version 1 with CBOR tag having tag number CBORTagInlinedCompactMap, and tag contant
 // as 3-element array:
 //
 // - index of inlined extra data
@@ -2415,7 +2420,7 @@ func newMapDataSlabFromDataV1(
 //
 // NOTE: This function doesn't decode tag number because tag number is decoded
 // in the caller and decoder only contains tag content.
-func DecodeInlinedCompositeStorable(
+func DecodeInlinedCompactMapStorable(
 	dec *cbor.StreamDecoder,
 	decodeStorable StorableDecoder,
 	parentSlabID SlabID,
@@ -2434,7 +2439,7 @@ func DecodeInlinedCompositeStorable(
 	if arrayCount != inlinedMapDataSlabArrayCount {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite, expect array of %d elements, got %d elements",
+				"failed to decode inlined compact map data, expect array of %d elements, got %d elements",
 				inlinedMapDataSlabArrayCount,
 				arrayCount))
 	}
@@ -2447,16 +2452,16 @@ func DecodeInlinedCompositeStorable(
 	if extraDataIndex >= uint64(len(inlinedExtraData)) {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite: inlined extra data index %d exceeds number of inlined extra data %d",
+				"failed to decode inlined compact map data: inlined extra data index %d exceeds number of inlined extra data %d",
 				extraDataIndex,
 				len(inlinedExtraData)))
 	}
 
-	extraData, ok := inlinedExtraData[extraDataIndex].(*compositeExtraData)
+	extraData, ok := inlinedExtraData[extraDataIndex].(*compactMapExtraData)
 	if !ok {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite: expect *compositeExtraData, got %T",
+				"failed to decode inlined compact map data: expect *compactMapExtraData, got %T",
 				inlinedExtraData[extraDataIndex]))
 	}
 
@@ -2468,15 +2473,15 @@ func DecodeInlinedCompositeStorable(
 	if len(b) != slabIndexSize {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite: expect %d bytes for slab index, got %d bytes",
+				"failed to decode inlined compact map data: expect %d bytes for slab index, got %d bytes",
 				slabIndexSize,
 				len(b)))
 	}
 
-	var index [8]byte
+	var index SlabIndex
 	copy(index[:], b)
 
-	slabID := NewSlabID(parentSlabID.address, SlabIndex(index))
+	slabID := NewSlabID(parentSlabID.address, index)
 
 	// Decode values
 	elemCount, err := dec.DecodeArrayHead()
@@ -2487,20 +2492,20 @@ func DecodeInlinedCompositeStorable(
 	if elemCount != uint64(len(extraData.keys)) {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode composite values: got %d, expect %d",
+				"failed to decode compact map values: got %d, expect %d",
 				elemCount,
 				extraData.mapExtraData.Count))
 	}
 
-	// Make a copy of digests because extraData is shared by all inlined composite referring to the same type.
+	// Make a copy of digests because extraData is shared by all inlined compact map data referring to the same type.
 	hkeys := make([]Digest, len(extraData.hkeys))
 	copy(hkeys, extraData.hkeys)
 
 	// Decode values
-	size := uint32(hkeyElementsPrefixSize)
+	elementsSize := uint32(hkeyElementsPrefixSize)
 	elems := make([]element, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		value, err := decodeStorable(dec, parentSlabID, inlinedExtraData)
+		value, err := decodeStorable(dec, slabID, inlinedExtraData)
 		if err != nil {
 			return nil, err
 		}
@@ -2512,7 +2517,7 @@ func DecodeInlinedCompositeStorable(
 		elem := &singleElement{key, value, elemSize}
 
 		elems[i] = elem
-		size += digestSize + elem.Size()
+		elementsSize += digestSize + elem.Size()
 	}
 
 	// Create hkeyElements
@@ -2520,7 +2525,7 @@ func DecodeInlinedCompositeStorable(
 		hkeys: hkeys,
 		elems: elems,
 		level: 0,
-		size:  size,
+		size:  elementsSize,
 	}
 
 	header := MapSlabHeader{
@@ -2587,7 +2592,7 @@ func DecodeInlinedMapStorable(
 	if extraDataIndex >= uint64(len(inlinedExtraData)) {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite: inlined extra data index %d exceeds number of inlined extra data %d",
+				"failed to decode inlined compact map data: inlined extra data index %d exceeds number of inlined extra data %d",
 				extraDataIndex,
 				len(inlinedExtraData)))
 	}
@@ -2607,18 +2612,18 @@ func DecodeInlinedMapStorable(
 	if len(b) != slabIndexSize {
 		return nil, NewDecodingError(
 			fmt.Errorf(
-				"failed to decode inlined composite: expect %d bytes for slab index, got %d bytes",
+				"failed to decode inlined compact map data: expect %d bytes for slab index, got %d bytes",
 				slabIndexSize,
 				len(b)))
 	}
 
-	var index [8]byte
+	var index SlabIndex
 	copy(index[:], b)
 
-	slabID := NewSlabID(parentSlabID.address, SlabIndex(index))
+	slabID := NewSlabID(parentSlabID.address, index)
 
 	// Decode elements
-	elements, err := newElementsFromData(dec, decodeStorable, parentSlabID, inlinedExtraData)
+	elements, err := newElementsFromData(dec, decodeStorable, slabID, inlinedExtraData)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by newElementsFromData().
 		return nil, err
@@ -2677,9 +2682,11 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 
 	inlinedTypes := newInlinedExtraData()
 
-	// TODO: maybe use a buffer pool
-	var buf bytes.Buffer
-	elemEnc := NewEncoder(&buf, enc.encMode)
+	// Get a buffer from a pool to encode elements.
+	elementBuf := getBuffer()
+	defer putBuffer(elementBuf)
+
+	elemEnc := NewEncoder(elementBuf, enc.encMode)
 
 	err := m.encodeElements(elemEnc, inlinedTypes)
 	if err != nil {
@@ -2757,7 +2764,7 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode elements
-	err = enc.CBOR.EncodeRawBytes(buf.Bytes())
+	err = enc.CBOR.EncodeRawBytes(elementBuf.Bytes())
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -2803,8 +2810,8 @@ func (m *MapDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedExtr
 			fmt.Errorf("failed to encode standalone map data slab as inlined"))
 	}
 
-	if hkeys, keys, values, ok := m.canBeEncodedAsComposite(); ok {
-		return encodeAsInlinedComposite(enc, m.header.slabID, m.extraData, hkeys, keys, values, inlinedTypeInfo)
+	if hkeys, keys, values, ok := m.canBeEncodedAsCompactMap(); ok {
+		return encodeAsInlinedCompactMap(enc, m.header.slabID, m.extraData, hkeys, keys, values, inlinedTypeInfo)
 	}
 
 	return m.encodeAsInlinedMap(enc, inlinedTypeInfo)
@@ -2814,8 +2821,8 @@ func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder, inlinedTypeInfo *inlinedE
 
 	extraDataIndex := inlinedTypeInfo.addMapExtraData(m.extraData)
 
-	if extraDataIndex > 255 {
-		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit 255", extraDataIndex))
+	if extraDataIndex > maxInlinedExtraDataIndex {
+		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit %d", extraDataIndex, maxInlinedExtraDataIndex))
 	}
 
 	var err error
@@ -2862,8 +2869,8 @@ func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder, inlinedTypeInfo *inlinedE
 	return nil
 }
 
-// encodeAsInlinedComposite encodes hkeys, keys, and values as inlined composite value.
-func encodeAsInlinedComposite(
+// encodeAsInlinedCompactMap encodes hkeys, keys, and values as inlined compact map value.
+func encodeAsInlinedCompactMap(
 	enc *Encoder,
 	slabID SlabID,
 	extraData *MapExtraData,
@@ -2873,15 +2880,15 @@ func encodeAsInlinedComposite(
 	inlinedTypeInfo *inlinedExtraData,
 ) error {
 
-	extraDataIndex, cachedKeys := inlinedTypeInfo.addCompositeExtraData(extraData, hkeys, keys)
+	extraDataIndex, cachedKeys := inlinedTypeInfo.addCompactMapExtraData(extraData, hkeys, keys)
 
 	if len(keys) != len(cachedKeys) {
-		return NewEncodingError(fmt.Errorf("number of elements %d is different from number of elements in cached composite type %d", len(keys), len(cachedKeys)))
+		return NewEncodingError(fmt.Errorf("number of elements %d is different from number of elements in cached compact map type %d", len(keys), len(cachedKeys)))
 	}
 
-	if extraDataIndex > 255 {
+	if extraDataIndex > maxInlinedExtraDataIndex {
 		// This should never happen because of slab size.
-		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit 255", extraDataIndex))
+		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit %d", extraDataIndex, maxInlinedExtraDataIndex))
 	}
 
 	var err error
@@ -2889,7 +2896,7 @@ func encodeAsInlinedComposite(
 	// Encode tag number and array head of 3 elements
 	err = enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
-		0xd8, CBORTagInlinedComposite,
+		0xd8, CBORTagInlinedCompactMap,
 		// array head of 3 elements
 		0x83,
 	})
@@ -2913,8 +2920,8 @@ func encodeAsInlinedComposite(
 		return NewEncodingError(err)
 	}
 
-	// element 2: composite values in the order of cachedKeys
-	err = encodeCompositeValues(enc, cachedKeys, keys, values, inlinedTypeInfo)
+	// element 2: compact map values in the order of cachedKeys
+	err = encodeCompactMapValues(enc, cachedKeys, keys, values, inlinedTypeInfo)
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -2927,8 +2934,8 @@ func encodeAsInlinedComposite(
 	return nil
 }
 
-// encodeCompositeValues encodes composite values as an array of values ordered by cachedKeys.
-func encodeCompositeValues(
+// encodeCompactMapValues encodes compact values as an array of values ordered by cachedKeys.
+func encodeCompactMapValues(
 	enc *Encoder,
 	cachedKeys []ComparableStorable,
 	keys []ComparableStorable,
@@ -2976,12 +2983,12 @@ func encodeCompositeValues(
 	return nil
 }
 
-// canBeEncodedAsComposite returns true if:
+// canBeEncodedAsCompactMap returns true if:
 // - map data slab is inlined
-// - map is composite type
+// - map type is composite type
 // - no collision elements
 // - keys are stored inline (not in a separate slab)
-func (m *MapDataSlab) canBeEncodedAsComposite() ([]Digest, []ComparableStorable, []Storable, bool) {
+func (m *MapDataSlab) canBeEncodedAsCompactMap() ([]Digest, []ComparableStorable, []Storable, bool) {
 	if !m.inlined {
 		return nil, nil, nil, false
 	}
@@ -3060,6 +3067,52 @@ func (m *MapDataSlab) Inlinable(maxInlineSize uint64) bool {
 	return uint64(inlinedSize) <= maxInlineSize
 }
 
+// inline converts not-inlined MapDataSlab to inlined MapDataSlab and removes it from storage.
+func (m *MapDataSlab) Inline(storage SlabStorage) error {
+	if m.inlined {
+		return NewFatalError(fmt.Errorf("failed to inline MapDataSlab %s: it is inlined already", m.header.slabID))
+	}
+
+	id := m.header.slabID
+
+	// Remove slab from storage because it is going to be inlined.
+	err := storage.Remove(id)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", id))
+	}
+
+	// Update data slab size from not inlined to inlined
+	m.header.size = inlinedMapDataSlabPrefixSize + m.elements.Size()
+
+	// Update data slab inlined status.
+	m.inlined = true
+
+	return nil
+}
+
+// uninline converts an inlined MapDataSlab to uninlined MapDataSlab and stores it in storage.
+func (m *MapDataSlab) Uninline(storage SlabStorage) error {
+	if !m.inlined {
+		return NewFatalError(fmt.Errorf("failed to uninline MapDataSlab %s: it is not inlined", m.header.slabID))
+	}
+
+	// Update data slab size from inlined to not inlined.
+	m.header.size = mapRootDataSlabPrefixSize + m.elements.Size()
+
+	// Update data slab inlined status.
+	m.inlined = false
+
+	// Store slab in storage
+	err := storage.Store(m.header.slabID, m)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.slabID))
+	}
+
+	return nil
+}
+
 func elementsStorables(elems elements, childStorables []Storable) []Storable {
 
 	switch v := elems.(type) {
@@ -3124,7 +3177,7 @@ func (m *MapDataSlab) Set(
 	value Value,
 ) (MapKey, MapValue, error) {
 
-	keyStorable, existingValue, err := m.elements.Set(storage, m.SlabID().address, b, digester, level, hkey, comparator, hip, key, value)
+	keyStorable, existingMapValueStorable, err := m.elements.Set(storage, m.SlabID().address, b, digester, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by elements.Set().
 		return nil, nil, err
@@ -3145,7 +3198,7 @@ func (m *MapDataSlab) Set(
 		}
 	}
 
-	return keyStorable, existingValue, nil
+	return keyStorable, existingMapValueStorable, nil
 }
 
 func (m *MapDataSlab) Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
@@ -3735,6 +3788,14 @@ func (m *MapMetaDataSlab) Inlinable(_ uint64) bool {
 	return false
 }
 
+func (m *MapMetaDataSlab) Inline(_ SlabStorage) error {
+	return NewFatalError(fmt.Errorf("failed to inline MapMetaDataSlab %s: MapMetaDataSlab can't be inlined", m.header.slabID))
+}
+
+func (m *MapMetaDataSlab) Uninline(_ SlabStorage) error {
+	return NewFatalError(fmt.Errorf("failed to uninline MapMetaDataSlab %s: MapMetaDataSlab is already unlined", m.header.slabID))
+}
+
 func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	if m.extraData == nil {
 		return nil, NewNotValueError(m.SlabID())
@@ -3827,7 +3888,7 @@ func (m *MapMetaDataSlab) Set(
 		return nil, nil, err
 	}
 
-	keyStorable, existingValue, err := child.Set(storage, b, digester, level, hkey, comparator, hip, key, value)
+	keyStorable, existingMapValueStorable, err := child.Set(storage, b, digester, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapSlab.Set().
 		return nil, nil, err
@@ -3846,7 +3907,7 @@ func (m *MapMetaDataSlab) Set(
 			// Don't need to wrap error as external error because err is already categorized by MapMetaDataSlab.SplitChildSlab().
 			return nil, nil, err
 		}
-		return keyStorable, existingValue, nil
+		return keyStorable, existingMapValueStorable, nil
 	}
 
 	if underflowSize, underflow := child.IsUnderflow(); underflow {
@@ -3855,7 +3916,7 @@ func (m *MapMetaDataSlab) Set(
 			// Don't need to wrap error as external error because err is already categorized by MapMetaDataSlab.MergeOrRebalanceChildSlab().
 			return nil, nil, err
 		}
-		return keyStorable, existingValue, nil
+		return keyStorable, existingMapValueStorable, nil
 	}
 
 	err = storage.Store(m.header.slabID, m)
@@ -3863,7 +3924,7 @@ func (m *MapMetaDataSlab) Set(
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
 		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.slabID))
 	}
-	return keyStorable, existingValue, nil
+	return keyStorable, existingMapValueStorable, nil
 }
 
 func (m *MapMetaDataSlab) Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
@@ -4618,8 +4679,8 @@ func (m *OrderedMap) setParentUpdater(f parentUpdater) {
 	m.parentUpdater = f
 }
 
-// setCallbackWithChild sets up callback function with child value so
-// parent map m can be notified when child value is modified.
+// setCallbackWithChild sets up callback function with child value (child)
+// so parent map (m) can be notified when child value is modified.
 func (m *OrderedMap) setCallbackWithChild(
 	comparator ValueComparator,
 	hip HashInputProvider,
@@ -4634,30 +4695,60 @@ func (m *OrderedMap) setCallbackWithChild(
 
 	vid := c.ValueID()
 
-	c.setParentUpdater(func() error {
+	c.setParentUpdater(func() (found bool, err error) {
 
 		// Avoid unnecessary write operation on parent container.
 		// Child value was stored as SlabIDStorable (not inlined) in parent container,
 		// and continues to be stored as SlabIDStorable (still not inlinable),
 		// so no update to parent container is needed.
 		if !c.Inlined() && !c.Inlinable(maxInlineSize) {
-			return nil
+			return true, nil
+		}
+
+		// Retrieve element value under the same key and
+		// verify retrieved value is this child (c).
+		_, valueStorable, err := m.get(comparator, hip, key)
+		if err != nil {
+			var knf *KeyNotFoundError
+			if errors.As(err, &knf) {
+				return false, nil
+			}
+			// Don't need to wrap error as external error because err is already categorized by OrderedMap.Get().
+			return false, err
+		}
+
+		// Verify retrieved element value is either SlabIDStorable or Slab, with identical value ID.
+		switch valueStorable := valueStorable.(type) {
+		case SlabIDStorable:
+			sid := SlabID(valueStorable)
+			if !vid.equal(sid) {
+				return false, nil
+			}
+
+		case Slab:
+			sid := valueStorable.SlabID()
+			if !vid.equal(sid) {
+				return false, nil
+			}
+
+		default:
+			return false, nil
 		}
 
 		// Set child value with parent map using same key.
 		// Set() calls c.Storable() which returns inlined or not-inlined child storable.
-		existingValueStorable, err := m.Set(comparator, hip, key, c)
+		existingValueStorable, err := m.set(comparator, hip, key, c)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		// Verify overwritten storable has identical value ID.
 
-		switch x := existingValueStorable.(type) {
+		switch existingValueStorable := existingValueStorable.(type) {
 		case SlabIDStorable:
-			sid := SlabID(x)
+			sid := SlabID(existingValueStorable)
 			if !vid.equal(sid) {
-				return NewFatalError(
+				return false, NewFatalError(
 					fmt.Errorf(
 						"failed to reset child value in parent updater callback: overwritten SlabIDStorable %s != value ID %s",
 						sid,
@@ -4665,9 +4756,9 @@ func (m *OrderedMap) setCallbackWithChild(
 			}
 
 		case Slab:
-			sid := x.SlabID()
+			sid := existingValueStorable.SlabID()
 			if !vid.equal(sid) {
-				return NewFatalError(
+				return false, NewFatalError(
 					fmt.Errorf(
 						"failed to reset child value in parent updater callback: overwritten Slab ID %s != value ID %s",
 						sid,
@@ -4675,26 +4766,39 @@ func (m *OrderedMap) setCallbackWithChild(
 			}
 
 		case nil:
-			return NewFatalError(
+			return false, NewFatalError(
 				fmt.Errorf(
 					"failed to reset child value in parent updater callback: overwritten value is nil"))
 
 		default:
-			return NewFatalError(
+			return false, NewFatalError(
 				fmt.Errorf(
 					"failed to reset child value in parent updater callback: overwritten value is wrong type %T",
 					existingValueStorable))
 		}
-		return nil
+
+		return true, nil
 	})
 }
 
-// notifyParentIfNeeded calls parent updater if this map is a child value.
+// notifyParentIfNeeded calls parent updater if this map (m) is a child
+// element in another container.
 func (m *OrderedMap) notifyParentIfNeeded() error {
 	if m.parentUpdater == nil {
 		return nil
 	}
-	return m.parentUpdater()
+
+	// If parentUpdater() doesn't find child map (m), then no-op on parent container
+	// and unset parentUpdater callback in child map.  This can happen when child
+	// map is an outdated reference (removed or overwritten in parent container).
+	found, err := m.parentUpdater()
+	if err != nil {
+		return err
+	}
+	if !found {
+		m.parentUpdater = nil
+	}
+	return nil
 }
 
 func (m *OrderedMap) Has(comparator ValueComparator, hip HashInputProvider, key Value) (bool, error) {
@@ -4724,8 +4828,9 @@ func (m *OrderedMap) Get(comparator ValueComparator, hip HashInputProvider, key 
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
 	}
 
+	// As a parent, this map (m) sets up notification callback with child
+	// value (v) so this map can be notified when child value is modified.
 	maxInlineSize := maxInlineMapValueSize(uint64(keyStorable.ByteSize()))
-
 	m.setCallbackWithChild(comparator, hip, key, v, maxInlineSize)
 
 	return v, nil
@@ -4753,6 +4858,34 @@ func (m *OrderedMap) get(comparator ValueComparator, hip HashInputProvider, key 
 }
 
 func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key Value, value Value) (Storable, error) {
+	storable, err := m.set(comparator, hip, key, value)
+	if err != nil {
+		return nil, err
+	}
+
+	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
+	// This is to prevent potential data loss because the overwritten inlined slab was not in
+	// storage and any future changes to it would have been lost.
+	switch s := storable.(type) {
+	case ArraySlab:
+		err = s.Uninline(m.Storage)
+		if err != nil {
+			return nil, err
+		}
+		storable = SlabIDStorable(s.SlabID())
+
+	case MapSlab:
+		err = s.Uninline(m.Storage)
+		if err != nil {
+			return nil, err
+		}
+		storable = SlabIDStorable(s.SlabID())
+	}
+
+	return storable, nil
+}
+
+func (m *OrderedMap) set(comparator ValueComparator, hip HashInputProvider, key Value, value Value) (Storable, error) {
 
 	keyDigest, err := m.digesterBuilder.Digest(hip, key)
 	if err != nil {
@@ -4769,13 +4902,13 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to get map key digest at level %d", level))
 	}
 
-	keyStorable, existingValue, err := m.root.Set(m.Storage, m.digesterBuilder, keyDigest, level, hkey, comparator, hip, key, value)
+	keyStorable, existingMapValueStorable, err := m.root.Set(m.Storage, m.digesterBuilder, keyDigest, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapSlab.Set().
 		return nil, err
 	}
 
-	if existingValue == nil {
+	if existingMapValueStorable == nil {
 		m.root.ExtraData().incrementCount()
 	}
 
@@ -4788,7 +4921,6 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 				// Don't need to wrap error as external error because err is already categorized by OrderedMap.promoteChildAsNewRoot().
 				return nil, err
 			}
-			return existingValue, nil
 		}
 	}
 
@@ -4800,19 +4932,63 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 		}
 	}
 
+	// This map (m) is a parent to the new child (value), and this map
+	// can also be a child in another container.
+	//
+	// As a parent, this map needs to setup notification callback with
+	// the new child value, so it can be notified when child is modified.
+	//
+	// If this map is a child, it needs to notify its parent because its
+	// content (maybe also its size) is changed by this "Set" operation.
+
+	// If this map is a child, it notifies parent by invoking callback because
+	// this map is changed by setting new child.
 	err = m.notifyParentIfNeeded()
 	if err != nil {
 		return nil, err
 	}
 
+	// As a parent, this map sets up notification callback with child value
+	// so this map can be notified when child value is modified.
+	//
+	// Setting up notification with new child value can happen at any time
+	// (either before or after this map notifies its parent) because
+	// setting up notification doesn't trigger any read/write ops on parent or child.
 	maxInlineSize := maxInlineMapValueSize(uint64(keyStorable.ByteSize()))
-
 	m.setCallbackWithChild(comparator, hip, key, value, maxInlineSize)
 
-	return existingValue, nil
+	return existingMapValueStorable, nil
 }
 
 func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, key Value) (Storable, Storable, error) {
+	keyStorable, valueStorable, err := m.remove(comparator, hip, key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
+	// This is to prevent potential data loss because the overwritten inlined slab was not in
+	// storage and any future changes to it would have been lost.
+	switch s := valueStorable.(type) {
+	case ArraySlab:
+		err = s.Uninline(m.Storage)
+		if err != nil {
+			return nil, nil, err
+		}
+		valueStorable = SlabIDStorable(s.SlabID())
+
+	case MapSlab:
+		err = s.Uninline(m.Storage)
+		if err != nil {
+			return nil, nil, err
+		}
+		valueStorable = SlabIDStorable(s.SlabID())
+	}
+
+	return keyStorable, valueStorable, nil
+}
+
+func (m *OrderedMap) remove(comparator ValueComparator, hip HashInputProvider, key Value) (Storable, Storable, error) {
 
 	keyDigest, err := m.digesterBuilder.Digest(hip, key)
 	if err != nil {
@@ -4846,7 +5022,6 @@ func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, k
 				// Don't need to wrap error as external error because err is already categorized by OrderedMap.promoteChildAsNewRoot().
 				return nil, nil, err
 			}
-			return k, v, nil
 		}
 	}
 
@@ -4858,6 +5033,8 @@ func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, k
 		}
 	}
 
+	// If this map is a child, it notifies parent by invoking callback because
+	// this map is changed by removing element.
 	err = m.notifyParentIfNeeded()
 	if err != nil {
 		return nil, nil, err
@@ -5004,53 +5181,20 @@ func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (S
 		// Root slab is inlinable and was NOT inlined.
 
 		// Inline root data slab.
-
-		// Inlineable root slab must be data slab.
-		rootDataSlab, ok := m.root.(*MapDataSlab)
-		if !ok {
-			return nil, NewFatalError(fmt.Errorf("unexpected inlinable map slab type %T", m.root))
-		}
-
-		rootID := rootDataSlab.header.slabID
-
-		// Remove root slab from storage because it is going to be inlined.
-		err := m.Storage.Remove(rootID)
+		err := m.root.Inline(m.Storage)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", rootID))
+			return nil, err
 		}
 
-		// Update root data slab size from not inlined to inlined
-		rootDataSlab.header.size = inlinedMapDataSlabPrefixSize + rootDataSlab.elements.Size()
-
-		// Update root data slab inlined status.
-		rootDataSlab.inlined = true
-
-		return rootDataSlab, nil
+		return m.root, nil
 
 	case !inlinable && inlined:
-
 		// Root slab is NOT inlinable and was inlined.
 
-		// Un-inline root slab.
-
-		// Inlined root slab must be data slab.
-		rootDataSlab, ok := m.root.(*MapDataSlab)
-		if !ok {
-			return nil, NewFatalError(fmt.Errorf("unexpected inlined map slab type %T", m.root))
-		}
-
-		// Update root data slab size from inlined to not inlined.
-		rootDataSlab.header.size = mapRootDataSlabPrefixSize + rootDataSlab.elements.Size()
-
-		// Update root data slab inlined status.
-		rootDataSlab.inlined = false
-
-		// Store root slab in storage
-		err := m.Storage.Store(m.SlabID(), m.root)
+		// Uninline root slab.
+		err := m.root.Uninline(m.Storage)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.SlabID()))
+			return nil, err
 		}
 
 		return SlabIDStorable(m.SlabID()), nil
@@ -5638,12 +5782,12 @@ func NewMapFromBatchData(
 			prevElem := elements.elems[lastElementIndex]
 			prevElemSize := prevElem.Size()
 
-			elem, _, existingValue, err := prevElem.Set(storage, address, digesterBuilder, digester, 0, hkey, comparator, hip, key, value)
+			elem, _, existingMapValueStorable, err := prevElem.Set(storage, address, digesterBuilder, digester, 0, hkey, comparator, hip, key, value)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by element.Set().
 				return nil, err
 			}
-			if existingValue != nil {
+			if existingMapValueStorable != nil {
 				return nil, NewDuplicateKeyError(key)
 			}
 

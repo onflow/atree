@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -61,14 +62,36 @@ const (
 	// 32 is faster than 24 and 40.
 	linearScanThreshold = 32
 
+	// inlined tag number size: CBOR tag number CBORTagInlinedArray or CBORTagInlinedMap
+	inlinedTagNumSize = 2
+
+	// inlined CBOR array head size: CBOR array head of 3 elements (extra data index, value id, elements)
+	inlinedCBORArrayHeadSize = 1
+
+	// inlined extra data index size: CBOR positive number encoded in 2 bytes [0, 255] (fixed-size for easy computation)
+	inlinedExtraDataIndexSize = 2
+
+	// inlined CBOR byte string head size for value ID: CBOR byte string head for byte string of 8 bytes
+	inlinedCBORValueIDHeadSize = 1
+
+	// inlined value id size: encoded in 8 bytes
+	inlinedValueIDSize = 8
+
 	// inlined array data slab prefix size:
 	//   tag number (2 bytes) +
 	//   3-element array head (1 byte) +
-	//   extra data ref index (2 bytes) [0, 255] +
+	//   extra data index (2 bytes) [0, 255] +
 	//   value ID index head (1 byte) +
 	//   value ID index (8 bytes) +
 	//   element array head (3 bytes)
-	inlinedArrayDataSlabPrefixSize = 2 + 1 + 2 + 1 + 8 + arrayDataSlabElementHeadSize
+	inlinedArrayDataSlabPrefixSize = inlinedTagNumSize +
+		inlinedCBORArrayHeadSize +
+		inlinedExtraDataIndexSize +
+		inlinedCBORValueIDHeadSize +
+		inlinedValueIDSize +
+		arrayDataSlabElementHeadSize
+
+	maxInlinedExtraDataIndex = 255
 )
 
 type ArraySlabHeader struct {
@@ -103,9 +126,8 @@ func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		return nil, NewNotValueError(a.SlabID())
 	}
 	return &Array{
-		Storage:             storage,
-		root:                a,
-		mutableElementIndex: make(map[ValueID]uint64),
+		Storage: storage,
+		root:    a,
 	}, nil
 }
 
@@ -132,9 +154,8 @@ func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 		return nil, NewNotValueError(a.SlabID())
 	}
 	return &Array{
-		Storage:             storage,
-		root:                a,
-		mutableElementIndex: make(map[ValueID]uint64),
+		Storage: storage,
+		root:    a,
 	}, nil
 }
 
@@ -165,6 +186,8 @@ type ArraySlab interface {
 
 	Inlined() bool
 	Inlinable(maxInlineSize uint64) bool
+	Inline(SlabStorage) error
+	Uninline(SlabStorage) error
 }
 
 // Array is a heterogeneous variable-size array, storing any type of values
@@ -192,8 +215,27 @@ type Array struct {
 
 	// mutableElementIndex tracks index of mutable element, such as Array and OrderedMap.
 	// This is needed by mutable element to properly update itself through parentUpdater.
+	// WARNING: since mutableElementIndex is created lazily, we need to create mutableElementIndex
+	// if it is nil before adding/updating elements.  Range, delete, and read are no-ops on nil Go map.
 	// TODO: maybe optimize by replacing map to get faster updates.
 	mutableElementIndex map[ValueID]uint64
+}
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		e := new(bytes.Buffer)
+		e.Grow(int(maxThreshold))
+		return e
+	},
+}
+
+func getBuffer() *bytes.Buffer {
+	return bufferPool.Get().(*bytes.Buffer)
+}
+
+func putBuffer(e *bytes.Buffer) {
+	e.Reset()
+	bufferPool.Put(e)
 }
 
 var _ Value = &Array{}
@@ -612,7 +654,7 @@ func DecodeInlinedArrayStorable(
 				len(b)))
 	}
 
-	var index [8]byte
+	var index SlabIndex
 	copy(index[:], b)
 
 	slabID := NewSlabID(parentSlabID.address, index)
@@ -675,9 +717,9 @@ func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedEx
 
 	extraDataIndex := inlinedTypeInfo.addArrayExtraData(a.extraData)
 
-	if extraDataIndex > 255 {
+	if extraDataIndex > maxInlinedExtraDataIndex {
 		return NewEncodingError(
-			fmt.Errorf("failed to encode inlined array data slab: extra data index %d exceeds limit 255", extraDataIndex))
+			fmt.Errorf("failed to encode inlined array data slab: extra data index %d exceeds limit %d", extraDataIndex, maxInlinedExtraDataIndex))
 	}
 
 	var err error
@@ -751,9 +793,11 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	inlinedTypes := newInlinedExtraData()
 
-	// TODO: maybe use a buffer pool
-	var elementBuf bytes.Buffer
-	elementEnc := NewEncoder(&elementBuf, enc.encMode)
+	// Get a buffer from a pool to encode elements.
+	elementBuf := getBuffer()
+	defer putBuffer(elementBuf)
+
+	elementEnc := NewEncoder(elementBuf, enc.encMode)
 
 	err := a.encodeElements(elementEnc, inlinedTypes)
 	if err != nil {
@@ -904,6 +948,56 @@ func (a *ArrayDataSlab) Inlinable(maxInlineSize uint64) bool {
 
 	// Inlined byte size must be less than max inline size.
 	return uint64(inlinedSize) <= maxInlineSize
+}
+
+// Inline converts not-inlined ArrayDataSlab to inlined ArrayDataSlab and removes it from storage.
+func (a *ArrayDataSlab) Inline(storage SlabStorage) error {
+	if a.inlined {
+		return NewFatalError(fmt.Errorf("failed to inline ArrayDataSlab %s: it is inlined already", a.header.slabID))
+	}
+
+	id := a.header.slabID
+
+	// Remove slab from storage because it is going to be inlined.
+	err := storage.Remove(id)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", id))
+	}
+
+	// Update data slab size as inlined slab.
+	a.header.size = a.header.size -
+		arrayRootDataSlabPrefixSize +
+		inlinedArrayDataSlabPrefixSize
+
+	// Update data slab inlined status.
+	a.inlined = true
+
+	return nil
+}
+
+// Uninline converts an inlined ArrayDataSlab to uninlined ArrayDataSlab and stores it in storage.
+func (a *ArrayDataSlab) Uninline(storage SlabStorage) error {
+	if !a.inlined {
+		return NewFatalError(fmt.Errorf("failed to un-inline ArrayDataSlab %s: it is not inlined", a.header.slabID))
+	}
+
+	// Update data slab size
+	a.header.size = a.header.size -
+		inlinedArrayDataSlabPrefixSize +
+		arrayRootDataSlabPrefixSize
+
+	// Update data slab inlined status
+	a.inlined = false
+
+	// Store slab in storage
+	err := storage.Store(a.header.slabID, a)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+	}
+
+	return nil
 }
 
 func (a *ArrayDataSlab) hasPointer() bool {
@@ -2534,6 +2628,14 @@ func (a *ArrayMetaDataSlab) Inlinable(_ uint64) bool {
 	return false
 }
 
+func (a *ArrayMetaDataSlab) Inline(_ SlabStorage) error {
+	return NewFatalError(fmt.Errorf("failed to inline ArrayMetaDataSlab %s: ArrayMetaDataSlab can't be inlined", a.header.slabID))
+}
+
+func (a *ArrayMetaDataSlab) Uninline(_ SlabStorage) error {
+	return NewFatalError(fmt.Errorf("failed to uninline ArrayMetaDataSlab %s: ArrayMetaDataSlab is already unlined", a.header.slabID))
+}
+
 func (a *ArrayMetaDataSlab) IsData() bool {
 	return false
 }
@@ -2647,9 +2749,8 @@ func NewArray(storage SlabStorage, address Address, typeInfo TypeInfo) (*Array, 
 	}
 
 	return &Array{
-		Storage:             storage,
-		root:                root,
-		mutableElementIndex: make(map[ValueID]uint64),
+		Storage: storage,
+		root:    root,
 	}, nil
 }
 
@@ -2670,34 +2771,41 @@ func NewArrayWithRootID(storage SlabStorage, rootID SlabID) (*Array, error) {
 	}
 
 	return &Array{
-		Storage:             storage,
-		root:                root,
-		mutableElementIndex: make(map[ValueID]uint64),
+		Storage: storage,
+		root:    root,
 	}, nil
 }
 
 // TODO: maybe optimize this
-func (a *Array) incrementIndexFrom(index uint64) {
+func (a *Array) incrementIndexFrom(index uint64) error {
 	// Although range loop over Go map is not deterministic, it is OK
 	// to use here because this operation is free of side-effect and
 	// leads to the same results independent of map order.
 	for id, i := range a.mutableElementIndex {
 		if i >= index {
+			if a.mutableElementIndex[id]+1 >= a.Count() {
+				return NewFatalError(fmt.Errorf("failed to increment index of ValueID %s in array %s: new index exceeds array count", id, a.ValueID()))
+			}
 			a.mutableElementIndex[id]++
 		}
 	}
+	return nil
 }
 
 // TODO: maybe optimize this
-func (a *Array) decrementIndexFrom(index uint64) {
+func (a *Array) decrementIndexFrom(index uint64) error {
 	// Although range loop over Go map is not deterministic, it is OK
 	// to use here because this operation is free of side-effect and
 	// leads to the same results independent of map order.
 	for id, i := range a.mutableElementIndex {
 		if i > index {
+			if a.mutableElementIndex[id] <= 0 {
+				return NewFatalError(fmt.Errorf("failed to decrement index of ValueID %s in array %s: new index < 0", id, a.ValueID()))
+			}
 			a.mutableElementIndex[id]--
 		}
 	}
+	return nil
 }
 
 func (a *Array) getIndexByValueID(id ValueID) (uint64, bool) {
@@ -2709,8 +2817,8 @@ func (a *Array) setParentUpdater(f parentUpdater) {
 	a.parentUpdater = f
 }
 
-// setCallbackWithChild sets up callback function with child value so
-// parent array a can be notified when child value is modified.
+// setCallbackWithChild sets up callback function with child value (child)
+// so parent array (a) can be notified when child value is modified.
 func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64) {
 	c, ok := child.(mutableValueNotifier)
 	if !ok {
@@ -2719,39 +2827,68 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 
 	vid := c.ValueID()
 
+	// mutableElementIndex is lazily initialized.
+	if a.mutableElementIndex == nil {
+		a.mutableElementIndex = make(map[ValueID]uint64)
+	}
+
 	// Index i will be updated with array operations, which affects element index.
 	a.mutableElementIndex[vid] = i
 
-	c.setParentUpdater(func() error {
+	c.setParentUpdater(func() (found bool, err error) {
 
 		// Avoid unnecessary write operation on parent container.
 		// Child value was stored as SlabIDStorable (not inlined) in parent container,
 		// and continues to be stored as SlabIDStorable (still not inlinable),
 		// so no update to parent container is needed.
 		if !c.Inlined() && !c.Inlinable(maxInlineSize) {
-			return nil
+			return true, nil
 		}
 
-		// Get latest index by child value ID.
-		index, exist := a.getIndexByValueID(vid)
+		// Get latest adjusted index by child value ID.
+		adjustedIndex, exist := a.getIndexByValueID(vid)
 		if !exist {
-			return NewFatalError(fmt.Errorf("failed to get index for child element with value id %s", vid))
+			return false, nil
+		}
+
+		storable, err := a.root.Get(a.Storage, adjustedIndex)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by ArraySlab.Get().
+			return false, err
+		}
+
+		// Verify retrieved element is either SlabIDStorable or Slab, with identical value ID.
+		switch storable := storable.(type) {
+		case SlabIDStorable:
+			sid := SlabID(storable)
+			if !vid.equal(sid) {
+				return false, nil
+			}
+
+		case Slab:
+			sid := storable.SlabID()
+			if !vid.equal(sid) {
+				return false, nil
+			}
+
+		default:
+			return false, nil
 		}
 
 		// Set child value with parent array using updated index.
 		// Set() calls c.Storable() which returns inlined or not-inlined child storable.
-		existingValueStorable, err := a.Set(index, c)
+		existingValueStorable, err := a.set(adjustedIndex, c)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		// Verify overwritten storable has identical value ID.
 
-		switch x := existingValueStorable.(type) {
+		switch existingValueStorable := existingValueStorable.(type) {
 		case SlabIDStorable:
-			sid := SlabID(x)
+			sid := SlabID(existingValueStorable)
 			if !vid.equal(sid) {
-				return NewFatalError(
+				return false, NewFatalError(
 					fmt.Errorf(
 						"failed to reset child value in parent updater callback: overwritten SlabIDStorable %s != value ID %s",
 						sid,
@@ -2759,9 +2896,9 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 			}
 
 		case Slab:
-			sid := x.SlabID()
+			sid := existingValueStorable.SlabID()
 			if !vid.equal(sid) {
-				return NewFatalError(
+				return false, NewFatalError(
 					fmt.Errorf(
 						"failed to reset child value in parent updater callback: overwritten Slab ID %s != value ID %s",
 						sid,
@@ -2769,27 +2906,38 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 			}
 
 		case nil:
-			return NewFatalError(
+			return false, NewFatalError(
 				fmt.Errorf(
 					"failed to reset child value in parent updater callback: overwritten value is nil"))
 
 		default:
-			return NewFatalError(
+			return false, NewFatalError(
 				fmt.Errorf(
 					"failed to reset child value in parent updater callback: overwritten value is wrong type %T",
 					existingValueStorable))
 		}
 
-		return nil
+		return true, nil
 	})
 }
 
-// notifyParentIfNeeded calls parent updater if this array is a child value.
+// notifyParentIfNeeded calls parent updater if this array (a) is a child element in another container.
 func (a *Array) notifyParentIfNeeded() error {
 	if a.parentUpdater == nil {
 		return nil
 	}
-	return a.parentUpdater()
+
+	// If parentUpdater() doesn't find child array (a), then no-op on parent container
+	// and unset parentUpdater callback in child array.  This can happen when child
+	// array is an outdated reference (removed or overwritten in parent container).
+	found, err := a.parentUpdater()
+	if err != nil {
+		return err
+	}
+	if !found {
+		a.parentUpdater = nil
+	}
+	return nil
 }
 
 func (a *Array) Get(i uint64) (Value, error) {
@@ -2805,14 +2953,59 @@ func (a *Array) Get(i uint64) (Value, error) {
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
 	}
 
-	// Set up notification callback in child value so
-	// when child value is modified parent a is notified.
+	// As a parent, this array (a) sets up notification callback with child
+	// value (v) so this array can be notified when child value is modified.
 	a.setCallbackWithChild(i, v, maxInlineArrayElementSize)
 
 	return v, nil
 }
 
 func (a *Array) Set(index uint64, value Value) (Storable, error) {
+	existingStorable, err := a.set(index, value)
+	if err != nil {
+		return nil, err
+	}
+
+	var existingValueID ValueID
+
+	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
+	// This is to prevent potential data loss because the overwritten inlined slab was not in
+	// storage and any future changes to it would have been lost.
+	switch s := existingStorable.(type) {
+	case ArraySlab:
+		err = s.Uninline(a.Storage)
+		if err != nil {
+			return nil, err
+		}
+		existingStorable = SlabIDStorable(s.SlabID())
+		existingValueID = slabIDToValueID(s.SlabID())
+
+	case MapSlab:
+		err = s.Uninline(a.Storage)
+		if err != nil {
+			return nil, err
+		}
+		existingStorable = SlabIDStorable(s.SlabID())
+		existingValueID = slabIDToValueID(s.SlabID())
+
+	case SlabIDStorable:
+		existingValueID = slabIDToValueID(SlabID(s))
+	}
+
+	// Remove overwritten array/map's ValueID from mutableElementIndex if:
+	// - new value isn't array/map, or
+	// - new value is array/map with different value ID
+	if existingValueID != emptyValueID {
+		newValue, ok := value.(mutableValueNotifier)
+		if !ok || existingValueID != newValue.ValueID() {
+			delete(a.mutableElementIndex, existingValueID)
+		}
+	}
+
+	return existingStorable, nil
+}
+
+func (a *Array) set(index uint64, value Value) (Storable, error) {
 	existingStorable, err := a.root.Set(a.Storage, a.Address(), index, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Set().
@@ -2825,7 +3018,6 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 			// Don't need to wrap error as external error because err is already categorized by Array.splitRoot().
 			return nil, err
 		}
-		return existingStorable, nil
 	}
 
 	if !a.root.IsData() {
@@ -2839,13 +3031,28 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 		}
 	}
 
+	// This array (a) is a parent to the new child (value), and this array
+	// can also be a child in another container.
+	//
+	// As a parent, this array needs to setup notification callback with
+	// the new child value, so it can be notified when child is modified.
+	//
+	// If this array is a child, it needs to notify its parent because its
+	// content (maybe also its size) is changed by this "Set" operation.
+
+	// If this array is a child, it notifies parent by invoking callback because
+	// this array is changed by setting new child.
 	err = a.notifyParentIfNeeded()
 	if err != nil {
 		return nil, err
 	}
 
-	// Set up notification callback in child value so
-	// when child value is modified parent a is notified.
+	// As a parent, this array sets up notification callback with child value
+	// so this array can be notified when child value is modified.
+	//
+	// Setting up notification with new child value can happen at any time
+	// (either before or after this array notifies its parent) because
+	// setting up notification doesn't trigger any read/write ops on parent or child.
 	a.setCallbackWithChild(index, value, maxInlineArrayElementSize)
 
 	return existingStorable, nil
@@ -2864,25 +3071,87 @@ func (a *Array) Insert(index uint64, value Value) error {
 	}
 
 	if a.root.IsFull() {
-		// Don't need to wrap error as external error because err is already categorized by Array.splitRoot().
-		return a.splitRoot()
+		err = a.splitRoot()
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by Array.splitRoot().
+			return err
+		}
 	}
 
-	a.incrementIndexFrom(index)
+	err = a.incrementIndexFrom(index)
+	if err != nil {
+		return err
+	}
 
+	// This array (a) is a parent to the new child (value), and this array
+	// can also be a child in another container.
+	//
+	// As a parent, this array needs to setup notification callback with
+	// the new child value, so it can be notified when child is modified.
+	//
+	// If this array is a child, it needs to notify its parent because its
+	// content (also its size) is changed by this "Insert" operation.
+
+	// If this array is a child, it notifies parent by invoking callback because
+	// this array is changed by inserting new child.
 	err = a.notifyParentIfNeeded()
 	if err != nil {
 		return err
 	}
 
-	// Set up notification callback in child value so
-	// when child value is modified parent a is notified.
+	// As a parent, this array sets up notification callback with child value
+	// so this array can be notified when child value is modified.
+	//
+	// Setting up notification with new child value can happen at any time
+	// (either before or after this array notifies its parent) because
+	// setting up notification doesn't trigger any read/write ops on parent or child.
 	a.setCallbackWithChild(index, value, maxInlineArrayElementSize)
 
 	return nil
 }
 
 func (a *Array) Remove(index uint64) (Storable, error) {
+	storable, err := a.remove(index)
+	if err != nil {
+		return nil, err
+	}
+
+	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
+	// This is to prevent potential data loss because the overwritten inlined slab was not in
+	// storage and any future changes to it would have been lost.
+	switch s := storable.(type) {
+	case ArraySlab:
+		err = s.Uninline(a.Storage)
+		if err != nil {
+			return nil, err
+		}
+		storable = SlabIDStorable(s.SlabID())
+
+		// Delete removed element ValueID from mutableElementIndex
+		removedValueID := slabIDToValueID(s.SlabID())
+		delete(a.mutableElementIndex, removedValueID)
+
+	case MapSlab:
+		err = s.Uninline(a.Storage)
+		if err != nil {
+			return nil, err
+		}
+		storable = SlabIDStorable(s.SlabID())
+
+		// Delete removed element ValueID from mutableElementIndex
+		removedValueID := slabIDToValueID(s.SlabID())
+		delete(a.mutableElementIndex, removedValueID)
+
+	case SlabIDStorable:
+		// Delete removed element ValueID from mutableElementIndex
+		removedValueID := slabIDToValueID(SlabID(s))
+		delete(a.mutableElementIndex, removedValueID)
+	}
+
+	return storable, nil
+}
+
+func (a *Array) remove(index uint64) (Storable, error) {
 	storable, err := a.root.Remove(a.Storage, index)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Remove().
@@ -2901,8 +3170,13 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 		}
 	}
 
-	a.decrementIndexFrom(index)
+	err = a.decrementIndexFrom(index)
+	if err != nil {
+		return nil, err
+	}
 
+	// If this array is a child, it notifies parent by invoking callback because
+	// this array is changed by removing element.
 	err = a.notifyParentIfNeeded()
 	if err != nil {
 		return nil, err
@@ -3049,57 +3323,21 @@ func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storab
 		// Root slab is inlinable and was NOT inlined.
 
 		// Inline root data slab.
-
-		// Inlineable root slab must be data slab.
-		rootDataSlab, ok := a.root.(*ArrayDataSlab)
-		if !ok {
-			return nil, NewFatalError(fmt.Errorf("unexpected inlinable array slab type %T", a.root))
-		}
-
-		rootID := rootDataSlab.header.slabID
-
-		// Remove root slab from storage because it is going to be inlined.
-		err := a.Storage.Remove(rootID)
+		err := a.root.Inline(a.Storage)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", rootID))
+			return nil, err
 		}
 
-		// Update root data slab size as inlined slab.
-		rootDataSlab.header.size = rootDataSlab.header.size -
-			arrayRootDataSlabPrefixSize +
-			inlinedArrayDataSlabPrefixSize
-
-		// Update root data slab inlined status.
-		rootDataSlab.inlined = true
-
-		return rootDataSlab, nil
+		return a.root, nil
 
 	case !inlinable && inlined:
 
 		// Root slab is NOT inlinable and was previously inlined.
 
-		// Un-inline root slab.
-
-		// Inlined root slab must be data slab.
-		rootDataSlab, ok := a.root.(*ArrayDataSlab)
-		if !ok {
-			return nil, NewFatalError(fmt.Errorf("unexpected inlined array slab type %T", a.root))
-		}
-
-		// Update root data slab size
-		rootDataSlab.header.size = rootDataSlab.header.size -
-			inlinedArrayDataSlabPrefixSize +
-			arrayRootDataSlabPrefixSize
-
-		// Update root data slab inlined status.
-		rootDataSlab.inlined = false
-
-		// Store root slab in storage
-		err := a.Storage.Store(rootDataSlab.header.slabID, a.root)
+		// Uninline root slab.
+		err := a.root.Uninline(a.Storage)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.SlabID()))
+			return nil, err
 		}
 
 		return SlabIDStorable(a.SlabID()), nil
@@ -3623,9 +3861,8 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 	}
 
 	return &Array{
-		Storage:             storage,
-		root:                root,
-		mutableElementIndex: make(map[ValueID]uint64),
+		Storage: storage,
+		root:    root,
 	}, nil
 }
 

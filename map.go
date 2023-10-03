@@ -135,7 +135,7 @@ type element interface {
 		hip HashInputProvider,
 		key Value,
 		value Value,
-	) (newElem element, keyStorable MapKey, existingValue MapValue, err error)
+	) (newElem element, keyStorable MapKey, existingMapValueStorable MapValue, err error)
 
 	// Remove returns matched key, value, and updated element.
 	// Updated element may be nil, modified, or a different type of element.
@@ -654,7 +654,7 @@ func (e *singleElement) Set(
 
 	// Key matches, overwrite existing value
 	if equal {
-		existingValue := e.value
+		existingMapValueStorable := e.value
 
 		valueStorable, err := value.Storable(storage, address, maxInlineMapValueSize(uint64(e.key.ByteSize())))
 		if err != nil {
@@ -664,7 +664,7 @@ func (e *singleElement) Set(
 
 		e.value = valueStorable
 		e.size = singleElementPrefixSize + e.key.ByteSize() + e.value.ByteSize()
-		return e, e.key, existingValue, nil
+		return e, e.key, existingMapValueStorable, nil
 	}
 
 	// Hash collision detected
@@ -822,7 +822,7 @@ func (e *inlineCollisionGroup) Set(
 	}
 	hkey, _ := digester.Digest(level)
 
-	keyStorable, existingValue, err := e.elements.Set(storage, address, b, digester, level, hkey, comparator, hip, key, value)
+	keyStorable, existingMapValueStorable, err := e.elements.Set(storage, address, b, digester, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by elements.Set().
 		return nil, nil, nil, err
@@ -863,11 +863,11 @@ func (e *inlineCollisionGroup) Set(
 			return &externalCollisionGroup{
 				slabID: id,
 				size:   externalCollisionGroupPrefixSize + SlabIDStorable(id).ByteSize(),
-			}, keyStorable, existingValue, nil
+			}, keyStorable, existingMapValueStorable, nil
 		}
 	}
 
-	return e, keyStorable, existingValue, nil
+	return e, keyStorable, existingMapValueStorable, nil
 }
 
 // Remove returns key, value, and updated element if key is found.
@@ -1021,12 +1021,12 @@ func (e *externalCollisionGroup) Set(
 	}
 	hkey, _ := digester.Digest(level)
 
-	keyStorable, existingValue, err := slab.Set(storage, b, digester, level, hkey, comparator, hip, key, value)
+	keyStorable, existingMapValueStorable, err := slab.Set(storage, b, digester, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapSlab.Set().
 		return nil, nil, nil, err
 	}
-	return e, keyStorable, existingValue, nil
+	return e, keyStorable, existingMapValueStorable, nil
 }
 
 // Remove returns key, value, and updated element if key is found.
@@ -1498,7 +1498,7 @@ func (e *hkeyElements) Set(
 			}
 		}
 
-		elem, keyStorable, existingValue, err := elem.Set(storage, address, b, digester, level, hkey, comparator, hip, key, value)
+		elem, keyStorable, existingMapValueStorable, err := elem.Set(storage, address, b, digester, level, hkey, comparator, hip, key, value)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by element.Set().
 			return nil, nil, err
@@ -1515,7 +1515,7 @@ func (e *hkeyElements) Set(
 		}
 		e.size = size
 
-		return keyStorable, existingValue, nil
+		return keyStorable, existingMapValueStorable, nil
 	}
 
 	// No matching hkey
@@ -2017,8 +2017,8 @@ func (e *singleElements) Set(
 		}
 
 		if equal {
-			existingKey := elem.key
-			existingValue := elem.value
+			existingKeyStorable := elem.key
+			existingValueStorable := elem.value
 
 			vs, err := value.Storable(storage, address, maxInlineMapValueSize(uint64(elem.key.ByteSize())))
 			if err != nil {
@@ -2038,7 +2038,7 @@ func (e *singleElements) Set(
 			}
 			e.size = size
 
-			return existingKey, existingValue, nil
+			return existingKeyStorable, existingValueStorable, nil
 		}
 	}
 
@@ -3177,7 +3177,7 @@ func (m *MapDataSlab) Set(
 	value Value,
 ) (MapKey, MapValue, error) {
 
-	keyStorable, existingValue, err := m.elements.Set(storage, m.SlabID().address, b, digester, level, hkey, comparator, hip, key, value)
+	keyStorable, existingMapValueStorable, err := m.elements.Set(storage, m.SlabID().address, b, digester, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by elements.Set().
 		return nil, nil, err
@@ -3198,7 +3198,7 @@ func (m *MapDataSlab) Set(
 		}
 	}
 
-	return keyStorable, existingValue, nil
+	return keyStorable, existingMapValueStorable, nil
 }
 
 func (m *MapDataSlab) Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
@@ -3888,7 +3888,7 @@ func (m *MapMetaDataSlab) Set(
 		return nil, nil, err
 	}
 
-	keyStorable, existingValue, err := child.Set(storage, b, digester, level, hkey, comparator, hip, key, value)
+	keyStorable, existingMapValueStorable, err := child.Set(storage, b, digester, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapSlab.Set().
 		return nil, nil, err
@@ -3907,7 +3907,7 @@ func (m *MapMetaDataSlab) Set(
 			// Don't need to wrap error as external error because err is already categorized by MapMetaDataSlab.SplitChildSlab().
 			return nil, nil, err
 		}
-		return keyStorable, existingValue, nil
+		return keyStorable, existingMapValueStorable, nil
 	}
 
 	if underflowSize, underflow := child.IsUnderflow(); underflow {
@@ -3916,7 +3916,7 @@ func (m *MapMetaDataSlab) Set(
 			// Don't need to wrap error as external error because err is already categorized by MapMetaDataSlab.MergeOrRebalanceChildSlab().
 			return nil, nil, err
 		}
-		return keyStorable, existingValue, nil
+		return keyStorable, existingMapValueStorable, nil
 	}
 
 	err = storage.Store(m.header.slabID, m)
@@ -3924,7 +3924,7 @@ func (m *MapMetaDataSlab) Set(
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
 		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.slabID))
 	}
-	return keyStorable, existingValue, nil
+	return keyStorable, existingMapValueStorable, nil
 }
 
 func (m *MapMetaDataSlab) Remove(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
@@ -4902,13 +4902,13 @@ func (m *OrderedMap) set(comparator ValueComparator, hip HashInputProvider, key 
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to get map key digest at level %d", level))
 	}
 
-	keyStorable, existingValue, err := m.root.Set(m.Storage, m.digesterBuilder, keyDigest, level, hkey, comparator, hip, key, value)
+	keyStorable, existingMapValueStorable, err := m.root.Set(m.Storage, m.digesterBuilder, keyDigest, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapSlab.Set().
 		return nil, err
 	}
 
-	if existingValue == nil {
+	if existingMapValueStorable == nil {
 		m.root.ExtraData().incrementCount()
 	}
 
@@ -4957,7 +4957,7 @@ func (m *OrderedMap) set(comparator ValueComparator, hip HashInputProvider, key 
 	maxInlineSize := maxInlineMapValueSize(uint64(keyStorable.ByteSize()))
 	m.setCallbackWithChild(comparator, hip, key, value, maxInlineSize)
 
-	return existingValue, nil
+	return existingMapValueStorable, nil
 }
 
 func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, key Value) (Storable, Storable, error) {
@@ -5724,12 +5724,12 @@ func NewMapFromBatchData(
 			prevElem := elements.elems[lastElementIndex]
 			prevElemSize := prevElem.Size()
 
-			elem, _, existingValue, err := prevElem.Set(storage, address, digesterBuilder, digester, 0, hkey, comparator, hip, key, value)
+			elem, _, existingMapValueStorable, err := prevElem.Set(storage, address, digesterBuilder, digester, 0, hkey, comparator, hip, key, value)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by element.Set().
 				return nil, err
 			}
-			if existingValue != nil {
+			if existingMapValueStorable != nil {
 				return nil, NewDuplicateKeyError(key)
 			}
 

@@ -147,12 +147,12 @@ func (i testCompositeTypeInfo) Equal(other TypeInfo) bool {
 }
 
 func typeInfoComparator(a, b TypeInfo) bool {
-	switch x := a.(type) {
+	switch a := a.(type) {
 	case testTypeInfo:
-		return x.Equal(b)
+		return a.Equal(b)
 
 	case testCompositeTypeInfo:
-		return x.Equal(b)
+		return a.Equal(b)
 
 	default:
 		return false

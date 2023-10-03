@@ -7882,15 +7882,15 @@ func TestEmptyMap(t *testing.T) {
 	})
 
 	t.Run("remove", func(t *testing.T) {
-		existingKey, existingValue, err := m.Remove(compare, hashInputProvider, Uint64Value(0))
+		existingMapKeyStorable, existingMapValueStorable, err := m.Remove(compare, hashInputProvider, Uint64Value(0))
 		require.Equal(t, 1, errorCategorizationCount(err))
 		var userError *UserError
 		var keyNotFoundError *KeyNotFoundError
 		require.ErrorAs(t, err, &userError)
 		require.ErrorAs(t, err, &keyNotFoundError)
 		require.ErrorAs(t, userError, &keyNotFoundError)
-		require.Nil(t, existingKey)
-		require.Nil(t, existingValue)
+		require.Nil(t, existingMapKeyStorable)
+		require.Nil(t, existingMapValueStorable)
 	})
 
 	t.Run("iterate", func(t *testing.T) {
@@ -10882,10 +10882,10 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			for _, k := range keys {
-				existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
-				require.Equal(t, k, existingKey)
-				require.NotNil(t, existingValue)
+				require.Equal(t, k, existingMapKeyStorable)
+				require.NotNil(t, existingMapValueStorable)
 
 				delete(expectedChildMapValues, k)
 
@@ -11041,10 +11041,10 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				break
 			}
 
-			existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, aKey)
+			existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, aKey)
 			require.NoError(t, err)
-			require.Equal(t, aKey, existingKey)
-			require.NotNil(t, existingValue)
+			require.Equal(t, aKey, existingMapKeyStorable)
+			require.NotNil(t, existingMapValueStorable)
 
 			delete(expectedChildMapValues, aKey)
 
@@ -11084,10 +11084,10 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			for _, k := range keys {
-				existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
-				require.Equal(t, k, existingKey)
-				require.NotNil(t, existingValue)
+				require.Equal(t, k, existingMapKeyStorable)
+				require.NotNil(t, existingMapValueStorable)
 
 				delete(expectedChildMapValues, k)
 
@@ -11231,10 +11231,10 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				break
 			}
 
-			existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, aKey)
+			existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, aKey)
 			require.NoError(t, err)
-			require.Equal(t, aKey, existingKey)
-			require.NotNil(t, existingValue)
+			require.Equal(t, aKey, existingMapKeyStorable)
+			require.NotNil(t, existingMapValueStorable)
 
 			delete(expectedChildMapValues, aKey)
 
@@ -11268,10 +11268,10 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			for _, k := range keys {
-				existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
-				require.Equal(t, k, existingKey)
-				require.NotNil(t, existingValue)
+				require.Equal(t, k, existingMapKeyStorable)
+				require.NotNil(t, existingMapValueStorable)
 
 				delete(expectedChildMapValues, k)
 
@@ -11515,10 +11515,10 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			for _, k := range gchildKeys {
-				existingKey, existingValue, err := gchildMap.Remove(compare, hashInputProvider, k)
+				existingMapKey, existingMapValueStorable, err := gchildMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
-				require.Equal(t, k, existingKey)
-				require.NotNil(t, existingValue)
+				require.Equal(t, k, existingMapKey)
+				require.NotNil(t, existingMapValueStorable)
 
 				delete(expectedGChildMapValues, k)
 
@@ -11782,10 +11782,10 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			// Remove all elements (large element first) to trigger grand child map being inlined again.
 			for _, k := range keys {
 
-				existingKey, existingValue, err := gchildMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := gchildMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
-				require.Equal(t, k, existingKey)
-				require.NotNil(t, existingValue)
+				require.Equal(t, k, existingMapKeyStorable)
+				require.NotNil(t, existingMapValueStorable)
 
 				delete(expectedGChildMapValues, k)
 
@@ -12101,10 +12101,10 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			// Remove one element
-			existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, aKey)
+			existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, aKey)
 			require.NoError(t, err)
-			require.Equal(t, aKey, existingKey)
-			require.NotNil(t, existingValue)
+			require.Equal(t, aKey, existingMapKeyStorable)
+			require.NotNil(t, existingMapValueStorable)
 
 			delete(expectedChildMapValues, aKey)
 
@@ -12171,10 +12171,10 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 
 			// Remove all elements, except grand child map
 			for _, k := range keys {
-				existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
-				require.Equal(t, k, existingKey)
-				require.NotNil(t, existingValue)
+				require.Equal(t, k, existingMapKeyStorable)
+				require.NotNil(t, existingMapValueStorable)
 
 				delete(expectedChildMapValues, k)
 
@@ -12417,10 +12417,10 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			// Remove one element from grand child map
-			existingKey, existingValue, err := gchildMap.Remove(compare, hashInputProvider, aKey)
+			existingMapKeyStorable, existingMapValueStorable, err := gchildMap.Remove(compare, hashInputProvider, aKey)
 			require.NoError(t, err)
-			require.Equal(t, aKey, existingKey)
-			require.NotNil(t, existingValue)
+			require.Equal(t, aKey, existingMapKeyStorable)
+			require.NotNil(t, existingMapValueStorable)
 
 			delete(expectedGChildMapValues, aKey)
 
@@ -12473,13 +12473,13 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 
 			// Remove grand children
 			for _, k := range keys {
-				existingKey, existingValue, err := childMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
-				require.Equal(t, k, existingKey)
-				require.NotNil(t, existingValue)
+				require.Equal(t, k, existingMapKeyStorable)
+				require.NotNil(t, existingMapValueStorable)
 
 				// Grand child map is returned as SlabIDStorable, even if it was stored inlined in the parent.
-				id, ok := existingValue.(SlabIDStorable)
+				id, ok := existingMapValueStorable.(SlabIDStorable)
 				require.True(t, ok)
 
 				v, err := id.StoredValue(storage)
@@ -12659,10 +12659,10 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 
 			for _, k := range keysForNonChildMaps {
 
-				existingKey, existingValue, err := parentMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := parentMap.Remove(compare, hashInputProvider, k)
 				require.NoError(t, err)
-				require.NotNil(t, existingKey)
-				require.NotNil(t, existingValue)
+				require.NotNil(t, existingMapKeyStorable)
+				require.NotNil(t, existingMapValueStorable)
 
 				delete(expectedKeyValues, k)
 

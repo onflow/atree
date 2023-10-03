@@ -3359,6 +3359,10 @@ type ArrayIterator struct {
 	readOnly        bool
 }
 
+func (i *ArrayIterator) CanMutate() bool {
+	return !i.readOnly
+}
+
 func (i *ArrayIterator) Next() (Value, error) {
 	if i.remainingCount == 0 {
 		return nil, nil
@@ -3391,7 +3395,7 @@ func (i *ArrayIterator) Next() (Value, error) {
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
 		}
 
-		if !i.readOnly {
+		if i.CanMutate() {
 			// Set up notification callback in child value so
 			// when child value is modified parent a is notified.
 			i.array.setCallbackWithChild(uint64(i.indexInArray), element, maxInlineArrayElementSize)

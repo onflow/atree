@@ -5341,7 +5341,7 @@ type MapElementIterationFunc func(Value) (resume bool, err error)
 
 type MapIterator struct {
 	m            *OrderedMap
-	comparator   ValueComparator // TODO: use comparator and hip to update child element in parent map in register inlining.
+	comparator   ValueComparator
 	hip          HashInputProvider
 	id           SlabID
 	elemIterator *mapElementIterator
@@ -5379,7 +5379,7 @@ func (i *MapIterator) Next() (key Value, value Value, err error) {
 			return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get map value's stored value")
 		}
 
-		if i.comparator != nil && i.hip != nil {
+		if i.CanMutate() {
 			maxInlineSize := maxInlineMapValueSize(uint64(ks.ByteSize()))
 			i.m.setCallbackWithChild(i.comparator, i.hip, key, value, maxInlineSize)
 		}
@@ -5454,7 +5454,7 @@ func (i *MapIterator) NextValue() (value Value, err error) {
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get map value's stored value")
 		}
 
-		if i.comparator != nil && i.hip != nil {
+		if i.CanMutate() {
 			key, err := ks.StoredValue(i.m.Storage)
 			if err != nil {
 				// Wrap err as external error (if needed) because err is returned by Storable interface.
@@ -5520,11 +5520,19 @@ func (m *OrderedMap) iterator(comparator ValueComparator, hip HashInputProvider)
 	}, nil
 }
 
+func (i *MapIterator) CanMutate() bool {
+	return i.comparator != nil && i.hip != nil
+}
+
 func (m *OrderedMap) Iterator(comparator ValueComparator, hip HashInputProvider) (*MapIterator, error) {
-	if comparator == nil || hip == nil {
+	iterator, err := m.iterator(comparator, hip)
+	if err != nil {
+		return nil, err
+	}
+	if !iterator.CanMutate() {
 		return nil, NewUserError(fmt.Errorf("failed to create MapIterator: ValueComparator or HashInputProvider is nil"))
 	}
-	return m.iterator(comparator, hip)
+	return iterator, nil
 }
 
 // ReadOnlyIterator returns readonly iterator for map elements.

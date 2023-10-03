@@ -29,39 +29,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func verifyEmptyArrayV0(
+func testEmptyArrayV0(
 	t *testing.T,
 	storage *PersistentSlabStorage,
 	typeInfo TypeInfo,
 	address Address,
 	array *Array,
 ) {
-	verifyArrayV0(t, storage, typeInfo, address, array, nil, false)
+	testArrayV0(t, storage, typeInfo, address, array, nil, false)
 }
 
-func verifyEmptyArray(
+func testEmptyArray(
 	t *testing.T,
 	storage *PersistentSlabStorage,
 	typeInfo TypeInfo,
 	address Address,
 	array *Array,
 ) {
-	verifyArray(t, storage, typeInfo, address, array, nil, false)
+	testArray(t, storage, typeInfo, address, array, nil, false)
 }
 
-func verifyArrayV0(
-	t *testing.T,
-	storage *PersistentSlabStorage,
-	typeInfo TypeInfo,
-	address Address,
-	array *Array,
-	values []Value,
-	hasNestedArrayMapElement bool,
-) {
-	_verifyArray(t, storage, typeInfo, address, array, values, hasNestedArrayMapElement, false)
-}
-
-func verifyArray(
+func testArrayV0(
 	t *testing.T,
 	storage *PersistentSlabStorage,
 	typeInfo TypeInfo,
@@ -70,11 +58,23 @@ func verifyArray(
 	values []Value,
 	hasNestedArrayMapElement bool,
 ) {
-	_verifyArray(t, storage, typeInfo, address, array, values, hasNestedArrayMapElement, true)
+	_testArray(t, storage, typeInfo, address, array, values, hasNestedArrayMapElement, false)
 }
 
-// verifyArray verifies array elements and validates serialization and in-memory slab tree.
-func _verifyArray(
+func testArray(
+	t *testing.T,
+	storage *PersistentSlabStorage,
+	typeInfo TypeInfo,
+	address Address,
+	array *Array,
+	values []Value,
+	hasNestedArrayMapElement bool,
+) {
+	_testArray(t, storage, typeInfo, address, array, values, hasNestedArrayMapElement, true)
+}
+
+// _testArray tests array elements, serialization, and in-memory slab tree.
+func _testArray(
 	t *testing.T,
 	storage *PersistentSlabStorage,
 	typeInfo TypeInfo,
@@ -195,7 +195,7 @@ func TestArrayAppendAndGet(t *testing.T) {
 	require.ErrorAs(t, err, &indexOutOfBoundsError)
 	require.ErrorAs(t, userError, &indexOutOfBoundsError)
 
-	verifyArray(t, storage, typeInfo, address, array, values, false)
+	testArray(t, storage, typeInfo, address, array, values, false)
 }
 
 func TestArraySetAndGet(t *testing.T) {
@@ -218,7 +218,7 @@ func TestArraySetAndGet(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 
 		for i := uint64(0); i < arraySize; i++ {
 			oldValue := values[i]
@@ -233,7 +233,7 @@ func TestArraySetAndGet(t *testing.T) {
 			valueEqual(t, oldValue, existingValue)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 
 	// This tests slabs splitting and root slab reassignment caused by Set operation.
@@ -264,7 +264,7 @@ func TestArraySetAndGet(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 
 		for i := uint64(0); i < arraySize; i++ {
 			oldValue := values[i]
@@ -279,7 +279,7 @@ func TestArraySetAndGet(t *testing.T) {
 			valueEqual(t, oldValue, existingValue)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 
 	// This tests slabs merging and root slab reassignment caused by Set operation.
@@ -311,7 +311,7 @@ func TestArraySetAndGet(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 
 		for i := uint64(0); i < arraySize; i++ {
 			oldValue := values[i]
@@ -326,7 +326,7 @@ func TestArraySetAndGet(t *testing.T) {
 			valueEqual(t, oldValue, existingValue)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 
 	t.Run("index out of bounds", func(t *testing.T) {
@@ -361,7 +361,7 @@ func TestArraySetAndGet(t *testing.T) {
 		require.ErrorAs(t, err, &indexOutOfBoundsError)
 		require.ErrorAs(t, userError, &indexOutOfBoundsError)
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 }
 
@@ -389,7 +389,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 
 	t.Run("insert-last", func(t *testing.T) {
@@ -411,7 +411,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 
 	t.Run("insert", func(t *testing.T) {
@@ -444,7 +444,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 
 	t.Run("index out of bounds", func(t *testing.T) {
@@ -478,7 +478,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 		require.ErrorAs(t, err, &indexOutOfBoundsError)
 		require.ErrorAs(t, userError, &indexOutOfBoundsError)
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 }
 
@@ -526,11 +526,11 @@ func TestArrayRemove(t *testing.T) {
 			require.Equal(t, arraySize-i-1, array.Count())
 
 			if i%256 == 0 {
-				verifyArray(t, storage, typeInfo, address, array, values[i+1:], false)
+				testArray(t, storage, typeInfo, address, array, values[i+1:], false)
 			}
 		}
 
-		verifyEmptyArray(t, storage, typeInfo, address, array)
+		testEmptyArray(t, storage, typeInfo, address, array)
 	})
 
 	t.Run("remove-last", func(t *testing.T) {
@@ -573,11 +573,11 @@ func TestArrayRemove(t *testing.T) {
 			require.Equal(t, uint64(i), array.Count())
 
 			if i%256 == 0 {
-				verifyArray(t, storage, typeInfo, address, array, values[:i], false)
+				testArray(t, storage, typeInfo, address, array, values[:i], false)
 			}
 		}
 
-		verifyEmptyArray(t, storage, typeInfo, address, array)
+		testEmptyArray(t, storage, typeInfo, address, array)
 	})
 
 	t.Run("remove", func(t *testing.T) {
@@ -626,13 +626,13 @@ func TestArrayRemove(t *testing.T) {
 			require.Equal(t, uint64(len(values)), array.Count())
 
 			if i%256 == 0 {
-				verifyArray(t, storage, typeInfo, address, array, values, false)
+				testArray(t, storage, typeInfo, address, array, values, false)
 			}
 		}
 
 		require.Equal(t, arraySize/2, len(values))
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 
 	t.Run("index out of bounds", func(t *testing.T) {
@@ -664,7 +664,7 @@ func TestArrayRemove(t *testing.T) {
 		require.ErrorAs(t, err, &indexOutOfBounds)
 		require.ErrorAs(t, userError, &indexOutOfBounds)
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 }
 
@@ -1138,7 +1138,7 @@ func TestArraySetRandomValues(t *testing.T) {
 		valueEqual(t, oldValue, existingValue)
 	}
 
-	verifyArray(t, storage, typeInfo, address, array, values, false)
+	testArray(t, storage, typeInfo, address, array, values, false)
 }
 
 func TestArrayInsertRandomValues(t *testing.T) {
@@ -1168,7 +1168,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 
 	t.Run("insert-last", func(t *testing.T) {
@@ -1193,7 +1193,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 
 	t.Run("insert-random", func(t *testing.T) {
@@ -1221,7 +1221,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 	})
 }
 
@@ -1251,7 +1251,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	verifyArray(t, storage, typeInfo, address, array, values, false)
+	testArray(t, storage, typeInfo, address, array, values, false)
 
 	// Remove n elements at random index
 	for i := uint64(0); i < arraySize; i++ {
@@ -1273,7 +1273,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 		}
 	}
 
-	verifyEmptyArray(t, storage, typeInfo, address, array)
+	testEmptyArray(t, storage, typeInfo, address, array)
 }
 
 func testArrayAppendSetInsertRemoveRandomValues(
@@ -1393,7 +1393,7 @@ func TestArrayAppendSetInsertRemoveRandomValues(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	array, values := testArrayAppendSetInsertRemoveRandomValues(t, r, storage, typeInfo, address, opCount)
-	verifyArray(t, storage, typeInfo, address, array, values, false)
+	testArray(t, storage, typeInfo, address, array, values, false)
 }
 
 func TestArrayWithChildArrayMap(t *testing.T) {
@@ -1434,7 +1434,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			expectedValues[i] = arrayValue{v}
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, expectedValues, false)
+		testArray(t, storage, typeInfo, address, array, expectedValues, false)
 	})
 
 	t.Run("big array", func(t *testing.T) {
@@ -1475,7 +1475,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			expectedValues[i] = arrayValue(expectedChildArrayValues)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true)
 	})
 
 	t.Run("small map", func(t *testing.T) {
@@ -1509,7 +1509,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			expectedValues[i] = mapValue{k: v}
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, expectedValues, false)
+		testArray(t, storage, typeInfo, address, array, expectedValues, false)
 	})
 
 	t.Run("big map", func(t *testing.T) {
@@ -1550,7 +1550,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			expectedValues[i] = expectedChildMapValues
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true)
 	})
 }
 
@@ -1596,7 +1596,7 @@ func TestArrayDecodeV0(t *testing.T) {
 		array, err := NewArrayWithRootID(storage, arraySlabID)
 		require.NoError(t, err)
 
-		verifyEmptyArrayV0(t, storage, typeInfo, address, array)
+		testEmptyArrayV0(t, storage, typeInfo, address, array)
 	})
 
 	t.Run("dataslab as root", func(t *testing.T) {
@@ -1642,7 +1642,7 @@ func TestArrayDecodeV0(t *testing.T) {
 		array, err := NewArrayWithRootID(storage, arraySlabID)
 		require.NoError(t, err)
 
-		verifyArrayV0(t, storage, typeInfo, address, array, values, false)
+		testArrayV0(t, storage, typeInfo, address, array, values, false)
 	})
 
 	t.Run("metadataslab as root", func(t *testing.T) {
@@ -1778,7 +1778,7 @@ func TestArrayDecodeV0(t *testing.T) {
 		array, err := NewArrayWithRootID(storage2, arraySlabID)
 		require.NoError(t, err)
 
-		verifyArrayV0(t, storage2, typeInfo, address, array, values, false)
+		testArrayV0(t, storage2, typeInfo, address, array, values, false)
 	})
 }
 
@@ -1823,7 +1823,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage2, array.SlabID())
 		require.NoError(t, err)
 
-		verifyEmptyArray(t, storage2, typeInfo, address, array2)
+		testEmptyArray(t, storage2, typeInfo, address, array2)
 	})
 
 	t.Run("root dataslab", func(t *testing.T) {
@@ -1869,7 +1869,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage2, array.SlabID())
 		require.NoError(t, err)
 
-		verifyArray(t, storage2, typeInfo, address, array2, values, false)
+		testArray(t, storage2, typeInfo, address, array2, values, false)
 	})
 
 	t.Run("root metadata slab", func(t *testing.T) {
@@ -1981,7 +1981,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage2, array.SlabID())
 		require.NoError(t, err)
 
-		verifyArray(t, storage2, typeInfo, address, array2, values, false)
+		testArray(t, storage2, typeInfo, address, array2, values, false)
 	})
 
 	// Same type info is reused.
@@ -2055,7 +2055,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage2, parentArray.SlabID())
 		require.NoError(t, err)
 
-		verifyArray(t, storage2, typeInfo, address, array2, expectedValues, false)
+		testArray(t, storage2, typeInfo, address, array2, expectedValues, false)
 	})
 
 	// Different type info are encoded.
@@ -2140,7 +2140,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage2, parentArray.SlabID())
 		require.NoError(t, err)
 
-		verifyArray(t, storage2, typeInfo, address, array2, expectedValues, false)
+		testArray(t, storage2, typeInfo, address, array2, expectedValues, false)
 	})
 
 	// Same type info is reused.
@@ -2228,7 +2228,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage2, parentArray.SlabID())
 		require.NoError(t, err)
 
-		verifyArray(t, storage2, typeInfo, address, array2, expectedValues, false)
+		testArray(t, storage2, typeInfo, address, array2, expectedValues, false)
 	})
 
 	t.Run("root data slab, multiple levels of inlined array of different type", func(t *testing.T) {
@@ -2337,7 +2337,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage2, parentArray.SlabID())
 		require.NoError(t, err)
 
-		verifyArray(t, storage2, typeInfo, address, array2, expectedValues, false)
+		testArray(t, storage2, typeInfo, address, array2, expectedValues, false)
 	})
 
 	t.Run("root metadata slab, inlined array of same type", func(t *testing.T) {
@@ -2476,7 +2476,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage2, array.SlabID())
 		require.NoError(t, err)
 
-		verifyArray(t, storage2, typeInfo, address, array2, expectedValues, false)
+		testArray(t, storage2, typeInfo, address, array2, expectedValues, false)
 	})
 
 	t.Run("root metadata slab, inlined array of different type", func(t *testing.T) {
@@ -2627,7 +2627,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage2, array.SlabID())
 		require.NoError(t, err)
 
-		verifyArray(t, storage2, typeInfo, address, array2, expectedValues, false)
+		testArray(t, storage2, typeInfo, address, array2, expectedValues, false)
 	})
 
 	t.Run("has pointers", func(t *testing.T) {
@@ -2789,7 +2789,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage2, array.SlabID())
 		require.NoError(t, err)
 
-		verifyArray(t, storage2, typeInfo, address, array2, expectedValues, false)
+		testArray(t, storage2, typeInfo, address, array2, expectedValues, false)
 	})
 
 	t.Run("has pointers in inlined slab", func(t *testing.T) {
@@ -2972,7 +2972,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		array2, err := NewArrayWithRootID(storage2, array.SlabID())
 		require.NoError(t, err)
 
-		verifyArray(t, storage2, typeInfo, address, array2, expectedValues, false)
+		testArray(t, storage2, typeInfo, address, array2, expectedValues, false)
 	})
 }
 
@@ -2991,7 +2991,7 @@ func TestArrayEncodeDecodeRandomValues(t *testing.T) {
 
 	array, values := testArrayAppendSetInsertRemoveRandomValues(t, r, storage, typeInfo, address, opCount)
 
-	verifyArray(t, storage, typeInfo, address, array, values, false)
+	testArray(t, storage, typeInfo, address, array, values, false)
 
 	// Decode data to new storage
 	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
@@ -3000,7 +3000,7 @@ func TestArrayEncodeDecodeRandomValues(t *testing.T) {
 	array2, err := NewArrayWithRootID(storage2, array.SlabID())
 	require.NoError(t, err)
 
-	verifyArray(t, storage2, typeInfo, address, array2, values, false)
+	testArray(t, storage2, typeInfo, address, array2, values, false)
 }
 
 func TestEmptyArray(t *testing.T) {
@@ -3109,7 +3109,7 @@ func TestArrayStringElement(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 
 		stats, err := GetArrayStats(array)
 		require.NoError(t, err)
@@ -3142,7 +3142,7 @@ func TestArrayStringElement(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		verifyArray(t, storage, typeInfo, address, array, values, false)
+		testArray(t, storage, typeInfo, address, array, values, false)
 
 		stats, err := GetArrayStats(array)
 		require.NoError(t, err)
@@ -3189,7 +3189,7 @@ func TestArrayStoredValue(t *testing.T) {
 			array2, ok := value.(*Array)
 			require.True(t, ok)
 
-			verifyArray(t, storage, typeInfo, address, array2, values, false)
+			testArray(t, storage, typeInfo, address, array2, values, false)
 		} else {
 			require.Equal(t, 1, errorCategorizationCount(err))
 			var fatalError *FatalError
@@ -3219,7 +3219,7 @@ func TestArrayPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), i)
 
-		verifyEmptyArray(t, storage, typeInfo, address, array)
+		testEmptyArray(t, storage, typeInfo, address, array)
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
@@ -3251,7 +3251,7 @@ func TestArrayPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
 
-		verifyEmptyArray(t, storage, typeInfo, address, array)
+		testEmptyArray(t, storage, typeInfo, address, array)
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
@@ -3285,7 +3285,7 @@ func TestArrayPopIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arraySize, i)
 
-		verifyEmptyArray(t, storage, typeInfo, address, array)
+		testEmptyArray(t, storage, typeInfo, address, array)
 	})
 }
 
@@ -3317,7 +3317,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, copied.SlabID(), array.SlabID())
 
-		verifyEmptyArray(t, storage, typeInfo, address, copied)
+		testEmptyArray(t, storage, typeInfo, address, copied)
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
@@ -3358,7 +3358,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, copied.SlabID(), array.SlabID())
 
-		verifyArray(t, storage, typeInfo, address, copied, values, false)
+		testArray(t, storage, typeInfo, address, copied, values, false)
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
@@ -3401,7 +3401,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, array.SlabID(), copied.SlabID())
 
-		verifyArray(t, storage, typeInfo, address, copied, values, false)
+		testArray(t, storage, typeInfo, address, copied, values, false)
 	})
 
 	t.Run("rebalance two data slabs", func(t *testing.T) {
@@ -3451,7 +3451,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, array.SlabID(), copied.SlabID())
 
-		verifyArray(t, storage, typeInfo, address, copied, values, false)
+		testArray(t, storage, typeInfo, address, copied, values, false)
 	})
 
 	t.Run("merge two data slabs", func(t *testing.T) {
@@ -3501,7 +3501,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, array.SlabID(), copied.SlabID())
 
-		verifyArray(t, storage, typeInfo, address, copied, values, false)
+		testArray(t, storage, typeInfo, address, copied, values, false)
 	})
 
 	t.Run("random", func(t *testing.T) {
@@ -3548,7 +3548,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, array.SlabID(), copied.SlabID())
 
-		verifyArray(t, storage, typeInfo, address, copied, values, false)
+		testArray(t, storage, typeInfo, address, copied, values, false)
 	})
 
 	t.Run("data slab too large", func(t *testing.T) {
@@ -3602,7 +3602,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqual(t, array.SlabID(), copied.SlabID())
 
-		verifyArray(t, storage, typeInfo, address, copied, values, false)
+		testArray(t, storage, typeInfo, address, copied, values, false)
 	})
 }
 
@@ -3630,7 +3630,7 @@ func TestArrayNestedStorables(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	verifyArray(t, storage, typeInfo, address, array, values, true)
+	testArray(t, storage, typeInfo, address, array, values, true)
 }
 
 func TestArrayMaxInlineElement(t *testing.T) {
@@ -3662,7 +3662,7 @@ func TestArrayMaxInlineElement(t *testing.T) {
 	// (for rounding when computing max inline array element size).
 	require.Equal(t, targetThreshold-slabIDSize-1, uint64(array.root.Header().size))
 
-	verifyArray(t, storage, typeInfo, address, array, values, false)
+	testArray(t, storage, typeInfo, address, array, values, false)
 }
 
 func TestArrayString(t *testing.T) {
@@ -3821,7 +3821,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 1, len(storage.deltas))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, nil)
+		testArrayLoadedElements(t, array, nil)
 	})
 
 	t.Run("root data slab with simple values", func(t *testing.T) {
@@ -3834,7 +3834,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 1, len(storage.deltas))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 	})
 
 	t.Run("root data slab with composite values", func(t *testing.T) {
@@ -3848,7 +3848,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 1+arraySize, len(storage.deltas))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 	})
 
 	t.Run("root data slab with composite values, unload composite element from front to back", func(t *testing.T) {
@@ -3862,7 +3862,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 1+arraySize, len(storage.deltas))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		// Unload composite element from front to back
 		for i := 0; i < len(values); i++ {
@@ -3872,7 +3872,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
-			verifyArrayLoadedElements(t, array, expectedValues)
+			testArrayLoadedElements(t, array, expectedValues)
 		}
 	})
 
@@ -3887,7 +3887,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 1+arraySize, len(storage.deltas))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		// Unload composite element from back to front
 		for i := len(values) - 1; i >= 0; i-- {
@@ -3897,7 +3897,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
-			verifyArrayLoadedElements(t, array, expectedValues)
+			testArrayLoadedElements(t, array, expectedValues)
 		}
 	})
 
@@ -3912,7 +3912,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 1+arraySize, len(storage.deltas))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		// Unload composite element in the middle
 		unloadValueIndex := 1
@@ -3925,7 +3925,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		copy(values[unloadValueIndex:], values[unloadValueIndex+1:])
 		values = values[:len(values)-1]
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 	})
 
 	t.Run("root data slab with composite values, unload composite elements during iteration", func(t *testing.T) {
@@ -3939,7 +3939,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 1+arraySize, len(storage.deltas))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		i := 0
 		err := array.IterateLoadedValues(func(v Value) (bool, error) {
@@ -3975,7 +3975,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 2, len(storage.deltas))
 			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 
 			// Unload composite element
 			err := storage.Remove(childSlabID)
@@ -3984,7 +3984,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			copy(values[childArrayIndex:], values[childArrayIndex+1:])
 			values = values[:len(values)-1]
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 		}
 	})
 
@@ -3998,7 +3998,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 3, len(storage.deltas))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 	})
 
 	t.Run("root metadata slab with composite values", func(t *testing.T) {
@@ -4012,7 +4012,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 3+arraySize, len(storage.deltas))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 	})
 
 	t.Run("root metadata slab with composite values, unload composite element from front to back", func(t *testing.T) {
@@ -4026,7 +4026,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 3+arraySize, len(storage.deltas))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		// Unload composite element from front to back
 		for i := 0; i < len(childSlabIDs); i++ {
@@ -4036,7 +4036,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedValues := values[i+1:]
-			verifyArrayLoadedElements(t, array, expectedValues)
+			testArrayLoadedElements(t, array, expectedValues)
 		}
 	})
 
@@ -4051,7 +4051,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 3+arraySize, len(storage.deltas))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		// Unload composite element from back to front
 		for i := len(childSlabIDs) - 1; i >= 0; i-- {
@@ -4061,7 +4061,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedValues := values[:i]
-			verifyArrayLoadedElements(t, array, expectedValues)
+			testArrayLoadedElements(t, array, expectedValues)
 		}
 	})
 
@@ -4076,7 +4076,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 3+arraySize, len(storage.deltas))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		// Unload composite element in the middle
 		for _, index := range []int{4, 14} {
@@ -4089,7 +4089,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			copy(values[index:], values[index+1:])
 			values = values[:len(values)-1]
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 		}
 	})
 
@@ -4107,7 +4107,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 3+1, len(storage.deltas))
 			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 
 			// Unload composite value
 			err := storage.Remove(childSlabID)
@@ -4116,7 +4116,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			copy(values[childArrayIndex:], values[childArrayIndex+1:])
 			values = values[:len(values)-1]
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 		}
 	})
 
@@ -4130,7 +4130,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 4, len(storage.deltas))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		metaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
 		require.True(t, ok)
@@ -4145,7 +4145,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			values = values[childHeader.count:]
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 		}
 	})
 
@@ -4159,7 +4159,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 4, len(storage.deltas))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		metaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
 		require.True(t, ok)
@@ -4174,7 +4174,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			values = values[:len(values)-int(childHeader.count)]
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 		}
 	})
 
@@ -4188,7 +4188,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.Equal(t, 4, len(storage.deltas))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		metaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
 		require.True(t, ok)
@@ -4204,7 +4204,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		copy(values[metaDataSlab.childrenCountSum[index-1]:], values[metaDataSlab.childrenCountSum[index]:])
 		values = values[:array.Count()-uint64(childHeader.count)]
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 	})
 
 	t.Run("root metadata slab, unload non-root metadata slab from front to back", func(t *testing.T) {
@@ -4229,7 +4229,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			values = values[childHeader.count:]
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 		}
 	})
 
@@ -4255,7 +4255,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			values = values[childHeader.count:]
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 		}
 	})
 
@@ -4271,7 +4271,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.True(t, len(storage.deltas) > 1+arraySize)
 		require.True(t, getArrayMetaDataSlabCount(storage) > 1)
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		r := newRand(t)
 
@@ -4291,7 +4291,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			copy(childSlabIDs[i:], childSlabIDs[i+1:])
 			childSlabIDs = childSlabIDs[:len(childSlabIDs)-1]
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 		}
 	})
 
@@ -4307,7 +4307,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.True(t, len(storage.deltas) > 1+arraySize)
 		require.True(t, getArrayMetaDataSlabCount(storage) > 1)
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		rootMetaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
 		require.True(t, ok)
@@ -4354,7 +4354,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			copy(values[slabInfoToUnload.startIndex:], values[slabInfoToUnload.startIndex+slabInfoToUnload.count:])
 			values = values[:len(values)-slabInfoToUnload.count]
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 		}
 
 		require.Equal(t, 0, len(values))
@@ -4372,7 +4372,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.True(t, len(storage.deltas) > 1+arraySize)
 		require.True(t, getArrayMetaDataSlabCount(storage) > 1)
 
-		verifyArrayLoadedElements(t, array, values)
+		testArrayLoadedElements(t, array, values)
 
 		type slabInfo struct {
 			id         SlabID
@@ -4500,7 +4500,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 				values = values[:len(values)-slabInfoToBeRemoved.count]
 			}
 
-			verifyArrayLoadedElements(t, array, values)
+			testArrayLoadedElements(t, array, values)
 		}
 
 		require.Equal(t, 0, len(values))
@@ -4625,7 +4625,7 @@ func createArrayWithSimpleAndChildArrayValues(
 	return array, expectedValues, childSlabID
 }
 
-func verifyArrayLoadedElements(t *testing.T, array *Array, expectedValues []Value) {
+func testArrayLoadedElements(t *testing.T, array *Array, expectedValues []Value) {
 	i := 0
 	err := array.IterateLoadedValues(func(v Value) (bool, error) {
 		require.True(t, i < len(expectedValues))
@@ -4735,7 +4735,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		expectedParentSize := uint32(arrayRootDataSlabPrefixSize) + uint32(inlinedArrayDataSlabPrefixSize)*arraySize
 		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Get inlined child array
 		e, err := parentArray.Get(0)
@@ -4782,7 +4782,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			// Test parent array's mutableElementIndex
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// Add one more element to child array which triggers inlined child array slab becomes standalone slab
@@ -4808,7 +4808,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove elements from child array which triggers standalone array slab becomes inlined slab again.
 		for childArray.Count() > 0 {
@@ -4833,7 +4833,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			// Test parent array's mutableElementIndex
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		require.Equal(t, uint64(0), childArray.Count())
@@ -4860,7 +4860,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		children := make([]struct {
 			array   *Array
@@ -4920,7 +4920,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				// Test parent array's mutableElementIndex
 				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+				testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
 
@@ -4959,7 +4959,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			// Test parent array's mutableElementIndex
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// Remove one element from child array which triggers standalone array slab becomes inlined slab again.
@@ -4995,7 +4995,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			// Test parent array's mutableElementIndex
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// Remove remaining elements from inlined child array
@@ -5029,7 +5029,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				// Test parent array's mutableElementIndex
 				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+				testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
 
@@ -5060,7 +5060,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		children := make([]struct {
 			array   *Array
@@ -5115,7 +5115,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				// Test parent array's mutableElementIndex
 				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+				testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
 
@@ -5149,7 +5149,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			// Test parent array's mutableElementIndex
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// Parent array has one data slab and all child arrays are not inlined.
@@ -5181,7 +5181,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			// Test parent array's mutableElementIndex
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// Parent array has 1 meta data slab and 2 data slabs.
@@ -5216,7 +5216,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				// Test parent array's mutableElementIndex
 				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+				testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
 
@@ -5258,7 +5258,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Get inlined child array
 		e, err := parentArray.Get(0)
@@ -5336,7 +5336,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// Add one more element to grand child array which triggers inlined child array slab (NOT grand child array slab) becomes standalone slab
@@ -5379,7 +5379,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove elements from grand child array which triggers standalone child array slab becomes inlined slab again.
 		for gchildArray.Count() > 0 {
@@ -5424,7 +5424,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		require.Equal(t, uint64(0), gchildArray.Count())
@@ -5453,7 +5453,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Get inlined child array
 		e, err := parentArray.Get(0)
@@ -5531,7 +5531,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// Add one more element to grand child array which triggers inlined grand child array slab (NOT child array slab) becomes standalone slab
@@ -5576,7 +5576,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove elements from grand child array which triggers standalone child array slab becomes inlined slab again.
 		for gchildArray.Count() > 0 {
@@ -5620,7 +5620,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		require.Equal(t, uint64(0), gchildArray.Count())
@@ -5678,7 +5678,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		type arrayInfo struct {
 			array   *Array
@@ -5769,7 +5769,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+				testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
 
@@ -5813,7 +5813,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		require.Equal(t, 3, getStoredDeltas(storage)) // There are 3 stored slab because child array is no longer inlined.
@@ -5865,7 +5865,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		require.Equal(t, expectedParentSize, parentArray.root.ByteSize())
@@ -5918,7 +5918,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+				testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
 
@@ -5974,7 +5974,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		type arrayInfo struct {
 			array   *Array
@@ -6065,7 +6065,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+				testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
 
@@ -6112,7 +6112,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		require.Equal(t, 3, getStoredDeltas(storage)) // There are 3 stored slab because child array is no longer inlined.
@@ -6165,7 +6165,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// Parent array has one root data slab, 4 grand child array with standalone root data slab.
@@ -6217,7 +6217,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// Parent array has 1 metadata slab, and two data slab, all child and grand child arrays are inlined.
@@ -6271,7 +6271,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.True(t, uint64(len(gchildArray.mutableElementIndex)) <= gchildArray.Count())
 				require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-				verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+				testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 			}
 		}
 
@@ -6309,7 +6309,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 	// Test array's mutableElementIndex
 	require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-	verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+	testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 	children := make([]*struct {
 		array       *Array
@@ -6381,7 +6381,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// insert value at index 2, so only second child array index is moved by +1
@@ -6426,7 +6426,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// insert value at index 4, so none of child array indexes are affected.
@@ -6466,7 +6466,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 	})
 
@@ -6511,7 +6511,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// Remove value at index 1, so only second child array index is moved by -1
@@ -6556,7 +6556,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 
 		// Remove value at index 2 (last element), so none of child array indexes are affected.
@@ -6596,7 +6596,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.True(t, uint64(len(childArray.mutableElementIndex)) <= childArray.Count())
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-			verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+			testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 		}
 	})
 }
@@ -6718,7 +6718,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Overwrite existing child array value
 		for i := 0; i < arraySize; i++ {
@@ -6743,7 +6743,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 			require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 		}
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 	})
 
 	t.Run("child array is inlined", func(t *testing.T) {
@@ -6778,7 +6778,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Overwrite existing child array value
 		for i := 0; i < arraySize; i++ {
@@ -6803,7 +6803,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 	})
 
 	t.Run("child map is not inlined", func(t *testing.T) {
@@ -6850,7 +6850,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Overwrite existing child map value
 		for i := 0; i < arraySize; i++ {
@@ -6875,7 +6875,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 	})
 
 	t.Run("child map is inlined", func(t *testing.T) {
@@ -6915,7 +6915,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Overwrite existing child map value
 		for i := 0; i < arraySize; i++ {
@@ -6940,7 +6940,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 	})
 }
 
@@ -6987,7 +6987,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove child array value
 		for i := 0; i < arraySize; i++ {
@@ -7009,7 +7009,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.Equal(t, 0, len(parentArray.mutableElementIndex))
 
-		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
+		testEmptyArray(t, storage, typeInfo, address, parentArray)
 	})
 
 	t.Run("child array is inlined", func(t *testing.T) {
@@ -7044,7 +7044,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove child array value
 		for i := 0; i < arraySize; i++ {
@@ -7066,7 +7066,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.Equal(t, 0, len(parentArray.mutableElementIndex))
 
-		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
+		testEmptyArray(t, storage, typeInfo, address, parentArray)
 	})
 
 	t.Run("child map is not inlined", func(t *testing.T) {
@@ -7113,7 +7113,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove child map value
 		for i := 0; i < arraySize; i++ {
@@ -7135,7 +7135,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.Equal(t, 0, len(parentArray.mutableElementIndex))
 
-		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
+		testEmptyArray(t, storage, typeInfo, address, parentArray)
 	})
 
 	t.Run("child map is inlined", func(t *testing.T) {
@@ -7175,7 +7175,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.True(t, uint64(len(parentArray.mutableElementIndex)) <= parentArray.Count())
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove child map value
 		for i := 0; i < arraySize; i++ {
@@ -7197,7 +7197,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		// Test array's mutableElementIndex
 		require.Equal(t, 0, len(parentArray.mutableElementIndex))
 
-		verifyEmptyArray(t, storage, typeInfo, address, parentArray)
+		testEmptyArray(t, storage, typeInfo, address, parentArray)
 	})
 }
 
@@ -7230,7 +7230,7 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 
 		expectedValues = append(expectedValues, arrayValue{v})
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Overwrite child array value from parent
 		valueStorable, err := parentArray.Set(0, Uint64Value(0))
@@ -7285,7 +7285,7 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 
 		expectedValues = append(expectedValues, arrayValue{v})
 
-		verifyArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
+		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Remove child array value from parent
 		valueStorable, err := parentArray.Remove(0)

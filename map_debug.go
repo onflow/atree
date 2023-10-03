@@ -247,6 +247,10 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 }
 
 func VerifyMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
+	return verifyMap(m, address, typeInfo, tic, hip, inlineEnabled, map[SlabID]struct{}{})
+}
+
+func verifyMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool, slabIDs map[SlabID]struct{}) error {
 
 	// Verify map address (independent of array inlined status)
 	if address != m.Address() {
@@ -297,7 +301,7 @@ func VerifyMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoCo
 	}
 
 	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := v.verifySlab(
-		m.root, 0, nil, []SlabID{}, []SlabID{}, []Digest{})
+		m.root, 0, nil, []SlabID{}, []SlabID{}, []Digest{}, slabIDs)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by verifySlab().
 		return err
@@ -357,6 +361,7 @@ func (v *mapVerifier) verifySlab(
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
 	firstKeys []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint64,
 	_dataSlabIDs []SlabID,
@@ -366,6 +371,13 @@ func (v *mapVerifier) verifySlab(
 ) {
 
 	id := slab.Header().slabID
+
+	// Verify SlabID is unique
+	if _, exist := slabIDs[id]; exist {
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("found duplicate slab ID %s", id))
+	}
+
+	slabIDs[id] = struct{}{}
 
 	// Verify slab address (independent of map inlined status)
 	if v.address != id.address {
@@ -413,10 +425,10 @@ func (v *mapVerifier) verifySlab(
 
 	switch slab := slab.(type) {
 	case *MapDataSlab:
-		return v.verifyDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
+		return v.verifyDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys, slabIDs)
 
 	case *MapMetaDataSlab:
-		return v.verifyMetaDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys)
+		return v.verifyMetaDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys, slabIDs)
 
 	default:
 		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapSlab is either *MapDataSlab or *MapMetaDataSlab, got %T", slab))
@@ -429,6 +441,7 @@ func (v *mapVerifier) verifyDataSlab(
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
 	firstKeys []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint64,
 	_dataSlabIDs []SlabID,
@@ -443,7 +456,7 @@ func (v *mapVerifier) verifyDataSlab(
 	}
 
 	// Verify data slab's elements
-	elementCount, elementSize, err := v.verifyElements(id, dataSlab.elements, 0, nil)
+	elementCount, elementSize, err := v.verifyElements(id, dataSlab.elements, 0, nil, slabIDs)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by verifyElements().
 		return 0, nil, nil, nil, err
@@ -508,6 +521,7 @@ func (v *mapVerifier) verifyMetaDataSlab(
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
 	firstKeys []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint64,
 	_dataSlabIDs []SlabID,
@@ -547,7 +561,7 @@ func (v *mapVerifier) verifyMetaDataSlab(
 		// Verify child slabs
 		count := uint64(0)
 		count, dataSlabIDs, nextDataSlabIDs, firstKeys, err =
-			v.verifySlab(childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
+			v.verifySlab(childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys, slabIDs)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by verifySlab().
 			return 0, nil, nil, nil, err
@@ -600,6 +614,7 @@ func (v *mapVerifier) verifyElements(
 	elements elements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint64,
 	elementSize uint32,
@@ -608,9 +623,9 @@ func (v *mapVerifier) verifyElements(
 
 	switch elems := elements.(type) {
 	case *hkeyElements:
-		return v.verifyHkeyElements(id, elems, digestLevel, hkeyPrefixes)
+		return v.verifyHkeyElements(id, elems, digestLevel, hkeyPrefixes, slabIDs)
 	case *singleElements:
-		return v.verifySingleElements(id, elems, digestLevel, hkeyPrefixes)
+		return v.verifySingleElements(id, elems, digestLevel, hkeyPrefixes, slabIDs)
 	default:
 		return 0, 0, NewFatalError(fmt.Errorf("slab %d has unknown elements type %T at digest level %d", id, elements, digestLevel))
 	}
@@ -621,6 +636,7 @@ func (v *mapVerifier) verifyHkeyElements(
 	elements *hkeyElements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint64,
 	elementSize uint32,
@@ -687,7 +703,7 @@ func (v *mapVerifier) verifyHkeyElements(
 				return 0, 0, err
 			}
 
-			count, size, err := v.verifyElements(id, group, digestLevel+1, hkeys)
+			count, size, err := v.verifyElements(id, group, digestLevel+1, hkeys, slabIDs)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by verifyElements().
 				return 0, 0, err
@@ -710,7 +726,7 @@ func (v *mapVerifier) verifyHkeyElements(
 
 		case *singleElement:
 			// Verify element
-			computedSize, maxDigestLevel, err := v.verifySingleElement(e, hkeys)
+			computedSize, maxDigestLevel, err := v.verifySingleElement(e, hkeys, slabIDs)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by verifySingleElement().
 				return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
@@ -745,6 +761,7 @@ func (v *mapVerifier) verifySingleElements(
 	elements *singleElements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint64,
 	elementSize uint32,
@@ -763,7 +780,7 @@ func (v *mapVerifier) verifySingleElements(
 	for _, e := range elements.elems {
 
 		// Verify element
-		computedSize, maxDigestLevel, err := v.verifySingleElement(e, hkeyPrefixes)
+		computedSize, maxDigestLevel, err := v.verifySingleElement(e, hkeyPrefixes, slabIDs)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by verifySingleElement().
 			return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
@@ -797,6 +814,7 @@ func (v *mapVerifier) verifySingleElements(
 func (v *mapVerifier) verifySingleElement(
 	e *singleElement,
 	digests []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	size uint32,
 	digestMaxLevel uint,
@@ -834,7 +852,7 @@ func (v *mapVerifier) verifySingleElement(
 		return 0, 0, NewFatalError(fmt.Errorf("element %s key shouldn't be inlined array or map", e))
 	}
 
-	err = verifyValue(kv, v.address, nil, v.tic, v.hip, v.inlineEnabled)
+	err = verifyValue(kv, v.address, nil, v.tic, v.hip, v.inlineEnabled, slabIDs)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by verifyValue().
 		return 0, 0, fmt.Errorf("element %s key isn't valid: %w", e, err)
@@ -870,7 +888,7 @@ func (v *mapVerifier) verifySingleElement(
 		}
 	}
 
-	err = verifyValue(vv, v.address, nil, v.tic, v.hip, v.inlineEnabled)
+	err = verifyValue(vv, v.address, nil, v.tic, v.hip, v.inlineEnabled, slabIDs)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by verifyValue().
 		return 0, 0, fmt.Errorf("element %s value isn't valid: %w", e, err)
@@ -902,12 +920,12 @@ func (v *mapVerifier) verifySingleElement(
 	return computedSize, digest.Levels(), nil
 }
 
-func verifyValue(value Value, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
+func verifyValue(value Value, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool, slabIDs map[SlabID]struct{}) error {
 	switch v := value.(type) {
 	case *Array:
-		return VerifyArray(v, address, typeInfo, tic, hip, inlineEnabled)
+		return verifyArray(v, address, typeInfo, tic, hip, inlineEnabled, slabIDs)
 	case *OrderedMap:
-		return VerifyMap(v, address, typeInfo, tic, hip, inlineEnabled)
+		return verifyMap(v, address, typeInfo, tic, hip, inlineEnabled, slabIDs)
 	}
 	return nil
 }

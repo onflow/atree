@@ -2505,7 +2505,7 @@ func DecodeInlinedCompactMapStorable(
 	size := uint32(hkeyElementsPrefixSize)
 	elems := make([]element, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		value, err := decodeStorable(dec, parentSlabID, inlinedExtraData)
+		value, err := decodeStorable(dec, slabID, inlinedExtraData)
 		if err != nil {
 			return nil, err
 		}
@@ -2623,7 +2623,7 @@ func DecodeInlinedMapStorable(
 	slabID := NewSlabID(parentSlabID.address, index)
 
 	// Decode elements
-	elements, err := newElementsFromData(dec, decodeStorable, parentSlabID, inlinedExtraData)
+	elements, err := newElementsFromData(dec, decodeStorable, slabID, inlinedExtraData)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by newElementsFromData().
 		return nil, err

@@ -100,7 +100,7 @@ func _testArray(
 
 	// Verify array elements by iterator
 	i := 0
-	err = array.Iterate(func(v Value) (bool, error) {
+	err = array.IterateReadOnly(func(v Value) (bool, error) {
 		valueEqual(t, expectedValues[i], v)
 		i++
 		return true, nil
@@ -679,7 +679,7 @@ func TestArrayIterate(t *testing.T) {
 		require.NoError(t, err)
 
 		i := uint64(0)
-		err = array.Iterate(func(v Value) (bool, error) {
+		err = array.IterateReadOnly(func(v Value) (bool, error) {
 			i++
 			return true, nil
 		})
@@ -706,7 +706,7 @@ func TestArrayIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err = array.Iterate(func(v Value) (bool, error) {
+		err = array.IterateReadOnly(func(v Value) (bool, error) {
 			require.Equal(t, Uint64Value(i), v)
 			i++
 			return true, nil
@@ -743,7 +743,7 @@ func TestArrayIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err = array.Iterate(func(v Value) (bool, error) {
+		err = array.IterateReadOnly(func(v Value) (bool, error) {
 			require.Equal(t, Uint64Value(i), v)
 			i++
 			return true, nil
@@ -776,7 +776,7 @@ func TestArrayIterate(t *testing.T) {
 		}
 
 		i := uint64(0)
-		err = array.Iterate(func(v Value) (bool, error) {
+		err = array.IterateReadOnly(func(v Value) (bool, error) {
 			require.Equal(t, Uint64Value(i), v)
 			i++
 			return true, nil
@@ -812,7 +812,7 @@ func TestArrayIterate(t *testing.T) {
 
 		i := uint64(0)
 		j := uint64(1)
-		err = array.Iterate(func(v Value) (bool, error) {
+		err = array.IterateReadOnly(func(v Value) (bool, error) {
 			require.Equal(t, Uint64Value(j), v)
 			i++
 			j += 2
@@ -838,7 +838,7 @@ func TestArrayIterate(t *testing.T) {
 		}
 
 		i := 0
-		err = array.Iterate(func(_ Value) (bool, error) {
+		err = array.IterateReadOnly(func(_ Value) (bool, error) {
 			if i == count/2 {
 				return false, nil
 			}
@@ -867,7 +867,7 @@ func TestArrayIterate(t *testing.T) {
 		testErr := errors.New("test")
 
 		i := 0
-		err = array.Iterate(func(_ Value) (bool, error) {
+		err = array.IterateReadOnly(func(_ Value) (bool, error) {
 			if i == count/2 {
 				return false, testErr
 			}
@@ -882,6 +882,67 @@ func TestArrayIterate(t *testing.T) {
 
 		require.Equal(t, count/2, i)
 	})
+
+	t.Run("mutation", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		const arraySize = 15
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		expectedValues := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			childArray, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			v := Uint64Value(i)
+			err = childArray.Append(v)
+			require.NoError(t, err)
+
+			err = array.Append(childArray)
+			require.NoError(t, err)
+
+			expectedValues[i] = arrayValue{v}
+		}
+		require.True(t, array.root.IsData())
+
+		sizeBeforeMutation := array.root.Header().size
+
+		i := 0
+		newElement := Uint64Value(0)
+		err = array.Iterate(func(v Value) (bool, error) {
+			childArray, ok := v.(*Array)
+			require.True(t, ok)
+			require.Equal(t, uint64(1), childArray.Count())
+			require.True(t, childArray.Inlined())
+
+			err := childArray.Append(newElement)
+			require.NoError(t, err)
+
+			expectedChildArrayValues, ok := expectedValues[i].(arrayValue)
+			require.True(t, ok)
+
+			expectedChildArrayValues = append(expectedChildArrayValues, newElement)
+			expectedValues[i] = expectedChildArrayValues
+
+			i++
+
+			require.Equal(t, array.root.Header().size, sizeBeforeMutation+uint32(i)*newElement.ByteSize())
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, arraySize, i)
+		require.True(t, array.root.IsData())
+
+		testArray(t, storage, typeInfo, address, array, expectedValues, false)
+	})
 }
 
 func testArrayIterateRange(t *testing.T, array *Array, values []Value) {
@@ -893,7 +954,7 @@ func testArrayIterateRange(t *testing.T, array *Array, values []Value) {
 	count := array.Count()
 
 	// If startIndex > count, IterateRange returns SliceOutOfBoundsError
-	err = array.IterateRange(count+1, count+1, func(v Value) (bool, error) {
+	err = array.IterateReadOnlyRange(count+1, count+1, func(v Value) (bool, error) {
 		i++
 		return true, nil
 	})
@@ -906,7 +967,7 @@ func testArrayIterateRange(t *testing.T, array *Array, values []Value) {
 	require.Equal(t, uint64(0), i)
 
 	// If endIndex > count, IterateRange returns SliceOutOfBoundsError
-	err = array.IterateRange(0, count+1, func(v Value) (bool, error) {
+	err = array.IterateReadOnlyRange(0, count+1, func(v Value) (bool, error) {
 		i++
 		return true, nil
 	})
@@ -918,7 +979,7 @@ func testArrayIterateRange(t *testing.T, array *Array, values []Value) {
 
 	// If startIndex > endIndex, IterateRange returns InvalidSliceIndexError
 	if count > 0 {
-		err = array.IterateRange(1, 0, func(v Value) (bool, error) {
+		err = array.IterateReadOnlyRange(1, 0, func(v Value) (bool, error) {
 			i++
 			return true, nil
 		})
@@ -933,7 +994,7 @@ func testArrayIterateRange(t *testing.T, array *Array, values []Value) {
 	for startIndex := uint64(0); startIndex <= count; startIndex++ {
 		for endIndex := startIndex; endIndex <= count; endIndex++ {
 			i = uint64(0)
-			err = array.IterateRange(startIndex, endIndex, func(v Value) (bool, error) {
+			err = array.IterateReadOnlyRange(startIndex, endIndex, func(v Value) (bool, error) {
 				valueEqual(t, v, values[int(startIndex+i)])
 				i++
 				return true, nil
@@ -1015,7 +1076,7 @@ func TestArrayIterateRange(t *testing.T) {
 		startIndex := uint64(1)
 		endIndex := uint64(5)
 		count := endIndex - startIndex
-		err = array.IterateRange(startIndex, endIndex, func(_ Value) (bool, error) {
+		err = array.IterateReadOnlyRange(startIndex, endIndex, func(_ Value) (bool, error) {
 			if i == count/2 {
 				return false, nil
 			}
@@ -1044,7 +1105,7 @@ func TestArrayIterateRange(t *testing.T) {
 		startIndex := uint64(1)
 		endIndex := uint64(5)
 		count := endIndex - startIndex
-		err = array.IterateRange(startIndex, endIndex, func(_ Value) (bool, error) {
+		err = array.IterateReadOnlyRange(startIndex, endIndex, func(_ Value) (bool, error) {
 			if i == count/2 {
 				return false, testErr
 			}
@@ -1057,6 +1118,70 @@ func TestArrayIterateRange(t *testing.T) {
 		require.ErrorAs(t, err, &externalError)
 		require.Equal(t, testErr, externalError.Unwrap())
 		require.Equal(t, count/2, i)
+	})
+
+	t.Run("mutation", func(t *testing.T) {
+		SetThreshold(256)
+		defer SetThreshold(1024)
+
+		const arraySize = 15
+
+		typeInfo := testTypeInfo{42}
+		storage := newTestPersistentStorage(t)
+		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		expectedValues := make([]Value, arraySize)
+		for i := uint64(0); i < arraySize; i++ {
+			childArray, err := NewArray(storage, address, typeInfo)
+			require.NoError(t, err)
+
+			v := Uint64Value(i)
+			err = childArray.Append(v)
+			require.NoError(t, err)
+
+			err = array.Append(childArray)
+			require.NoError(t, err)
+
+			expectedValues[i] = arrayValue{v}
+		}
+		require.True(t, array.root.IsData())
+
+		sizeBeforeMutation := array.root.Header().size
+
+		i := 0
+		startIndex := uint64(1)
+		endIndex := array.Count() - 2
+		newElement := Uint64Value(0)
+		err = array.IterateRange(startIndex, endIndex, func(v Value) (bool, error) {
+			childArray, ok := v.(*Array)
+			require.True(t, ok)
+			require.Equal(t, uint64(1), childArray.Count())
+			require.True(t, childArray.Inlined())
+
+			err := childArray.Append(newElement)
+			require.NoError(t, err)
+
+			index := int(startIndex) + i
+			expectedChildArrayValues, ok := expectedValues[index].(arrayValue)
+			require.True(t, ok)
+
+			expectedChildArrayValues = append(expectedChildArrayValues, newElement)
+			expectedValues[index] = expectedChildArrayValues
+
+			i++
+
+			require.Equal(t, array.root.Header().size, sizeBeforeMutation+uint32(i)*newElement.ByteSize())
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, endIndex-startIndex, uint64(i))
+		require.True(t, array.root.IsData())
+
+		testArray(t, storage, typeInfo, address, array, expectedValues, false)
 	})
 }
 
@@ -3059,7 +3184,7 @@ func TestEmptyArray(t *testing.T) {
 
 	t.Run("iterate", func(t *testing.T) {
 		i := uint64(0)
-		err := array.Iterate(func(v Value) (bool, error) {
+		err := array.IterateReadOnly(func(v Value) (bool, error) {
 			i++
 			return true, nil
 		})
@@ -3301,7 +3426,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), array.Count())
 
-		iter, err := array.Iterator()
+		iter, err := array.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		// Create a new array with new storage, new address, and original array's elements.
@@ -3341,7 +3466,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		require.Equal(t, uint64(arraySize), array.Count())
 
-		iter, err := array.Iterator()
+		iter, err := array.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		// Create a new array with new storage, new address, and original array's elements.
@@ -3385,7 +3510,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		require.Equal(t, uint64(arraySize), array.Count())
 
-		iter, err := array.Iterator()
+		iter, err := array.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		address := Address{2, 3, 4, 5, 6, 7, 8, 9}
@@ -3435,7 +3560,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		require.Equal(t, uint64(36), array.Count())
 
-		iter, err := array.Iterator()
+		iter, err := array.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		storage := newTestPersistentStorage(t)
@@ -3485,7 +3610,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		require.Equal(t, uint64(36), array.Count())
 
-		iter, err := array.Iterator()
+		iter, err := array.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		storage := newTestPersistentStorage(t)
@@ -3531,7 +3656,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		require.Equal(t, uint64(arraySize), array.Count())
 
-		iter, err := array.Iterator()
+		iter, err := array.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		storage := newTestPersistentStorage(t)
@@ -3586,7 +3711,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		err = array.Append(v)
 		require.NoError(t, err)
 
-		iter, err := array.Iterator()
+		iter, err := array.ReadOnlyIterator()
 		require.NoError(t, err)
 
 		storage := newTestPersistentStorage(t)
@@ -3942,7 +4067,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		testArrayLoadedElements(t, array, values)
 
 		i := 0
-		err := array.IterateLoadedValues(func(v Value) (bool, error) {
+		err := array.IterateReadOnlyLoadedValues(func(v Value) (bool, error) {
 			// At this point, iterator returned first element (v).
 
 			// Remove all other nested composite elements (except first element) from storage.
@@ -4627,7 +4752,7 @@ func createArrayWithSimpleAndChildArrayValues(
 
 func testArrayLoadedElements(t *testing.T, array *Array, expectedValues []Value) {
 	i := 0
-	err := array.IterateLoadedValues(func(v Value) (bool, error) {
+	err := array.IterateReadOnlyLoadedValues(func(v Value) (bool, error) {
 		require.True(t, i < len(expectedValues))
 		valueEqual(t, expectedValues[i], v)
 		i++

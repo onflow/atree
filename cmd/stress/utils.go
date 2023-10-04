@@ -40,8 +40,12 @@ const (
 	uint64Type
 	smallStringType
 	largeStringType
-	arrayType
-	mapType
+	arrayType1
+	arrayType2
+	arrayType3
+	mapType1
+	mapType2
+	mapType3
 	maxValueType
 )
 
@@ -84,10 +88,10 @@ func generateValue(storage *atree.PersistentSlabStorage, address atree.Address, 
 	case largeStringType:
 		slen := r.Intn(125) + 1024
 		return NewStringValue(randStr(slen)), nil
-	case arrayType:
+	case arrayType1, arrayType2, arrayType3:
 		length := r.Intn(maxNestedArraySize)
 		return newArray(storage, address, length, nestedLevels)
-	case mapType:
+	case mapType1, mapType2, mapType3:
 		length := r.Intn(maxNestedMapSize)
 		return newMap(storage, address, length, nestedLevels)
 	default:

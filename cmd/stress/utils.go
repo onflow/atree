@@ -192,12 +192,6 @@ func removeValue(storage *atree.PersistentSlabStorage, value atree.Value) error 
 }
 
 func removeStorable(storage *atree.PersistentSlabStorage, storable atree.Storable) error {
-	sid, ok := storable.(atree.SlabIDStorable)
-	if !ok {
-		return nil
-	}
-
-	id := atree.SlabID(sid)
 
 	value, err := storable.StoredValue(storage)
 	if err != nil {
@@ -205,8 +199,6 @@ func removeStorable(storage *atree.PersistentSlabStorage, storable atree.Storabl
 	}
 
 	switch v := value.(type) {
-	case StringValue:
-		return storage.Remove(id)
 	case *atree.Array:
 		err := v.PopIterate(func(storable atree.Storable) {
 			_ = removeStorable(storage, storable)
@@ -214,7 +206,6 @@ func removeStorable(storage *atree.PersistentSlabStorage, storable atree.Storabl
 		if err != nil {
 			return err
 		}
-		return storage.Remove(id)
 
 	case *atree.OrderedMap:
 		err := v.PopIterate(func(keyStorable atree.Storable, valueStorable atree.Storable) {
@@ -224,11 +215,13 @@ func removeStorable(storage *atree.PersistentSlabStorage, storable atree.Storabl
 		if err != nil {
 			return err
 		}
-		return storage.Remove(id)
-
-	default:
-		return fmt.Errorf("failed to remove storable: storable type %T isn't supported", v)
 	}
+
+	if sid, ok := storable.(atree.SlabIDStorable); ok {
+		return storage.Remove(atree.SlabID(sid))
+	}
+
+	return nil
 }
 
 func valueEqual(a atree.Value, b atree.Value) error {

@@ -392,6 +392,16 @@ func testArray(
 			if !checkStorageHealth(storage, array.SlabID()) {
 				return
 			}
+
+			// Commit slabs to storage so slabs are encoded and then decoded at next op.
+			err = storage.FastCommit(runtime.NumCPU())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to commit to storage: %s", err)
+				return
+			}
+
+			// Drop cache after commit to force slab decoding at next op.
+			storage.DropCache()
 		}
 	}
 }

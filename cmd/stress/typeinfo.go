@@ -26,38 +26,107 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-type testTypeInfo struct {
-	value uint64
+const (
+	maxArrayTypeValue = 10
+	maxMapTypeValue   = 10
+
+	arrayTypeTagNum = 246
+	mapTypeTagNum   = 245
+)
+
+type arrayTypeInfo struct {
+	value int
 }
 
-var _ atree.TypeInfo = testTypeInfo{}
+func newArrayTypeInfo() arrayTypeInfo {
+	return arrayTypeInfo{value: r.Intn(maxArrayTypeValue)}
+}
 
-func (i testTypeInfo) Copy() atree.TypeInfo {
+var _ atree.TypeInfo = arrayTypeInfo{}
+
+func (i arrayTypeInfo) Copy() atree.TypeInfo {
 	return i
 }
 
-func (i testTypeInfo) IsComposite() bool {
+func (i arrayTypeInfo) IsComposite() bool {
 	return false
 }
 
-func (i testTypeInfo) ID() string {
-	return fmt.Sprintf("uint64(%d)", i)
+func (i arrayTypeInfo) ID() string {
+	return fmt.Sprintf("array(%d)", i)
 }
 
-func (i testTypeInfo) Encode(e *cbor.StreamEncoder) error {
-	return e.EncodeUint64(i.value)
+func (i arrayTypeInfo) Encode(e *cbor.StreamEncoder) error {
+	err := e.EncodeTagHead(arrayTypeTagNum)
+	if err != nil {
+		return err
+	}
+	return e.EncodeInt64(int64(i.value))
 }
 
-func (i testTypeInfo) Equal(other atree.TypeInfo) bool {
-	otherTestTypeInfo, ok := other.(testTypeInfo)
-	return ok && i.value == otherTestTypeInfo.value
+func (i arrayTypeInfo) Equal(other atree.TypeInfo) bool {
+	otherArrayTypeInfo, ok := other.(arrayTypeInfo)
+	return ok && i.value == otherArrayTypeInfo.value
+}
+
+type mapTypeInfo struct {
+	value int
+}
+
+var _ atree.TypeInfo = mapTypeInfo{}
+
+func newMapTypeInfo() mapTypeInfo {
+	return mapTypeInfo{value: r.Intn(maxMapTypeValue)}
+}
+
+func (i mapTypeInfo) Copy() atree.TypeInfo {
+	return i
+}
+
+func (i mapTypeInfo) IsComposite() bool {
+	return false
+}
+
+func (i mapTypeInfo) ID() string {
+	return fmt.Sprintf("map(%d)", i)
+}
+
+func (i mapTypeInfo) Encode(e *cbor.StreamEncoder) error {
+	err := e.EncodeTagHead(mapTypeTagNum)
+	if err != nil {
+		return err
+	}
+	return e.EncodeInt64(int64(i.value))
+}
+
+func (i mapTypeInfo) Equal(other atree.TypeInfo) bool {
+	otherMapTypeInfo, ok := other.(mapTypeInfo)
+	return ok && i.value == otherMapTypeInfo.value
 }
 
 func decodeTypeInfo(dec *cbor.StreamDecoder) (atree.TypeInfo, error) {
-	value, err := dec.DecodeUint64()
+	num, err := dec.DecodeTagNumber()
 	if err != nil {
 		return nil, err
 	}
+	switch num {
+	case arrayTypeTagNum:
+		value, err := dec.DecodeInt64()
+		if err != nil {
+			return nil, err
+		}
 
-	return testTypeInfo{value: value}, nil
+		return arrayTypeInfo{value: int(value)}, nil
+
+	case mapTypeTagNum:
+		value, err := dec.DecodeInt64()
+		if err != nil {
+			return nil, err
+		}
+
+		return mapTypeInfo{value: int(value)}, nil
+
+	default:
+		return nil, fmt.Errorf("failed to decode type info with tag number %d", num)
+	}
 }

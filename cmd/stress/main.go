@@ -129,8 +129,6 @@ func main() {
 		decodeTypeInfo,
 	)
 
-	typeInfo := testTypeInfo{value: 123}
-
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	switch typ {
@@ -142,7 +140,7 @@ func main() {
 
 		go updateStatus(sigc, status)
 
-		testArray(storage, address, typeInfo, maxLength, status, minHeapAllocMiB, maxHeapAllocMiB)
+		testArray(storage, address, maxLength, status, minHeapAllocMiB, maxHeapAllocMiB)
 
 	case "map":
 		fmt.Printf("Starting map stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB\n", minHeapAllocMiB, maxHeapAllocMiB)
@@ -151,7 +149,7 @@ func main() {
 
 		go updateStatus(sigc, status)
 
-		testMap(storage, address, typeInfo, maxLength, status, minHeapAllocMiB, maxHeapAllocMiB)
+		testMap(storage, address, maxLength, status, minHeapAllocMiB, maxHeapAllocMiB)
 	}
 
 }

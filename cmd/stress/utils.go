@@ -343,7 +343,7 @@ func mapEqual(a atree.Value, b atree.Value) error {
 
 // newArray creates atree.Array with random elements of specified size and nested level
 func newArray(storage *atree.PersistentSlabStorage, address atree.Address, length int, nestedLevel int) (*atree.Array, error) {
-	typeInfo := testTypeInfo{value: 123}
+	typeInfo := newArrayTypeInfo()
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 	if err != nil {
@@ -385,7 +385,7 @@ func newArray(storage *atree.PersistentSlabStorage, address atree.Address, lengt
 
 // newMap creates atree.OrderedMap with random elements of specified size and nested level
 func newMap(storage *atree.PersistentSlabStorage, address atree.Address, length int, nestedLevel int) (*atree.OrderedMap, error) {
-	typeInfo := testTypeInfo{value: 123}
+	typeInfo := newMapTypeInfo()
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	if err != nil {

@@ -97,12 +97,12 @@ func (status *mapStatus) Write() {
 func testMap(
 	storage *atree.PersistentSlabStorage,
 	address atree.Address,
-	typeInfo atree.TypeInfo,
 	maxLength uint64,
 	status *mapStatus,
 	minHeapAllocMiB uint64,
 	maxHeapAllocMiB uint64,
 ) {
+	typeInfo := newMapTypeInfo()
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	if err != nil {
@@ -110,8 +110,8 @@ func testMap(
 		return
 	}
 
-	// elements contains generated keys and values. It is used to check data loss.
-	elements := make(map[atree.Value]atree.Value, maxLength)
+	// expectedValues contains generated keys and values. It is used to check data loss.
+	expectedValues := make(map[atree.Value]atree.Value, maxLength)
 
 	// keys contains generated keys.  It is used to select random keys for removal.
 	keys := make([]atree.Value, 0, maxLength)
@@ -148,7 +148,7 @@ func testMap(
 			storage.DropDeltas()
 			storage.DropCache()
 
-			elements = make(map[atree.Value]atree.Value, maxLength)
+			expectedValues = make(map[atree.Value]atree.Value, maxLength)
 
 			// Load root slab from storage and cache it in read cache
 			rootID := m.SlabID()
@@ -213,15 +213,15 @@ func testMap(
 				return
 			}
 
-			oldV := elements[copiedKey]
+			oldExpectedValue := expectedValues[copiedKey]
 
 			// Update keys
-			if oldV == nil {
+			if oldExpectedValue == nil {
 				keys = append(keys, copiedKey)
 			}
 
 			// Update elements
-			elements[copiedKey] = copiedValue
+			expectedValues[copiedKey] = copiedValue
 
 			// Update map
 			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
@@ -231,13 +231,13 @@ func testMap(
 			}
 
 			// Compare old value from map with old value from elements
-			if (oldV == nil) && (existingStorable != nil) {
+			if (oldExpectedValue == nil) && (existingStorable != nil) {
 				fmt.Fprintf(os.Stderr, "Set returned storable %s, want nil", existingStorable)
 				return
 			}
 
-			if (oldV != nil) && (existingStorable == nil) {
-				fmt.Fprintf(os.Stderr, "Set returned nil, want %s", oldV)
+			if (oldExpectedValue != nil) && (existingStorable == nil) {
+				fmt.Fprintf(os.Stderr, "Set returned nil, want %s", oldExpectedValue)
 				return
 			}
 
@@ -249,9 +249,9 @@ func testMap(
 					return
 				}
 
-				err = valueEqual(oldV, existingValue)
+				err = valueEqual(oldExpectedValue, existingValue)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Set() returned wrong existing value %s, want %s", existingValue, oldV)
+					fmt.Fprintf(os.Stderr, "Set() returned wrong existing value %s, want %s", existingValue, oldExpectedValue)
 					return
 				}
 
@@ -261,7 +261,7 @@ func testMap(
 					return
 				}
 
-				err = removeValue(storage, oldV)
+				err = removeValue(storage, oldExpectedValue)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to remove copied overwritten value %s: %s", existingValue, err)
 					return
@@ -269,7 +269,7 @@ func testMap(
 			}
 
 			// Update status
-			status.incSet(oldV == nil)
+			status.incSet(oldExpectedValue == nil)
 
 		case mapRemoveOp:
 			if m.Count() == 0 {
@@ -281,10 +281,10 @@ func testMap(
 			index := r.Intn(len(keys))
 			k := keys[index]
 
-			oldV := elements[k]
+			oldExpectedValue := expectedValues[k]
 
 			// Update elements
-			delete(elements, k)
+			delete(expectedValues, k)
 
 			// Update keys
 			copy(keys[index:], keys[index+1:])
@@ -318,9 +318,9 @@ func testMap(
 				return
 			}
 
-			err = valueEqual(oldV, existingValue)
+			err = valueEqual(oldExpectedValue, existingValue)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Remove() returned wrong existing value %s, want %s", existingValueStorable, oldV)
+				fmt.Fprintf(os.Stderr, "Remove() returned wrong existing value %s, want %s", existingValueStorable, oldExpectedValue)
 				return
 			}
 
@@ -342,7 +342,7 @@ func testMap(
 				return
 			}
 
-			err = removeValue(storage, oldV)
+			err = removeValue(storage, oldExpectedValue)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to remove copied value %s: %s", existingValue, err)
 				return
@@ -353,7 +353,7 @@ func testMap(
 		}
 
 		// Check map elements against elements after every op
-		err = checkMapDataLoss(m, elements)
+		err = checkMapDataLoss(m, expectedValues)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return
@@ -361,20 +361,7 @@ func testMap(
 
 		if opCount >= 100 {
 			opCount = 0
-			rootIDs, err := atree.CheckStorageHealth(storage, -1)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return
-			}
-			ids := make([]atree.SlabID, 0, len(rootIDs))
-			for id := range rootIDs {
-				// filter out root ids with empty address
-				if !id.HasTempAddress() {
-					ids = append(ids, id)
-				}
-			}
-			if len(ids) != 1 || ids[0] != m.SlabID() {
-				fmt.Fprintf(os.Stderr, "root slab ids %v in storage, want %s\n", ids, m.SlabID())
+			if !checkStorageHealth(storage, m.SlabID()) {
 				return
 			}
 		}

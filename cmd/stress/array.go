@@ -113,12 +113,13 @@ func (status *arrayStatus) Write() {
 func testArray(
 	storage *atree.PersistentSlabStorage,
 	address atree.Address,
-	typeInfo atree.TypeInfo,
 	maxLength uint64,
 	status *arrayStatus,
 	minHeapAllocMiB uint64,
 	maxHeapAllocMiB uint64,
 ) {
+
+	typeInfo := newArrayTypeInfo()
 
 	// Create new array
 	array, err := atree.NewArray(storage, address, typeInfo)
@@ -127,8 +128,8 @@ func testArray(
 		return
 	}
 
-	// values contains array elements in the same order.  It is used to check data loss.
-	values := make([]atree.Value, 0, maxLength)
+	// expectedValues contains array elements in the same order.  It is used to check data loss.
+	expectedValues := make([]atree.Value, 0, maxLength)
 
 	reduceHeapAllocs := false
 
@@ -214,7 +215,7 @@ func testArray(
 			}
 
 			// Append to values
-			values = append(values, copiedValue)
+			expectedValues = append(expectedValues, copiedValue)
 
 			// Append to array
 			err = array.Append(v)
@@ -248,10 +249,10 @@ func testArray(
 				return
 			}
 
-			oldV := values[k]
+			oldExpectedValue := expectedValues[k]
 
 			// Update values
-			values[k] = copiedValue
+			expectedValues[k] = copiedValue
 
 			// Update array
 			existingStorable, err := array.Set(uint64(k), v)
@@ -267,9 +268,9 @@ func testArray(
 				return
 			}
 
-			err = valueEqual(oldV, existingValue)
+			err = valueEqual(oldExpectedValue, existingValue)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingValue, oldV, err)
+				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingValue, oldExpectedValue, err)
 				return
 			}
 
@@ -280,9 +281,9 @@ func testArray(
 				return
 			}
 
-			err = removeValue(storage, oldV)
+			err = removeValue(storage, oldExpectedValue)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove copied overwritten value %s: %s", oldV, err)
+				fmt.Fprintf(os.Stderr, "Failed to remove copied overwritten value %s: %s", oldExpectedValue, err)
 				return
 			}
 
@@ -309,11 +310,11 @@ func testArray(
 
 			// Update values
 			if k == int(array.Count()) {
-				values = append(values, copiedValue)
+				expectedValues = append(expectedValues, copiedValue)
 			} else {
-				values = append(values, nil)
-				copy(values[k+1:], values[k:])
-				values[k] = copiedValue
+				expectedValues = append(expectedValues, nil)
+				copy(expectedValues[k+1:], expectedValues[k:])
+				expectedValues[k] = copiedValue
 			}
 
 			// Update array
@@ -335,12 +336,12 @@ func testArray(
 
 			k := r.Intn(int(array.Count()))
 
-			oldV := values[k]
+			oldExpectedValue := expectedValues[k]
 
 			// Update values
-			copy(values[k:], values[k+1:])
-			values[len(values)-1] = nil
-			values = values[:len(values)-1]
+			copy(expectedValues[k:], expectedValues[k+1:])
+			expectedValues[len(expectedValues)-1] = nil
+			expectedValues = expectedValues[:len(expectedValues)-1]
 
 			// Update array
 			existingStorable, err := array.Remove(uint64(k))
@@ -356,9 +357,9 @@ func testArray(
 				return
 			}
 
-			err = valueEqual(oldV, existingValue)
+			err = valueEqual(oldExpectedValue, existingValue)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingValue, oldV, err)
+				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingValue, oldExpectedValue, err)
 				return
 			}
 
@@ -369,9 +370,9 @@ func testArray(
 				return
 			}
 
-			err = removeValue(storage, oldV)
+			err = removeValue(storage, oldExpectedValue)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove copied removed value %s: %s", oldV, err)
+				fmt.Fprintf(os.Stderr, "Failed to remove copied removed value %s: %s", oldExpectedValue, err)
 				return
 			}
 
@@ -380,7 +381,7 @@ func testArray(
 		}
 
 		// Check array elements against values after every op
-		err = checkArrayDataLoss(array, values)
+		err = checkArrayDataLoss(array, expectedValues)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return
@@ -388,24 +389,36 @@ func testArray(
 
 		if opCount >= 100 {
 			opCount = 0
-			rootIDs, err := atree.CheckStorageHealth(storage, -1)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return
-			}
-			ids := make([]atree.SlabID, 0, len(rootIDs))
-			for id := range rootIDs {
-				// filter out root ids with empty address
-				if !id.HasTempAddress() {
-					ids = append(ids, id)
-				}
-			}
-			if len(ids) != 1 || ids[0] != array.SlabID() {
-				fmt.Fprintf(os.Stderr, "root slab ids %v in storage, want %s\n", ids, array.SlabID())
+			if !checkStorageHealth(storage, array.SlabID()) {
 				return
 			}
 		}
 	}
+}
+
+func checkStorageHealth(storage *atree.PersistentSlabStorage, rootSlabID atree.SlabID) bool {
+	rootIDs, err := atree.CheckStorageHealth(storage, -1)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return false
+	}
+
+	// Filter out slabs with temp address because
+	// child array/map values used for data loss check is stored with temp address.
+	ids := make([]atree.SlabID, 0, len(rootIDs))
+	for id := range rootIDs {
+		// filter out root ids with empty address
+		if !id.HasTempAddress() {
+			ids = append(ids, id)
+		}
+	}
+
+	if len(ids) != 1 || ids[0] != rootSlabID {
+		fmt.Fprintf(os.Stderr, "root slab ids %v in storage, want %s\n", ids, rootSlabID)
+		return false
+	}
+
+	return true
 }
 
 func checkArrayDataLoss(array *atree.Array, values []atree.Value) error {

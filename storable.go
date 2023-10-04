@@ -37,6 +37,23 @@ type Storable interface {
 	ChildStorables() []Storable
 }
 
+// ComparableStorable is an interface that supports comparison and cloning of Storable.
+// This is only used for compact keys.
+type ComparableStorable interface {
+	Storable
+
+	// Equal returns true if the given storable is equal to this storable.
+	Equal(Storable) bool
+
+	// Less returns true if the given storable is less than this storable.
+	Less(Storable) bool
+
+	// ID returns a unique identifier.
+	ID() string
+
+	Copy() Storable
+}
+
 type containerStorable interface {
 	Storable
 	hasPointer() bool
@@ -50,6 +67,19 @@ func hasPointer(storable Storable) bool {
 }
 
 const (
+	// WARNING: tag numbers defined in here in github.com/onflow/atree
+	// MUST not overlap with tag numbers used by Cadence internal value encoding.
+	// As of Oct. 2, 2023, Cadence uses tag numbers from 128 to 224.
+	// See runtime/interpreter/encode.go at github.com/onflow/cadence.
+
+	CBORTagInlinedArrayExtraData      = 247
+	CBORTagInlinedMapExtraData        = 248
+	CBORTagInlinedCompactMapExtraData = 249
+
+	CBORTagInlinedArray      = 250
+	CBORTagInlinedMap        = 251
+	CBORTagInlinedCompactMap = 252
+
 	CBORTagInlineCollisionGroup   = 253
 	CBORTagExternalCollisionGroup = 254
 
@@ -59,6 +89,7 @@ const (
 type SlabIDStorable SlabID
 
 var _ Storable = SlabIDStorable{}
+var _ containerStorable = SlabIDStorable{}
 
 func (v SlabIDStorable) hasPointer() bool {
 	return true

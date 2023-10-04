@@ -76,7 +76,7 @@ func newBasicArrayDataSlabFromData(
 		)
 	}
 
-	cborDec := decMode.NewByteStreamDecoder(data[2:])
+	cborDec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
 
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
@@ -85,7 +85,7 @@ func newBasicArrayDataSlabFromData(
 
 	elements := make([]Storable, elemCount)
 	for i := 0; i < int(elemCount); i++ {
-		storable, err := decodeStorable(cborDec, SlabIDUndefined)
+		storable, err := decodeStorable(cborDec, id, nil)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode array element")
@@ -101,10 +101,17 @@ func newBasicArrayDataSlabFromData(
 
 func (a *BasicArrayDataSlab) Encode(enc *Encoder) error {
 
-	flag := maskBasicArray | maskSlabRoot
+	const version = 1
+
+	h, err := newArraySlabHead(version, slabBasicArray)
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	h.setRoot()
 
 	// Encode flag
-	_, err := enc.Write([]byte{0x0, flag})
+	_, err = enc.Write(h[:])
 	if err != nil {
 		return NewEncodingError(err)
 	}

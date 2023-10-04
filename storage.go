@@ -25,15 +25,45 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/fxamacker/cbor/v2"
 )
 
 const LedgerBaseStorageSlabPrefix = "$"
 
-// ValueID identifies Array and OrderedMap.
-type ValueID [16]byte
+// ValueID identifies an Array or OrderedMap. ValueID is consistent
+// independent of inlining status, while ValueID and SlabID are used
+// differently despite having the same size and content under the hood.
+// By contrast, SlabID is affected by inlining because it identifies
+// a slab in storage.  Given this, ValueID should be used for
+// resource tracking, etc.
+type ValueID [unsafe.Sizeof(Address{}) + unsafe.Sizeof(SlabIndex{})]byte
 
+var emptyValueID = ValueID{}
+
+func slabIDToValueID(sid SlabID) ValueID {
+	var id ValueID
+	n := copy(id[:], sid.address[:])
+	copy(id[n:], sid.index[:])
+	return id
+}
+
+func (vid ValueID) equal(sid SlabID) bool {
+	return bytes.Equal(vid[:len(sid.address)], sid.address[:]) &&
+		bytes.Equal(vid[len(sid.address):], sid.index[:])
+}
+
+func (vid ValueID) String() string {
+	return fmt.Sprintf(
+		"0x%x.%d",
+		binary.BigEndian.Uint64(vid[:8]),
+		binary.BigEndian.Uint64(vid[8:]),
+	)
+}
+
+// WARNING: Any changes to SlabID or its components (Address and SlabIndex)
+// require updates to ValueID definition and functions.
 type (
 	Address   [8]byte
 	SlabIndex [8]byte
@@ -448,6 +478,8 @@ func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map
 					atLeastOneExternalSlab = true
 				}
 
+				// This handles inlined slab because inlined slab is a child storable (s) and
+				// we traverse s.ChildStorables() for its inlined elements.
 				next = append(next, s.ChildStorables()...)
 			}
 
@@ -574,6 +606,11 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 
 				slabIDStorable, ok := childStorable.(SlabIDStorable)
 				if !ok {
+					// Append child storables of this childStorable to handle inlined slab containing SlabIDStorable.
+					nextChildStorables = append(
+						nextChildStorables,
+						childStorable.ChildStorables()...,
+					)
 					continue
 				}
 
@@ -989,12 +1026,18 @@ func (s *PersistentSlabStorage) Retrieve(id SlabID) (Slab, bool, error) {
 }
 
 func (s *PersistentSlabStorage) Store(id SlabID, slab Slab) error {
+	if id == SlabIDUndefined {
+		return NewSlabIDError("failed to store slab with undefined slab ID")
+	}
 	// add to deltas
 	s.deltas[id] = slab
 	return nil
 }
 
 func (s *PersistentSlabStorage) Remove(id SlabID) error {
+	if id == SlabIDUndefined {
+		return NewSlabIDError("failed to remove slab with undefined slab ID")
+	}
 	// add to nil to deltas under that id
 	s.deltas[id] = nil
 	return nil

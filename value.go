@@ -25,3 +25,14 @@ type Value interface {
 type ValueComparator func(SlabStorage, Value, Storable) (bool, error)
 
 type StorableComparator func(Storable, Storable) bool
+
+type parentUpdater func() (found bool, err error)
+
+// mutableValueNotifier is an interface that allows mutable child value to notify and update parent.
+type mutableValueNotifier interface {
+	Value
+	ValueID() ValueID
+	setParentUpdater(parentUpdater)
+	Inlined() bool
+	Inlinable(uint64) bool
+}

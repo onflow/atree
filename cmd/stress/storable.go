@@ -413,7 +413,7 @@ func (v StringValue) String() string {
 	return v.str
 }
 
-func decodeStorable(dec *cbor.StreamDecoder, _ atree.SlabID) (atree.Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, _ atree.SlabID, _ []atree.ExtraData) (atree.Storable, error) {
 	t, err := dec.NextType()
 	if err != nil {
 		return nil, err

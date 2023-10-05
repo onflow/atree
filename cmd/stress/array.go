@@ -21,6 +21,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -113,10 +114,7 @@ func (status *arrayStatus) Write() {
 func testArray(
 	storage *atree.PersistentSlabStorage,
 	address atree.Address,
-	maxLength uint64,
 	status *arrayStatus,
-	minHeapAllocMiB uint64,
-	maxHeapAllocMiB uint64,
 ) {
 
 	typeInfo := newArrayTypeInfo()
@@ -129,7 +127,7 @@ func testArray(
 	}
 
 	// expectedValues contains array elements in the same order.  It is used to check data loss.
-	expectedValues := make([]atree.Value, 0, maxLength)
+	expectedValues := make([]atree.Value, 0, flagMaxLength)
 
 	reduceHeapAllocs := false
 
@@ -141,10 +139,10 @@ func testArray(
 		runtime.ReadMemStats(&m)
 		allocMiB := m.Alloc / 1024 / 1024
 
-		if !reduceHeapAllocs && allocMiB > maxHeapAllocMiB {
+		if !reduceHeapAllocs && allocMiB > flagMaxHeapAllocMiB {
 			fmt.Printf("\nHeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
 			reduceHeapAllocs = true
-		} else if reduceHeapAllocs && allocMiB < minHeapAllocMiB {
+		} else if reduceHeapAllocs && allocMiB < flagMinHeapAllocMiB {
 			fmt.Printf("\nHeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
 			reduceHeapAllocs = false
 		}
@@ -179,20 +177,20 @@ func testArray(
 			fmt.Printf("\nHeapAlloc is %d MiB after cleanup and forced gc\n", allocMiB)
 
 			// Prevent infinite loop that doesn't do useful work.
-			if allocMiB > maxHeapAllocMiB {
+			if allocMiB > flagMaxHeapAllocMiB {
 				// This shouldn't happen unless there's a memory leak.
 				fmt.Fprintf(
 					os.Stderr,
 					"Exiting because allocMiB %d > maxMapHeapAlloMiB %d with empty map\n",
 					allocMiB,
-					maxHeapAllocMiB)
+					flagMaxHeapAllocMiB)
 				return
 			}
 		}
 
 		nextOp := r.Intn(maxArrayOp)
 
-		if array.Count() == maxLength || reduceHeapAllocs {
+		if array.Count() == flagMaxLength || reduceHeapAllocs {
 			nextOp = arrayRemoveOp
 		}
 
@@ -431,15 +429,15 @@ func checkStorageHealth(storage *atree.PersistentSlabStorage, rootSlabID atree.S
 	return true
 }
 
-func checkArrayDataLoss(array *atree.Array, values []atree.Value) error {
+func checkArrayDataLoss(array *atree.Array, expectedValues []atree.Value) error {
 
 	// Check array has the same number of elements as values
-	if array.Count() != uint64(len(values)) {
-		return fmt.Errorf("Count() %d != len(values) %d", array.Count(), len(values))
+	if array.Count() != uint64(len(expectedValues)) {
+		return fmt.Errorf("Count() %d != len(values) %d", array.Count(), len(expectedValues))
 	}
 
 	// Check every element
-	for i, v := range values {
+	for i, v := range expectedValues {
 		convertedValue, err := array.Get(uint64(i))
 		if err != nil {
 			return fmt.Errorf("failed to get element at %d: %w", i, err)
@@ -447,6 +445,31 @@ func checkArrayDataLoss(array *atree.Array, values []atree.Value) error {
 		err = valueEqual(v, convertedValue)
 		if err != nil {
 			return fmt.Errorf("failed to compare %s and %s: %w", v, convertedValue, err)
+		}
+	}
+
+	if flagCheckSlabEnabled {
+		typeInfoComparator := func(a atree.TypeInfo, b atree.TypeInfo) bool {
+			return a.ID() == b.ID()
+		}
+
+		err := atree.VerifyArray(array, array.Address(), array.Type(), typeInfoComparator, hashInputProvider, true)
+		if err != nil {
+			return err
+		}
+
+		err = atree.VerifyArraySerialization(
+			array,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			func(a, b atree.Storable) bool {
+				return reflect.DeepEqual(a, b)
+			},
+		)
+		if err != nil {
+			return err
 		}
 	}
 

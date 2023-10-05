@@ -21,6 +21,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -97,10 +98,7 @@ func (status *mapStatus) Write() {
 func testMap(
 	storage *atree.PersistentSlabStorage,
 	address atree.Address,
-	maxLength uint64,
 	status *mapStatus,
-	minHeapAllocMiB uint64,
-	maxHeapAllocMiB uint64,
 ) {
 	typeInfo := newMapTypeInfo()
 
@@ -111,10 +109,10 @@ func testMap(
 	}
 
 	// expectedValues contains generated keys and values. It is used to check data loss.
-	expectedValues := make(map[atree.Value]atree.Value, maxLength)
+	expectedValues := make(map[atree.Value]atree.Value, flagMaxLength)
 
 	// keys contains generated keys.  It is used to select random keys for removal.
-	keys := make([]atree.Value, 0, maxLength)
+	keys := make([]atree.Value, 0, flagMaxLength)
 
 	reduceHeapAllocs := false
 
@@ -126,10 +124,10 @@ func testMap(
 		runtime.ReadMemStats(&ms)
 		allocMiB := ms.Alloc / 1024 / 1024
 
-		if !reduceHeapAllocs && allocMiB > maxHeapAllocMiB {
+		if !reduceHeapAllocs && allocMiB > flagMaxHeapAllocMiB {
 			fmt.Printf("\nHeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
 			reduceHeapAllocs = true
-		} else if reduceHeapAllocs && allocMiB < minHeapAllocMiB {
+		} else if reduceHeapAllocs && allocMiB < flagMinHeapAllocMiB {
 			fmt.Printf("\nHeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
 			reduceHeapAllocs = false
 		}
@@ -148,7 +146,7 @@ func testMap(
 			storage.DropDeltas()
 			storage.DropCache()
 
-			expectedValues = make(map[atree.Value]atree.Value, maxLength)
+			expectedValues = make(map[atree.Value]atree.Value, flagMaxLength)
 
 			// Load root slab from storage and cache it in read cache
 			rootID := m.SlabID()
@@ -166,20 +164,20 @@ func testMap(
 			fmt.Printf("\nHeapAlloc is %d MiB after cleanup and forced gc\n", allocMiB)
 
 			// Prevent infinite loop that doesn't do useful work.
-			if allocMiB > maxHeapAllocMiB {
+			if allocMiB > flagMaxHeapAllocMiB {
 				// This shouldn't happen unless there's a memory leak.
 				fmt.Fprintf(
 					os.Stderr,
 					"Exiting because allocMiB %d > maxMapHeapAlloMiB %d with empty map\n",
 					allocMiB,
-					maxHeapAllocMiB)
+					flagMaxHeapAllocMiB)
 				return
 			}
 		}
 
 		nextOp := r.Intn(maxMapOp)
 
-		if m.Count() == maxLength || reduceHeapAllocs {
+		if m.Count() == flagMaxLength || reduceHeapAllocs {
 			nextOp = mapRemoveOp
 		}
 
@@ -378,15 +376,15 @@ func testMap(
 	}
 }
 
-func checkMapDataLoss(m *atree.OrderedMap, elements map[atree.Value]atree.Value) error {
+func checkMapDataLoss(m *atree.OrderedMap, expectedValues map[atree.Value]atree.Value) error {
 
 	// Check map has the same number of elements as elements
-	if m.Count() != uint64(len(elements)) {
-		return fmt.Errorf("Count() %d != len(values) %d", m.Count(), len(elements))
+	if m.Count() != uint64(len(expectedValues)) {
+		return fmt.Errorf("Count() %d != len(values) %d", m.Count(), len(expectedValues))
 	}
 
 	// Check every element
-	for k, v := range elements {
+	for k, v := range expectedValues {
 		convertedValue, err := m.Get(compare, hashInputProvider, k)
 		if err != nil {
 			return fmt.Errorf("failed to get element with key %s: %w", k, err)
@@ -397,5 +395,29 @@ func checkMapDataLoss(m *atree.OrderedMap, elements map[atree.Value]atree.Value)
 		}
 	}
 
+	if flagCheckSlabEnabled {
+		typeInfoComparator := func(a atree.TypeInfo, b atree.TypeInfo) bool {
+			return a.ID() == b.ID()
+		}
+
+		err := atree.VerifyMap(m, m.Address(), m.Type(), typeInfoComparator, hashInputProvider, true)
+		if err != nil {
+			return err
+		}
+
+		err = atree.VerifyMapSerialization(
+			m,
+			cborDecMode,
+			cborEncMode,
+			decodeStorable,
+			decodeTypeInfo,
+			func(a, b atree.Storable) bool {
+				return reflect.DeepEqual(a, b)
+			},
+		)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

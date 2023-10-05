@@ -127,7 +127,7 @@ func testArray(
 	}
 
 	// expectedValues contains array elements in the same order.  It is used to check data loss.
-	expectedValues := make([]atree.Value, 0, flagMaxLength)
+	expectedValues := make(arrayValue, 0, flagMaxLength)
 
 	reduceHeapAllocs := false
 
@@ -200,25 +200,19 @@ func testArray(
 			opCount++
 
 			nestedLevels := r.Intn(maxNestedLevels)
-			v, err := randomValue(storage, address, nestedLevels)
+			expectedValue, value, err := randomValue(storage, address, nestedLevels)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
+				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", value, err)
 				return
 			}
 
-			copiedValue, err := copyValue(storage, atree.Address{}, v)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
-				return
-			}
-
-			// Append to values
-			expectedValues = append(expectedValues, copiedValue)
+			// Append to expectedValues
+			expectedValues = append(expectedValues, expectedValue)
 
 			// Append to array
-			err = array.Append(v)
+			err = array.Append(value)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to append %s: %s", v, err)
+				fmt.Fprintf(os.Stderr, "Failed to append %s: %s", value, err)
 				return
 			}
 
@@ -232,30 +226,24 @@ func testArray(
 				continue
 			}
 
-			k := r.Intn(int(array.Count()))
+			index := r.Intn(int(array.Count()))
 
 			nestedLevels := r.Intn(maxNestedLevels)
-			v, err := randomValue(storage, address, nestedLevels)
+			expectedValue, value, err := randomValue(storage, address, nestedLevels)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
+				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", value, err)
 				return
 			}
 
-			copiedValue, err := copyValue(storage, atree.Address{}, v)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
-				return
-			}
+			oldExpectedValue := expectedValues[index]
 
-			oldExpectedValue := expectedValues[k]
-
-			// Update values
-			expectedValues[k] = copiedValue
+			// Update expectedValues
+			expectedValues[index] = expectedValue
 
 			// Update array
-			existingStorable, err := array.Set(uint64(k), v)
+			existingStorable, err := array.Set(uint64(index), value)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to set %s at index %d: %s", v, k, err)
+				fmt.Fprintf(os.Stderr, "Failed to set %s at index %d: %s", value, index, err)
 				return
 			}
 
@@ -279,46 +267,34 @@ func testArray(
 				return
 			}
 
-			err = removeValue(storage, oldExpectedValue)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove copied overwritten value %s: %s", oldExpectedValue, err)
-				return
-			}
-
 			// Update status
 			status.incSet()
 
 		case arrayInsertOp:
 			opCount++
 
-			k := r.Intn(int(array.Count() + 1))
+			index := r.Intn(int(array.Count() + 1))
 
 			nestedLevels := r.Intn(maxNestedLevels)
-			v, err := randomValue(storage, address, nestedLevels)
+			expectedValue, value, err := randomValue(storage, address, nestedLevels)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
+				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", value, err)
 				return
 			}
 
-			copiedValue, err := copyValue(storage, atree.Address{}, v)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
-				return
-			}
-
-			// Update values
-			if k == int(array.Count()) {
-				expectedValues = append(expectedValues, copiedValue)
+			// Update expectedValues
+			if index == int(array.Count()) {
+				expectedValues = append(expectedValues, expectedValue)
 			} else {
 				expectedValues = append(expectedValues, nil)
-				copy(expectedValues[k+1:], expectedValues[k:])
-				expectedValues[k] = copiedValue
+				copy(expectedValues[index+1:], expectedValues[index:])
+				expectedValues[index] = expectedValue
 			}
 
 			// Update array
-			err = array.Insert(uint64(k), v)
+			err = array.Insert(uint64(index), value)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to insert %s into index %d: %s", v, k, err)
+				fmt.Fprintf(os.Stderr, "Failed to insert %s into index %d: %s", value, index, err)
 				return
 			}
 
@@ -336,7 +312,7 @@ func testArray(
 
 			oldExpectedValue := expectedValues[k]
 
-			// Update values
+			// Update expectedValues
 			copy(expectedValues[k:], expectedValues[k+1:])
 			expectedValues[len(expectedValues)-1] = nil
 			expectedValues = expectedValues[:len(expectedValues)-1]
@@ -368,18 +344,12 @@ func testArray(
 				return
 			}
 
-			err = removeValue(storage, oldExpectedValue)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove copied removed value %s: %s", oldExpectedValue, err)
-				return
-			}
-
 			// Update status
 			status.incRemove()
 		}
 
 		// Check array elements against values after every op
-		err = checkArrayDataLoss(array, expectedValues)
+		err = checkArrayDataLoss(expectedValues, array)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return
@@ -429,7 +399,7 @@ func checkStorageHealth(storage *atree.PersistentSlabStorage, rootSlabID atree.S
 	return true
 }
 
-func checkArrayDataLoss(array *atree.Array, expectedValues []atree.Value) error {
+func checkArrayDataLoss(expectedValues arrayValue, array *atree.Array) error {
 
 	// Check array has the same number of elements as values
 	if array.Count() != uint64(len(expectedValues)) {

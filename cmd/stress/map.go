@@ -109,7 +109,7 @@ func testMap(
 	}
 
 	// expectedValues contains generated keys and values. It is used to check data loss.
-	expectedValues := make(map[atree.Value]atree.Value, flagMaxLength)
+	expectedValues := make(mapValue, flagMaxLength)
 
 	// keys contains generated keys.  It is used to select random keys for removal.
 	keys := make([]atree.Value, 0, flagMaxLength)
@@ -186,45 +186,33 @@ func testMap(
 		case mapSetOp1, mapSetOp2, mapSetOp3:
 			opCount++
 
-			k, err := randomKey()
+			expectedKey, key, err := randomKey()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to generate random key %s: %s", k, err)
+				fmt.Fprintf(os.Stderr, "Failed to generate random key %s: %s", key, err)
 				return
 			}
 
 			nestedLevels := r.Intn(maxNestedLevels)
-			v, err := randomValue(storage, address, nestedLevels)
+			expectedValue, value, err := randomValue(storage, address, nestedLevels)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
+				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", value, err)
 				return
 			}
 
-			copiedKey, err := copyValue(storage, atree.Address{}, k)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to copy random key %s: %s", k, err)
-				return
-			}
-
-			copiedValue, err := copyValue(storage, atree.Address{}, v)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", k, err)
-				return
-			}
-
-			oldExpectedValue := expectedValues[copiedKey]
+			oldExpectedValue, keyExist := expectedValues[expectedKey]
 
 			// Update keys
-			if oldExpectedValue == nil {
-				keys = append(keys, copiedKey)
+			if !keyExist {
+				keys = append(keys, expectedKey)
 			}
 
-			// Update elements
-			expectedValues[copiedKey] = copiedValue
+			// Update expectedValues
+			expectedValues[expectedKey] = expectedValue
 
 			// Update map
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(compare, hashInputProvider, key, value)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to set %s at index %d: %s", v, k, err)
+				fmt.Fprintf(os.Stderr, "Failed to set %s at index %d: %s", value, key, err)
 				return
 			}
 
@@ -258,12 +246,6 @@ func testMap(
 					fmt.Fprintf(os.Stderr, "Failed to remove map storable element %s: %s", existingStorable, err)
 					return
 				}
-
-				err = removeValue(storage, oldExpectedValue)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to remove copied overwritten value %s: %s", existingValue, err)
-					return
-				}
 			}
 
 			// Update status
@@ -277,12 +259,12 @@ func testMap(
 			opCount++
 
 			index := r.Intn(len(keys))
-			k := keys[index]
+			key := keys[index]
 
-			oldExpectedValue := expectedValues[k]
+			oldExpectedValue := expectedValues[key]
 
-			// Update elements
-			delete(expectedValues, k)
+			// Update unexpectedValues
+			delete(expectedValues, key)
 
 			// Update keys
 			copy(keys[index:], keys[index+1:])
@@ -290,9 +272,9 @@ func testMap(
 			keys = keys[:len(keys)-1]
 
 			// Update map
-			existingKeyStorable, existingValueStorable, err := m.Remove(compare, hashInputProvider, k)
+			existingKeyStorable, existingValueStorable, err := m.Remove(compare, hashInputProvider, key)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove element with key %s: %s", k, err)
+				fmt.Fprintf(os.Stderr, "Failed to remove element with key %s: %s", key, err)
 				return
 			}
 
@@ -303,9 +285,9 @@ func testMap(
 				return
 			}
 
-			err = valueEqual(k, existingKeyValue)
+			err = valueEqual(key, existingKeyValue)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Remove() returned wrong existing key %s, want %s", existingKeyStorable, k)
+				fmt.Fprintf(os.Stderr, "Remove() returned wrong existing key %s, want %s", existingKeyStorable, key)
 				return
 			}
 
@@ -334,24 +316,12 @@ func testMap(
 				return
 			}
 
-			err = removeValue(storage, k)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove copied key %s: %s", k, err)
-				return
-			}
-
-			err = removeValue(storage, oldExpectedValue)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove copied value %s: %s", existingValue, err)
-				return
-			}
-
 			// Update status
 			status.incRemove()
 		}
 
 		// Check map elements against elements after every op
-		err = checkMapDataLoss(m, expectedValues)
+		err = checkMapDataLoss(expectedValues, m)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return
@@ -376,7 +346,7 @@ func testMap(
 	}
 }
 
-func checkMapDataLoss(m *atree.OrderedMap, expectedValues map[atree.Value]atree.Value) error {
+func checkMapDataLoss(expectedValues mapValue, m *atree.OrderedMap) error {
 
 	// Check map has the same number of elements as elements
 	if m.Count() != uint64(len(expectedValues)) {

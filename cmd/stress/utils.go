@@ -40,13 +40,13 @@ const (
 	uint64Type
 	smallStringType
 	largeStringType
-	arrayType1
-	arrayType2
-	arrayType3
-	mapType1
-	mapType2
-	mapType3
-	maxValueType
+	maxSimpleValueType
+)
+
+const (
+	arrayType int = iota
+	mapType
+	maxContainerValueType
 )
 
 var (
@@ -72,11 +72,8 @@ func randStr(n int) string {
 	return string(runes)
 }
 
-func generateValue(
-	storage *atree.PersistentSlabStorage,
-	address atree.Address,
+func generateSimpleValue(
 	valueType int,
-	nestedLevels int,
 ) (expected atree.Value, actual atree.Value, err error) {
 	switch valueType {
 	case uint8Type:
@@ -105,22 +102,34 @@ func generateValue(
 		v := NewStringValue(randStr(slen))
 		return v, v, nil
 
-	case arrayType1, arrayType2, arrayType3:
+	default:
+		return nil, nil, fmt.Errorf("unexpected randome simple value type %d", valueType)
+	}
+}
+
+func generateContainerValue(
+	valueType int,
+	storage *atree.PersistentSlabStorage,
+	address atree.Address,
+	nestedLevels int,
+) (expected atree.Value, actual atree.Value, err error) {
+	switch valueType {
+	case arrayType:
 		length := r.Intn(maxNestedArraySize)
 		return newArray(storage, address, length, nestedLevels)
 
-	case mapType1, mapType2, mapType3:
+	case mapType:
 		length := r.Intn(maxNestedMapSize)
 		return newMap(storage, address, length, nestedLevels)
 
 	default:
-		return nil, nil, fmt.Errorf("unexpected randome value type %d", valueType)
+		return nil, nil, fmt.Errorf("unexpected randome container value type %d", valueType)
 	}
 }
 
 func randomKey() (atree.Value, atree.Value, error) {
-	t := r.Intn(largeStringType + 1)
-	return generateValue(nil, atree.Address{}, t, 0)
+	t := r.Intn(maxSimpleValueType)
+	return generateSimpleValue(t)
 }
 
 func randomValue(
@@ -128,13 +137,13 @@ func randomValue(
 	address atree.Address,
 	nestedLevels int,
 ) (expected atree.Value, actual atree.Value, err error) {
-	var t int
 	if nestedLevels <= 0 {
-		t = r.Intn(largeStringType + 1)
-	} else {
-		t = r.Intn(maxValueType)
+		t := r.Intn(maxSimpleValueType)
+		return generateSimpleValue(t)
 	}
-	return generateValue(storage, address, t, nestedLevels)
+
+	t := r.Intn(maxContainerValueType)
+	return generateContainerValue(t, storage, address, nestedLevels)
 }
 
 func removeStorable(storage *atree.PersistentSlabStorage, storable atree.Storable) error {

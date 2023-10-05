@@ -29,8 +29,10 @@ import (
 	"github.com/onflow/atree"
 )
 
+type mapOpType int
+
 const (
-	mapSetOp1 = iota
+	mapSetOp1 mapOpType = iota
 	mapSetOp2
 	mapSetOp3
 	mapRemoveOp
@@ -72,23 +74,19 @@ func (status *mapStatus) String() string {
 	)
 }
 
-func (status *mapStatus) incSet(newValue bool) {
+func (status *mapStatus) incOp(op mapOpType, count uint64) {
 	status.lock.Lock()
 	defer status.lock.Unlock()
 
-	status.setOps++
+	switch op {
+	case mapSetOp1, mapSetOp2, mapSetOp3:
+		status.setOps++
 
-	if newValue {
-		status.count++
+	case mapRemoveOp:
+		status.removeOps++
 	}
-}
 
-func (status *mapStatus) incRemove() {
-	status.lock.Lock()
-	defer status.lock.Unlock()
-
-	status.removeOps++
-	status.count--
+	status.count = count
 }
 
 func (status *mapStatus) Write() {
@@ -175,150 +173,22 @@ func testMap(
 			}
 		}
 
-		nextOp := r.Intn(maxMapOp)
-
+		var forceRemove bool
 		if m.Count() == flagMaxLength || reduceHeapAllocs {
-			nextOp = mapRemoveOp
+			forceRemove = true
 		}
 
-		switch nextOp {
-
-		case mapSetOp1, mapSetOp2, mapSetOp3:
-			opCount++
-
-			expectedKey, key, err := randomKey()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to generate random key %s: %s", key, err)
-				return
-			}
-
-			nestedLevels := r.Intn(maxNestedLevels)
-			expectedValue, value, err := randomValue(storage, address, nestedLevels)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", value, err)
-				return
-			}
-
-			oldExpectedValue, keyExist := expectedValues[expectedKey]
-
-			// Update keys
-			if !keyExist {
-				keys = append(keys, expectedKey)
-			}
-
-			// Update expectedValues
-			expectedValues[expectedKey] = expectedValue
-
-			// Update map
-			existingStorable, err := m.Set(compare, hashInputProvider, key, value)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to set %s at index %d: %s", value, key, err)
-				return
-			}
-
-			// Compare old value from map with old value from elements
-			if (oldExpectedValue == nil) && (existingStorable != nil) {
-				fmt.Fprintf(os.Stderr, "Set returned storable %s, want nil", existingStorable)
-				return
-			}
-
-			if (oldExpectedValue != nil) && (existingStorable == nil) {
-				fmt.Fprintf(os.Stderr, "Set returned nil, want %s", oldExpectedValue)
-				return
-			}
-
-			if existingStorable != nil {
-
-				existingValue, err := existingStorable.StoredValue(storage)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingStorable, err)
-					return
-				}
-
-				err = valueEqual(oldExpectedValue, existingValue)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Set() returned wrong existing value %s, want %s", existingValue, oldExpectedValue)
-					return
-				}
-
-				err = removeStorable(storage, existingStorable)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to remove map storable element %s: %s", existingStorable, err)
-					return
-				}
-			}
-
-			// Update status
-			status.incSet(oldExpectedValue == nil)
-
-		case mapRemoveOp:
-			if m.Count() == 0 {
-				continue
-			}
-
-			opCount++
-
-			index := r.Intn(len(keys))
-			key := keys[index]
-
-			oldExpectedValue := expectedValues[key]
-
-			// Update unexpectedValues
-			delete(expectedValues, key)
-
-			// Update keys
-			copy(keys[index:], keys[index+1:])
-			keys[len(keys)-1] = nil
-			keys = keys[:len(keys)-1]
-
-			// Update map
-			existingKeyStorable, existingValueStorable, err := m.Remove(compare, hashInputProvider, key)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove element with key %s: %s", key, err)
-				return
-			}
-
-			// Compare removed key from map with removed key from elements
-			existingKeyValue, err := existingKeyStorable.StoredValue(storage)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingKeyStorable, err)
-				return
-			}
-
-			err = valueEqual(key, existingKeyValue)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Remove() returned wrong existing key %s, want %s", existingKeyStorable, key)
-				return
-			}
-
-			// Compare removed value from map with removed value from elements
-			existingValue, err := existingValueStorable.StoredValue(storage)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingValueStorable, err)
-				return
-			}
-
-			err = valueEqual(oldExpectedValue, existingValue)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Remove() returned wrong existing value %s, want %s", existingValueStorable, oldExpectedValue)
-				return
-			}
-
-			err = removeStorable(storage, existingKeyStorable)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove key %s: %s", existingKeyStorable, err)
-				return
-			}
-
-			err = removeStorable(storage, existingValueStorable)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove value %s: %s", existingValueStorable, err)
-				return
-			}
-
-			// Update status
-			status.incRemove()
+		var nextOp mapOpType
+		expectedValues, keys, nextOp, err = modifyMap(expectedValues, keys, m, maxNestedLevels, forceRemove)
+		if err != nil {
+			fmt.Fprint(os.Stderr, err.Error())
+			return
 		}
+
+		opCount++
+
+		// Update status
+		status.incOp(nextOp, m.Count())
 
 		// Check map elements against elements after every op
 		err = checkMapDataLoss(expectedValues, m)
@@ -344,6 +214,142 @@ func testMap(
 			storage.DropCache()
 		}
 	}
+}
+
+func modifyMap(
+	expectedValues mapValue,
+	keys []atree.Value,
+	m *atree.OrderedMap,
+	maxNestedLevels int,
+	forceRemove bool,
+) (mapValue, []atree.Value, mapOpType, error) {
+
+	storage := m.Storage
+	address := m.Address()
+
+	var nextOp mapOpType
+	if forceRemove {
+		if m.Count() == 0 {
+			return nil, nil, 0, fmt.Errorf("failed to force remove map elements because there is no element")
+		}
+		nextOp = mapRemoveOp
+	} else {
+		if m.Count() == 0 {
+			nextOp = mapSetOp1
+		} else {
+			nextOp = mapOpType(r.Intn(int(maxMapOp)))
+		}
+	}
+
+	switch nextOp {
+	case mapSetOp1, mapSetOp2, mapSetOp3:
+
+		expectedKey, key, err := randomKey()
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("failed to generate random key %s: %s", key, err)
+		}
+
+		nestedLevels := r.Intn(maxNestedLevels)
+		expectedValue, value, err := randomValue(storage, address, nestedLevels)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("failed to generate random value %s: %s", value, err)
+		}
+
+		oldExpectedValue, keyExist := expectedValues[expectedKey]
+
+		// Update keys
+		if !keyExist {
+			keys = append(keys, expectedKey)
+		}
+
+		// Update expectedValues
+		expectedValues[expectedKey] = expectedValue
+
+		// Update map
+		existingStorable, err := m.Set(compare, hashInputProvider, key, value)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("failed to set %s at index %d: %s", value, key, err)
+		}
+
+		// Compare old value from map with old value from elements
+		if (oldExpectedValue == nil) != (existingStorable == nil) {
+			return nil, nil, 0, fmt.Errorf("Set returned storable %s != expected %s", existingStorable, oldExpectedValue)
+		}
+
+		if existingStorable != nil {
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			if err != nil {
+				return nil, nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingStorable, err)
+			}
+
+			err = valueEqual(oldExpectedValue, existingValue)
+			if err != nil {
+				return nil, nil, 0, fmt.Errorf("Set() returned wrong existing value %s, want %s", existingValue, oldExpectedValue)
+			}
+
+			// Delete removed element from storage
+			err = removeStorable(storage, existingStorable)
+			if err != nil {
+				return nil, nil, 0, fmt.Errorf("failed to remove map storable element %s: %s", existingStorable, err)
+			}
+		}
+
+	case mapRemoveOp:
+		index := r.Intn(len(keys))
+		key := keys[index]
+
+		oldExpectedValue := expectedValues[key]
+
+		// Update expectedValues
+		delete(expectedValues, key)
+
+		// Update keys
+		copy(keys[index:], keys[index+1:])
+		keys[len(keys)-1] = nil
+		keys = keys[:len(keys)-1]
+
+		// Update map
+		existingKeyStorable, existingValueStorable, err := m.Remove(compare, hashInputProvider, key)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("failed to remove element with key %s: %s", key, err)
+		}
+
+		// Compare removed key from map with removed key from elements
+		existingKeyValue, err := existingKeyStorable.StoredValue(storage)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingKeyStorable, err)
+		}
+
+		err = valueEqual(key, existingKeyValue)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("Remove() returned wrong existing key %s, want %s", existingKeyStorable, key)
+		}
+
+		// Compare removed value from map with removed value from elements
+		existingValue, err := existingValueStorable.StoredValue(storage)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingValueStorable, err)
+		}
+
+		err = valueEqual(oldExpectedValue, existingValue)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("Remove() returned wrong existing value %s, want %s", existingValueStorable, oldExpectedValue)
+		}
+
+		// Delete removed element from storage
+		err = removeStorable(storage, existingKeyStorable)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("failed to remove key %s: %s", existingKeyStorable, err)
+		}
+
+		err = removeStorable(storage, existingValueStorable)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("failed to remove value %s: %s", existingValueStorable, err)
+		}
+	}
+
+	return expectedValues, keys, nextOp, nil
 }
 
 func checkMapDataLoss(expectedValues mapValue, m *atree.OrderedMap) error {

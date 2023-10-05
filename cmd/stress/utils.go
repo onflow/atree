@@ -109,7 +109,7 @@ func generateSimpleValue(
 
 func generateContainerValue(
 	valueType int,
-	storage *atree.PersistentSlabStorage,
+	storage atree.SlabStorage,
 	address atree.Address,
 	nestedLevels int,
 ) (expected atree.Value, actual atree.Value, err error) {
@@ -133,7 +133,7 @@ func randomKey() (atree.Value, atree.Value, error) {
 }
 
 func randomValue(
-	storage *atree.PersistentSlabStorage,
+	storage atree.SlabStorage,
 	address atree.Address,
 	nestedLevels int,
 ) (expected atree.Value, actual atree.Value, err error) {
@@ -146,7 +146,7 @@ func randomValue(
 	return generateContainerValue(t, storage, address, nestedLevels)
 }
 
-func removeStorable(storage *atree.PersistentSlabStorage, storable atree.Storable) error {
+func removeStorable(storage atree.SlabStorage, storable atree.Storable) error {
 
 	value, err := storable.StoredValue(storage)
 	if err != nil {
@@ -295,7 +295,7 @@ func mapEqual(expected mapValue, actual *atree.OrderedMap) error {
 
 // newArray creates atree.Array with random elements of specified size and nested level
 func newArray(
-	storage *atree.PersistentSlabStorage,
+	storage atree.SlabStorage,
 	address atree.Address,
 	length int,
 	nestedLevel int,
@@ -334,7 +334,7 @@ func newArray(
 
 // newMap creates atree.OrderedMap with random elements of specified size and nested level
 func newMap(
-	storage *atree.PersistentSlabStorage,
+	storage atree.SlabStorage,
 	address atree.Address,
 	length int,
 	nestedLevel int,

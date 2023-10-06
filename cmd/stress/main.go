@@ -141,7 +141,13 @@ func main() {
 	switch flagType {
 
 	case "array":
-		fmt.Printf("Starting array stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB\n", flagMinHeapAllocMiB, flagMaxHeapAllocMiB)
+		var msg string
+		if flagCheckSlabEnabled {
+			msg = fmt.Sprintf("Starting array stress test with slab check, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB", flagMinHeapAllocMiB, flagMaxHeapAllocMiB)
+		} else {
+			msg = fmt.Sprintf("Starting array stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB", flagMinHeapAllocMiB, flagMaxHeapAllocMiB)
+		}
+		fmt.Println(msg)
 
 		status := newArrayStatus()
 
@@ -150,7 +156,13 @@ func main() {
 		testArray(storage, address, status)
 
 	case "map":
-		fmt.Printf("Starting map stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB\n", flagMinHeapAllocMiB, flagMaxHeapAllocMiB)
+		var msg string
+		if flagCheckSlabEnabled {
+			msg = fmt.Sprintf("Starting map stress test with slab check, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB", flagMinHeapAllocMiB, flagMaxHeapAllocMiB)
+		} else {
+			msg = fmt.Sprintf("Starting map stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB", flagMinHeapAllocMiB, flagMaxHeapAllocMiB)
+		}
+		fmt.Println(msg)
 
 		status := newMapStatus()
 

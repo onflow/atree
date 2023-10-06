@@ -29,11 +29,17 @@ import (
 	"github.com/onflow/atree"
 )
 
+type arrayOpType int
+
 const (
-	arrayAppendOp = iota
+	arrayAppendOp arrayOpType = iota
 	arrayInsertOp
 	arraySetOp
 	arrayRemoveOp
+	arrayMutateChildContainerAfterGet
+	arrayMutateChildContainerAfterAppend
+	arrayMutateChildContainerAfterInsert
+	arrayMutateChildContainerAfterSet
 	maxArrayOp
 )
 
@@ -44,10 +50,14 @@ type arrayStatus struct {
 
 	count uint64 // number of elements in array
 
-	appendOps uint64
-	insertOps uint64
-	setOps    uint64
-	removeOps uint64
+	appendOps                          uint64
+	insertOps                          uint64
+	setOps                             uint64
+	removeOps                          uint64
+	mutateChildContainerAfterGetOps    uint64
+	mutateChildContainerAfterAppendOps uint64
+	mutateChildContainerAfterInsertOps uint64
+	mutateChildContainerAfterSetOps    uint64
 }
 
 var _ Status = &arrayStatus{}
@@ -65,7 +75,7 @@ func (status *arrayStatus) String() string {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	return fmt.Sprintf("duration %s, heapAlloc %d MiB, %d elements, %d appends, %d sets, %d inserts, %d removes",
+	return fmt.Sprintf("duration %s, heapAlloc %d MiB, %d elements, %d appends, %d sets, %d inserts, %d removes, %d Get mutations, %d Append mutations, %d Insert mutations, %d Set mutations",
 		duration.Truncate(time.Second).String(),
 		m.Alloc/1024/1024,
 		status.count,
@@ -73,10 +83,14 @@ func (status *arrayStatus) String() string {
 		status.setOps,
 		status.insertOps,
 		status.removeOps,
+		status.mutateChildContainerAfterGetOps,
+		status.mutateChildContainerAfterAppendOps,
+		status.mutateChildContainerAfterInsertOps,
+		status.mutateChildContainerAfterSetOps,
 	)
 }
 
-func (status *arrayStatus) incOp(op int, count uint64) {
+func (status *arrayStatus) incOp(op arrayOpType, count uint64) {
 	status.lock.Lock()
 	defer status.lock.Unlock()
 
@@ -92,6 +106,18 @@ func (status *arrayStatus) incOp(op int, count uint64) {
 
 	case arrayRemoveOp:
 		status.removeOps++
+
+	case arrayMutateChildContainerAfterGet:
+		status.mutateChildContainerAfterGetOps++
+
+	case arrayMutateChildContainerAfterAppend:
+		status.mutateChildContainerAfterAppendOps++
+
+	case arrayMutateChildContainerAfterInsert:
+		status.mutateChildContainerAfterInsertOps++
+
+	case arrayMutateChildContainerAfterSet:
+		status.mutateChildContainerAfterSetOps++
 	}
 
 	status.count = count
@@ -183,8 +209,8 @@ func testArray(
 			forceRemove = true
 		}
 
-		var nextOp int
-		expectedValues, nextOp, err = modifyArray(expectedValues, array, maxNestedLevels, forceRemove)
+		var prevOp arrayOpType
+		expectedValues, prevOp, err = modifyArray(expectedValues, array, maxNestedLevels, forceRemove)
 		if err != nil {
 			fmt.Fprint(os.Stderr, err.Error())
 			return
@@ -193,7 +219,7 @@ func testArray(
 		opCount++
 
 		// Update status
-		status.incOp(nextOp, array.Count())
+		status.incOp(prevOp, array.Count())
 
 		// Check array elements against values after every op
 		err = checkArrayDataLoss(expectedValues, array)
@@ -221,52 +247,116 @@ func testArray(
 	}
 }
 
+func nextArrayOp(
+	expectedValues arrayValue,
+	array *atree.Array,
+	nestedLevels int,
+	forceRemove bool,
+) (arrayOpType, error) {
+
+	if forceRemove {
+		if array.Count() == 0 {
+			return 0, fmt.Errorf("failed to force remove array elements because array has no elements")
+		}
+		return arrayRemoveOp, nil
+	}
+
+	if array.Count() == 0 {
+		return arrayAppendOp, nil
+	}
+
+	for {
+		nextOp := arrayOpType(r.Intn(int(maxArrayOp)))
+
+		switch nextOp {
+		case arrayMutateChildContainerAfterAppend,
+			arrayMutateChildContainerAfterInsert,
+			arrayMutateChildContainerAfterSet:
+
+			if nestedLevels-1 > 0 {
+				return nextOp, nil
+			}
+
+			// New child container can't be created because next nestedLevels is 0.
+			// Try another array operation.
+
+		case arrayMutateChildContainerAfterGet:
+			if hasChildContainerInArray(expectedValues) {
+				return nextOp, nil
+			}
+
+			// Array doesn't have child container, try another array operation.
+
+		default:
+			return nextOp, nil
+		}
+	}
+}
+
 func modifyArray(
 	expectedValues arrayValue,
 	array *atree.Array,
-	maxNestedLevels int,
+	nestedLevels int,
 	forceRemove bool,
-) (arrayValue, int, error) {
+) (arrayValue, arrayOpType, error) {
 
 	storage := array.Storage
 	address := array.Address()
 
-	var nextOp int
-	if forceRemove {
-		if array.Count() == 0 {
-			return nil, 0, fmt.Errorf("failed to force remove array elements because there is no element")
-		}
-		nextOp = arrayRemoveOp
-	} else {
-		if array.Count() == 0 {
-			nextOp = arrayAppendOp
-		} else {
-			nextOp = r.Intn(maxArrayOp)
-		}
+	nextOp, err := nextArrayOp(expectedValues, array, nestedLevels, forceRemove)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	switch nextOp {
-	case arrayAppendOp:
-		nestedLevels := r.Intn(maxNestedLevels)
-		expectedValue, value, err := randomValue(storage, address, nestedLevels)
+	case arrayAppendOp, arrayMutateChildContainerAfterAppend:
+
+		var nextNestedLevels int
+
+		if nextOp == arrayAppendOp {
+			nextNestedLevels = r.Intn(nestedLevels)
+		} else { // arrayMutateChildContainerAfterAppend
+			nextNestedLevels = nestedLevels - 1
+		}
+
+		// Create new chid child
+		expectedChildValue, child, err := randomValue(storage, address, nextNestedLevels)
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to generate random value %s: %s", value, err)
+			return nil, 0, fmt.Errorf("failed to generate random value %s: %s", child, err)
 		}
 
 		// Update expectedValues
-		expectedValues = append(expectedValues, expectedValue)
+		expectedValues = append(expectedValues, expectedChildValue)
 
 		// Update array
-		err = array.Append(value)
+		err = array.Append(child)
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to append %s: %s", value, err)
+			return nil, 0, fmt.Errorf("failed to append %s: %s", child, err)
 		}
 
-	case arraySetOp:
-		nestedLevels := r.Intn(maxNestedLevels)
-		expectedValue, value, err := randomValue(storage, address, nestedLevels)
+		if nextOp == arrayMutateChildContainerAfterAppend {
+			index := len(expectedValues) - 1
+
+			expectedValues[index], err = modifyContainer(expectedValues[index], child, nextNestedLevels)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to modify child container at index %d: %w", index, err)
+			}
+		}
+
+	case arraySetOp, arrayMutateChildContainerAfterSet:
+
+		var nextNestedLevels int
+
+		if nextOp == arraySetOp {
+			nextNestedLevels = r.Intn(nestedLevels)
+		} else { // arrayMutateChildContainerAfterSet
+			nextNestedLevels = nestedLevels - 1
+		}
+
+		// Create new child child
+		expectedChildValue, child, err := randomValue(storage, address, nextNestedLevels)
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to generate random value %s: %s", value, err)
+			return nil, 0, fmt.Errorf("failed to generate random value %s: %s", child, err)
 		}
 
 		index := r.Intn(int(array.Count()))
@@ -274,12 +364,12 @@ func modifyArray(
 		oldExpectedValue := expectedValues[index]
 
 		// Update expectedValues
-		expectedValues[index] = expectedValue
+		expectedValues[index] = expectedChildValue
 
 		// Update array
-		existingStorable, err := array.Set(uint64(index), value)
+		existingStorable, err := array.Set(uint64(index), child)
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to set %s at index %d: %s", value, index, err)
+			return nil, 0, fmt.Errorf("failed to set %s at index %d: %s", child, index, err)
 		}
 
 		// Compare overwritten value from array with overwritten value from expectedValues
@@ -299,28 +389,51 @@ func modifyArray(
 			return nil, 0, fmt.Errorf("failed to remove storable %s: %s", existingStorable, err)
 		}
 
-	case arrayInsertOp:
-		nestedLevels := r.Intn(maxNestedLevels)
-		expectedValue, value, err := randomValue(storage, address, nestedLevels)
+		if nextOp == arrayMutateChildContainerAfterSet {
+			expectedValues[index], err = modifyContainer(expectedValues[index], child, nextNestedLevels)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to modify child container at index %d: %w", index, err)
+			}
+		}
+
+	case arrayInsertOp, arrayMutateChildContainerAfterInsert:
+
+		var nextNestedLevels int
+
+		if nextOp == arrayInsertOp {
+			nextNestedLevels = r.Intn(nestedLevels)
+		} else { // arrayMutateChildContainerAfterInsert
+			nextNestedLevels = nestedLevels - 1
+		}
+
+		// Create new child child
+		expectedChildValue, child, err := randomValue(storage, address, nextNestedLevels)
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to generate random value %s: %s", value, err)
+			return nil, 0, fmt.Errorf("failed to generate random value %s: %s", child, err)
 		}
 
 		index := r.Intn(int(array.Count() + 1))
 
 		// Update expectedValues
 		if index == int(array.Count()) {
-			expectedValues = append(expectedValues, expectedValue)
+			expectedValues = append(expectedValues, expectedChildValue)
 		} else {
 			expectedValues = append(expectedValues, nil)
 			copy(expectedValues[index+1:], expectedValues[index:])
-			expectedValues[index] = expectedValue
+			expectedValues[index] = expectedChildValue
 		}
 
 		// Update array
-		err = array.Insert(uint64(index), value)
+		err = array.Insert(uint64(index), child)
 		if err != nil {
-			return nil, 0, fmt.Errorf("failed to insert %s into index %d: %s", value, index, err)
+			return nil, 0, fmt.Errorf("failed to insert %s into index %d: %s", child, index, err)
+		}
+
+		if nextOp == arrayMutateChildContainerAfterInsert {
+			expectedValues[index], err = modifyContainer(expectedValues[index], child, nextNestedLevels)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to modify child container at index %d: %w", index, err)
+			}
 		}
 
 	case arrayRemoveOp:
@@ -355,9 +468,83 @@ func modifyArray(
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to remove element %s: %s", existingStorable, err)
 		}
+
+	case arrayMutateChildContainerAfterGet:
+		index, found := getRandomChildContainerIndexInArray(expectedValues)
+		if !found {
+			// arrayMutateChildContainerAfterGet op can't be performed because there isn't any child container in this array.
+			// Try another array operation.
+			return modifyArray(expectedValues, array, nestedLevels, forceRemove)
+		}
+
+		child, err := array.Get(uint64(index))
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get element from array at index %d: %s", index, err)
+		}
+
+		expectedValues[index], err = modifyContainer(expectedValues[index], child, nestedLevels-1)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to modify child container at index %d: %w", index, err)
+		}
 	}
 
 	return expectedValues, nextOp, nil
+}
+
+func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels int) (expected atree.Value, err error) {
+
+	switch value := value.(type) {
+	case *atree.Array:
+		expectedArrayValue, ok := expectedValue.(arrayValue)
+		if !ok {
+			return nil, fmt.Errorf("failed to get expected value of type arrayValue: got %T", expectedValue)
+		}
+
+		expectedValue, _, err = modifyArray(expectedArrayValue, value, nestedLevels, false)
+		if err != nil {
+			return nil, err
+		}
+
+	case *atree.OrderedMap:
+		expectedMapValue, ok := expectedValue.(mapValue)
+		if !ok {
+			return nil, fmt.Errorf("failed to get expected value of type mapValue: got %T", expectedValue)
+		}
+
+		expectedValue, _, err = modifyMap(expectedMapValue, value, nestedLevels, false)
+		if err != nil {
+			return nil, err
+		}
+
+	default:
+		return nil, fmt.Errorf("failed to get container: got %T", value)
+	}
+
+	return expectedValue, nil
+}
+
+func hasChildContainerInArray(expectedValues arrayValue) bool {
+	for _, v := range expectedValues {
+		switch v.(type) {
+		case arrayValue, mapValue:
+			return true
+		}
+	}
+	return false
+}
+
+func getRandomChildContainerIndexInArray(expectedValues arrayValue) (index int, found bool) {
+	indexes := make([]int, 0, len(expectedValues))
+	for i, v := range expectedValues {
+		switch v.(type) {
+		case arrayValue, mapValue:
+			indexes = append(indexes, i)
+		}
+	}
+	if len(indexes) == 0 {
+		return 0, false
+	}
+	return indexes[r.Intn(len(indexes))], true
 }
 
 func checkStorageHealth(storage *atree.PersistentSlabStorage, rootSlabID atree.SlabID) bool {

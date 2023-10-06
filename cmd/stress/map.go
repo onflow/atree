@@ -36,6 +36,8 @@ const (
 	mapSetOp2
 	mapSetOp3
 	mapRemoveOp
+	mapMutateChildContainerAfterGet
+	mapMutateChildContainerAfterSet
 	maxMapOp
 )
 
@@ -46,8 +48,10 @@ type mapStatus struct {
 
 	count uint64 // number of elements in map
 
-	setOps    uint64
-	removeOps uint64
+	setOps                          uint64
+	removeOps                       uint64
+	mutateChildContainerAfterGetOps uint64
+	mutateChildContainerAfterSetOps uint64
 }
 
 var _ Status = &mapStatus{}
@@ -65,12 +69,14 @@ func (status *mapStatus) String() string {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	return fmt.Sprintf("duration %s, heapAlloc %d MiB, %d elements, %d sets, %d removes",
+	return fmt.Sprintf("duration %s, heapAlloc %d MiB, %d elements, %d sets, %d removes, %d Get mutations, %d Set mutations",
 		duration.Truncate(time.Second).String(),
 		m.Alloc/1024/1024,
 		status.count,
 		status.setOps,
 		status.removeOps,
+		status.mutateChildContainerAfterGetOps,
+		status.mutateChildContainerAfterSetOps,
 	)
 }
 
@@ -84,6 +90,12 @@ func (status *mapStatus) incOp(op mapOpType, count uint64) {
 
 	case mapRemoveOp:
 		status.removeOps++
+
+	case mapMutateChildContainerAfterGet:
+		status.mutateChildContainerAfterGetOps++
+
+	case mapMutateChildContainerAfterSet:
+		status.mutateChildContainerAfterSetOps++
 	}
 
 	status.count = count
@@ -108,9 +120,6 @@ func testMap(
 
 	// expectedValues contains generated keys and values. It is used to check data loss.
 	expectedValues := make(mapValue, flagMaxLength)
-
-	// keys contains generated keys.  It is used to select random keys for removal.
-	keys := make([]atree.Value, 0, flagMaxLength)
 
 	reduceHeapAllocs := false
 
@@ -178,8 +187,8 @@ func testMap(
 			forceRemove = true
 		}
 
-		var nextOp mapOpType
-		expectedValues, keys, nextOp, err = modifyMap(expectedValues, keys, m, maxNestedLevels, forceRemove)
+		var prevOp mapOpType
+		expectedValues, prevOp, err = modifyMap(expectedValues, m, maxNestedLevels, forceRemove)
 		if err != nil {
 			fmt.Fprint(os.Stderr, err.Error())
 			return
@@ -188,7 +197,7 @@ func testMap(
 		opCount++
 
 		// Update status
-		status.incOp(nextOp, m.Count())
+		status.incOp(prevOp, m.Count())
 
 		// Check map elements against elements after every op
 		err = checkMapDataLoss(expectedValues, m)
@@ -216,140 +225,223 @@ func testMap(
 	}
 }
 
+func nextMapOp(
+	expectedValues mapValue,
+	m *atree.OrderedMap,
+	nestedLevels int,
+	forceRemove bool,
+) (mapOpType, error) {
+
+	if forceRemove {
+		if m.Count() == 0 {
+			return 0, fmt.Errorf("failed to force remove map elements because map has no elements")
+		}
+		return mapRemoveOp, nil
+	}
+
+	if m.Count() == 0 {
+		return mapSetOp1, nil
+	}
+
+	for {
+		nextOp := mapOpType(r.Intn(int(maxMapOp)))
+
+		switch nextOp {
+		case mapMutateChildContainerAfterSet:
+			if nestedLevels-1 > 0 {
+				return nextOp, nil
+			}
+
+			// New child container can't be created because next nestedLevels is 0.
+			// Try another map operation.
+
+		case mapMutateChildContainerAfterGet:
+			if hasChildContainerInMap(expectedValues) {
+				return nextOp, nil
+			}
+
+			// Map doesn't have child container, try another map operation.
+
+		default:
+			return nextOp, nil
+		}
+	}
+}
+
 func modifyMap(
 	expectedValues mapValue,
-	keys []atree.Value,
 	m *atree.OrderedMap,
-	maxNestedLevels int,
+	nestedLevels int,
 	forceRemove bool,
-) (mapValue, []atree.Value, mapOpType, error) {
+) (mapValue, mapOpType, error) {
 
 	storage := m.Storage
 	address := m.Address()
 
-	var nextOp mapOpType
-	if forceRemove {
-		if m.Count() == 0 {
-			return nil, nil, 0, fmt.Errorf("failed to force remove map elements because there is no element")
-		}
-		nextOp = mapRemoveOp
-	} else {
-		if m.Count() == 0 {
-			nextOp = mapSetOp1
-		} else {
-			nextOp = mapOpType(r.Intn(int(maxMapOp)))
-		}
+	nextOp, err := nextMapOp(expectedValues, m, nestedLevels, forceRemove)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	switch nextOp {
-	case mapSetOp1, mapSetOp2, mapSetOp3:
+	case mapSetOp1, mapSetOp2, mapSetOp3, mapMutateChildContainerAfterSet:
+
+		var nextNestedLevels int
+
+		if nextOp == mapMutateChildContainerAfterSet {
+			nextNestedLevels = nestedLevels - 1
+		} else { // mapSetOp1, mapSetOp2, mapSetOp3
+			nextNestedLevels = r.Intn(nestedLevels)
+		}
 
 		expectedKey, key, err := randomKey()
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("failed to generate random key %s: %s", key, err)
+			return nil, 0, fmt.Errorf("failed to generate random key %s: %s", key, err)
 		}
 
-		nestedLevels := r.Intn(maxNestedLevels)
-		expectedValue, value, err := randomValue(storage, address, nestedLevels)
+		expectedChildValue, child, err := randomValue(storage, address, nextNestedLevels)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("failed to generate random value %s: %s", value, err)
+			return nil, 0, fmt.Errorf("failed to generate random value %s: %s", child, err)
 		}
 
-		oldExpectedValue, keyExist := expectedValues[expectedKey]
-
-		// Update keys
-		if !keyExist {
-			keys = append(keys, expectedKey)
-		}
+		oldExpectedValue := expectedValues[expectedKey]
 
 		// Update expectedValues
-		expectedValues[expectedKey] = expectedValue
+		expectedValues[expectedKey] = expectedChildValue
 
 		// Update map
-		existingStorable, err := m.Set(compare, hashInputProvider, key, value)
+		existingStorable, err := m.Set(compare, hashInputProvider, key, child)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("failed to set %s at index %d: %s", value, key, err)
+			return nil, 0, fmt.Errorf("failed to set %s at index %d: %s", child, key, err)
 		}
 
 		// Compare old value from map with old value from elements
 		if (oldExpectedValue == nil) != (existingStorable == nil) {
-			return nil, nil, 0, fmt.Errorf("Set returned storable %s != expected %s", existingStorable, oldExpectedValue)
+			return nil, 0, fmt.Errorf("Set returned storable %s != expected %s", existingStorable, oldExpectedValue)
 		}
 
 		if existingStorable != nil {
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			if err != nil {
-				return nil, nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingStorable, err)
+				return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingStorable, err)
 			}
 
 			err = valueEqual(oldExpectedValue, existingValue)
 			if err != nil {
-				return nil, nil, 0, fmt.Errorf("Set() returned wrong existing value %s, want %s", existingValue, oldExpectedValue)
+				return nil, 0, fmt.Errorf("Set() returned wrong existing value %s, want %s", existingValue, oldExpectedValue)
 			}
 
 			// Delete removed element from storage
 			err = removeStorable(storage, existingStorable)
 			if err != nil {
-				return nil, nil, 0, fmt.Errorf("failed to remove map storable element %s: %s", existingStorable, err)
+				return nil, 0, fmt.Errorf("failed to remove map storable element %s: %s", existingStorable, err)
+			}
+		}
+
+		if nextOp == mapMutateChildContainerAfterSet {
+			expectedValues[expectedKey], err = modifyContainer(expectedValues[expectedKey], child, nextNestedLevels)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to modify child container at key %s: %w", expectedKey, err)
 			}
 		}
 
 	case mapRemoveOp:
-		index := r.Intn(len(keys))
-		key := keys[index]
+		// Use for-range on Go map to get random key
+		var key atree.Value
+		for k := range expectedValues {
+			key = k
+			break
+		}
 
 		oldExpectedValue := expectedValues[key]
 
 		// Update expectedValues
 		delete(expectedValues, key)
 
-		// Update keys
-		copy(keys[index:], keys[index+1:])
-		keys[len(keys)-1] = nil
-		keys = keys[:len(keys)-1]
-
 		// Update map
 		existingKeyStorable, existingValueStorable, err := m.Remove(compare, hashInputProvider, key)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("failed to remove element with key %s: %s", key, err)
+			return nil, 0, fmt.Errorf("failed to remove element with key %s: %s", key, err)
 		}
 
 		// Compare removed key from map with removed key from elements
 		existingKeyValue, err := existingKeyStorable.StoredValue(storage)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingKeyStorable, err)
+			return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingKeyStorable, err)
 		}
 
 		err = valueEqual(key, existingKeyValue)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("Remove() returned wrong existing key %s, want %s", existingKeyStorable, key)
+			return nil, 0, fmt.Errorf("Remove() returned wrong existing key %s, want %s", existingKeyStorable, key)
 		}
 
 		// Compare removed value from map with removed value from elements
 		existingValue, err := existingValueStorable.StoredValue(storage)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingValueStorable, err)
+			return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingValueStorable, err)
 		}
 
 		err = valueEqual(oldExpectedValue, existingValue)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("Remove() returned wrong existing value %s, want %s", existingValueStorable, oldExpectedValue)
+			return nil, 0, fmt.Errorf("Remove() returned wrong existing value %s, want %s", existingValueStorable, oldExpectedValue)
 		}
 
 		// Delete removed element from storage
 		err = removeStorable(storage, existingKeyStorable)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("failed to remove key %s: %s", existingKeyStorable, err)
+			return nil, 0, fmt.Errorf("failed to remove key %s: %s", existingKeyStorable, err)
 		}
 
 		err = removeStorable(storage, existingValueStorable)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("failed to remove value %s: %s", existingValueStorable, err)
+			return nil, 0, fmt.Errorf("failed to remove value %s: %s", existingValueStorable, err)
+		}
+
+	case mapMutateChildContainerAfterGet:
+		key, found := getRandomChildContainerKeyInMap(expectedValues)
+		if !found {
+			// mapMutateChildContainerAfterGet op can't be performed because there isn't any child container in this map.
+			// Try another map operation.
+			return modifyMap(expectedValues, m, nestedLevels, forceRemove)
+		}
+
+		child, err := m.Get(compare, hashInputProvider, key)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get element from map at key %s: %s", key, err)
+		}
+
+		expectedValues[key], err = modifyContainer(expectedValues[key], child, nestedLevels-1)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to modify child container at key %s: %w", key, err)
 		}
 	}
 
-	return expectedValues, keys, nextOp, nil
+	return expectedValues, nextOp, nil
+}
+
+func hasChildContainerInMap(expectedValues mapValue) bool {
+	for _, v := range expectedValues {
+		switch v.(type) {
+		case arrayValue, mapValue:
+			return true
+		}
+	}
+	return false
+}
+
+func getRandomChildContainerKeyInMap(expectedValues mapValue) (key atree.Value, found bool) {
+	keys := make([]atree.Value, 0, len(expectedValues))
+	for k, v := range expectedValues {
+		switch v.(type) {
+		case arrayValue, mapValue:
+			keys = append(keys, k)
+		}
+	}
+	if len(keys) == 0 {
+		return nil, false
+	}
+	return keys[r.Intn(len(keys))], true
 }
 
 func checkMapDataLoss(expectedValues mapValue, m *atree.OrderedMap) error {

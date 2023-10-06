@@ -98,7 +98,7 @@ func generateSimpleValue(
 		return v, v, nil
 
 	case largeStringType:
-		slen := r.Intn(125) + 1024
+		slen := r.Intn(125) + 1024/2
 		v := NewStringValue(randStr(slen))
 		return v, v, nil
 

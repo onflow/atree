@@ -90,7 +90,7 @@ func (status *arrayStatus) String() string {
 	)
 }
 
-func (status *arrayStatus) incOp(op arrayOpType, count uint64) {
+func (status *arrayStatus) incOp(op arrayOpType, newTotalCount uint64) {
 	status.lock.Lock()
 	defer status.lock.Unlock()
 
@@ -120,7 +120,7 @@ func (status *arrayStatus) incOp(op arrayOpType, count uint64) {
 		status.mutateChildContainerAfterSetOps++
 	}
 
-	status.count = count
+	status.count = newTotalCount
 }
 
 func (status *arrayStatus) Write() {
@@ -147,7 +147,7 @@ func testArray(
 
 	reduceHeapAllocs := false
 
-	opCount := uint64(0)
+	opCountForStorageHealthCheck := uint64(0)
 
 	var m runtime.MemStats
 
@@ -216,7 +216,7 @@ func testArray(
 			return
 		}
 
-		opCount++
+		opCountForStorageHealthCheck++
 
 		// Update status
 		status.incOp(prevOp, array.Count())
@@ -228,8 +228,9 @@ func testArray(
 			return
 		}
 
-		if opCount >= 100 {
-			opCount = 0
+		if opCountForStorageHealthCheck >= flagMinOpsForStorageHealthCheck {
+			opCountForStorageHealthCheck = 0
+
 			if !checkStorageHealth(storage, array.SlabID()) {
 				return
 			}
@@ -313,10 +314,13 @@ func modifyArray(
 
 		var nextNestedLevels int
 
-		if nextOp == arrayAppendOp {
+		switch nextOp {
+		case arrayAppendOp:
 			nextNestedLevels = r.Intn(nestedLevels)
-		} else { // arrayMutateChildContainerAfterAppend
+		case arrayMutateChildContainerAfterAppend:
 			nextNestedLevels = nestedLevels - 1
+		default:
+			panic("not reachable")
 		}
 
 		// Create new chid child
@@ -347,10 +351,13 @@ func modifyArray(
 
 		var nextNestedLevels int
 
-		if nextOp == arraySetOp {
+		switch nextOp {
+		case arraySetOp:
 			nextNestedLevels = r.Intn(nestedLevels)
-		} else { // arrayMutateChildContainerAfterSet
+		case arrayMutateChildContainerAfterSet:
 			nextNestedLevels = nestedLevels - 1
+		default:
+			panic("not reachable")
 		}
 
 		// Create new child child
@@ -400,10 +407,13 @@ func modifyArray(
 
 		var nextNestedLevels int
 
-		if nextOp == arrayInsertOp {
+		switch nextOp {
+		case arrayInsertOp:
 			nextNestedLevels = r.Intn(nestedLevels)
-		} else { // arrayMutateChildContainerAfterInsert
+		case arrayMutateChildContainerAfterInsert:
 			nextNestedLevels = nestedLevels - 1
+		default:
+			panic("not reachable")
 		}
 
 		// Create new child child
@@ -592,29 +602,29 @@ func checkArrayDataLoss(expectedValues arrayValue, array *atree.Array) error {
 	}
 
 	if flagCheckSlabEnabled {
-		typeInfoComparator := func(a atree.TypeInfo, b atree.TypeInfo) bool {
-			return a.ID() == b.ID()
-		}
-
-		err := atree.VerifyArray(array, array.Address(), array.Type(), typeInfoComparator, hashInputProvider, true)
-		if err != nil {
-			return err
-		}
-
-		err = atree.VerifyArraySerialization(
-			array,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			func(a, b atree.Storable) bool {
-				return reflect.DeepEqual(a, b)
-			},
-		)
+		err := checkArraySlab(array)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func checkArraySlab(array *atree.Array) error {
+	err := atree.VerifyArray(array, array.Address(), array.Type(), typeInfoComparator, hashInputProvider, true)
+	if err != nil {
+		return err
+	}
+
+	return atree.VerifyArraySerialization(
+		array,
+		cborDecMode,
+		cborEncMode,
+		decodeStorable,
+		decodeTypeInfo,
+		func(a, b atree.Storable) bool {
+			return reflect.DeepEqual(a, b)
+		},
+	)
 }

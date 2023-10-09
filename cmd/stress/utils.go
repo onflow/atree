@@ -20,6 +20,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"reflect"
 	"time"
@@ -77,19 +78,19 @@ func generateSimpleValue(
 ) (expected atree.Value, actual atree.Value, err error) {
 	switch valueType {
 	case uint8Type:
-		v := Uint8Value(r.Intn(255))
+		v := Uint8Value(r.Intn(math.MaxUint8)) // 255
 		return v, v, nil
 
 	case uint16Type:
-		v := Uint16Value(r.Intn(6535))
+		v := Uint16Value(r.Intn(math.MaxUint16)) // 65535
 		return v, v, nil
 
 	case uint32Type:
-		v := Uint32Value(r.Intn(4294967295))
+		v := Uint32Value(r.Intn(math.MaxUint32)) // 4294967295
 		return v, v, nil
 
 	case uint64Type:
-		v := Uint64Value(r.Intn(1844674407370955161))
+		v := Uint64Value(r.Intn(math.MaxInt)) // 9_223_372_036_854_775_807
 		return v, v, nil
 
 	case smallStringType:
@@ -470,6 +471,8 @@ func (s *InMemBaseStorage) ResetReporter() {
 	// not needed
 }
 
+// arrayValue is an atree.Value that represents an array of atree.Value.
+// It's used to test elements of atree.Array.
 type arrayValue []atree.Value
 
 var _ atree.Value = &arrayValue{}
@@ -478,10 +481,16 @@ func (v arrayValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.St
 	panic("not reachable")
 }
 
+// mapValue is an atree.Value that represents a map of atree.Value.
+// It's used to test elements of atree.OrderedMap.
 type mapValue map[atree.Value]atree.Value
 
 var _ atree.Value = &mapValue{}
 
 func (v mapValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
 	panic("not reachable")
+}
+
+var typeInfoComparator = func(a atree.TypeInfo, b atree.TypeInfo) bool {
+	return a.ID() == b.ID()
 }

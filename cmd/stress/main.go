@@ -92,12 +92,14 @@ var (
 	flagMaxLength                            uint64
 	flagSeedHex                              string
 	flagMinHeapAllocMiB, flagMaxHeapAllocMiB uint64
+	flagMinOpsForStorageHealthCheck          uint64
 )
 
 func main() {
 
 	flag.StringVar(&flagType, "type", "array", "array or map")
 	flag.BoolVar(&flagCheckSlabEnabled, "slabcheck", false, "in memory and serialized slab check")
+	flag.Uint64Var(&flagMinOpsForStorageHealthCheck, "minOpsForStorageHealthCheck", 100, "number of operations for storage health check")
 	flag.Uint64Var(&flagMaxLength, "maxlen", 10_000, "max number of elements")
 	flag.StringVar(&flagSeedHex, "seed", "", "seed for prng in hex (default is Unix time)")
 	flag.Uint64Var(&flagMinHeapAllocMiB, "minheap", 1000, "min HeapAlloc in MiB to stop extra removal of elements")

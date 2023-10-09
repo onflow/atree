@@ -80,7 +80,7 @@ func (status *mapStatus) String() string {
 	)
 }
 
-func (status *mapStatus) incOp(op mapOpType, count uint64) {
+func (status *mapStatus) incOp(op mapOpType, newTotalCount uint64) {
 	status.lock.Lock()
 	defer status.lock.Unlock()
 
@@ -98,7 +98,7 @@ func (status *mapStatus) incOp(op mapOpType, count uint64) {
 		status.mutateChildContainerAfterSetOps++
 	}
 
-	status.count = count
+	status.count = newTotalCount
 }
 
 func (status *mapStatus) Write() {
@@ -123,7 +123,7 @@ func testMap(
 
 	reduceHeapAllocs := false
 
-	opCount := uint64(0)
+	opCountForStorageHealthCheck := uint64(0)
 
 	var ms runtime.MemStats
 
@@ -194,7 +194,7 @@ func testMap(
 			return
 		}
 
-		opCount++
+		opCountForStorageHealthCheck++
 
 		// Update status
 		status.incOp(prevOp, m.Count())
@@ -206,8 +206,9 @@ func testMap(
 			return
 		}
 
-		if opCount >= 100 {
-			opCount = 0
+		if opCountForStorageHealthCheck >= flagMinOpsForStorageHealthCheck {
+			opCountForStorageHealthCheck = 0
+
 			if !checkStorageHealth(storage, m.SlabID()) {
 				return
 			}
@@ -288,10 +289,13 @@ func modifyMap(
 
 		var nextNestedLevels int
 
-		if nextOp == mapMutateChildContainerAfterSet {
-			nextNestedLevels = nestedLevels - 1
-		} else { // mapSetOp1, mapSetOp2, mapSetOp3
+		switch nextOp {
+		case mapSetOp1, mapSetOp2, mapSetOp3:
 			nextNestedLevels = r.Intn(nestedLevels)
+		case mapMutateChildContainerAfterSet:
+			nextNestedLevels = nestedLevels - 1
+		default:
+			panic("not reachable")
 		}
 
 		expectedKey, key, err := randomKey()
@@ -464,28 +468,29 @@ func checkMapDataLoss(expectedValues mapValue, m *atree.OrderedMap) error {
 	}
 
 	if flagCheckSlabEnabled {
-		typeInfoComparator := func(a atree.TypeInfo, b atree.TypeInfo) bool {
-			return a.ID() == b.ID()
-		}
-
-		err := atree.VerifyMap(m, m.Address(), m.Type(), typeInfoComparator, hashInputProvider, true)
-		if err != nil {
-			return err
-		}
-
-		err = atree.VerifyMapSerialization(
-			m,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			func(a, b atree.Storable) bool {
-				return reflect.DeepEqual(a, b)
-			},
-		)
+		err := checkMapSlab(m)
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
+}
+
+func checkMapSlab(m *atree.OrderedMap) error {
+	err := atree.VerifyMap(m, m.Address(), m.Type(), typeInfoComparator, hashInputProvider, true)
+	if err != nil {
+		return err
+	}
+
+	return atree.VerifyMapSerialization(
+		m,
+		cborDecMode,
+		cborEncMode,
+		decodeStorable,
+		decodeTypeInfo,
+		func(a, b atree.Storable) bool {
+			return reflect.DeepEqual(a, b)
+		},
+	)
 }

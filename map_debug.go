@@ -1351,8 +1351,18 @@ func mapExtraDataEqual(expected, actual *MapExtraData) error {
 		return NewFatalError(fmt.Errorf("has extra data is %t, want %t", actual == nil, expected == nil))
 	}
 
-	if !reflect.DeepEqual(*expected, *actual) {
-		return NewFatalError(fmt.Errorf("extra data %+v is wrong, want %+v", *actual, *expected))
+	if !reflect.DeepEqual(expected.TypeInfo, actual.TypeInfo) {
+		return NewFatalError(fmt.Errorf("map extra data type %+v is wrong, want %+v", actual.TypeInfo, expected.TypeInfo))
+	}
+
+	if expected.Count != actual.Count {
+		return NewFatalError(fmt.Errorf("map extra data count %d is wrong, want %d", actual.Count, expected.Count))
+	}
+
+	if !expected.TypeInfo.IsComposite() {
+		if expected.Seed != actual.Seed {
+			return NewFatalError(fmt.Errorf("map extra data seed %d is wrong, want %d", actual.Seed, expected.Seed))
+		}
 	}
 
 	return nil

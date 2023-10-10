@@ -47,6 +47,7 @@ const (
 const (
 	arrayType int = iota
 	mapType
+	compositeType
 	maxContainerValueType
 )
 
@@ -122,6 +123,9 @@ func generateContainerValue(
 	case mapType:
 		length := r.Intn(maxNestedMapSize)
 		return newMap(storage, address, length, nestedLevels)
+
+	case compositeType:
+		return newComposite(storage, address, nestedLevels)
 
 	default:
 		return nil, nil, fmt.Errorf("unexpected randome container value type %d", valueType)
@@ -374,6 +378,50 @@ func newMap(
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to remove storable element %s: %w", existingStorable, err)
 			}
+		}
+	}
+
+	err = checkMapDataLoss(expectedValues, m)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return expectedValues, m, nil
+}
+
+// newComposite creates atree.OrderedMap with elements of random composite type and nested level
+func newComposite(
+	storage atree.SlabStorage,
+	address atree.Address,
+	nestedLevel int,
+) (mapValue, *atree.OrderedMap, error) {
+
+	compositeType := newCompositeTypeInfo()
+
+	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), compositeType)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create new map: %w", err)
+	}
+
+	expectedValues := make(mapValue)
+
+	for _, name := range compositeType.getFieldNames() {
+
+		expectedKey, key := NewStringValue(name), NewStringValue(name)
+
+		expectedValue, value, err := randomValue(storage, address, nestedLevel-1)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		expectedValues[expectedKey] = expectedValue
+
+		existingStorable, err := m.Set(compare, hashInputProvider, key, value)
+		if err != nil {
+			return nil, nil, err
+		}
+		if existingStorable != nil {
+			return nil, nil, fmt.Errorf("failed to create new map of composite type: found duplicate field name %s", name)
 		}
 	}
 

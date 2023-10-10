@@ -413,7 +413,7 @@ func (v StringValue) String() string {
 	return v.str
 }
 
-func decodeStorable(dec *cbor.StreamDecoder, _ atree.SlabID, _ []atree.ExtraData) (atree.Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, id atree.SlabID, inlinedExtraData []atree.ExtraData) (atree.Storable, error) {
 	t, err := dec.NextType()
 	if err != nil {
 		return nil, err
@@ -434,6 +434,15 @@ func decodeStorable(dec *cbor.StreamDecoder, _ atree.SlabID, _ []atree.ExtraData
 		}
 
 		switch tagNumber {
+
+		case atree.CBORTagInlinedArray:
+			return atree.DecodeInlinedArrayStorable(dec, decodeStorable, id, inlinedExtraData)
+
+		case atree.CBORTagInlinedMap:
+			return atree.DecodeInlinedMapStorable(dec, decodeStorable, id, inlinedExtraData)
+
+		case atree.CBORTagInlinedCompactMap:
+			return atree.DecodeInlinedCompactMapStorable(dec, decodeStorable, id, inlinedExtraData)
 
 		case atree.CBORTagSlabID:
 			return atree.DecodeSlabIDStorable(dec)

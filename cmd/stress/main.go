@@ -70,25 +70,47 @@ func updateStatus(sigc <-chan os.Signal, status Status) {
 	}
 }
 
+var cborEncMode = func() cbor.EncMode {
+	encMode, err := cbor.EncOptions{}.EncMode()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create CBOR encoding mode: %s", err))
+	}
+	return encMode
+}()
+
+var cborDecMode = func() cbor.DecMode {
+	decMode, err := cbor.DecOptions{}.DecMode()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create CBOR decoding mode: %s\n", err))
+	}
+	return decMode
+}()
+
+var (
+	flagType                                 string
+	flagCheckSlabEnabled                     bool
+	flagMaxLength                            uint64
+	flagSeedHex                              string
+	flagMinHeapAllocMiB, flagMaxHeapAllocMiB uint64
+	flagMinOpsForStorageHealthCheck          uint64
+)
+
 func main() {
 
-	var typ string
-	var maxLength uint64
-	var seedHex string
-	var minHeapAllocMiB, maxHeapAllocMiB uint64
-
-	flag.StringVar(&typ, "type", "array", "array or map")
-	flag.Uint64Var(&maxLength, "maxlen", 10_000, "max number of elements")
-	flag.StringVar(&seedHex, "seed", "", "seed for prng in hex (default is Unix time)")
-	flag.Uint64Var(&minHeapAllocMiB, "minheap", 1000, "min HeapAlloc in MiB to stop extra removal of elements")
-	flag.Uint64Var(&maxHeapAllocMiB, "maxheap", 2000, "max HeapAlloc in MiB to trigger extra removal of elements")
+	flag.StringVar(&flagType, "type", "array", "array or map")
+	flag.BoolVar(&flagCheckSlabEnabled, "slabcheck", false, "in memory and serialized slab check")
+	flag.Uint64Var(&flagMinOpsForStorageHealthCheck, "minOpsForStorageHealthCheck", 100, "number of operations for storage health check")
+	flag.Uint64Var(&flagMaxLength, "maxlen", 10_000, "max number of elements")
+	flag.StringVar(&flagSeedHex, "seed", "", "seed for prng in hex (default is Unix time)")
+	flag.Uint64Var(&flagMinHeapAllocMiB, "minheap", 1000, "min HeapAlloc in MiB to stop extra removal of elements")
+	flag.Uint64Var(&flagMaxHeapAllocMiB, "maxheap", 2000, "max HeapAlloc in MiB to trigger extra removal of elements")
 
 	flag.Parse()
 
 	var seed int64
-	if len(seedHex) != 0 {
+	if len(flagSeedHex) != 0 {
 		var err error
-		seed, err = strconv.ParseInt(strings.ReplaceAll(seedHex, "0x", ""), 16, 64)
+		seed, err = strconv.ParseInt(strings.ReplaceAll(flagSeedHex, "0x", ""), 16, 64)
 		if err != nil {
 			panic("Failed to parse seed flag (hex string)")
 		}
@@ -96,9 +118,9 @@ func main() {
 
 	r = newRand(seed)
 
-	typ = strings.ToLower(typ)
+	flagType = strings.ToLower(flagType)
 
-	if typ != "array" && typ != "map" {
+	if flagType != "array" && flagType != "map" {
 		fmt.Fprintf(os.Stderr, "Please specify type as either \"array\" or \"map\"")
 		return
 	}
@@ -106,52 +128,49 @@ func main() {
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
 
-	// Create storage
-	encMode, err := cbor.EncOptions{}.EncMode()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create CBOR encoding mode: %s\n", err)
-		return
-	}
-
-	decMode, err := cbor.DecOptions{}.DecMode()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create CBOR decoding mode: %s\n", err)
-		return
-	}
-
 	baseStorage := NewInMemBaseStorage()
 
 	storage := atree.NewPersistentSlabStorage(
 		baseStorage,
-		encMode,
-		decMode,
+		cborEncMode,
+		cborDecMode,
 		decodeStorable,
 		decodeTypeInfo,
 	)
 
-	typeInfo := testTypeInfo{value: 123}
-
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	switch typ {
+	switch flagType {
 
 	case "array":
-		fmt.Printf("Starting array stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB\n", minHeapAllocMiB, maxHeapAllocMiB)
+		var msg string
+		if flagCheckSlabEnabled {
+			msg = fmt.Sprintf("Starting array stress test with slab check, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB", flagMinHeapAllocMiB, flagMaxHeapAllocMiB)
+		} else {
+			msg = fmt.Sprintf("Starting array stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB", flagMinHeapAllocMiB, flagMaxHeapAllocMiB)
+		}
+		fmt.Println(msg)
 
 		status := newArrayStatus()
 
 		go updateStatus(sigc, status)
 
-		testArray(storage, address, typeInfo, maxLength, status, minHeapAllocMiB, maxHeapAllocMiB)
+		testArray(storage, address, status)
 
 	case "map":
-		fmt.Printf("Starting map stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB\n", minHeapAllocMiB, maxHeapAllocMiB)
+		var msg string
+		if flagCheckSlabEnabled {
+			msg = fmt.Sprintf("Starting map stress test with slab check, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB", flagMinHeapAllocMiB, flagMaxHeapAllocMiB)
+		} else {
+			msg = fmt.Sprintf("Starting map stress test, minMapHeapAlloc = %d MiB, maxMapHeapAlloc = %d MiB", flagMinHeapAllocMiB, flagMaxHeapAllocMiB)
+		}
+		fmt.Println(msg)
 
 		status := newMapStatus()
 
 		go updateStatus(sigc, status)
 
-		testMap(storage, address, typeInfo, maxLength, status, minHeapAllocMiB, maxHeapAllocMiB)
+		testMap(storage, address, status)
 	}
 
 }

@@ -199,11 +199,25 @@ type compactMapTypeInfo struct {
 	keys  []ComparableStorable
 }
 
+type InlinedExtraData interface {
+	Encode(*Encoder) error
+
+	addArrayExtraData(data *ArrayExtraData) int
+	addMapExtraData(data *MapExtraData) int
+	addCompactMapExtraData(
+		data *MapExtraData,
+		digests []Digest,
+		keys []ComparableStorable,
+	) (int, []ComparableStorable)
+}
+
 type inlinedExtraData struct {
 	extraData       []ExtraData
 	compactMapTypes map[string]compactMapTypeInfo
 	arrayTypes      map[string]int
 }
+
+var _ InlinedExtraData = &inlinedExtraData{}
 
 func newInlinedExtraData() *inlinedExtraData {
 	return &inlinedExtraData{}

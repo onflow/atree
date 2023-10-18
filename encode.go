@@ -44,7 +44,7 @@ func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
 
 // encodeStorableAsElement encodes storable as Array or OrderedMap element.
 // Storable is encode as an inlined ArrayDataSlab or MapDataSlab if it is ArrayDataSlab or MapDataSlab.
-func encodeStorableAsElement(enc *Encoder, storable Storable, inlinedTypeInfo *inlinedExtraData) error {
+func encodeStorableAsElement(enc *Encoder, storable Storable, inlinedTypeInfo InlinedExtraData) error {
 
 	switch storable := storable.(type) {
 

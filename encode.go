@@ -48,11 +48,12 @@ func encodeStorableAsElement(enc *Encoder, storable Storable, inlinedTypeInfo In
 
 	switch storable := storable.(type) {
 
-	case *ArrayDataSlab:
-		return storable.encodeAsInlined(enc, inlinedTypeInfo)
-
-	case *MapDataSlab:
-		return storable.encodeAsInlined(enc, inlinedTypeInfo)
+	case ContainerStorable:
+		err := storable.EncodeAsElement(enc, inlinedTypeInfo)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by ContainerStorable interface.
+			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode container storable as element")
+		}
 
 	default:
 		err := storable.Encode(enc)

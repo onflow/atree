@@ -132,6 +132,7 @@ func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 }
 
 var _ ArraySlab = &ArrayDataSlab{}
+var _ ContainerStorable = &ArrayDataSlab{}
 
 // ArrayMetaDataSlab is internal node, implementing ArraySlab.
 type ArrayMetaDataSlab struct {
@@ -697,14 +698,14 @@ func DecodeInlinedArrayStorable(
 	}, nil
 }
 
-// encodeAsInlined encodes inlined array data slab. Encoding is
+// EncodeAsElement encodes inlined array data slab. Encoding is
 // version 1 with CBOR tag having tag number CBORTagInlinedArray,
 // and tag contant as 3-element array:
 //
 //	+------------------+----------------+----------+
 //	| extra data index | value ID index | elements |
 //	+------------------+----------------+----------+
-func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo InlinedExtraData) error {
+func (a *ArrayDataSlab) EncodeAsElement(enc *Encoder, inlinedTypeInfo InlinedExtraData) error {
 	if a.extraData == nil {
 		return NewEncodingError(
 			fmt.Errorf("failed to encode non-root array data slab as inlined"))

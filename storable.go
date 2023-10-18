@@ -54,6 +54,13 @@ type ComparableStorable interface {
 	Copy() Storable
 }
 
+// ContainerStorable is an interface that supports Storable containing other storables.
+type ContainerStorable interface {
+	Storable
+
+	EncodeAsElement(*Encoder, InlinedExtraData) error
+}
+
 type containerStorable interface {
 	Storable
 	hasPointer() bool

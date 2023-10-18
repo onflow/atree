@@ -300,7 +300,7 @@ type MapDataSlab struct {
 }
 
 var _ MapSlab = &MapDataSlab{}
-var _ Storable = &MapDataSlab{}
+var _ ContainerStorable = &MapDataSlab{}
 
 // MapMetaDataSlab is internal node, implementing MapSlab.
 type MapMetaDataSlab struct {
@@ -2792,14 +2792,14 @@ func (m *MapDataSlab) encodeElements(enc *Encoder, inlinedTypes InlinedExtraData
 	return nil
 }
 
-// encodeAsInlined encodes inlined map data slab. Encoding is
+// EncodeAsElement encodes inlined map data slab. Encoding is
 // version 1 with CBOR tag having tag number CBORTagInlinedMap,
 // and tag contant as 3-element array:
 //
 //	+------------------+----------------+----------+
 //	| extra data index | value ID index | elements |
 //	+------------------+----------------+----------+
-func (m *MapDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo InlinedExtraData) error {
+func (m *MapDataSlab) EncodeAsElement(enc *Encoder, inlinedTypeInfo InlinedExtraData) error {
 	if m.extraData == nil {
 		return NewEncodingError(
 			fmt.Errorf("failed to encode non-root map data slab as inlined"))

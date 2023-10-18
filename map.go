@@ -595,17 +595,17 @@ func (e *singleElement) Encode(enc *Encoder, inlinedTypeInfo InlinedExtraData) e
 	}
 
 	// Encode key
-	err = e.key.Encode(enc)
+	err = encodeStorableAsElement(enc, e.key, inlinedTypeInfo)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by Storable interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode map key")
+		// Don't need to wrap error as external error because err is already categorized by encodeStorableAsElement().
+		return err
 	}
 
 	// Encode value
 	err = encodeStorableAsElement(enc, e.value, inlinedTypeInfo)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by Storable interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode map value")
+		// Don't need to wrap error as external error because err is already categorized by encodeStorableAsElement().
+		return err
 	}
 
 	err = enc.CBOR.Flush()

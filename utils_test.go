@@ -200,6 +200,15 @@ func newTestPersistentStorageWithBaseStorage(t testing.TB, baseStorage BaseStora
 	)
 }
 
+func newTestPersistentStorageWithBaseStorageAndDeltas(t testing.TB, baseStorage BaseStorage, data map[SlabID][]byte) *PersistentSlabStorage {
+	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
+	for id, b := range data {
+		err := storage.baseStorage.Store(id, b)
+		require.NoError(t, err)
+	}
+	return storage
+}
+
 func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)

@@ -142,6 +142,30 @@ func _testArray(
 	require.Equal(t, 1, len(rootIDs))
 	require.Equal(t, array.SlabID(), rootIDs[0])
 
+	// Encode all non-nil slab
+	encodedSlabs := make(map[SlabID][]byte)
+	for id, slab := range storage.deltas {
+		if slab != nil {
+			b, err := EncodeSlab(slab, storage.cborEncMode)
+			require.NoError(t, err)
+			encodedSlabs[id] = b
+		}
+	}
+
+	// Test decoded array from new storage to force slab decoding
+	decodedArray, err := NewArrayWithRootID(
+		newTestPersistentStorageWithBaseStorageAndDeltas(t, storage.baseStorage, encodedSlabs),
+		array.SlabID())
+	require.NoError(t, err)
+
+	// Verify decoded array elements
+	for i, expected := range expectedValues {
+		actual, err := decodedArray.Get(uint64(i))
+		require.NoError(t, err)
+
+		valueEqual(t, expected, actual)
+	}
+
 	if !hasNestedArrayMapElement {
 		// Need to call Commit before calling storage.Count() for PersistentSlabStorage.
 		err = storage.Commit()

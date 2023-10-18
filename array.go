@@ -819,7 +819,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 		return NewEncodingError(err)
 	}
 
-	if a.hasPointer() {
+	if a.HasPointer() {
 		h.setHasPointers()
 	}
 
@@ -1002,7 +1002,7 @@ func (a *ArrayDataSlab) Uninline(storage SlabStorage) error {
 	return nil
 }
 
-func (a *ArrayDataSlab) hasPointer() bool {
+func (a *ArrayDataSlab) HasPointer() bool {
 	for _, e := range a.elements {
 		if hasPointer(e) {
 			return true

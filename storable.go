@@ -59,16 +59,12 @@ type ContainerStorable interface {
 	Storable
 
 	EncodeAsElement(*Encoder, InlinedExtraData) error
-}
-
-type containerStorable interface {
-	Storable
-	hasPointer() bool
+	HasPointer() bool
 }
 
 func hasPointer(storable Storable) bool {
-	if cs, ok := storable.(containerStorable); ok {
-		return cs.hasPointer()
+	if cs, ok := storable.(ContainerStorable); ok {
+		return cs.HasPointer()
 	}
 	return false
 }
@@ -95,10 +91,9 @@ const (
 
 type SlabIDStorable SlabID
 
-var _ Storable = SlabIDStorable{}
-var _ containerStorable = SlabIDStorable{}
+var _ ContainerStorable = SlabIDStorable{}
 
-func (v SlabIDStorable) hasPointer() bool {
+func (v SlabIDStorable) HasPointer() bool {
 	return true
 }
 
@@ -153,6 +148,10 @@ func (v SlabIDStorable) Encode(enc *Encoder) error {
 	}
 
 	return nil
+}
+
+func (v SlabIDStorable) EncodeAsElement(enc *Encoder, _ InlinedExtraData) error {
+	return v.Encode(enc)
 }
 
 func (v SlabIDStorable) ByteSize() uint32 {

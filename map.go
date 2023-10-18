@@ -2705,7 +2705,7 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 		return NewEncodingError(err)
 	}
 
-	if m.hasPointer() {
+	if m.HasPointer() {
 		h.setHasPointers()
 	}
 
@@ -3031,7 +3031,7 @@ func (m *MapDataSlab) canBeEncodedAsCompactMap() ([]Digest, []ComparableStorable
 	return elements.hkeys, keys, values, true
 }
 
-func (m *MapDataSlab) hasPointer() bool {
+func (m *MapDataSlab) HasPointer() bool {
 	return m.elements.hasPointer()
 }
 

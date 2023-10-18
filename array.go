@@ -908,7 +908,7 @@ func (a *ArrayDataSlab) encodeElements(enc *Encoder, inlinedTypeInfo InlinedExtr
 
 	// Encode data slab content (array of elements)
 	for _, e := range a.elements {
-		err = encodeStorableAsElement(enc, e, inlinedTypeInfo)
+		err = EncodeStorableAsElement(enc, e, inlinedTypeInfo)
 		if err != nil {
 			// err is already categorized by encodeStorableAsElement().
 			return err

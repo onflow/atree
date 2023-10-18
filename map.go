@@ -595,14 +595,14 @@ func (e *singleElement) Encode(enc *Encoder, inlinedTypeInfo InlinedExtraData) e
 	}
 
 	// Encode key
-	err = encodeStorableAsElement(enc, e.key, inlinedTypeInfo)
+	err = EncodeStorableAsElement(enc, e.key, inlinedTypeInfo)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by encodeStorableAsElement().
 		return err
 	}
 
 	// Encode value
-	err = encodeStorableAsElement(enc, e.value, inlinedTypeInfo)
+	err = EncodeStorableAsElement(enc, e.value, inlinedTypeInfo)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by encodeStorableAsElement().
 		return err
@@ -2967,7 +2967,7 @@ func encodeCompactMapValues(
 				found = true
 				keyIndexes[i], keyIndexes[j] = keyIndexes[j], keyIndexes[i]
 
-				err = encodeStorableAsElement(enc, values[index], inlinedTypeInfo)
+				err = EncodeStorableAsElement(enc, values[index], inlinedTypeInfo)
 				if err != nil {
 					// Don't need to wrap error as external error because err is already categorized by encodeStorableAsElement().
 					return err

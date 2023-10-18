@@ -164,12 +164,11 @@ func (v SlabIDStorable) String() string {
 	return fmt.Sprintf("SlabIDStorable(%d)", v)
 }
 
-// Encode is a wrapper for Storable.Encode()
-func Encode(storable Storable, encMode cbor.EncMode) ([]byte, error) {
+func EncodeSlab(slab Slab, encMode cbor.EncMode) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := NewEncoder(&buf, encMode)
 
-	err := storable.Encode(enc)
+	err := slab.Encode(enc)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Storable interface.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable")

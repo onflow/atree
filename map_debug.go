@@ -958,7 +958,7 @@ func (v *serializationVerifier) verifyMapSlab(slab MapSlab) error {
 	id := slab.SlabID()
 
 	// Encode slab
-	data, err := Encode(slab, v.cborEncMode)
+	data, err := EncodeSlab(slab, v.cborEncMode)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err
@@ -972,7 +972,7 @@ func (v *serializationVerifier) verifyMapSlab(slab MapSlab) error {
 	}
 
 	// Re-encode decoded slab
-	dataFromDecodedSlab, err := Encode(decodedSlab, v.cborEncMode)
+	dataFromDecodedSlab, err := EncodeSlab(decodedSlab, v.cborEncMode)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err

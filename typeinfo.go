@@ -29,7 +29,7 @@ import (
 type TypeInfo interface {
 	Encode(*cbor.StreamEncoder) error
 	IsComposite() bool
-	ID() string
+	Identifier() string
 	Copy() TypeInfo
 }
 
@@ -312,7 +312,7 @@ func (ied *inlinedExtraData) addArrayExtraData(data *ArrayExtraData) int {
 		ied.arrayTypes = make(map[string]int)
 	}
 
-	id := data.TypeInfo.ID()
+	id := data.TypeInfo.Identifier()
 	index, exist := ied.arrayTypes[id]
 	if exist {
 		return index
@@ -376,14 +376,14 @@ func makeCompactMapTypeID(t TypeInfo, names []ComparableStorable) string {
 	const separator = ","
 
 	if len(names) == 1 {
-		return t.ID() + separator + names[0].ID()
+		return t.Identifier() + separator + names[0].ID()
 	}
 
 	sorter := newFieldNameSorter(names)
 
 	sort.Sort(sorter)
 
-	return t.ID() + separator + sorter.join(separator)
+	return t.Identifier() + separator + sorter.join(separator)
 }
 
 // fieldNameSorter sorts names by index (not in place sort).

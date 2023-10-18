@@ -100,7 +100,7 @@ func (i testTypeInfo) IsComposite() bool {
 	return false
 }
 
-func (i testTypeInfo) ID() string {
+func (i testTypeInfo) Identifier() string {
 	return fmt.Sprintf("uint64(%d)", i)
 }
 
@@ -129,7 +129,7 @@ func (i testCompositeTypeInfo) IsComposite() bool {
 	return true
 }
 
-func (i testCompositeTypeInfo) ID() string {
+func (i testCompositeTypeInfo) Identifier() string {
 	return fmt.Sprintf("composite(%d)", i)
 }
 

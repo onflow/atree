@@ -2923,7 +2923,8 @@ func encodeAsInlinedCompactMap(
 	// element 2: compact map values in the order of cachedKeys
 	err = encodeCompactMapValues(enc, cachedKeys, keys, values, inlinedTypeInfo)
 	if err != nil {
-		return NewEncodingError(err)
+		// err is already categorized by encodeCompactMapValues().
+		return err
 	}
 
 	err = enc.CBOR.Flush()
@@ -2968,7 +2969,7 @@ func encodeCompactMapValues(
 
 				err = encodeStorableAsElement(enc, values[index], inlinedTypeInfo)
 				if err != nil {
-					// Don't need to wrap error as external error because err is already categorized by encodeStorable().
+					// Don't need to wrap error as external error because err is already categorized by encodeStorableAsElement().
 					return err
 				}
 

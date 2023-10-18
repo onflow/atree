@@ -272,12 +272,8 @@ func (v *arrayVerifier) verifySlab(
 
 	// Verify that inlined slab is not in storage
 	if slab.Inlined() {
-		_, exist, err := v.storage.Retrieve(id)
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by Storage interface.
-			return 0, nil, nil, wrapErrorAsExternalErrorIfNeeded(err)
-		}
-		if exist {
+		slab := v.storage.RetrieveIfLoaded(id)
+		if slab != nil {
 			return 0, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s is in storage", id))
 		}
 	}
@@ -345,8 +341,16 @@ func (v *arrayVerifier) verifyDataSlab(
 	}
 
 	// Verify that only root data slab can be inlined
-	if level > 0 && dataSlab.Inlined() {
-		return 0, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
+	if dataSlab.Inlined() {
+		if level > 0 {
+			return 0, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
+		}
+		if dataSlab.extraData == nil {
+			return 0, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s doesn't have extra data", id))
+		}
+		if dataSlab.next != SlabIDUndefined {
+			return 0, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s has next slab ID", id))
+		}
 	}
 
 	// Verify that aggregated element size + slab prefix is the same as header.size
@@ -524,6 +528,11 @@ func VerifyArraySerialization(
 	decodeTypeInfo TypeInfoDecoder,
 	compare StorableComparator,
 ) error {
+	// Skip verification of inlined array serialization.
+	if a.Inlined() {
+		return nil
+	}
+
 	v := &serializationVerifier{
 		storage:        a.Storage,
 		cborDecMode:    cborDecMode,

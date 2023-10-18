@@ -386,12 +386,8 @@ func (v *mapVerifier) verifySlab(
 
 	// Verify that inlined slab is not in storage
 	if slab.Inlined() {
-		_, exist, err := v.storage.Retrieve(id)
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by Storage interface.
-			return 0, nil, nil, nil, wrapErrorAsExternalErrorIfNeeded(err)
-		}
-		if exist {
+		slab := v.storage.RetrieveIfLoaded(id)
+		if slab != nil {
 			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s is in storage", id))
 		}
 	}
@@ -470,8 +466,16 @@ func (v *mapVerifier) verifyDataSlab(
 	}
 
 	// Verify that only root slab can be inlined
-	if level > 0 && dataSlab.Inlined() {
-		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
+	if dataSlab.Inlined() {
+		if level > 0 {
+			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
+		}
+		if dataSlab.extraData == nil {
+			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s doesn't have extra data", id))
+		}
+		if dataSlab.next != SlabIDUndefined {
+			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s has next slab ID", id))
+		}
 	}
 
 	// Verify that aggregated element size + slab prefix is the same as header.size
@@ -846,12 +850,6 @@ func (v *mapVerifier) verifySingleElement(
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("element %s key can't be converted to value", e))
 	}
 
-	switch e.key.(type) {
-	case *ArrayDataSlab, *MapDataSlab:
-		// Verify key can't be inlined array or map
-		return 0, 0, NewFatalError(fmt.Errorf("element %s key shouldn't be inlined array or map", e))
-	}
-
 	err = verifyValue(kv, v.address, nil, v.tic, v.hip, v.inlineEnabled, slabIDs)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by verifyValue().
@@ -942,6 +940,11 @@ func VerifyMapSerialization(
 	decodeTypeInfo TypeInfoDecoder,
 	compare StorableComparator,
 ) error {
+	// Skip verification of inlined map serialization.
+	if m.Inlined() {
+		return nil
+	}
+
 	v := &serializationVerifier{
 		storage:        m.Storage,
 		cborDecMode:    cborDecMode,
@@ -1065,8 +1068,10 @@ func (v *serializationVerifier) verifyMapSlab(slab MapSlab) error {
 
 func (v *serializationVerifier) mapDataSlabEqual(expected, actual *MapDataSlab) error {
 
+	_, _, _, actualDecodedFromCompactMap := expected.canBeEncodedAsCompactMap()
+
 	// Compare extra data
-	err := mapExtraDataEqual(expected.extraData, actual.extraData)
+	err := mapExtraDataEqual(expected.extraData, actual.extraData, actualDecodedFromCompactMap)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by mapExtraDataEqual().
 		return err
@@ -1093,12 +1098,21 @@ func (v *serializationVerifier) mapDataSlabEqual(expected, actual *MapDataSlab) 
 	}
 
 	// Compare header
-	if !reflect.DeepEqual(expected.header, actual.header) {
-		return NewFatalError(fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header))
+	if actualDecodedFromCompactMap {
+		if expected.header.slabID != actual.header.slabID {
+			return NewFatalError(fmt.Errorf("header.slabID %s is wrong, want %s", actual.header.slabID, expected.header.slabID))
+		}
+		if expected.header.size != actual.header.size {
+			return NewFatalError(fmt.Errorf("header.size %d is wrong, want %d", actual.header.size, expected.header.size))
+		}
+	} else {
+		if !reflect.DeepEqual(expected.header, actual.header) {
+			return NewFatalError(fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header))
+		}
 	}
 
 	// Compare elements
-	err = v.mapElementsEqual(expected.elements, actual.elements)
+	err = v.mapElementsEqual(expected.elements, actual.elements, actualDecodedFromCompactMap)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by mapElementsEqual().
 		return err
@@ -1107,7 +1121,7 @@ func (v *serializationVerifier) mapDataSlabEqual(expected, actual *MapDataSlab) 
 	return nil
 }
 
-func (v *serializationVerifier) mapElementsEqual(expected, actual elements) error {
+func (v *serializationVerifier) mapElementsEqual(expected, actual elements, actualDecodedFromCompactMap bool) error {
 	switch expectedElems := expected.(type) {
 
 	case *hkeyElements:
@@ -1115,7 +1129,7 @@ func (v *serializationVerifier) mapElementsEqual(expected, actual elements) erro
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return v.mapHkeyElementsEqual(expectedElems, actualElems)
+		return v.mapHkeyElementsEqual(expectedElems, actualElems, actualDecodedFromCompactMap)
 
 	case *singleElements:
 		actualElems, ok := actual.(*singleElements)
@@ -1129,7 +1143,7 @@ func (v *serializationVerifier) mapElementsEqual(expected, actual elements) erro
 	return nil
 }
 
-func (v *serializationVerifier) mapHkeyElementsEqual(expected, actual *hkeyElements) error {
+func (v *serializationVerifier) mapHkeyElementsEqual(expected, actual *hkeyElements, actualDecodedFromCompactMap bool) error {
 
 	if expected.level != actual.level {
 		return NewFatalError(fmt.Errorf("hkeyElements level %d is wrong, want %d", actual.level, expected.level))
@@ -1139,12 +1153,12 @@ func (v *serializationVerifier) mapHkeyElementsEqual(expected, actual *hkeyEleme
 		return NewFatalError(fmt.Errorf("hkeyElements size %d is wrong, want %d", actual.size, expected.size))
 	}
 
-	if len(expected.hkeys) == 0 {
-		if len(actual.hkeys) != 0 {
-			return NewFatalError(fmt.Errorf("hkeyElements hkeys %v is wrong, want %v", actual.hkeys, expected.hkeys))
-		}
-	} else {
-		if !reflect.DeepEqual(expected.hkeys, actual.hkeys) {
+	if len(expected.hkeys) != len(actual.hkeys) {
+		return NewFatalError(fmt.Errorf("hkeyElements hkeys len %d is wrong, want %d", len(actual.hkeys), len(expected.hkeys)))
+	}
+
+	if !actualDecodedFromCompactMap {
+		if len(expected.hkeys) > 0 && !reflect.DeepEqual(expected.hkeys, actual.hkeys) {
 			return NewFatalError(fmt.Errorf("hkeyElements hkeys %v is wrong, want %v", actual.hkeys, expected.hkeys))
 		}
 	}
@@ -1153,14 +1167,30 @@ func (v *serializationVerifier) mapHkeyElementsEqual(expected, actual *hkeyEleme
 		return NewFatalError(fmt.Errorf("hkeyElements elems len %d is wrong, want %d", len(actual.elems), len(expected.elems)))
 	}
 
-	for i := 0; i < len(expected.elems); i++ {
-		expectedEle := expected.elems[i]
-		actualEle := actual.elems[i]
+	if actualDecodedFromCompactMap {
+		for _, expectedEle := range expected.elems {
+			found := false
+			for _, actualEle := range actual.elems {
+				err := v.mapElementEqual(expectedEle, actualEle, actualDecodedFromCompactMap)
+				if err == nil {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return NewFatalError(fmt.Errorf("hkeyElements elem %v is not found", expectedEle))
+			}
+		}
+	} else {
+		for i := 0; i < len(expected.elems); i++ {
+			expectedEle := expected.elems[i]
+			actualEle := actual.elems[i]
 
-		err := v.mapElementEqual(expectedEle, actualEle)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by mapElementEqual().
-			return err
+			err := v.mapElementEqual(expectedEle, actualEle, actualDecodedFromCompactMap)
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by mapElementEqual().
+				return err
+			}
 		}
 	}
 
@@ -1195,7 +1225,7 @@ func (v *serializationVerifier) mapSingleElementsEqual(expected, actual *singleE
 	return nil
 }
 
-func (v *serializationVerifier) mapElementEqual(expected, actual element) error {
+func (v *serializationVerifier) mapElementEqual(expected, actual element, actualDecodedFromCompactMap bool) error {
 	switch expectedElem := expected.(type) {
 
 	case *singleElement:
@@ -1210,7 +1240,7 @@ func (v *serializationVerifier) mapElementEqual(expected, actual element) error 
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return v.mapElementsEqual(expectedElem.elements, actualElem.elements)
+		return v.mapElementsEqual(expectedElem.elements, actualElem.elements, actualDecodedFromCompactMap)
 
 	case *externalCollisionGroup:
 		actualElem, ok := actual.(*externalCollisionGroup)
@@ -1322,7 +1352,7 @@ func (v *serializationVerifier) mapSingleElementEqual(expected, actual *singleEl
 func (v *serializationVerifier) mapMetaDataSlabEqual(expected, actual *MapMetaDataSlab) error {
 
 	// Compare extra data
-	err := mapExtraDataEqual(expected.extraData, actual.extraData)
+	err := mapExtraDataEqual(expected.extraData, actual.extraData, false)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by mapExtraDataEqual().
 		return err
@@ -1341,7 +1371,7 @@ func (v *serializationVerifier) mapMetaDataSlabEqual(expected, actual *MapMetaDa
 	return nil
 }
 
-func mapExtraDataEqual(expected, actual *MapExtraData) error {
+func mapExtraDataEqual(expected, actual *MapExtraData, actualDecodedFromCompactMap bool) error {
 
 	if (expected == nil) && (actual == nil) {
 		return nil
@@ -1359,7 +1389,7 @@ func mapExtraDataEqual(expected, actual *MapExtraData) error {
 		return NewFatalError(fmt.Errorf("map extra data count %d is wrong, want %d", actual.Count, expected.Count))
 	}
 
-	if !expected.TypeInfo.IsComposite() {
+	if !actualDecodedFromCompactMap {
 		if expected.Seed != actual.Seed {
 			return NewFatalError(fmt.Errorf("map extra data seed %d is wrong, want %d", actual.Seed, expected.Seed))
 		}

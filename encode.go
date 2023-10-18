@@ -58,7 +58,7 @@ func encodeStorableAsElement(enc *Encoder, storable Storable, inlinedTypeInfo *i
 		err := storable.Encode(enc)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode map value")
+			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable as element")
 		}
 	}
 

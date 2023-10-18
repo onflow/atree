@@ -754,7 +754,8 @@ func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedEx
 	// element 2: array elements
 	err = a.encodeElements(enc, inlinedTypeInfo)
 	if err != nil {
-		return NewEncodingError(err)
+		// err is already categorized by ArrayDataSlab.encodeElements().
+		return err
 	}
 
 	err = enc.CBOR.Flush()
@@ -908,8 +909,8 @@ func (a *ArrayDataSlab) encodeElements(enc *Encoder, inlinedTypeInfo *inlinedExt
 	for _, e := range a.elements {
 		err = encodeStorableAsElement(enc, e, inlinedTypeInfo)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by Storable interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode array element")
+			// err is already categorized by encodeStorableAsElement().
+			return err
 		}
 	}
 

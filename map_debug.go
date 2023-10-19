@@ -1105,10 +1105,8 @@ func (v *serializationVerifier) mapDataSlabEqual(expected, actual *MapDataSlab) 
 		if expected.header.size != actual.header.size {
 			return NewFatalError(fmt.Errorf("header.size %d is wrong, want %d", actual.header.size, expected.header.size))
 		}
-	} else {
-		if !reflect.DeepEqual(expected.header, actual.header) {
-			return NewFatalError(fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header))
-		}
+	} else if !reflect.DeepEqual(expected.header, actual.header) {
+		return NewFatalError(fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header))
 	}
 
 	// Compare elements

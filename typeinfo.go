@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -418,9 +419,12 @@ func (fn *fieldNameSorter) Swap(i, j int) {
 }
 
 func (fn *fieldNameSorter) join(sep string) string {
-	var s string
-	for _, i := range fn.index {
-		s += sep + fn.names[i].ID()
+	var sb strings.Builder
+	for i, index := range fn.index {
+		if i > 0 {
+			sb.WriteString(sep)
+		}
+		sb.WriteString(fn.names[index].ID())
 	}
-	return s
+	return sb.String()
 }

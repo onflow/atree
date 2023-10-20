@@ -272,8 +272,12 @@ func (v *arrayVerifier) verifySlab(
 
 	// Verify that inlined slab is not in storage
 	if slab.Inlined() {
-		slab := v.storage.RetrieveIfLoaded(id)
-		if slab != nil {
+		_, exist, err := v.storage.Retrieve(id)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by Storage interface.
+			return 0, nil, nil, wrapErrorAsExternalErrorIfNeeded(err)
+		}
+		if exist {
 			return 0, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s is in storage", id))
 		}
 	}

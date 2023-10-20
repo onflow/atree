@@ -345,8 +345,16 @@ func (v *arrayVerifier) verifyDataSlab(
 	}
 
 	// Verify that only root data slab can be inlined
-	if level > 0 && dataSlab.Inlined() {
-		return 0, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
+	if dataSlab.Inlined() {
+		if level > 0 {
+			return 0, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
+		}
+		if dataSlab.extraData == nil {
+			return 0, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s doesn't have extra data", id))
+		}
+		if dataSlab.next != SlabIDUndefined {
+			return 0, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s has next slab ID", id))
+		}
 	}
 
 	// Verify that aggregated element size + slab prefix is the same as header.size
@@ -524,6 +532,11 @@ func VerifyArraySerialization(
 	decodeTypeInfo TypeInfoDecoder,
 	compare StorableComparator,
 ) error {
+	// Skip verification of inlined array serialization.
+	if a.Inlined() {
+		return nil
+	}
+
 	v := &serializationVerifier{
 		storage:        a.Storage,
 		cborDecMode:    cborDecMode,
@@ -550,7 +563,7 @@ func (v *serializationVerifier) verifyArraySlab(slab ArraySlab) error {
 	id := slab.SlabID()
 
 	// Encode slab
-	data, err := Encode(slab, v.cborEncMode)
+	data, err := EncodeSlab(slab, v.cborEncMode)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err
@@ -564,7 +577,7 @@ func (v *serializationVerifier) verifyArraySlab(slab ArraySlab) error {
 	}
 
 	// Re-encode decoded slab
-	dataFromDecodedSlab, err := Encode(decodedSlab, v.cborEncMode)
+	dataFromDecodedSlab, err := EncodeSlab(decodedSlab, v.cborEncMode)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err

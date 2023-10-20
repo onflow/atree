@@ -100,7 +100,7 @@ func (i testTypeInfo) IsComposite() bool {
 	return false
 }
 
-func (i testTypeInfo) ID() string {
+func (i testTypeInfo) Identifier() string {
 	return fmt.Sprintf("uint64(%d)", i)
 }
 
@@ -129,7 +129,7 @@ func (i testCompositeTypeInfo) IsComposite() bool {
 	return true
 }
 
-func (i testCompositeTypeInfo) ID() string {
+func (i testCompositeTypeInfo) Identifier() string {
 	return fmt.Sprintf("composite(%d)", i)
 }
 
@@ -198,6 +198,15 @@ func newTestPersistentStorageWithBaseStorage(t testing.TB, baseStorage BaseStora
 		decodeStorable,
 		decodeTypeInfo,
 	)
+}
+
+func newTestPersistentStorageWithBaseStorageAndDeltas(t testing.TB, baseStorage BaseStorage, data map[SlabID][]byte) *PersistentSlabStorage {
+	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
+	for id, b := range data {
+		err := storage.baseStorage.Store(id, b)
+		require.NoError(t, err)
+	}
+	return storage
 }
 
 func newTestBasicStorage(t testing.TB) *BasicSlabStorage {

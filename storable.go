@@ -54,14 +54,23 @@ type ComparableStorable interface {
 	Copy() Storable
 }
 
-type containerStorable interface {
+// ContainerStorable is an interface that supports Storable containing other storables.
+type ContainerStorable interface {
 	Storable
-	hasPointer() bool
+
+	// EncodeAsElement encodes ContainerStorable and its child storables as an element
+	// of parent array/map.  Since child storable can be inlined array or map,
+	// encoding inlined array or map requires extra parameter InlinedExtraData.
+	EncodeAsElement(*Encoder, *InlinedExtraData) error
+
+	// HasPointer returns true if any of its child storables is SlabIDStorable
+	// (references to another slab).  This function is used during encoding.
+	HasPointer() bool
 }
 
 func hasPointer(storable Storable) bool {
-	if cs, ok := storable.(containerStorable); ok {
-		return cs.hasPointer()
+	if cs, ok := storable.(ContainerStorable); ok {
+		return cs.HasPointer()
 	}
 	return false
 }
@@ -88,10 +97,9 @@ const (
 
 type SlabIDStorable SlabID
 
-var _ Storable = SlabIDStorable{}
-var _ containerStorable = SlabIDStorable{}
+var _ ContainerStorable = SlabIDStorable{}
 
-func (v SlabIDStorable) hasPointer() bool {
+func (v SlabIDStorable) HasPointer() bool {
 	return true
 }
 
@@ -148,6 +156,10 @@ func (v SlabIDStorable) Encode(enc *Encoder) error {
 	return nil
 }
 
+func (v SlabIDStorable) EncodeAsElement(enc *Encoder, _ *InlinedExtraData) error {
+	return v.Encode(enc)
+}
+
 func (v SlabIDStorable) ByteSize() uint32 {
 	// tag number (2 bytes) + byte string header (1 byte) + slab id (16 bytes)
 	return 2 + 1 + slabIDSize
@@ -157,12 +169,11 @@ func (v SlabIDStorable) String() string {
 	return fmt.Sprintf("SlabIDStorable(%d)", v)
 }
 
-// Encode is a wrapper for Storable.Encode()
-func Encode(storable Storable, encMode cbor.EncMode) ([]byte, error) {
+func EncodeSlab(slab Slab, encMode cbor.EncMode) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := NewEncoder(&buf, encMode)
 
-	err := storable.Encode(enc)
+	err := slab.Encode(enc)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Storable interface.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable")

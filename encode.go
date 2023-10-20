@@ -42,23 +42,24 @@ func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
 	}
 }
 
-// encodeStorableAsElement encodes storable as Array or OrderedMap element.
+// EncodeStorableAsElement encodes storable as Array or OrderedMap element.
 // Storable is encode as an inlined ArrayDataSlab or MapDataSlab if it is ArrayDataSlab or MapDataSlab.
-func encodeStorableAsElement(enc *Encoder, storable Storable, inlinedTypeInfo *inlinedExtraData) error {
+func EncodeStorableAsElement(enc *Encoder, storable Storable, inlinedTypeInfo *InlinedExtraData) error {
 
 	switch storable := storable.(type) {
 
-	case *ArrayDataSlab:
-		return storable.encodeAsInlined(enc, inlinedTypeInfo)
-
-	case *MapDataSlab:
-		return storable.encodeAsInlined(enc, inlinedTypeInfo)
+	case ContainerStorable:
+		err := storable.EncodeAsElement(enc, inlinedTypeInfo)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by ContainerStorable interface.
+			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode container storable as element")
+		}
 
 	default:
 		err := storable.Encode(enc)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode map value")
+			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable as element")
 		}
 	}
 

@@ -749,7 +749,7 @@ func TestPersistentStorage(t *testing.T) {
 				require.NoError(t, err)
 
 				// capture data for accuracy testing
-				simpleMap[slabID], err = Encode(slab, encMode)
+				simpleMap[slabID], err = EncodeSlab(slab, encMode)
 				require.NoError(t, err)
 			}
 		}
@@ -1000,7 +1000,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 				break
 			}
 
-			encodedSlab, err := Encode(slab, storage.cborEncMode)
+			encodedSlab, err := EncodeSlab(slab, storage.cborEncMode)
 			require.NoError(t, err)
 
 			require.Equal(t, encodedSlab, data[id])

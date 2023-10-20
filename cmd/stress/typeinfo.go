@@ -53,7 +53,7 @@ func (i arrayTypeInfo) IsComposite() bool {
 	return false
 }
 
-func (i arrayTypeInfo) ID() string {
+func (i arrayTypeInfo) Identifier() string {
 	return fmt.Sprintf("array(%d)", i)
 }
 
@@ -88,7 +88,7 @@ func (i mapTypeInfo) IsComposite() bool {
 	return false
 }
 
-func (i mapTypeInfo) ID() string {
+func (i mapTypeInfo) Identifier() string {
 	return fmt.Sprintf("map(%d)", i)
 }
 
@@ -153,7 +153,7 @@ func (i compositeTypeInfo) IsComposite() bool {
 	return true
 }
 
-func (i compositeTypeInfo) ID() string {
+func (i compositeTypeInfo) Identifier() string {
 	return fmt.Sprintf("composite(%d_%d)", i.fieldStartIndex, i.fieldEndIndex)
 }
 

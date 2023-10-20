@@ -540,5 +540,5 @@ func (v mapValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Stor
 }
 
 var typeInfoComparator = func(a atree.TypeInfo, b atree.TypeInfo) bool {
-	return a.ID() == b.ID()
+	return a.Identifier() == b.Identifier()
 }

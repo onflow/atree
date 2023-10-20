@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -29,7 +30,7 @@ import (
 type TypeInfo interface {
 	Encode(*cbor.StreamEncoder) error
 	IsComposite() bool
-	ID() string
+	Identifier() string
 	Copy() TypeInfo
 }
 
@@ -199,18 +200,18 @@ type compactMapTypeInfo struct {
 	keys  []ComparableStorable
 }
 
-type inlinedExtraData struct {
+type InlinedExtraData struct {
 	extraData       []ExtraData
 	compactMapTypes map[string]compactMapTypeInfo
 	arrayTypes      map[string]int
 }
 
-func newInlinedExtraData() *inlinedExtraData {
-	return &inlinedExtraData{}
+func newInlinedExtraData() *InlinedExtraData {
+	return &InlinedExtraData{}
 }
 
 // Encode encodes inlined extra data as CBOR array.
-func (ied *inlinedExtraData) Encode(enc *Encoder) error {
+func (ied *InlinedExtraData) Encode(enc *Encoder) error {
 	err := enc.CBOR.EncodeArrayHead(uint64(len(ied.extraData)))
 	if err != nil {
 		return NewEncodingError(err)
@@ -307,12 +308,12 @@ func newInlinedExtraDataFromData(
 // addArrayExtraData returns index of deduplicated array extra data.
 // Array extra data is deduplicated by array type info ID because array
 // extra data only contains type info.
-func (ied *inlinedExtraData) addArrayExtraData(data *ArrayExtraData) int {
+func (ied *InlinedExtraData) addArrayExtraData(data *ArrayExtraData) int {
 	if ied.arrayTypes == nil {
 		ied.arrayTypes = make(map[string]int)
 	}
 
-	id := data.TypeInfo.ID()
+	id := data.TypeInfo.Identifier()
 	index, exist := ied.arrayTypes[id]
 	if exist {
 		return index
@@ -326,7 +327,7 @@ func (ied *inlinedExtraData) addArrayExtraData(data *ArrayExtraData) int {
 
 // addMapExtraData returns index of map extra data.
 // Map extra data is not deduplicated because it also contains count and seed.
-func (ied *inlinedExtraData) addMapExtraData(data *MapExtraData) int {
+func (ied *InlinedExtraData) addMapExtraData(data *MapExtraData) int {
 	index := len(ied.extraData)
 	ied.extraData = append(ied.extraData, data)
 	return index
@@ -334,7 +335,7 @@ func (ied *inlinedExtraData) addMapExtraData(data *MapExtraData) int {
 
 // addCompactMapExtraData returns index of deduplicated compact map extra data.
 // Compact map extra data is deduplicated by TypeInfo.ID() with sorted field names.
-func (ied *inlinedExtraData) addCompactMapExtraData(
+func (ied *InlinedExtraData) addCompactMapExtraData(
 	data *MapExtraData,
 	digests []Digest,
 	keys []ComparableStorable,
@@ -367,7 +368,7 @@ func (ied *inlinedExtraData) addCompactMapExtraData(
 	return index, keys
 }
 
-func (ied *inlinedExtraData) empty() bool {
+func (ied *InlinedExtraData) empty() bool {
 	return len(ied.extraData) == 0
 }
 
@@ -376,14 +377,14 @@ func makeCompactMapTypeID(t TypeInfo, names []ComparableStorable) string {
 	const separator = ","
 
 	if len(names) == 1 {
-		return t.ID() + separator + names[0].ID()
+		return t.Identifier() + separator + names[0].ID()
 	}
 
 	sorter := newFieldNameSorter(names)
 
 	sort.Sort(sorter)
 
-	return t.ID() + separator + sorter.join(separator)
+	return t.Identifier() + separator + sorter.join(separator)
 }
 
 // fieldNameSorter sorts names by index (not in place sort).
@@ -418,9 +419,12 @@ func (fn *fieldNameSorter) Swap(i, j int) {
 }
 
 func (fn *fieldNameSorter) join(sep string) string {
-	var s string
-	for _, i := range fn.index {
-		s += sep + fn.names[i].ID()
+	var sb strings.Builder
+	for i, index := range fn.index {
+		if i > 0 {
+			sb.WriteString(sep)
+		}
+		sb.WriteString(fn.names[index].ID())
 	}
-	return s
+	return sb.String()
 }

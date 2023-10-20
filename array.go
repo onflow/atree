@@ -132,6 +132,7 @@ func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 }
 
 var _ ArraySlab = &ArrayDataSlab{}
+var _ ContainerStorable = &ArrayDataSlab{}
 
 // ArrayMetaDataSlab is internal node, implementing ArraySlab.
 type ArrayMetaDataSlab struct {
@@ -697,14 +698,14 @@ func DecodeInlinedArrayStorable(
 	}, nil
 }
 
-// encodeAsInlined encodes inlined array data slab. Encoding is
+// EncodeAsElement encodes inlined array data slab. Encoding is
 // version 1 with CBOR tag having tag number CBORTagInlinedArray,
 // and tag contant as 3-element array:
 //
 //	+------------------+----------------+----------+
 //	| extra data index | value ID index | elements |
 //	+------------------+----------------+----------+
-func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
+func (a *ArrayDataSlab) EncodeAsElement(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
 	if a.extraData == nil {
 		return NewEncodingError(
 			fmt.Errorf("failed to encode non-root array data slab as inlined"))
@@ -754,7 +755,8 @@ func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder, inlinedTypeInfo *inlinedEx
 	// element 2: array elements
 	err = a.encodeElements(enc, inlinedTypeInfo)
 	if err != nil {
-		return NewEncodingError(err)
+		// err is already categorized by ArrayDataSlab.encodeElements().
+		return err
 	}
 
 	err = enc.CBOR.Flush()
@@ -817,7 +819,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 		return NewEncodingError(err)
 	}
 
-	if a.hasPointer() {
+	if a.HasPointer() {
 		h.setHasPointers()
 	}
 
@@ -885,7 +887,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (a *ArrayDataSlab) encodeElements(enc *Encoder, inlinedTypeInfo *inlinedExtraData) error {
+func (a *ArrayDataSlab) encodeElements(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
 	// Encode CBOR array size manually for fix-sized encoding
 
 	enc.Scratch[0] = 0x80 | 25
@@ -906,10 +908,10 @@ func (a *ArrayDataSlab) encodeElements(enc *Encoder, inlinedTypeInfo *inlinedExt
 
 	// Encode data slab content (array of elements)
 	for _, e := range a.elements {
-		err = encodeStorableAsElement(enc, e, inlinedTypeInfo)
+		err = EncodeStorableAsElement(enc, e, inlinedTypeInfo)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by Storable interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode array element")
+			// err is already categorized by encodeStorableAsElement().
+			return err
 		}
 	}
 
@@ -1000,7 +1002,7 @@ func (a *ArrayDataSlab) Uninline(storage SlabStorage) error {
 	return nil
 }
 
-func (a *ArrayDataSlab) hasPointer() bool {
+func (a *ArrayDataSlab) HasPointer() bool {
 	for _, e := range a.elements {
 		if hasPointer(e) {
 			return true

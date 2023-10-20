@@ -390,7 +390,7 @@ func (s *BasicSlabStorage) SlabIDs() []SlabID {
 func (s *BasicSlabStorage) Encode() (map[SlabID][]byte, error) {
 	m := make(map[SlabID][]byte)
 	for id, slab := range s.Slabs {
-		b, err := Encode(slab, s.cborEncMode)
+		b, err := EncodeSlab(slab, s.cborEncMode)
 		if err != nil {
 			// err is already categorized by Encode().
 			return nil, err
@@ -800,7 +800,7 @@ func (s *PersistentSlabStorage) Commit() error {
 		}
 
 		// serialize
-		data, err := Encode(slab, s.cborEncMode)
+		data, err := EncodeSlab(slab, s.cborEncMode)
 		if err != nil {
 			// err is categorized already by Encode()
 			return err
@@ -879,7 +879,7 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 				continue
 			}
 			// serialize
-			data, err := Encode(slab, s.cborEncMode)
+			data, err := EncodeSlab(slab, s.cborEncMode)
 			results <- &encodedSlabs{
 				slabID: id,
 				data:   data,

@@ -698,11 +698,11 @@ type SomeStorable struct {
 	Storable Storable
 }
 
-var _ Storable = SomeStorable{}
+var _ ContainerStorable = SomeStorable{}
 
-func (v SomeStorable) hasPointer() bool {
-	if ms, ok := v.Storable.(containerStorable); ok {
-		return ms.hasPointer()
+func (v SomeStorable) HasPointer() bool {
+	if ms, ok := v.Storable.(ContainerStorable); ok {
+		return ms.HasPointer()
 	}
 	return false
 }
@@ -721,6 +721,17 @@ func (v SomeStorable) Encode(enc *Encoder) error {
 		return err
 	}
 	return v.Storable.Encode(enc)
+}
+
+func (v SomeStorable) EncodeAsElement(enc *Encoder, inlinedExtraData *InlinedExtraData) error {
+	err := enc.CBOR.EncodeRawBytes([]byte{
+		// tag number
+		0xd8, cborTagSomeValue,
+	})
+	if err != nil {
+		return err
+	}
+	return EncodeStorableAsElement(enc, v.Storable, inlinedExtraData)
 }
 
 func (v SomeStorable) ChildStorables() []Storable {

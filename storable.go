@@ -61,7 +61,7 @@ type ContainerStorable interface {
 	// EncodeAsElement encodes ContainerStorable and its child storables as an element
 	// of parent array/map.  Since child storable can be inlined array or map,
 	// encoding inlined array or map requires extra parameter InlinedExtraData.
-	EncodeAsElement(*Encoder, InlinedExtraData) error
+	EncodeAsElement(*Encoder, *InlinedExtraData) error
 
 	// HasPointer returns true if any of its child storables is SlabIDStorable
 	// (references to another slab).  This function is used during encoding.
@@ -156,7 +156,7 @@ func (v SlabIDStorable) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (v SlabIDStorable) EncodeAsElement(enc *Encoder, _ InlinedExtraData) error {
+func (v SlabIDStorable) EncodeAsElement(enc *Encoder, _ *InlinedExtraData) error {
 	return v.Encode(enc)
 }
 

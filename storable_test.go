@@ -723,7 +723,7 @@ func (v SomeStorable) Encode(enc *Encoder) error {
 	return v.Storable.Encode(enc)
 }
 
-func (v SomeStorable) EncodeAsElement(enc *Encoder, inlinedExtraData InlinedExtraData) error {
+func (v SomeStorable) EncodeAsElement(enc *Encoder, inlinedExtraData *InlinedExtraData) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagSomeValue,

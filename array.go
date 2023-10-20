@@ -705,7 +705,7 @@ func DecodeInlinedArrayStorable(
 //	+------------------+----------------+----------+
 //	| extra data index | value ID index | elements |
 //	+------------------+----------------+----------+
-func (a *ArrayDataSlab) EncodeAsElement(enc *Encoder, inlinedTypeInfo InlinedExtraData) error {
+func (a *ArrayDataSlab) EncodeAsElement(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
 	if a.extraData == nil {
 		return NewEncodingError(
 			fmt.Errorf("failed to encode non-root array data slab as inlined"))
@@ -887,7 +887,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (a *ArrayDataSlab) encodeElements(enc *Encoder, inlinedTypeInfo InlinedExtraData) error {
+func (a *ArrayDataSlab) encodeElements(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
 	// Encode CBOR array size manually for fix-sized encoding
 
 	enc.Scratch[0] = 0x80 | 25

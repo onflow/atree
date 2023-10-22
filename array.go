@@ -698,14 +698,14 @@ func DecodeInlinedArrayStorable(
 	}, nil
 }
 
-// EncodeAsElement encodes inlined array data slab. Encoding is
+// encodeAsInlined encodes inlined array data slab. Encoding is
 // version 1 with CBOR tag having tag number CBORTagInlinedArray,
 // and tag contant as 3-element array:
 //
 //	+------------------+----------------+----------+
 //	| extra data index | value ID index | elements |
 //	+------------------+----------------+----------+
-func (a *ArrayDataSlab) EncodeAsElement(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
+func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder) error {
 	if a.extraData == nil {
 		return NewEncodingError(
 			fmt.Errorf("failed to encode non-root array data slab as inlined"))
@@ -716,7 +716,7 @@ func (a *ArrayDataSlab) EncodeAsElement(enc *Encoder, inlinedTypeInfo *InlinedEx
 			fmt.Errorf("failed to encode standalone array data slab as inlined"))
 	}
 
-	extraDataIndex := inlinedTypeInfo.addArrayExtraData(a.extraData)
+	extraDataIndex := enc.inlinedExtraData.addArrayExtraData(a.extraData)
 
 	if extraDataIndex > maxInlinedExtraDataIndex {
 		return NewEncodingError(
@@ -753,7 +753,7 @@ func (a *ArrayDataSlab) EncodeAsElement(enc *Encoder, inlinedTypeInfo *InlinedEx
 	}
 
 	// element 2: array elements
-	err = a.encodeElements(enc, inlinedTypeInfo)
+	err = a.encodeElements(enc)
 	if err != nil {
 		// err is already categorized by ArrayDataSlab.encodeElements().
 		return err
@@ -784,8 +784,7 @@ func (a *ArrayDataSlab) EncodeAsElement(enc *Encoder, inlinedTypeInfo *InlinedEx
 func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	if a.inlined {
-		return NewEncodingError(
-			fmt.Errorf("failed to encode inlined array data slab as standalone slab"))
+		return a.encodeAsInlined(enc)
 	}
 
 	// Encoding is done in two steps:
@@ -793,15 +792,13 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	// 1. Encode array elements using a new buffer while collecting inlined extra data from inlined elements.
 	// 2. Encode slab with deduplicated inlined extra data and copy encoded elements from previous buffer.
 
-	inlinedTypes := newInlinedExtraData()
-
 	// Get a buffer from a pool to encode elements.
 	elementBuf := getBuffer()
 	defer putBuffer(elementBuf)
 
 	elementEnc := NewEncoder(elementBuf, enc.encMode)
 
-	err := a.encodeElements(elementEnc, inlinedTypes)
+	err := a.encodeElements(elementEnc)
 	if err != nil {
 		// err is already categorized by Array.encodeElements().
 		return err
@@ -831,7 +828,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 		h.setRoot()
 	}
 
-	if !inlinedTypes.empty() {
+	if !elementEnc.inlinedExtraData.empty() {
 		h.setHasInlinedSlabs()
 	}
 
@@ -851,8 +848,8 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode inlined extra data
-	if !inlinedTypes.empty() {
-		err = inlinedTypes.Encode(enc)
+	if !elementEnc.inlinedExtraData.empty() {
+		err = elementEnc.inlinedExtraData.Encode(enc)
 		if err != nil {
 			// err is already categorized by inlinedExtraData.Encode().
 			return err
@@ -887,7 +884,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (a *ArrayDataSlab) encodeElements(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
+func (a *ArrayDataSlab) encodeElements(enc *Encoder) error {
 	// Encode CBOR array size manually for fix-sized encoding
 
 	enc.Scratch[0] = 0x80 | 25
@@ -908,10 +905,10 @@ func (a *ArrayDataSlab) encodeElements(enc *Encoder, inlinedTypeInfo *InlinedExt
 
 	// Encode data slab content (array of elements)
 	for _, e := range a.elements {
-		err = EncodeStorableAsElement(enc, e, inlinedTypeInfo)
+		err = e.Encode(enc)
 		if err != nil {
-			// err is already categorized by encodeStorableAsElement().
-			return err
+			// Wrap err as external error (if needed) because err is returned by Storable interface.
+			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode array element")
 		}
 	}
 

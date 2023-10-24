@@ -148,7 +148,7 @@ type element interface {
 		key Value,
 	) (MapKey, MapValue, element, error)
 
-	Encode(*Encoder, *InlinedExtraData) error
+	Encode(*Encoder) error
 
 	hasPointer() bool
 
@@ -215,7 +215,7 @@ type elements interface {
 
 	Element(int) (element, error)
 
-	Encode(*Encoder, *InlinedExtraData) error
+	Encode(*Encoder) error
 
 	hasPointer() bool
 
@@ -586,7 +586,7 @@ func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable Storab
 // Encode encodes singleElement to the given encoder.
 //
 //	CBOR encoded array of 2 elements (key, value).
-func (e *singleElement) Encode(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
+func (e *singleElement) Encode(enc *Encoder) error {
 
 	// Encode CBOR array head for 2 elements
 	err := enc.CBOR.EncodeRawBytes([]byte{0x82})
@@ -595,17 +595,17 @@ func (e *singleElement) Encode(enc *Encoder, inlinedTypeInfo *InlinedExtraData) 
 	}
 
 	// Encode key
-	err = EncodeStorableAsElement(enc, e.key, inlinedTypeInfo)
+	err = e.key.Encode(enc)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by encodeStorableAsElement().
-		return err
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode map key storable")
 	}
 
 	// Encode value
-	err = EncodeStorableAsElement(enc, e.value, inlinedTypeInfo)
+	err = e.value.Encode(enc)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by encodeStorableAsElement().
-		return err
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode map value storable")
 	}
 
 	err = enc.CBOR.Flush()
@@ -763,7 +763,7 @@ func newInlineCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorable
 // Encode encodes inlineCollisionGroup to the given encoder.
 //
 //	CBOR tag (number: CBORTagInlineCollisionGroup, content: elements)
-func (e *inlineCollisionGroup) Encode(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
+func (e *inlineCollisionGroup) Encode(enc *Encoder) error {
 
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number CBORTagInlineCollisionGroup
@@ -773,7 +773,7 @@ func (e *inlineCollisionGroup) Encode(enc *Encoder, inlinedTypeInfo *InlinedExtr
 		return NewEncodingError(err)
 	}
 
-	err = e.elements.Encode(enc, inlinedTypeInfo)
+	err = e.elements.Encode(enc)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by elements.Encode().
 		return err
@@ -953,7 +953,7 @@ func newExternalCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorab
 // Encode encodes externalCollisionGroup to the given encoder.
 //
 //	CBOR tag (number: CBORTagExternalCollisionGroup, content: slab ID)
-func (e *externalCollisionGroup) Encode(enc *Encoder, _ *InlinedExtraData) error {
+func (e *externalCollisionGroup) Encode(enc *Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number CBORTagExternalCollisionGroup
 		0xd8, CBORTagExternalCollisionGroup,
@@ -1259,7 +1259,7 @@ func newHkeyElementsWithElement(level uint, hkey Digest, elem element) *hkeyElem
 //	    1: hkeys (byte string)
 //	    2: elements (array)
 //	]
-func (e *hkeyElements) Encode(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
+func (e *hkeyElements) Encode(enc *Encoder) error {
 
 	if e.level > maxDigestLevel {
 		return NewFatalError(fmt.Errorf("hash level %d exceeds max digest level %d", e.level, maxDigestLevel))
@@ -1313,7 +1313,7 @@ func (e *hkeyElements) Encode(enc *Encoder, inlinedTypeInfo *InlinedExtraData) e
 
 	// Encode each element
 	for _, e := range e.elems {
-		err = e.Encode(enc, inlinedTypeInfo)
+		err = e.Encode(enc)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by element.Encode().
 			return err
@@ -1921,7 +1921,7 @@ func newSingleElementsWithElement(level uint, elem *singleElement) *singleElemen
 //	    1: hkeys (0 length byte string)
 //	    2: elements (array)
 //	]
-func (e *singleElements) Encode(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
+func (e *singleElements) Encode(enc *Encoder) error {
 
 	if e.level > maxDigestLevel {
 		return NewFatalError(fmt.Errorf("digest level %d exceeds max digest level %d", e.level, maxDigestLevel))
@@ -1952,7 +1952,7 @@ func (e *singleElements) Encode(enc *Encoder, inlinedTypeInfo *InlinedExtraData)
 
 	// Encode each element
 	for _, e := range e.elems {
-		err = e.Encode(enc, inlinedTypeInfo)
+		err = e.Encode(enc)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by singleElement.Encode().
 			return err
@@ -2671,8 +2671,7 @@ func DecodeInlinedMapStorable(
 func (m *MapDataSlab) Encode(enc *Encoder) error {
 
 	if m.inlined {
-		return NewEncodingError(
-			fmt.Errorf("failed to encode inlined map data slab as standalone slab"))
+		return m.encodeAsInlined(enc)
 	}
 
 	// Encoding is done in two steps:
@@ -2680,15 +2679,13 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	// 1. Encode map elements using a new buffer while collecting inlined extra data from inlined elements.
 	// 2. Encode slab with deduplicated inlined extra data and copy encoded elements from previous buffer.
 
-	inlinedTypes := newInlinedExtraData()
-
 	// Get a buffer from a pool to encode elements.
 	elementBuf := getBuffer()
 	defer putBuffer(elementBuf)
 
 	elemEnc := NewEncoder(elementBuf, enc.encMode)
 
-	err := m.encodeElements(elemEnc, inlinedTypes)
+	err := m.encodeElements(elemEnc)
 	if err != nil {
 		return err
 	}
@@ -2721,7 +2718,7 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 		h.setRoot()
 	}
 
-	if !inlinedTypes.empty() {
+	if elemEnc.hasInlinedExtraData() {
 		h.setHasInlinedSlabs()
 	}
 
@@ -2741,8 +2738,8 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode inlined types
-	if !inlinedTypes.empty() {
-		err = inlinedTypes.Encode(enc)
+	if elemEnc.hasInlinedExtraData() {
+		err = elemEnc.inlinedExtraData().Encode(enc)
 		if err != nil {
 			return NewEncodingError(err)
 		}
@@ -2777,8 +2774,8 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (m *MapDataSlab) encodeElements(enc *Encoder, inlinedTypes *InlinedExtraData) error {
-	err := m.elements.Encode(enc, inlinedTypes)
+func (m *MapDataSlab) encodeElements(enc *Encoder) error {
+	err := m.elements.Encode(enc)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by elements.Encode().
 		return err
@@ -2792,14 +2789,14 @@ func (m *MapDataSlab) encodeElements(enc *Encoder, inlinedTypes *InlinedExtraDat
 	return nil
 }
 
-// EncodeAsElement encodes inlined map data slab. Encoding is
+// encodeAsInlined encodes inlined map data slab. Encoding is
 // version 1 with CBOR tag having tag number CBORTagInlinedMap,
 // and tag contant as 3-element array:
 //
 //	+------------------+----------------+----------+
 //	| extra data index | value ID index | elements |
 //	+------------------+----------------+----------+
-func (m *MapDataSlab) EncodeAsElement(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
+func (m *MapDataSlab) encodeAsInlined(enc *Encoder) error {
 	if m.extraData == nil {
 		return NewEncodingError(
 			fmt.Errorf("failed to encode non-root map data slab as inlined"))
@@ -2811,15 +2808,15 @@ func (m *MapDataSlab) EncodeAsElement(enc *Encoder, inlinedTypeInfo *InlinedExtr
 	}
 
 	if hkeys, keys, values, ok := m.canBeEncodedAsCompactMap(); ok {
-		return encodeAsInlinedCompactMap(enc, m.header.slabID, m.extraData, hkeys, keys, values, inlinedTypeInfo)
+		return encodeAsInlinedCompactMap(enc, m.header.slabID, m.extraData, hkeys, keys, values)
 	}
 
-	return m.encodeAsInlinedMap(enc, inlinedTypeInfo)
+	return m.encodeAsInlinedMap(enc)
 }
 
-func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder, inlinedTypeInfo *InlinedExtraData) error {
+func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder) error {
 
-	extraDataIndex := inlinedTypeInfo.addMapExtraData(m.extraData)
+	extraDataIndex := enc.inlinedExtraData().addMapExtraData(m.extraData)
 
 	if extraDataIndex > maxInlinedExtraDataIndex {
 		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit %d", extraDataIndex, maxInlinedExtraDataIndex))
@@ -2855,7 +2852,7 @@ func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder, inlinedTypeInfo *InlinedE
 	}
 
 	// element 2: map elements
-	err = m.elements.Encode(enc, inlinedTypeInfo)
+	err = m.elements.Encode(enc)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by elements.Encode().
 		return err
@@ -2877,10 +2874,9 @@ func encodeAsInlinedCompactMap(
 	hkeys []Digest,
 	keys []ComparableStorable,
 	values []Storable,
-	inlinedTypeInfo *InlinedExtraData,
 ) error {
 
-	extraDataIndex, cachedKeys := inlinedTypeInfo.addCompactMapExtraData(extraData, hkeys, keys)
+	extraDataIndex, cachedKeys := enc.inlinedExtraData().addCompactMapExtraData(extraData, hkeys, keys)
 
 	if len(keys) != len(cachedKeys) {
 		return NewEncodingError(fmt.Errorf("number of elements %d is different from number of elements in cached compact map type %d", len(keys), len(cachedKeys)))
@@ -2921,7 +2917,7 @@ func encodeAsInlinedCompactMap(
 	}
 
 	// element 2: compact map values in the order of cachedKeys
-	err = encodeCompactMapValues(enc, cachedKeys, keys, values, inlinedTypeInfo)
+	err = encodeCompactMapValues(enc, cachedKeys, keys, values)
 	if err != nil {
 		// err is already categorized by encodeCompactMapValues().
 		return err
@@ -2941,7 +2937,6 @@ func encodeCompactMapValues(
 	cachedKeys []ComparableStorable,
 	keys []ComparableStorable,
 	values []Storable,
-	inlinedTypeInfo *InlinedExtraData,
 ) error {
 
 	var err error
@@ -2967,10 +2962,10 @@ func encodeCompactMapValues(
 				found = true
 				keyIndexes[i], keyIndexes[j] = keyIndexes[j], keyIndexes[i]
 
-				err = EncodeStorableAsElement(enc, values[index], inlinedTypeInfo)
+				err = values[index].Encode(enc)
 				if err != nil {
-					// Don't need to wrap error as external error because err is already categorized by encodeStorableAsElement().
-					return err
+					// Wrap err as external error (if needed) because err is returned by Storable interface.
+					return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode map value storable")
 				}
 
 				break

@@ -723,17 +723,6 @@ func (v SomeStorable) Encode(enc *Encoder) error {
 	return v.Storable.Encode(enc)
 }
 
-func (v SomeStorable) EncodeAsElement(enc *Encoder, inlinedExtraData *InlinedExtraData) error {
-	err := enc.CBOR.EncodeRawBytes([]byte{
-		// tag number
-		0xd8, cborTagSomeValue,
-	})
-	if err != nil {
-		return err
-	}
-	return EncodeStorableAsElement(enc, v.Storable, inlinedExtraData)
-}
-
 func (v SomeStorable) ChildStorables() []Storable {
 	return []Storable{v.Storable}
 }

@@ -28,9 +28,10 @@ import (
 // Encoder writes atree slabs to io.Writer.
 type Encoder struct {
 	io.Writer
-	CBOR    *cbor.StreamEncoder
-	Scratch [64]byte
-	encMode cbor.EncMode
+	CBOR              *cbor.StreamEncoder
+	Scratch           [64]byte
+	encMode           cbor.EncMode
+	_inlinedExtraData *InlinedExtraData
 }
 
 func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
@@ -42,28 +43,18 @@ func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
 	}
 }
 
-// EncodeStorableAsElement encodes storable as Array or OrderedMap element.
-// Storable is encode as an inlined ArrayDataSlab or MapDataSlab if it is ArrayDataSlab or MapDataSlab.
-func EncodeStorableAsElement(enc *Encoder, storable Storable, inlinedTypeInfo *InlinedExtraData) error {
-
-	switch storable := storable.(type) {
-
-	case ContainerStorable:
-		err := storable.EncodeAsElement(enc, inlinedTypeInfo)
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by ContainerStorable interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode container storable as element")
-		}
-
-	default:
-		err := storable.Encode(enc)
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by Storable interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable as element")
-		}
+func (enc *Encoder) inlinedExtraData() *InlinedExtraData {
+	if enc._inlinedExtraData == nil {
+		enc._inlinedExtraData = newInlinedExtraData()
 	}
+	return enc._inlinedExtraData
+}
 
-	return nil
+func (enc *Encoder) hasInlinedExtraData() bool {
+	if enc._inlinedExtraData == nil {
+		return false
+	}
+	return !enc._inlinedExtraData.empty()
 }
 
 type StorableDecoder func(

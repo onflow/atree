@@ -93,6 +93,10 @@ func (s *StorableSlab) Encode(enc *Encoder) error {
 		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable")
 	}
 
+	if enc.hasInlinedExtraData() {
+		return NewEncodingError(fmt.Errorf("failed to encode storable slab because storable contains inlined array/map"))
+	}
+
 	return nil
 }
 

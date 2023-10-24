@@ -2718,7 +2718,7 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 		h.setRoot()
 	}
 
-	if !elemEnc.inlinedExtraData().empty() {
+	if elemEnc.hasInlinedExtraData() {
 		h.setHasInlinedSlabs()
 	}
 
@@ -2738,7 +2738,7 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode inlined types
-	if !elemEnc.inlinedExtraData().empty() {
+	if elemEnc.hasInlinedExtraData() {
 		err = elemEnc.inlinedExtraData().Encode(enc)
 		if err != nil {
 			return NewEncodingError(err)

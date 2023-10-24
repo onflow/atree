@@ -50,6 +50,13 @@ func (enc *Encoder) inlinedExtraData() *InlinedExtraData {
 	return enc._inlinedExtraData
 }
 
+func (enc *Encoder) hasInlinedExtraData() bool {
+	if enc._inlinedExtraData == nil {
+		return false
+	}
+	return !enc._inlinedExtraData.empty()
+}
+
 type StorableDecoder func(
 	decoder *cbor.StreamDecoder,
 	storableSlabID SlabID,

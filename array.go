@@ -828,7 +828,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 		h.setRoot()
 	}
 
-	if !elementEnc.inlinedExtraData().empty() {
+	if elementEnc.hasInlinedExtraData() {
 		h.setHasInlinedSlabs()
 	}
 
@@ -848,7 +848,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode inlined extra data
-	if !elementEnc.inlinedExtraData().empty() {
+	if elementEnc.hasInlinedExtraData() {
 		err = elementEnc.inlinedExtraData().Encode(enc)
 		if err != nil {
 			// err is already categorized by inlinedExtraData.Encode().

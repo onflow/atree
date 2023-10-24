@@ -28,20 +28,26 @@ import (
 // Encoder writes atree slabs to io.Writer.
 type Encoder struct {
 	io.Writer
-	CBOR             *cbor.StreamEncoder
-	Scratch          [64]byte
-	encMode          cbor.EncMode
-	inlinedExtraData *InlinedExtraData
+	CBOR              *cbor.StreamEncoder
+	Scratch           [64]byte
+	encMode           cbor.EncMode
+	_inlinedExtraData *InlinedExtraData
 }
 
 func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
 	streamEncoder := encMode.NewStreamEncoder(w)
 	return &Encoder{
-		Writer:           w,
-		CBOR:             streamEncoder,
-		encMode:          encMode,
-		inlinedExtraData: newInlinedExtraData(),
+		Writer:  w,
+		CBOR:    streamEncoder,
+		encMode: encMode,
 	}
+}
+
+func (enc *Encoder) inlinedExtraData() *InlinedExtraData {
+	if enc._inlinedExtraData == nil {
+		enc._inlinedExtraData = newInlinedExtraData()
+	}
+	return enc._inlinedExtraData
 }
 
 type StorableDecoder func(

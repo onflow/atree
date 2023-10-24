@@ -2718,7 +2718,7 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 		h.setRoot()
 	}
 
-	if !elemEnc.inlinedExtraData.empty() {
+	if !elemEnc.inlinedExtraData().empty() {
 		h.setHasInlinedSlabs()
 	}
 
@@ -2738,8 +2738,8 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode inlined types
-	if !elemEnc.inlinedExtraData.empty() {
-		err = elemEnc.inlinedExtraData.Encode(enc)
+	if !elemEnc.inlinedExtraData().empty() {
+		err = elemEnc.inlinedExtraData().Encode(enc)
 		if err != nil {
 			return NewEncodingError(err)
 		}
@@ -2816,7 +2816,7 @@ func (m *MapDataSlab) encodeAsInlined(enc *Encoder) error {
 
 func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder) error {
 
-	extraDataIndex := enc.inlinedExtraData.addMapExtraData(m.extraData)
+	extraDataIndex := enc.inlinedExtraData().addMapExtraData(m.extraData)
 
 	if extraDataIndex > maxInlinedExtraDataIndex {
 		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit %d", extraDataIndex, maxInlinedExtraDataIndex))
@@ -2876,7 +2876,7 @@ func encodeAsInlinedCompactMap(
 	values []Storable,
 ) error {
 
-	extraDataIndex, cachedKeys := enc.inlinedExtraData.addCompactMapExtraData(extraData, hkeys, keys)
+	extraDataIndex, cachedKeys := enc.inlinedExtraData().addCompactMapExtraData(extraData, hkeys, keys)
 
 	if len(keys) != len(cachedKeys) {
 		return NewEncodingError(fmt.Errorf("number of elements %d is different from number of elements in cached compact map type %d", len(keys), len(cachedKeys)))

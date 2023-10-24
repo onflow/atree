@@ -716,7 +716,7 @@ func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder) error {
 			fmt.Errorf("failed to encode standalone array data slab as inlined"))
 	}
 
-	extraDataIndex := enc.inlinedExtraData.addArrayExtraData(a.extraData)
+	extraDataIndex := enc.inlinedExtraData().addArrayExtraData(a.extraData)
 
 	if extraDataIndex > maxInlinedExtraDataIndex {
 		return NewEncodingError(
@@ -828,7 +828,7 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 		h.setRoot()
 	}
 
-	if !elementEnc.inlinedExtraData.empty() {
+	if !elementEnc.inlinedExtraData().empty() {
 		h.setHasInlinedSlabs()
 	}
 
@@ -848,8 +848,8 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 	}
 
 	// Encode inlined extra data
-	if !elementEnc.inlinedExtraData.empty() {
-		err = elementEnc.inlinedExtraData.Encode(enc)
+	if !elementEnc.inlinedExtraData().empty() {
+		err = elementEnc.inlinedExtraData().Encode(enc)
 		if err != nil {
 			// err is already categorized by inlinedExtraData.Encode().
 			return err

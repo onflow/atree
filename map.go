@@ -114,6 +114,15 @@ type MapValue Storable
 type element interface {
 	fmt.Stringer
 
+	getElementAndNextKey(
+		storage SlabStorage,
+		digester Digester,
+		level uint,
+		hkey Digest,
+		comparator ValueComparator,
+		key Value,
+	) (MapKey, MapValue, MapKey, error)
+
 	Get(
 		storage SlabStorage,
 		digester Digester,
@@ -634,6 +643,20 @@ func (e *singleElement) Encode(enc *Encoder) error {
 	return nil
 }
 
+func (e *singleElement) getElementAndNextKey(
+	storage SlabStorage,
+	digester Digester,
+	level uint,
+	hkey Digest,
+	comparator ValueComparator,
+	key Value,
+) (MapKey, MapValue, MapKey, error) {
+	k, v, err := e.Get(storage, digester, level, hkey, comparator, key)
+
+	nextKey := MapKey(nil)
+	return k, v, nextKey, err
+}
+
 func (e *singleElement) Get(storage SlabStorage, _ Digester, _ uint, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
 	equal, err := comparator(storage, key, e.key)
 	if err != nil {
@@ -804,6 +827,27 @@ func (e *inlineCollisionGroup) Encode(enc *Encoder) error {
 	}
 
 	return nil
+}
+
+func (e *inlineCollisionGroup) getElementAndNextKey(
+	storage SlabStorage,
+	digester Digester,
+	level uint,
+	_ Digest,
+	comparator ValueComparator,
+	key Value,
+) (MapKey, MapValue, MapKey, error) {
+
+	// Adjust level and hkey for collision group
+	level++
+	if level > digester.Levels() {
+		return nil, nil, nil, NewHashLevelErrorf("inline collision group digest level is %d, want <= %d", level, digester.Levels())
+	}
+	hkey, _ := digester.Digest(level)
+
+	// Search key in collision group with adjusted hkeyPrefix and hkey
+	// Don't need to wrap error as external error because err is already categorized by elements.Get().
+	return e.elements.getElementAndNextKey(storage, digester, level, hkey, comparator, key)
 }
 
 func (e *inlineCollisionGroup) Get(storage SlabStorage, digester Digester, level uint, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
@@ -993,6 +1037,32 @@ func (e *externalCollisionGroup) Encode(enc *Encoder) error {
 	}
 
 	return nil
+}
+
+func (e *externalCollisionGroup) getElementAndNextKey(
+	storage SlabStorage,
+	digester Digester,
+	level uint,
+	_ Digest,
+	comparator ValueComparator,
+	key Value,
+) (MapKey, MapValue, MapKey, error) {
+	slab, err := getMapSlab(storage, e.slabID)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by getMapSlab().
+		return nil, nil, nil, err
+	}
+
+	// Adjust level and hkey for collision group
+	level++
+	if level > digester.Levels() {
+		return nil, nil, nil, NewHashLevelErrorf("external collision group digest level is %d, want <= %d", level, digester.Levels())
+	}
+	hkey, _ := digester.Digest(level)
+
+	// Search key in collision group with adjusted hkeyPrefix and hkey
+	// Don't need to wrap error as external error because err is already categorized by MapSlab.getElementAndNextKey().
+	return slab.getElementAndNextKey(storage, digester, level, hkey, comparator, key)
 }
 
 func (e *externalCollisionGroup) Get(storage SlabStorage, digester Digester, level uint, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
@@ -1347,10 +1417,15 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 	return nil
 }
 
-func (e *hkeyElements) get(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, int, error) {
+func (e *hkeyElements) getElement(
+	digester Digester,
+	level uint,
+	hkey Digest,
+	key Value,
+) (element, int, error) {
 
 	if level >= digester.Levels() {
-		return nil, nil, 0, NewHashLevelErrorf("hkey elements digest level is %d, want < %d", level, digester.Levels())
+		return nil, 0, NewHashLevelErrorf("hkey elements digest level is %d, want < %d", level, digester.Levels())
 	}
 
 	// binary search by hkey
@@ -1372,23 +1447,21 @@ func (e *hkeyElements) get(storage SlabStorage, digester Digester, level uint, h
 
 	// No matching hkey
 	if equalIndex == -1 {
-		return nil, nil, 0, NewKeyNotFoundError(key)
+		return nil, 0, NewKeyNotFoundError(key)
 	}
 
-	elem := e.elems[equalIndex]
-
-	k, v, err := elem.Get(storage, digester, level, hkey, comparator, key)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by element.Get().
-		return nil, nil, 0, err
-	}
-
-	return k, v, equalIndex, nil
+	return e.elems[equalIndex], equalIndex, nil
 }
 
 func (e *hkeyElements) Get(storage SlabStorage, digester Digester, level uint, hkey Digest, comparator ValueComparator, key Value) (MapKey, MapValue, error) {
-	k, v, _, err := e.get(storage, digester, level, hkey, comparator, key)
-	return k, v, err
+	elem, _, err := e.getElement(digester, level, hkey, key)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by hkeyElements.getElement().
+		return nil, nil, err
+	}
+
+	// Don't need to wrap error as external error because err is already categorized by element.Get().
+	return elem.Get(storage, digester, level, hkey, comparator, key)
 }
 
 func (e *hkeyElements) getElementAndNextKey(
@@ -1399,10 +1472,21 @@ func (e *hkeyElements) getElementAndNextKey(
 	comparator ValueComparator,
 	key Value,
 ) (MapKey, MapValue, MapKey, error) {
-	k, v, index, err := e.get(storage, digester, level, hkey, comparator, key)
+	elem, index, err := e.getElement(digester, level, hkey, key)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by hkeyElements.getElement().
+		return nil, nil, nil, err
+	}
+
+	k, v, nk, err := elem.getElementAndNextKey(storage, digester, level, hkey, comparator, key)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by hkeyElements.get().
 		return nil, nil, nil, err
+	}
+
+	if nk != nil {
+		// Found next key in element group
+		return k, v, nk, nil
 	}
 
 	nextIndex := index + 1

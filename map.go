@@ -5940,14 +5940,8 @@ func (m *OrderedMap) IterateReadOnly(fn MapEntryIterationFunc) error {
 	return iterateMap(iterator, fn)
 }
 
-func (m *OrderedMap) IterateReadOnlyKeys(fn MapElementIterationFunc) error {
-
-	iterator, err := m.ReadOnlyIterator()
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by OrderedMap.Iterator().
-		return err
-	}
-
+func iterateMapKeys(iterator MapIterator, fn MapElementIterationFunc) error {
+	var err error
 	var key Value
 	for {
 		key, err = iterator.NextKey()
@@ -5967,6 +5961,24 @@ func (m *OrderedMap) IterateReadOnlyKeys(fn MapElementIterationFunc) error {
 			return nil
 		}
 	}
+}
+
+func (m *OrderedMap) IterateKeys(comparator ValueComparator, hip HashInputProvider, fn MapElementIterationFunc) error {
+	iterator, err := m.Iterator(comparator, hip)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by OrderedMap.Iterator().
+		return err
+	}
+	return iterateMapKeys(iterator, fn)
+}
+
+func (m *OrderedMap) IterateReadOnlyKeys(fn MapElementIterationFunc) error {
+	iterator, err := m.ReadOnlyIterator()
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by OrderedMap.ReadOnlyIterator().
+		return err
+	}
+	return iterateMapKeys(iterator, fn)
 }
 
 func iterateMapValues(iterator MapIterator, fn MapElementIterationFunc) error {

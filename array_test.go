@@ -692,7 +692,7 @@ func TestArrayRemove(t *testing.T) {
 	})
 }
 
-func TestArrayIterateReadOnly(t *testing.T) {
+func TestReadOnlyArrayIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		typeInfo := testTypeInfo{42}

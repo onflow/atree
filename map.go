@@ -838,14 +838,14 @@ func (e *inlineCollisionGroup) getElementAndNextKey(
 	key Value,
 ) (MapKey, MapValue, MapKey, error) {
 
-	// Adjust level and hkey for collision group
+	// Adjust level and hkey for collision group.
 	level++
 	if level > digester.Levels() {
 		return nil, nil, nil, NewHashLevelErrorf("inline collision group digest level is %d, want <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
-	// Search key in collision group with adjusted hkeyPrefix and hkey
+	// Search key in collision group with adjusted hkeyPrefix and hkey.
 	// Don't need to wrap error as external error because err is already categorized by elements.Get().
 	return e.elements.getElementAndNextKey(storage, digester, level, hkey, comparator, key)
 }
@@ -1053,14 +1053,14 @@ func (e *externalCollisionGroup) getElementAndNextKey(
 		return nil, nil, nil, err
 	}
 
-	// Adjust level and hkey for collision group
+	// Adjust level and hkey for collision group.
 	level++
 	if level > digester.Levels() {
 		return nil, nil, nil, NewHashLevelErrorf("external collision group digest level is %d, want <= %d", level, digester.Levels())
 	}
 	hkey, _ := digester.Digest(level)
 
-	// Search key in collision group with adjusted hkeyPrefix and hkey
+	// Search key in collision group with adjusted hkeyPrefix and hkey.
 	// Don't need to wrap error as external error because err is already categorized by MapSlab.getElementAndNextKey().
 	return slab.getElementAndNextKey(storage, digester, level, hkey, comparator, key)
 }
@@ -1485,7 +1485,7 @@ func (e *hkeyElements) getElementAndNextKey(
 	}
 
 	if nk != nil {
-		// Found next key in element group
+		// Found next key in element group.
 		return k, v, nk, nil
 	}
 
@@ -2171,7 +2171,7 @@ func (e *singleElements) getElementAndNextKey(
 		return k, v, nil, nil
 
 	default: // nextIndex > len(e.elems)
-		// This should never happen
+		// This should never happen.
 		return nil, nil, nil, NewUnreachableError()
 	}
 }
@@ -4094,7 +4094,7 @@ func (m *MapMetaDataSlab) getElementAndNextKey(
 		return k, v, nil, nil
 
 	default: // nextIndex > len(m.childrenHeaders)
-		// This should never happen
+		// This should never happen.
 		return nil, nil, nil, NewUnreachableError()
 	}
 }
@@ -5722,7 +5722,7 @@ func (i *mutableMapIterator) CanMutate() bool {
 
 func (i *mutableMapIterator) Next() (Value, Value, error) {
 	if i.nextKey == nil {
-		// No more elements
+		// No more elements.
 		return nil, nil, nil
 	}
 
@@ -5740,7 +5740,7 @@ func (i *mutableMapIterator) Next() (Value, Value, error) {
 
 func (i *mutableMapIterator) NextKey() (Value, error) {
 	if i.nextKey == nil {
-		// No more elements
+		// No more elements.
 		return nil, nil
 	}
 

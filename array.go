@@ -3346,103 +3346,184 @@ func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storab
 	}
 }
 
-var emptyArrayIterator = &ArrayIterator{}
-
-type ArrayIterator struct {
-	array           *Array
-	id              SlabID
-	dataSlab        *ArrayDataSlab
-	indexInArray    int
-	indexInDataSlab int
-	remainingCount  int
-	readOnly        bool
+type ArrayIterator interface {
+	CanMutate() bool
+	Next() (Value, error)
 }
 
-func (i *ArrayIterator) CanMutate() bool {
+type emptyArrayIterator struct {
+	readOnly bool
+}
+
+var _ ArrayIterator = &emptyArrayIterator{}
+
+var emptyMutableArrayIterator = &emptyArrayIterator{readOnly: false}
+var emptyReadOnlyArrayIterator = &emptyArrayIterator{readOnly: true}
+
+func (i *emptyArrayIterator) CanMutate() bool {
 	return !i.readOnly
 }
 
-func (i *ArrayIterator) Next() (Value, error) {
+func (*emptyArrayIterator) Next() (Value, error) {
+	return nil, nil
+}
+
+type mutableArrayIterator struct {
+	array     *Array
+	nextIndex uint64
+	lastIndex uint64 // noninclusive index
+}
+
+var _ ArrayIterator = &mutableArrayIterator{}
+
+func (i *mutableArrayIterator) CanMutate() bool {
+	return true
+}
+
+func (i *mutableArrayIterator) Next() (Value, error) {
+	if i.nextIndex == i.lastIndex {
+		// No more elements.
+		return nil, nil
+	}
+
+	// Don't need to set up notification callback for v because
+	// Get() returns value with notification already.
+	v, err := i.array.Get(i.nextIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	i.nextIndex++
+
+	return v, nil
+}
+
+type readOnlyArrayIterator struct {
+	array           *Array
+	dataSlab        *ArrayDataSlab
+	indexInDataSlab uint64
+	remainingCount  uint64 // needed for range iteration
+}
+
+var _ ArrayIterator = &readOnlyArrayIterator{}
+
+func (i *readOnlyArrayIterator) CanMutate() bool {
+	return false
+}
+
+func (i *readOnlyArrayIterator) Next() (Value, error) {
 	if i.remainingCount == 0 {
 		return nil, nil
 	}
 
-	if i.dataSlab == nil {
-		if i.id == SlabIDUndefined {
+	if i.indexInDataSlab >= uint64(len(i.dataSlab.elements)) {
+		// No more elements in current data slab.
+
+		nextDataSlabID := i.dataSlab.next
+
+		if nextDataSlabID == SlabIDUndefined {
+			// No more elements in array.
 			return nil, nil
 		}
 
-		slab, found, err := i.array.Storage.Retrieve(i.id)
+		// Load next data slab.
+		slab, found, err := i.array.Storage.Retrieve(nextDataSlabID)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", i.id))
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", nextDataSlabID))
 		}
 		if !found {
-			return nil, NewSlabNotFoundErrorf(i.id, "slab not found during array iteration")
+			return nil, NewSlabNotFoundErrorf(nextDataSlabID, "slab not found during array iteration")
 		}
 
 		i.dataSlab = slab.(*ArrayDataSlab)
 		i.indexInDataSlab = 0
-	}
 
-	var element Value
-	var err error
-	if i.indexInDataSlab < len(i.dataSlab.elements) {
-		element, err = i.dataSlab.elements[i.indexInDataSlab].StoredValue(i.array.Storage)
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by Storable interface.
-			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
+		// Check current data slab isn't empty because i.remainingCount > 0.
+		if len(i.dataSlab.elements) == 0 {
+			return nil, NewSlabDataErrorf("data slab contains 0 elements, expect more")
 		}
-
-		if i.CanMutate() {
-			// Set up notification callback in child value so
-			// when child value is modified parent a is notified.
-			i.array.setCallbackWithChild(uint64(i.indexInArray), element, maxInlineArrayElementSize)
-		}
-
-		i.indexInDataSlab++
-		i.indexInArray++
 	}
 
-	if i.indexInDataSlab >= len(i.dataSlab.elements) {
-		i.id = i.dataSlab.next
-		i.dataSlab = nil
+	// At this point:
+	// - There are elements to iterate in array (i.remainingCount > 0), and
+	// - There are elements to iterate in i.dataSlab (i.indexInDataSlab < len(i.dataSlab.elements))
+
+	element, err := i.dataSlab.elements[i.indexInDataSlab].StoredValue(i.array.Storage)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
 	}
 
+	i.indexInDataSlab++
 	i.remainingCount--
 
 	return element, nil
 }
 
-func (a *Array) Iterator() (*ArrayIterator, error) {
+// Iterator returns mutable iterator for array elements.
+// Mutable iterator handles:
+// - indirect element mutation, such as modifying nested container
+// - direct element mutation, such as overwriting existing element with new element
+// Mutable iterator doesn't handle:
+// - inserting new elements into the array
+// - removing existing elements from the array
+// NOTE: Use readonly iterator if mutation is not needed for better performance.
+func (a *Array) Iterator() (ArrayIterator, error) {
+	if a.Count() == 0 {
+		return emptyMutableArrayIterator, nil
+	}
+
+	return &mutableArrayIterator{
+		array:     a,
+		lastIndex: a.Count(),
+	}, nil
+}
+
+// ReadOnlyIterator returns readonly iterator for array elements.
+// If elements are mutated, those changes are not guaranteed to persist.
+// NOTE: Use readonly iterator if mutation is not needed for better performance.
+func (a *Array) ReadOnlyIterator() (ArrayIterator, error) {
+	if a.Count() == 0 {
+		return emptyReadOnlyArrayIterator, nil
+	}
+
 	slab, err := firstArrayDataSlab(a.Storage, a.root)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by firstArrayDataSlab().
 		return nil, err
 	}
 
-	return &ArrayIterator{
+	return &readOnlyArrayIterator{
 		array:          a,
-		id:             slab.SlabID(),
 		dataSlab:       slab,
-		remainingCount: int(a.Count()),
+		remainingCount: a.Count(),
 	}, nil
 }
 
-// ReadOnlyIterator returns readonly iterator for array elements.
-// If elements of child containers are mutated, those changes
-// are not guaranteed to persist.
-func (a *Array) ReadOnlyIterator() (*ArrayIterator, error) {
-	iterator, err := a.Iterator()
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by Iterator().
-		return nil, err
+func (a *Array) RangeIterator(startIndex uint64, endIndex uint64) (ArrayIterator, error) {
+	count := a.Count()
+
+	if startIndex > count || endIndex > count {
+		return nil, NewSliceOutOfBoundsError(startIndex, endIndex, 0, count)
 	}
-	iterator.readOnly = true
-	return iterator, nil
+
+	if startIndex > endIndex {
+		return nil, NewInvalidSliceIndexError(startIndex, endIndex)
+	}
+
+	if endIndex == startIndex {
+		return emptyMutableArrayIterator, nil
+	}
+
+	return &mutableArrayIterator{
+		array:     a,
+		nextIndex: startIndex,
+		lastIndex: endIndex,
+	}, nil
 }
 
-func (a *Array) RangeIterator(startIndex uint64, endIndex uint64) (*ArrayIterator, error) {
+func (a *Array) ReadOnlyRangeIterator(startIndex uint64, endIndex uint64) (ArrayIterator, error) {
 	count := a.Count()
 
 	if startIndex > count || endIndex > count {
@@ -3456,7 +3537,7 @@ func (a *Array) RangeIterator(startIndex uint64, endIndex uint64) (*ArrayIterato
 	numberOfElements := endIndex - startIndex
 
 	if numberOfElements == 0 {
-		return emptyArrayIterator, nil
+		return emptyReadOnlyArrayIterator, nil
 	}
 
 	var dataSlab *ArrayDataSlab
@@ -3483,28 +3564,17 @@ func (a *Array) RangeIterator(startIndex uint64, endIndex uint64) (*ArrayIterato
 		}
 	}
 
-	return &ArrayIterator{
+	return &readOnlyArrayIterator{
 		array:           a,
-		id:              dataSlab.SlabID(),
 		dataSlab:        dataSlab,
-		indexInArray:    int(startIndex),
-		indexInDataSlab: int(index),
-		remainingCount:  int(numberOfElements),
+		indexInDataSlab: index,
+		remainingCount:  numberOfElements,
 	}, nil
-}
-
-func (a *Array) ReadOnlyRangeIterator(startIndex uint64, endIndex uint64) (*ArrayIterator, error) {
-	iterator, err := a.RangeIterator(startIndex, endIndex)
-	if err != nil {
-		return nil, err
-	}
-	iterator.readOnly = true
-	return iterator, nil
 }
 
 type ArrayIterationFunc func(element Value) (resume bool, err error)
 
-func iterateArray(iterator *ArrayIterator, fn ArrayIterationFunc) error {
+func iterateArray(iterator ArrayIterator, fn ArrayIterationFunc) error {
 	for {
 		value, err := iterator.Next()
 		if err != nil {
@@ -3621,18 +3691,23 @@ func getArraySlab(storage SlabStorage, id SlabID) (ArraySlab, error) {
 }
 
 func firstArrayDataSlab(storage SlabStorage, slab ArraySlab) (*ArrayDataSlab, error) {
-	if slab.IsData() {
-		return slab.(*ArrayDataSlab), nil
+	switch slab := slab.(type) {
+	case *ArrayDataSlab:
+		return slab, nil
+
+	case *ArrayMetaDataSlab:
+		firstChildID := slab.childrenHeaders[0].slabID
+		firstChild, err := getArraySlab(storage, firstChildID)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by getArraySlab().
+			return nil, err
+		}
+		// Don't need to wrap error as external error because err is already categorized by firstArrayDataSlab().
+		return firstArrayDataSlab(storage, firstChild)
+
+	default:
+		return nil, NewUnreachableError()
 	}
-	meta := slab.(*ArrayMetaDataSlab)
-	firstChildID := meta.childrenHeaders[0].slabID
-	firstChild, err := getArraySlab(storage, firstChildID)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getArraySlab().
-		return nil, err
-	}
-	// Don't need to wrap error as external error because err is already categorized by firstArrayDataSlab().
-	return firstArrayDataSlab(storage, firstChild)
 }
 
 // getArrayDataSlabWithIndex returns data slab containing element at specified index

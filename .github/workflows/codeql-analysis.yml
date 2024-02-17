@@ -34,30 +34,17 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-      
-    - name: Set up Go 1.20
-      uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
-      with:
-        go-version: '1.20'
-        check-latest: true
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@7e187e1c529d80bac7b87a16e7a792427f65cf02 # v2.15.5
+      uses: github/codeql-action/init@e8893c57a1f3a2b659b6b55564fdfdbbd2982911 # v3.24.0
       with:
         languages: ${{ matrix.language }}
 
+    # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
     # If this step fails, then you should remove it and run the build manually (see below)
     - name: Autobuild
-      uses: github/codeql-action/autobuild@7e187e1c529d80bac7b87a16e7a792427f65cf02 # v2.15.5
-
-    # ✏️ If the Autobuild fails above, remove it and uncomment the following three lines
-    #    and modify them (or add more) to build your code if your project
-    #    uses a compiled language
-
-    #- run: |
-    #   make bootstrap
-    #   make release
+      uses: github/codeql-action/autobuild@e8893c57a1f3a2b659b6b55564fdfdbbd2982911 # v3.24.0
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@7e187e1c529d80bac7b87a16e7a792427f65cf02 # v2.15.5
+      uses: github/codeql-action/analyze@e8893c57a1f3a2b659b6b55564fdfdbbd2982911 # v3.24.0

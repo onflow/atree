@@ -861,12 +861,27 @@ func hasInlinedComposite(data []byte) (bool, error) {
 
 	// Parse inlined extra data to find compact map extra data.
 	dec := cbor.NewStreamDecoder(bytes.NewBuffer(data))
+
 	count, err := dec.DecodeArrayHead()
 	if err != nil {
 		return false, NewDecodingError(err)
 	}
+	if count != inlinedExtraDataArrayCount {
+		return false, NewDecodingError(fmt.Errorf("failed to decode inlined extra data, expect %d elements, got %d elements", inlinedExtraDataArrayCount, count))
+	}
 
-	for i := uint64(0); i < count; i++ {
+	// Skip element 0 (inlined type info)
+	err = dec.Skip()
+	if err != nil {
+		return false, NewDecodingError(err)
+	}
+
+	// Decoding element 1 (inlined extra data)
+	extraDataCount, err := dec.DecodeArrayHead()
+	if err != nil {
+		return false, NewDecodingError(err)
+	}
+	for i := uint64(0); i < extraDataCount; i++ {
 		tagNum, err := dec.DecodeTagNumber()
 		if err != nil {
 			return false, NewDecodingError(err)

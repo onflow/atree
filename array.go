@@ -301,13 +301,13 @@ func (a *ArrayExtraData) isExtraData() bool {
 // Encode encodes extra data as CBOR array:
 //
 //	[type info]
-func (a *ArrayExtraData) Encode(enc *Encoder) error {
+func (a *ArrayExtraData) Encode(enc *Encoder, encodeTypeInfo encodeTypeInfo) error {
 	err := enc.CBOR.EncodeArrayHead(arrayExtraDataLength)
 	if err != nil {
 		return NewEncodingError(err)
 	}
 
-	err = a.TypeInfo.Encode(enc.CBOR)
+	err = encodeTypeInfo(enc, a.TypeInfo)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by TypeInfo interface.
 		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode type info")
@@ -840,7 +840,8 @@ func (a *ArrayDataSlab) Encode(enc *Encoder) error {
 
 	// Encode extra data
 	if a.extraData != nil {
-		err = a.extraData.Encode(enc)
+		// Use defaultEncodeTypeInfo to encode root level TypeInfo as is.
+		err = a.extraData.Encode(enc, defaultEncodeTypeInfo)
 		if err != nil {
 			// err is already categorized by ArrayExtraData.Encode().
 			return err
@@ -1738,7 +1739,8 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 
 	// Encode extra data if present
 	if a.extraData != nil {
-		err = a.extraData.Encode(enc)
+		// Use defaultEncodeTypeInfo to encode root level TypeInfo as is.
+		err = a.extraData.Encode(enc, defaultEncodeTypeInfo)
 		if err != nil {
 			// Don't need to wrap because err is already categorized by ArrayExtraData.Encode().
 			return err

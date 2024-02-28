@@ -41,9 +41,19 @@ type TypeInfoDecoder func(
 	error,
 )
 
+// encodeTypeInfo encodes TypeInfo either:
+// - as is (for TypeInfo in root slab extra data section), or
+// - as index of inlined TypeInfos (for TypeInfo in inlined slab extra data section)
+type encodeTypeInfo func(*Encoder, TypeInfo) error
+
+// defaultEncodeTypeInfo encodes TypeInfo as is.
+func defaultEncodeTypeInfo(enc *Encoder, typeInfo TypeInfo) error {
+	return typeInfo.Encode(enc.CBOR)
+}
+
 type ExtraData interface {
 	isExtraData() bool
-	Encode(enc *Encoder) error
+	Encode(enc *Encoder, encodeTypeInfo encodeTypeInfo) error
 }
 
 // compactMapExtraData is used for inlining compact values.
@@ -64,14 +74,14 @@ func (c *compactMapExtraData) isExtraData() bool {
 	return true
 }
 
-func (c *compactMapExtraData) Encode(enc *Encoder) error {
+func (c *compactMapExtraData) Encode(enc *Encoder, encodeTypeInfo encodeTypeInfo) error {
 	err := enc.CBOR.EncodeArrayHead(compactMapExtraDataLength)
 	if err != nil {
 		return NewEncodingError(err)
 	}
 
 	// element 0: map extra data
-	err = c.mapExtraData.Encode(enc)
+	err = c.mapExtraData.Encode(enc, encodeTypeInfo)
 	if err != nil {
 		return err
 	}
@@ -200,27 +210,64 @@ type compactMapTypeInfo struct {
 	keys  []ComparableStorable
 }
 
+type extraDataInfo struct {
+	data          ExtraData
+	typeInfoIndex int
+}
+
 type InlinedExtraData struct {
-	extraData       []ExtraData
-	compactMapTypes map[string]compactMapTypeInfo
-	arrayTypes      map[string]int
+	extraData         []extraDataInfo               // Used to encode deduplicated ExtraData in order
+	typeInfo          []TypeInfo                    // Used to encode deduplicated TypeInfo in order
+	compactMapTypeSet map[string]compactMapTypeInfo // Used to deduplicate compactMapExtraData by TypeInfo.Identifier() + sorted field names
+	arrayExtraDataSet map[string]int                // Used to deduplicate arrayExtraData by TypeInfo.Identifier()
+	typeInfoSet       map[string]int                // Used to deduplicate TypeInfo by TypeInfo.Identifier()
 }
 
 func newInlinedExtraData() *InlinedExtraData {
+	// Maps used for deduplication are initialized lazily.
 	return &InlinedExtraData{}
 }
 
-// Encode encodes inlined extra data as CBOR array.
+const inlinedExtraDataArrayCount = 2
+
+// Encode encodes inlined extra data as 2-element array:
+//
+//	+-----------------------+------------------------+
+//	| [+ inlined type info] | [+ inlined extra data] |
+//	+-----------------------+------------------------+
 func (ied *InlinedExtraData) Encode(enc *Encoder) error {
-	err := enc.CBOR.EncodeArrayHead(uint64(len(ied.extraData)))
+	var err error
+
+	err = enc.CBOR.EncodeArrayHead(inlinedExtraDataArrayCount)
 	if err != nil {
 		return NewEncodingError(err)
 	}
 
-	var tagNum uint64
+	// element 0: deduplicated array of type info
+	err = enc.CBOR.EncodeArrayHead(uint64(len(ied.typeInfo)))
+	if err != nil {
+		return NewEncodingError(err)
+	}
 
+	// Encode inlined type info
+	for _, typeInfo := range ied.typeInfo {
+		err = typeInfo.Encode(enc.CBOR)
+		if err != nil {
+			return NewEncodingError(err)
+		}
+	}
+
+	// element 1: deduplicated array of extra data
+	err = enc.CBOR.EncodeArrayHead(uint64(len(ied.extraData)))
+	if err != nil {
+		return NewEncodingError(err)
+	}
+
+	// Encode inlined extra data
 	for _, extraData := range ied.extraData {
-		switch extraData.(type) {
+		var tagNum uint64
+
+		switch extraData.data.(type) {
 		case *ArrayExtraData:
 			tagNum = CBORTagInlinedArrayExtraData
 
@@ -239,7 +286,25 @@ func (ied *InlinedExtraData) Encode(enc *Encoder) error {
 			return NewEncodingError(err)
 		}
 
-		err = extraData.Encode(enc)
+		err = extraData.data.Encode(enc, func(enc *Encoder, typeInfo TypeInfo) error {
+			id := typeInfo.Identifier()
+			index, exist := ied.typeInfoSet[id]
+			if !exist {
+				return NewEncodingError(fmt.Errorf("failed to encode type info ref %s (%T)", id, typeInfo))
+			}
+
+			err := enc.CBOR.EncodeTagHead(CBORTagTypeInfoRef)
+			if err != nil {
+				return NewEncodingError(err)
+			}
+
+			err = enc.CBOR.EncodeUint64(uint64(index))
+			if err != nil {
+				return NewEncodingError(err)
+			}
+
+			return nil
+		})
 		if err != nil {
 			return err
 		}
@@ -267,12 +332,60 @@ func newInlinedExtraDataFromData(
 		return nil, nil, NewDecodingError(err)
 	}
 
-	if count == 0 {
+	if count != inlinedExtraDataArrayCount {
+		return nil, nil, NewDecodingError(fmt.Errorf("failed to decode inlined extra data: expect %d elements, got %d elements", inlinedExtraDataArrayCount, count))
+	}
+
+	// element 0: array of deduplicated type info
+	typeInfoCount, err := dec.DecodeArrayHead()
+	if err != nil {
+		return nil, nil, NewDecodingError(err)
+	}
+
+	if typeInfoCount == 0 {
+		return nil, nil, NewDecodingError(fmt.Errorf("failed to decode inlined extra data: expect at least one inlined type info"))
+	}
+
+	inlinedTypeInfo := make([]TypeInfo, typeInfoCount)
+	for i := uint64(0); i < typeInfoCount; i++ {
+		inlinedTypeInfo[i], err = decodeTypeInfo(dec)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	typeInfoRefDecoder := func(decoder *cbor.StreamDecoder) (TypeInfo, error) {
+		tagNum, err := decoder.DecodeTagNumber()
+		if err != nil {
+			return nil, err
+		}
+		if tagNum != CBORTagTypeInfoRef {
+			return nil, NewDecodingError(fmt.Errorf("failed to decode type info ref: expect tag number %d, got %d", CBORTagTypeInfoRef, tagNum))
+		}
+
+		index, err := decoder.DecodeUint64()
+		if err != nil {
+			return nil, NewDecodingError(err)
+		}
+		if index >= uint64(len(inlinedTypeInfo)) {
+			return nil, NewDecodingError(fmt.Errorf("failed to decode type info ref: expect index < %d, got %d", len(inlinedTypeInfo), index))
+		}
+
+		return inlinedTypeInfo[int(index)], nil
+	}
+
+	// element 1: array of deduplicated extra data info
+	extraDataCount, err := dec.DecodeArrayHead()
+	if err != nil {
+		return nil, nil, NewDecodingError(err)
+	}
+
+	if extraDataCount == 0 {
 		return nil, nil, NewDecodingError(fmt.Errorf("failed to decode inlined extra data: expect at least one inlined extra data"))
 	}
 
-	inlinedExtraData := make([]ExtraData, count)
-	for i := uint64(0); i < count; i++ {
+	inlinedExtraData := make([]ExtraData, extraDataCount)
+	for i := uint64(0); i < extraDataCount; i++ {
 		tagNum, err := dec.DecodeTagNumber()
 		if err != nil {
 			return nil, nil, NewDecodingError(err)
@@ -280,19 +393,19 @@ func newInlinedExtraDataFromData(
 
 		switch tagNum {
 		case CBORTagInlinedArrayExtraData:
-			inlinedExtraData[i], err = newArrayExtraData(dec, decodeTypeInfo)
+			inlinedExtraData[i], err = newArrayExtraData(dec, typeInfoRefDecoder)
 			if err != nil {
 				return nil, nil, err
 			}
 
 		case CBORTagInlinedMapExtraData:
-			inlinedExtraData[i], err = newMapExtraData(dec, decodeTypeInfo)
+			inlinedExtraData[i], err = newMapExtraData(dec, typeInfoRefDecoder)
 			if err != nil {
 				return nil, nil, err
 			}
 
 		case CBORTagInlinedCompactMapExtraData:
-			inlinedExtraData[i], err = newCompactMapExtraData(dec, decodeTypeInfo, decodeStorable)
+			inlinedExtraData[i], err = newCompactMapExtraData(dec, typeInfoRefDecoder, decodeStorable)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -305,31 +418,55 @@ func newInlinedExtraDataFromData(
 	return inlinedExtraData, data[dec.NumBytesDecoded():], nil
 }
 
-// addArrayExtraData returns index of deduplicated array extra data.
-// Array extra data is deduplicated by array type info ID because array
-// extra data only contains type info.
-func (ied *InlinedExtraData) addArrayExtraData(data *ArrayExtraData) int {
-	if ied.arrayTypes == nil {
-		ied.arrayTypes = make(map[string]int)
+// addTypeInfo returns index of deduplicated type info.
+func (ied *InlinedExtraData) addTypeInfo(typeInfo TypeInfo) int {
+	if ied.typeInfoSet == nil {
+		ied.typeInfoSet = make(map[string]int)
 	}
 
-	id := data.TypeInfo.Identifier()
-	index, exist := ied.arrayTypes[id]
+	id := typeInfo.Identifier()
+	index, exist := ied.typeInfoSet[id]
 	if exist {
 		return index
 	}
 
+	index = len(ied.typeInfo)
+	ied.typeInfo = append(ied.typeInfo, typeInfo)
+	ied.typeInfoSet[id] = index
+
+	return index
+}
+
+// addArrayExtraData returns index of deduplicated array extra data.
+// Array extra data is deduplicated by array type info ID because array
+// extra data only contains type info.
+func (ied *InlinedExtraData) addArrayExtraData(data *ArrayExtraData) int {
+	if ied.arrayExtraDataSet == nil {
+		ied.arrayExtraDataSet = make(map[string]int)
+	}
+
+	id := data.TypeInfo.Identifier()
+	index, exist := ied.arrayExtraDataSet[id]
+	if exist {
+		return index
+	}
+
+	typeInfoIndex := ied.addTypeInfo(data.TypeInfo)
+
 	index = len(ied.extraData)
-	ied.extraData = append(ied.extraData, data)
-	ied.arrayTypes[id] = index
+	ied.extraData = append(ied.extraData, extraDataInfo{data, typeInfoIndex})
+	ied.arrayExtraDataSet[id] = index
+
 	return index
 }
 
 // addMapExtraData returns index of map extra data.
 // Map extra data is not deduplicated because it also contains count and seed.
 func (ied *InlinedExtraData) addMapExtraData(data *MapExtraData) int {
+	typeInfoIndex := ied.addTypeInfo(data.TypeInfo)
+
 	index := len(ied.extraData)
-	ied.extraData = append(ied.extraData, data)
+	ied.extraData = append(ied.extraData, extraDataInfo{data, typeInfoIndex})
 	return index
 }
 
@@ -341,12 +478,12 @@ func (ied *InlinedExtraData) addCompactMapExtraData(
 	keys []ComparableStorable,
 ) (int, []ComparableStorable) {
 
-	if ied.compactMapTypes == nil {
-		ied.compactMapTypes = make(map[string]compactMapTypeInfo)
+	if ied.compactMapTypeSet == nil {
+		ied.compactMapTypeSet = make(map[string]compactMapTypeInfo)
 	}
 
 	id := makeCompactMapTypeID(data.TypeInfo, keys)
-	info, exist := ied.compactMapTypes[id]
+	info, exist := ied.compactMapTypeSet[id]
 	if exist {
 		return info.index, info.keys
 	}
@@ -357,10 +494,12 @@ func (ied *InlinedExtraData) addCompactMapExtraData(
 		keys:         keys,
 	}
 
-	index := len(ied.extraData)
-	ied.extraData = append(ied.extraData, compactMapData)
+	typeInfoIndex := ied.addTypeInfo(data.TypeInfo)
 
-	ied.compactMapTypes[id] = compactMapTypeInfo{
+	index := len(ied.extraData)
+	ied.extraData = append(ied.extraData, extraDataInfo{compactMapData, typeInfoIndex})
+
+	ied.compactMapTypeSet[id] = compactMapTypeInfo{
 		keys:  keys,
 		index: index,
 	}

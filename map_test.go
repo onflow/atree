@@ -24,6 +24,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -18336,4 +18337,299 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 		// No-op on parent
 		valueEqual(t, expectedKeyValues, parentMap)
 	})
+}
+
+func TestMapSetType(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	newTypeInfo := testTypeInfo{43}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	t.Run("empty", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+		require.True(t, m.root.IsData())
+
+		seed := m.root.ExtraData().Seed
+
+		err = m.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), m.Count())
+		require.Equal(t, newTypeInfo, m.Type())
+		require.Equal(t, seed, m.root.ExtraData().Seed)
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingMapSetType(t, m.SlabID(), storage.baseStorage, newTypeInfo, m.Count(), seed)
+	})
+
+	t.Run("data slab root", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		mapSize := 10
+		for i := 0; i < mapSize; i++ {
+			v := Uint64Value(i)
+			existingStorable, err := m.Set(compare, hashInputProvider, v, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+		require.True(t, m.root.IsData())
+
+		seed := m.root.ExtraData().Seed
+
+		err = m.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, newTypeInfo, m.Type())
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, seed, m.root.ExtraData().Seed)
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingMapSetType(t, m.SlabID(), storage.baseStorage, newTypeInfo, m.Count(), seed)
+	})
+
+	t.Run("metadata slab root", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		mapSize := 10_000
+		for i := 0; i < mapSize; i++ {
+			v := Uint64Value(i)
+			existingStorable, err := m.Set(compare, hashInputProvider, v, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+		require.False(t, m.root.IsData())
+
+		seed := m.root.ExtraData().Seed
+
+		err = m.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, newTypeInfo, m.Type())
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, seed, m.root.ExtraData().Seed)
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingMapSetType(t, m.SlabID(), storage.baseStorage, newTypeInfo, m.Count(), seed)
+	})
+
+	t.Run("inlined in parent container root data slab", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		childMapSeed := childMap.root.ExtraData().Seed
+
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(0), childMap)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+
+		require.Equal(t, uint64(1), parentMap.Count())
+		require.Equal(t, typeInfo, parentMap.Type())
+		require.True(t, parentMap.root.IsData())
+		require.False(t, parentMap.Inlined())
+
+		require.Equal(t, uint64(0), childMap.Count())
+		require.Equal(t, typeInfo, childMap.Type())
+		require.True(t, childMap.root.IsData())
+		require.True(t, childMap.Inlined())
+
+		err = childMap.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, newTypeInfo, childMap.Type())
+		require.Equal(t, uint64(0), childMap.Count())
+		require.Equal(t, childMapSeed, childMap.root.ExtraData().Seed)
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingInlinedMapSetType(
+			t,
+			parentMap.SlabID(),
+			Uint64Value(0),
+			storage.baseStorage,
+			newTypeInfo,
+			childMap.Count(),
+			childMapSeed,
+		)
+	})
+
+	t.Run("inlined in parent container non-root data slab", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		childMapSeed := childMap.root.ExtraData().Seed
+
+		mapSize := 10_000
+		for i := 0; i < mapSize-1; i++ {
+			v := Uint64Value(i)
+			existingStorable, err := parentMap.Set(compare, hashInputProvider, v, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(mapSize-1), childMap)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+
+		require.Equal(t, uint64(mapSize), parentMap.Count())
+		require.Equal(t, typeInfo, parentMap.Type())
+		require.False(t, parentMap.root.IsData())
+		require.False(t, parentMap.Inlined())
+
+		require.Equal(t, uint64(0), childMap.Count())
+		require.Equal(t, typeInfo, childMap.Type())
+		require.True(t, childMap.root.IsData())
+		require.True(t, childMap.Inlined())
+
+		err = childMap.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, newTypeInfo, childMap.Type())
+		require.Equal(t, uint64(0), childMap.Count())
+		require.Equal(t, childMapSeed, childMap.root.ExtraData().Seed)
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingInlinedMapSetType(
+			t,
+			parentMap.SlabID(),
+			Uint64Value(mapSize-1),
+			storage.baseStorage,
+			newTypeInfo,
+			childMap.Count(),
+			childMapSeed,
+		)
+	})
+}
+
+func testExistingMapSetType(
+	t *testing.T,
+	id SlabID,
+	baseStorage BaseStorage,
+	expectedTypeInfo testTypeInfo,
+	expectedCount uint64,
+	expectedSeed uint64,
+) {
+	newTypeInfo := testTypeInfo{value: expectedTypeInfo.value + 1}
+
+	// Create storage from existing data
+	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
+
+	// Load existing map by ID
+	m, err := NewMapWithRootID(storage, id, newBasicDigesterBuilder())
+	require.NoError(t, err)
+	require.Equal(t, expectedCount, m.Count())
+	require.Equal(t, expectedTypeInfo, m.Type())
+	require.Equal(t, expectedSeed, m.root.ExtraData().Seed)
+
+	// Modify type info of existing map
+	err = m.SetType(newTypeInfo)
+	require.NoError(t, err)
+	require.Equal(t, expectedCount, m.Count())
+	require.Equal(t, newTypeInfo, m.Type())
+	require.Equal(t, expectedSeed, m.root.ExtraData().Seed)
+
+	// Commit data in storage
+	err = storage.FastCommit(runtime.NumCPU())
+	require.NoError(t, err)
+
+	// Create storage from existing data
+	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
+
+	// Load existing map again from storage
+	m2, err := NewMapWithRootID(storage2, id, newBasicDigesterBuilder())
+	require.NoError(t, err)
+	require.Equal(t, expectedCount, m2.Count())
+	require.Equal(t, newTypeInfo, m2.Type())
+	require.Equal(t, expectedSeed, m2.root.ExtraData().Seed)
+}
+
+func testExistingInlinedMapSetType(
+	t *testing.T,
+	parentID SlabID,
+	inlinedChildKey Value,
+	baseStorage BaseStorage,
+	expectedTypeInfo testTypeInfo,
+	expectedCount uint64,
+	expectedSeed uint64,
+) {
+	newTypeInfo := testTypeInfo{value: expectedTypeInfo.value + 1}
+
+	// Create storage from existing data
+	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
+
+	// Load existing map by ID
+	parentMap, err := NewMapWithRootID(storage, parentID, newBasicDigesterBuilder())
+	require.NoError(t, err)
+
+	element, err := parentMap.Get(compare, hashInputProvider, inlinedChildKey)
+	require.NoError(t, err)
+
+	childMap, ok := element.(*OrderedMap)
+	require.True(t, ok)
+
+	require.Equal(t, expectedCount, childMap.Count())
+	require.Equal(t, expectedTypeInfo, childMap.Type())
+	require.Equal(t, expectedSeed, childMap.root.ExtraData().Seed)
+
+	// Modify type info of existing map
+	err = childMap.SetType(newTypeInfo)
+	require.NoError(t, err)
+	require.Equal(t, expectedCount, childMap.Count())
+	require.Equal(t, newTypeInfo, childMap.Type())
+	require.Equal(t, expectedSeed, childMap.root.ExtraData().Seed)
+
+	// Commit data in storage
+	err = storage.FastCommit(runtime.NumCPU())
+	require.NoError(t, err)
+
+	// Create storage from existing data
+	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
+
+	// Load existing map again from storage
+	parentMap2, err := NewMapWithRootID(storage2, parentID, newBasicDigesterBuilder())
+	require.NoError(t, err)
+
+	element2, err := parentMap2.Get(compare, hashInputProvider, inlinedChildKey)
+	require.NoError(t, err)
+
+	childMap2, ok := element2.(*OrderedMap)
+	require.True(t, ok)
+
+	require.Equal(t, expectedCount, childMap2.Count())
+	require.Equal(t, newTypeInfo, childMap2.Type())
+	require.Equal(t, expectedSeed, childMap.root.ExtraData().Seed)
 }

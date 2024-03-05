@@ -5550,6 +5550,40 @@ func (m *OrderedMap) Type() TypeInfo {
 	return nil
 }
 
+func (m *OrderedMap) SetType(typeInfo TypeInfo) error {
+	extraData := m.root.ExtraData()
+	extraData.TypeInfo = typeInfo
+
+	m.root.SetExtraData(extraData)
+
+	if m.Inlined() {
+		// Map is inlined.
+		// Notify parent container so parent slab is saved in storage with updated TypeInfo of inlined array.
+		found, err := m.parentUpdater()
+		if err != nil {
+			return err
+		}
+		if !found {
+			m.parentUpdater = nil
+		}
+
+		return nil
+	}
+
+	// Map is standalone.
+
+	slabID := m.SlabID()
+
+	// Store modified root slab in storage since typeInfo is part of extraData stored in root slab.
+	err := m.Storage.Store(slabID, m.root)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", slabID))
+	}
+
+	return nil
+}
+
 func (m *OrderedMap) String() string {
 	iterator, err := m.ReadOnlyIterator()
 	if err != nil {

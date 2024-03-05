@@ -2371,6 +2371,22 @@ func (a *Array) Type() TypeInfo {
 	return nil
 }
 
+func (a *Array) SetType(typeInfo TypeInfo) error {
+	extraData := a.root.ExtraData()
+	extraData.TypeInfo = typeInfo
+
+	a.root.SetExtraData(extraData)
+
+	// Store modified root slab in storage since typeInfo is part of extraData stored in root slab.
+	err := a.Storage.Store(a.root.Header().id, a.root)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.root.Header().id))
+	}
+
+	return nil
+}
+
 func (a *Array) String() string {
 	iterator, err := a.Iterator()
 	if err != nil {

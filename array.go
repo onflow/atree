@@ -3653,6 +3653,40 @@ func (a *Array) Type() TypeInfo {
 	return nil
 }
 
+func (a *Array) SetType(typeInfo TypeInfo) error {
+	extraData := a.root.ExtraData()
+	extraData.TypeInfo = typeInfo
+
+	a.root.SetExtraData(extraData)
+
+	if a.Inlined() {
+		// Array is inlined.
+		// Notify parent container so parent slab is saved in storage with updated TypeInfo of inlined array.
+		found, err := a.parentUpdater()
+		if err != nil {
+			return err
+		}
+		if !found {
+			a.parentUpdater = nil
+		}
+
+		return nil
+	}
+
+	// Array is standalone.
+
+	slabID := a.SlabID()
+
+	// Store modified root slab in storage since typeInfo is part of extraData stored in root slab.
+	err := a.Storage.Store(slabID, a.root)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", slabID))
+	}
+
+	return nil
+}
+
 func (a *Array) String() string {
 	iterator, err := a.ReadOnlyIterator()
 	if err != nil {

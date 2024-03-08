@@ -24,6 +24,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -5742,4 +5743,142 @@ func getMapMetaDataSlabCount(storage *PersistentSlabStorage) int {
 		}
 	}
 	return counter
+}
+
+func TestMapSetType(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	newTypeInfo := testTypeInfo{43}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	t.Run("empty", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+		require.True(t, m.root.IsData())
+
+		seed := m.root.ExtraData().Seed
+
+		err = m.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), m.Count())
+		require.Equal(t, newTypeInfo, m.Type())
+		require.Equal(t, seed, m.root.ExtraData().Seed)
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingMapSetType(t, m.StorageID(), storage.baseStorage, newTypeInfo, m.Count(), seed)
+	})
+
+	t.Run("data slab root", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		mapSize := 10
+		for i := 0; i < mapSize; i++ {
+			v := Uint64Value(i)
+			existingStorable, err := m.Set(compare, hashInputProvider, v, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+		require.True(t, m.root.IsData())
+
+		seed := m.root.ExtraData().Seed
+
+		err = m.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, newTypeInfo, m.Type())
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, seed, m.root.ExtraData().Seed)
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingMapSetType(t, m.StorageID(), storage.baseStorage, newTypeInfo, m.Count(), seed)
+	})
+
+	t.Run("metadata slab root", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		mapSize := 10_000
+		for i := 0; i < mapSize; i++ {
+			v := Uint64Value(i)
+			existingStorable, err := m.Set(compare, hashInputProvider, v, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, typeInfo, m.Type())
+		require.False(t, m.root.IsData())
+
+		seed := m.root.ExtraData().Seed
+
+		err = m.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, newTypeInfo, m.Type())
+		require.Equal(t, uint64(mapSize), m.Count())
+		require.Equal(t, seed, m.root.ExtraData().Seed)
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingMapSetType(t, m.StorageID(), storage.baseStorage, newTypeInfo, m.Count(), seed)
+	})
+}
+
+func testExistingMapSetType(
+	t *testing.T,
+	id StorageID,
+	baseStorage BaseStorage,
+	expectedTypeInfo testTypeInfo,
+	expectedCount uint64,
+	expectedSeed uint64,
+) {
+	newTypeInfo := testTypeInfo{value: expectedTypeInfo.value + 1}
+
+	// Create storage from existing data
+	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
+
+	// Load existing map by ID
+	m, err := NewMapWithRootID(storage, id, newBasicDigesterBuilder())
+	require.NoError(t, err)
+	require.Equal(t, expectedCount, m.Count())
+	require.Equal(t, expectedTypeInfo, m.Type())
+	require.Equal(t, expectedSeed, m.root.ExtraData().Seed)
+
+	// Modify type info of existing map
+	err = m.SetType(newTypeInfo)
+	require.NoError(t, err)
+	require.Equal(t, expectedCount, m.Count())
+	require.Equal(t, newTypeInfo, m.Type())
+	require.Equal(t, expectedSeed, m.root.ExtraData().Seed)
+
+	// Commit data in storage
+	err = storage.FastCommit(runtime.NumCPU())
+	require.NoError(t, err)
+
+	// Create storage from existing data
+	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
+
+	// Load existing map again from storage
+	m2, err := NewMapWithRootID(storage2, id, newBasicDigesterBuilder())
+	require.NoError(t, err)
+	require.Equal(t, expectedCount, m2.Count())
+	require.Equal(t, newTypeInfo, m2.Type())
+	require.Equal(t, expectedSeed, m2.root.ExtraData().Seed)
 }

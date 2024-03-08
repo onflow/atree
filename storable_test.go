@@ -360,7 +360,7 @@ func (v StringValue) Storable(storage SlabStorage, address Address, maxInlineSiz
 		}
 
 		// Store StorableSlab in storage
-		err = storage.Store(id, slab)
+		err = storeSlab(storage, slab)
 		if err != nil {
 			return nil, err
 		}

@@ -801,10 +801,9 @@ func (e *inlineCollisionGroup) Set(
 				collisionGroup: true,
 			}
 
-			err = storage.Store(id, slab)
+			err = storeSlab(storage, slab)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
+				return nil, nil, err
 			}
 
 			// Create and return externalCollisionGroup (wrapper of newly created MapDataSlab)
@@ -2334,10 +2333,9 @@ func (m *MapDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester Diges
 	}
 
 	// Store modified slab
-	err = storage.Store(m.header.id, m)
+	err = storeSlab(storage, m)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
+		return nil, err
 	}
 
 	return existingValue, nil
@@ -2362,10 +2360,9 @@ func (m *MapDataSlab) Remove(storage SlabStorage, digester Digester, level uint,
 	}
 
 	// Store modified slab
-	err = storage.Store(m.header.id, m)
+	err = storeSlab(storage, m)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
+		return nil, nil, err
 	}
 
 	return k, v, nil
@@ -2857,10 +2854,9 @@ func (m *MapMetaDataSlab) Set(storage SlabStorage, b DigesterBuilder, digester D
 		return existingValue, nil
 	}
 
-	err = storage.Store(m.header.id, m)
+	err = storeSlab(storage, m)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
+		return nil, err
 	}
 	return existingValue, nil
 }
@@ -2924,10 +2920,9 @@ func (m *MapMetaDataSlab) Remove(storage SlabStorage, digester Digester, level u
 		return k, v, nil
 	}
 
-	err = storage.Store(m.header.id, m)
+	err = storeSlab(storage, m)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
+		return nil, nil, err
 	}
 	return k, v, nil
 }
@@ -2954,25 +2949,17 @@ func (m *MapMetaDataSlab) SplitChildSlab(storage SlabStorage, child MapSlab, chi
 	m.header.size += mapSlabHeaderSize
 
 	// Store modified slabs
-	err = storage.Store(left.ID(), left)
+	err = storeSlab(storage, left)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", left.ID()))
+		return err
 	}
 
-	err = storage.Store(right.ID(), right)
+	err = storeSlab(storage, right)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", right.ID()))
+		return err
 	}
 
-	err = storage.Store(m.header.id, m)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
-	}
-
-	return nil
+	return storeSlab(storage, m)
 }
 
 // MergeOrRebalanceChildSlab merges or rebalances child slab.
@@ -3045,24 +3032,17 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 			}
 
 			// Store modified slabs
-			err = storage.Store(child.ID(), child)
+			err = storeSlab(storage, child)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.ID()))
+				return err
 			}
 
-			err = storage.Store(rightSib.ID(), rightSib)
+			err = storeSlab(storage, rightSib)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", rightSib.ID()))
+				return err
 			}
 
-			err = storage.Store(m.header.id, m)
-			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
-			}
-			return nil
+			return storeSlab(storage, m)
 		}
 
 		// Rebalance with left sib
@@ -3078,24 +3058,17 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 			m.childrenHeaders[childHeaderIndex] = child.Header()
 
 			// Store modified slabs
-			err = storage.Store(leftSib.ID(), leftSib)
+			err = storeSlab(storage, leftSib)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", leftSib.ID()))
+				return err
 			}
 
-			err = storage.Store(child.ID(), child)
+			err = storeSlab(storage, child)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.ID()))
+				return err
 			}
 
-			err = storage.Store(m.header.id, m)
-			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
-			}
-			return nil
+			return storeSlab(storage, m)
 		}
 
 		// Rebalance with bigger sib
@@ -3111,24 +3084,17 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 			m.childrenHeaders[childHeaderIndex] = child.Header()
 
 			// Store modified slabs
-			err = storage.Store(leftSib.ID(), leftSib)
+			err = storeSlab(storage, leftSib)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", leftSib.ID()))
+				return err
 			}
 
-			err = storage.Store(child.ID(), child)
+			err = storeSlab(storage, child)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.ID()))
+				return err
 			}
 
-			err = storage.Store(m.header.id, m)
-			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
-			}
-			return nil
+			return storeSlab(storage, m)
 		} else {
 			// leftSib.ByteSize() <= rightSib.ByteSize
 
@@ -3147,24 +3113,17 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 			}
 
 			// Store modified slabs
-			err = storage.Store(child.ID(), child)
+			err = storeSlab(storage, child)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.ID()))
+				return err
 			}
 
-			err = storage.Store(rightSib.ID(), rightSib)
+			err = storeSlab(storage, rightSib)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", rightSib.ID()))
+				return err
 			}
 
-			err = storage.Store(m.header.id, m)
-			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
-			}
-			return nil
+			return storeSlab(storage, m)
 		}
 	}
 
@@ -3193,15 +3152,14 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Store modified slabs in storage
-		err = storage.Store(child.ID(), child)
+		err = storeSlab(storage, child)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.ID()))
+			return err
 		}
-		err = storage.Store(m.header.id, m)
+
+		err = storeSlab(storage, m)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
+			return err
 		}
 
 		// Remove right sib from storage
@@ -3210,6 +3168,7 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
 			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", rightSib.ID()))
 		}
+
 		return nil
 	}
 
@@ -3231,15 +3190,14 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		m.header.size -= mapSlabHeaderSize
 
 		// Store modified slabs in storage
-		err = storage.Store(leftSib.ID(), leftSib)
+		err = storeSlab(storage, leftSib)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", leftSib.ID()))
+			return err
 		}
-		err = storage.Store(m.header.id, m)
+
+		err = storeSlab(storage, m)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
+			return err
 		}
 
 		// Remove child from storage
@@ -3248,6 +3206,7 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
 			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", child.ID()))
 		}
+
 		return nil
 	}
 
@@ -3268,15 +3227,14 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		m.header.size -= mapSlabHeaderSize
 
 		// Store modified slabs in storage
-		err = storage.Store(leftSib.ID(), leftSib)
+		err = storeSlab(storage, leftSib)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", leftSib.ID()))
+			return err
 		}
-		err = storage.Store(m.header.id, m)
+
+		err = storeSlab(storage, m)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
+			return err
 		}
 
 		// Remove child from storage
@@ -3309,15 +3267,14 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		}
 
 		// Store modified slabs in storage
-		err = storage.Store(child.ID(), child)
+		err = storeSlab(storage, child)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.ID()))
+			return err
 		}
-		err = storage.Store(m.header.id, m)
+
+		err = storeSlab(storage, m)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.header.id))
+			return err
 		}
 
 		// Remove rightSib from storage
@@ -3567,10 +3524,9 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 		extraData: extraData,
 	}
 
-	err = storage.Store(root.header.id, root)
+	err = storeSlab(storage, root)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", root.header.id))
+		return nil, err
 	}
 
 	return &OrderedMap{
@@ -3786,22 +3742,15 @@ func (m *OrderedMap) splitRoot() error {
 
 	m.root = newRoot
 
-	err = m.Storage.Store(left.ID(), left)
+	err = storeSlab(m.Storage, left)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", left.ID()))
+		return err
 	}
-	err = m.Storage.Store(right.ID(), right)
+	err = storeSlab(m.Storage, right)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", right.ID()))
+		return err
 	}
-	err = m.Storage.Store(m.root.ID(), m.root)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.root.ID()))
-	}
-	return nil
+	return storeSlab(m.Storage, m.root)
 }
 
 func (m *OrderedMap) promoteChildAsNewRoot(childID StorageID) error {
@@ -3828,10 +3777,9 @@ func (m *OrderedMap) promoteChildAsNewRoot(childID StorageID) error {
 
 	m.root.SetExtraData(extraData)
 
-	err = m.Storage.Store(rootID, m.root)
+	err = storeSlab(m.Storage, m.root)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", rootID))
+		return err
 	}
 
 	err = m.Storage.Remove(childID)
@@ -4266,12 +4214,7 @@ func (m *OrderedMap) PopIterate(fn MapPopIterationFunc) error {
 	}
 
 	// Save root slab
-	err = m.Storage.Store(m.root.ID(), m.root)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.root.ID()))
-	}
-	return nil
+	return storeSlab(m.Storage, m.root)
 }
 
 func (m *OrderedMap) Seed() uint64 {
@@ -4496,10 +4439,9 @@ func NewMapFromBatchData(
 
 		// Store all slabs
 		for _, slab := range slabs {
-			err = storage.Store(slab.ID(), slab)
+			err = storeSlab(storage, slab)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", slab.ID()))
+				return nil, err
 			}
 		}
 
@@ -4526,10 +4468,9 @@ func NewMapFromBatchData(
 	root.SetExtraData(extraData)
 
 	// Store root
-	err = storage.Store(root.ID(), root)
+	err = storeSlab(storage, root)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", root.ID()))
+		return nil, err
 	}
 
 	return &OrderedMap{

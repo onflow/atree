@@ -155,13 +155,7 @@ func (a *BasicArrayDataSlab) Set(storage SlabStorage, index uint64, v Storable) 
 		oldElem.ByteSize() +
 		v.ByteSize()
 
-	err := storage.Store(a.header.id, a)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.id))
-	}
-
-	return nil
+	return storeSlab(storage, a)
 }
 
 func (a *BasicArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storable) error {
@@ -180,13 +174,7 @@ func (a *BasicArrayDataSlab) Insert(storage SlabStorage, index uint64, v Storabl
 	a.header.count++
 	a.header.size += v.ByteSize()
 
-	err := storage.Store(a.header.id, a)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.id))
-	}
-
-	return nil
+	return storeSlab(storage, a)
 }
 
 func (a *BasicArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
@@ -209,10 +197,9 @@ func (a *BasicArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable
 	a.header.count--
 	a.header.size -= v.ByteSize()
 
-	err := storage.Store(a.header.id, a)
+	err := storeSlab(storage, a)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.id))
+		return nil, err
 	}
 
 	return v, nil

@@ -990,13 +990,7 @@ func (a *ArrayDataSlab) Uninline(storage SlabStorage) error {
 	a.inlined = false
 
 	// Store slab in storage
-	err := storage.Store(a.header.slabID, a)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
-	}
-
-	return nil
+	return storeSlab(storage, a)
 }
 
 func (a *ArrayDataSlab) HasPointer() bool {
@@ -1057,10 +1051,9 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, address Address, index uint64, 
 	a.header.size = size
 
 	if !a.inlined {
-		err := storage.Store(a.header.slabID, a)
+		err := storeSlab(storage, a)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+			return nil, err
 		}
 	}
 
@@ -1090,10 +1083,9 @@ func (a *ArrayDataSlab) Insert(storage SlabStorage, address Address, index uint6
 	a.header.size += storable.ByteSize()
 
 	if !a.inlined {
-		err := storage.Store(a.header.slabID, a)
+		err = storeSlab(storage, a)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+			return err
 		}
 	}
 
@@ -1122,10 +1114,9 @@ func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, err
 	a.header.size -= v.ByteSize()
 
 	if !a.inlined {
-		err := storage.Store(a.header.slabID, a)
+		err := storeSlab(storage, a)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+			return nil, err
 		}
 	}
 
@@ -1909,11 +1900,11 @@ func (a *ArrayMetaDataSlab) Set(storage SlabStorage, address Address, index uint
 		return existingElem, nil
 	}
 
-	err = storage.Store(a.header.slabID, a)
+	err = storeSlab(storage, a)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+		return nil, err
 	}
+
 	return existingElem, nil
 }
 
@@ -1974,13 +1965,7 @@ func (a *ArrayMetaDataSlab) Insert(storage SlabStorage, address Address, index u
 	// Insertion always increases the size,
 	// so there is no need to check underflow
 
-	err = storage.Store(a.header.slabID, a)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
-	}
-
-	return nil
+	return storeSlab(storage, a)
 }
 
 func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable, error) {
@@ -2030,10 +2015,9 @@ func (a *ArrayMetaDataSlab) Remove(storage SlabStorage, index uint64) (Storable,
 	// Removal always decreases the size,
 	// so there is no need to check isFull
 
-	err = storage.Store(a.header.slabID, a)
+	err = storeSlab(storage, a)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+		return nil, err
 	}
 
 	return v, nil
@@ -2066,25 +2050,17 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 	a.header.size += arraySlabHeaderSize
 
 	// Store modified slabs
-	err = storage.Store(left.SlabID(), left)
+	err = storeSlab(storage, left)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", left.SlabID()))
+		return err
 	}
 
-	err = storage.Store(right.SlabID(), right)
+	err = storeSlab(storage, right)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", right.SlabID()))
+		return err
 	}
 
-	err = storage.Store(a.header.slabID, a)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
-	}
-
-	return nil
+	return storeSlab(storage, a)
 }
 
 // MergeOrRebalanceChildSlab merges or rebalances child slab.
@@ -2152,22 +2128,15 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 			a.childrenCountSum[childHeaderIndex] = baseCountSum + child.Header().count
 
 			// Store modified slabs
-			err = storage.Store(child.SlabID(), child)
+			err = storeSlab(storage, child)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.SlabID()))
+				return err
 			}
-			err = storage.Store(rightSib.SlabID(), rightSib)
+			err = storeSlab(storage, rightSib)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", rightSib.SlabID()))
+				return err
 			}
-			err = storage.Store(a.header.slabID, a)
-			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
-			}
-			return nil
+			return storeSlab(storage, a)
 		}
 
 		// Rebalance with left sib
@@ -2187,22 +2156,15 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 			a.childrenCountSum[childHeaderIndex-1] = baseCountSum + leftSib.Header().count
 
 			// Store modified slabs
-			err = storage.Store(leftSib.SlabID(), leftSib)
+			err = storeSlab(storage, leftSib)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", leftSib.SlabID()))
+				return err
 			}
-			err = storage.Store(child.SlabID(), child)
+			err = storeSlab(storage, child)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.SlabID()))
+				return err
 			}
-			err = storage.Store(a.header.slabID, a)
-			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
-			}
-			return nil
+			return storeSlab(storage, a)
 		}
 
 		// Rebalance with bigger sib
@@ -2222,22 +2184,18 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 			a.childrenCountSum[childHeaderIndex-1] = baseCountSum + leftSib.Header().count
 
 			// Store modified slabs
-			err = storage.Store(leftSib.SlabID(), leftSib)
+			err = storeSlab(storage, leftSib)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", leftSib.SlabID()))
+				return err
 			}
-			err = storage.Store(child.SlabID(), child)
+
+			err = storeSlab(storage, child)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.SlabID()))
+				return err
 			}
-			err = storage.Store(a.header.slabID, a)
-			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
-			}
-			return nil
+
+			return storeSlab(storage, a)
+
 		} else {
 			// leftSib.ByteSize() <= rightSib.ByteSize
 
@@ -2256,22 +2214,17 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 			a.childrenCountSum[childHeaderIndex] = baseCountSum + child.Header().count
 
 			// Store modified slabs
-			err = storage.Store(child.SlabID(), child)
+			err = storeSlab(storage, child)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.SlabID()))
+				return err
 			}
-			err = storage.Store(rightSib.SlabID(), rightSib)
+
+			err = storeSlab(storage, rightSib)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", rightSib.SlabID()))
+				return err
 			}
-			err = storage.Store(a.header.slabID, a)
-			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
-			}
-			return nil
+
+			return storeSlab(storage, a)
 		}
 	}
 
@@ -2299,16 +2252,14 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		a.header.size -= arraySlabHeaderSize
 
 		// Store modified slabs in storage
-		err = storage.Store(child.SlabID(), child)
+		err = storeSlab(storage, child)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.SlabID()))
+			return err
 		}
 
-		err = storage.Store(a.header.slabID, a)
+		err = storeSlab(storage, a)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+			return err
 		}
 
 		// Remove right sib from storage
@@ -2343,16 +2294,14 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		a.header.size -= arraySlabHeaderSize
 
 		// Store modified slabs in storage
-		err = storage.Store(leftSib.SlabID(), leftSib)
+		err = storeSlab(storage, leftSib)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", leftSib.SlabID()))
+			return err
 		}
 
-		err = storage.Store(a.header.slabID, a)
+		err = storeSlab(storage, a)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+			return err
 		}
 
 		// Remove child from storage
@@ -2386,15 +2335,14 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		a.header.size -= arraySlabHeaderSize
 
 		// Store modified slabs in storage
-		err = storage.Store(leftSib.SlabID(), leftSib)
+		err = storeSlab(storage, leftSib)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", leftSib.SlabID()))
+			return err
 		}
-		err = storage.Store(a.header.slabID, a)
+
+		err = storeSlab(storage, a)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+			return err
 		}
 
 		// Remove child from storage
@@ -2427,15 +2375,13 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		a.header.size -= arraySlabHeaderSize
 
 		// Store modified slabs in storage
-		err = storage.Store(child.SlabID(), child)
+		err = storeSlab(storage, child)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", child.SlabID()))
+			return err
 		}
-		err = storage.Store(a.header.slabID, a)
+		err = storeSlab(storage, a)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.header.slabID))
+			return err
 		}
 
 		// Remove rightSib from storage
@@ -2741,10 +2687,9 @@ func NewArray(storage SlabStorage, address Address, typeInfo TypeInfo) (*Array, 
 		extraData: extraData,
 	}
 
-	err = storage.Store(root.header.slabID, root)
+	err = storeSlab(storage, root)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", root.header.slabID))
+		return nil, err
 	}
 
 	return &Array{
@@ -3234,23 +3179,17 @@ func (a *Array) splitRoot() error {
 
 	a.root = newRoot
 
-	err = a.Storage.Store(left.SlabID(), left)
+	err = storeSlab(a.Storage, left)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", left.SlabID()))
-	}
-	err = a.Storage.Store(right.SlabID(), right)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", right.SlabID()))
-	}
-	err = a.Storage.Store(a.root.SlabID(), a.root)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.root.SlabID()))
+		return err
 	}
 
-	return nil
+	err = storeSlab(a.Storage, right)
+	if err != nil {
+		return err
+	}
+
+	return storeSlab(a.Storage, a.root)
 }
 
 func (a *Array) promoteChildAsNewRoot(childID SlabID) error {
@@ -3277,11 +3216,11 @@ func (a *Array) promoteChildAsNewRoot(childID SlabID) error {
 
 	a.root.SetExtraData(extraData)
 
-	err = a.Storage.Store(rootID, a.root)
+	err = storeSlab(a.Storage, a.root)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", rootID))
+		return err
 	}
+
 	err = a.Storage.Remove(childID)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
@@ -3675,16 +3614,8 @@ func (a *Array) SetType(typeInfo TypeInfo) error {
 
 	// Array is standalone.
 
-	slabID := a.SlabID()
-
 	// Store modified root slab in storage since typeInfo is part of extraData stored in root slab.
-	err := a.Storage.Store(slabID, a.root)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", slabID))
-	}
-
-	return nil
+	return storeSlab(a.Storage, a.root)
 }
 
 func (a *Array) String() string {
@@ -3806,10 +3737,9 @@ func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
 
 	// Save root slab
 	if !a.Inlined() {
-		err = a.Storage.Store(a.root.SlabID(), a.root)
+		err = storeSlab(a.Storage, a.root)
 		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", a.root.SlabID()))
+			return err
 		}
 	}
 
@@ -3934,12 +3864,9 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 
 		// Store all slabs
 		for _, slab := range slabs {
-			err = storage.Store(slab.SlabID(), slab)
+			err = storeSlab(storage, slab)
 			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return nil, wrapErrorfAsExternalErrorIfNeeded(
-					err,
-					fmt.Sprintf("failed to store slab %s", slab.SlabID()))
+				return nil, err
 			}
 		}
 
@@ -3966,10 +3893,9 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 	root.SetExtraData(extraData)
 
 	// Store root
-	err = storage.Store(root.SlabID(), root)
+	err = storeSlab(storage, root)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", root.SlabID()))
+		return nil, err
 	}
 
 	return &Array{

@@ -50,10 +50,9 @@ func NewStorableSlab(storage SlabStorage, address Address, storable Storable) (S
 		storable: storable,
 	}
 
-	err = storage.Store(id, slab)
+	err = storeSlab(storage, slab)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
+		return nil, err
 	}
 
 	return SlabIDStorable(id), nil

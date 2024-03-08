@@ -1017,3 +1017,13 @@ func (s *PersistentSlabStorage) DeltasSizeWithoutTempAddresses() uint64 {
 	}
 	return size
 }
+
+func storeSlab(storage SlabStorage, slab Slab) error {
+	id := slab.ID()
+	err := storage.Store(id, slab)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
+	}
+	return nil
+}

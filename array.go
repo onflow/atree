@@ -298,6 +298,10 @@ func (a *ArrayExtraData) isExtraData() bool {
 	return true
 }
 
+func (a *ArrayExtraData) Type() TypeInfo {
+	return a.TypeInfo
+}
+
 // Encode encodes extra data as CBOR array:
 //
 //	[type info]

@@ -494,6 +494,10 @@ func (m *MapExtraData) isExtraData() bool {
 	return true
 }
 
+func (m *MapExtraData) Type() TypeInfo {
+	return m.TypeInfo
+}
+
 // Encode encodes extra data as CBOR array:
 //
 //	[type info, count, seed]

@@ -3186,17 +3186,14 @@ func TestArrayEncodeDecode(t *testing.T) {
 				// inlined extra data
 				0x82,
 				// element 0: array of type info
-				0x81,
-				// type info
-				0x18, 0x2b,
+				0x80,
 				// element 1: array of extra data
 				0x81,
 				// array extra data
 				0xd8, 0xf7,
 				0x81,
 				// array type info ref
-				0xd8, 0xf6,
-				0x00,
+				0x18, 0x2b,
 
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x02,
@@ -3275,21 +3272,17 @@ func TestArrayEncodeDecode(t *testing.T) {
 				// inlined extra data
 				0x82,
 				// element 0: array of inlined type info
-				0x82,
-				0x18, 0x2c,
-				0x18, 0x2b,
+				0x80,
 				// element 1: array of inlined extra data
 				0x82,
 				// inlined array extra data
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x00,
+				0x18, 0x2c,
 				// inlined array extra data
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x01,
+				0x18, 0x2b,
 
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x02,
@@ -3372,20 +3365,16 @@ func TestArrayEncodeDecode(t *testing.T) {
 				// inlined extra data
 				0x82,
 				// element 0: array of inlined type info
-				0x82,
-				0x18, 0x2c,
-				0x18, 0x2b,
+				0x80,
 				// element 1: array of inlined extra data
 				0x82,
 				// inlined array extra data
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x00,
+				0x18, 0x2c,
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x01,
+				0x18, 0x2b,
 
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x02,
@@ -3480,33 +3469,25 @@ func TestArrayEncodeDecode(t *testing.T) {
 				// inlined extra data
 				0x82,
 				// element 0: array of inlined type info
-				0x84,
-				0x18, 0x2c,
-				0x18, 0x2b,
-				0x18, 0x2e,
-				0x18, 0x2d,
+				0x80,
 				// element 1: array of inlined extra data
 				0x84,
 				// typeInfo3
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x00,
+				0x18, 0x2c,
 				// typeInfo2
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x01,
+				0x18, 0x2b,
 				// typeInfo5
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x02,
+				0x18, 0x2e,
 				// typeInfo4
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x03,
+				0x18, 0x2d,
 
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x02,
@@ -3633,15 +3614,13 @@ func TestArrayEncodeDecode(t *testing.T) {
 				// inlined extra data
 				0x82,
 				// element 0: array of inlined type info
-				0x81,
-				0x18, 0x2b,
+				0x80,
 				// element 1: array of inlined extra data
 				0x81,
 				// inlined array extra data
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x00,
+				0x18, 0x2b,
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x0b,
 				// CBOR encoded array elements
@@ -3787,20 +3766,16 @@ func TestArrayEncodeDecode(t *testing.T) {
 				// inlined extra data
 				0x82,
 				// element 0: array of inlined extra data
-				0x82,
-				0x18, 0x2c,
-				0x18, 0x2b,
+				0x80,
 				// element 1: array of inlined extra data
 				0x82,
 				// inlined array extra data
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x00,
+				0x18, 0x2c,
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x01,
+				0x18, 0x2b,
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x0b,
 				// CBOR encoded array elements
@@ -4117,15 +4092,13 @@ func TestArrayEncodeDecode(t *testing.T) {
 				// inlined extra data
 				0x82,
 				// element 0: array of type info
-				0x81,
-				0x18, 0x2c,
+				0x80,
 				// element 1: array of extra data
 				0x81,
 				// type info
 				0xd8, 0xf7,
 				0x81,
-				0xd8, 0xf6,
-				0x00,
+				0x18, 0x2c,
 
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x0b,

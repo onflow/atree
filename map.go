@@ -3824,13 +3824,7 @@ func (m *OrderedMap) SetType(typeInfo TypeInfo) error {
 	m.root.SetExtraData(extraData)
 
 	// Store modified root slab in storage since typeInfo is part of extraData stored in root slab.
-	err := m.Storage.Store(m.root.Header().id, m.root)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", m.root.Header().id))
-	}
-
-	return nil
+	return storeSlab(m.Storage, m.root)
 }
 
 func (m *OrderedMap) String() string {

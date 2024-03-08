@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -8479,4 +8480,252 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 		// No-op on parent
 		valueEqual(t, expectedValues, parentArray)
 	})
+}
+
+func TestArraySetType(t *testing.T) {
+	typeInfo := testTypeInfo{42}
+	newTypeInfo := testTypeInfo{43}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	t.Run("empty", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		// Create a new array in memory
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), array.Count())
+		require.Equal(t, typeInfo, array.Type())
+		require.True(t, array.root.IsData())
+
+		// Modify type info of new array
+		err = array.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, newTypeInfo, array.Type())
+
+		// Commit new array to storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingArraySetType(t, array.SlabID(), storage.baseStorage, newTypeInfo, array.Count())
+	})
+
+	t.Run("data slab root", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		arraySize := 10
+		for i := 0; i < arraySize; i++ {
+			v := Uint64Value(i)
+			err := array.Append(v)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+		require.Equal(t, typeInfo, array.Type())
+		require.True(t, array.root.IsData())
+
+		err = array.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, newTypeInfo, array.Type())
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingArraySetType(t, array.SlabID(), storage.baseStorage, newTypeInfo, array.Count())
+	})
+
+	t.Run("metadata slab root", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		array, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		arraySize := 10_000
+		for i := 0; i < arraySize; i++ {
+			v := Uint64Value(i)
+			err := array.Append(v)
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, uint64(arraySize), array.Count())
+		require.Equal(t, typeInfo, array.Type())
+		require.False(t, array.root.IsData())
+
+		err = array.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, newTypeInfo, array.Type())
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingArraySetType(t, array.SlabID(), storage.baseStorage, newTypeInfo, array.Count())
+	})
+
+	t.Run("inlined in parent container root data slab", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		childArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		err = parentArray.Append(childArray)
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(1), parentArray.Count())
+		require.Equal(t, typeInfo, parentArray.Type())
+		require.True(t, parentArray.root.IsData())
+		require.False(t, parentArray.Inlined())
+
+		require.Equal(t, uint64(0), childArray.Count())
+		require.Equal(t, typeInfo, childArray.Type())
+		require.True(t, childArray.root.IsData())
+		require.True(t, childArray.Inlined())
+
+		err = childArray.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, newTypeInfo, childArray.Type())
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingInlinedArraySetType(t, parentArray.SlabID(), 0, storage.baseStorage, newTypeInfo, childArray.Count())
+	})
+
+	t.Run("inlined in parent container non-root data slab", func(t *testing.T) {
+		storage := newTestPersistentStorage(t)
+
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		arraySize := 10_000
+		for i := 0; i < arraySize-1; i++ {
+			v := Uint64Value(i)
+			err := parentArray.Append(v)
+			require.NoError(t, err)
+		}
+
+		childArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		err = parentArray.Append(childArray)
+		require.NoError(t, err)
+
+		require.Equal(t, uint64(arraySize), parentArray.Count())
+		require.Equal(t, typeInfo, parentArray.Type())
+		require.False(t, parentArray.root.IsData())
+		require.False(t, parentArray.Inlined())
+
+		require.Equal(t, uint64(0), childArray.Count())
+		require.Equal(t, typeInfo, childArray.Type())
+		require.True(t, childArray.root.IsData())
+		require.True(t, childArray.Inlined())
+
+		err = childArray.SetType(newTypeInfo)
+		require.NoError(t, err)
+		require.Equal(t, newTypeInfo, childArray.Type())
+
+		// Commit modified slabs in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		testExistingInlinedArraySetType(t, parentArray.SlabID(), arraySize-1, storage.baseStorage, newTypeInfo, childArray.Count())
+	})
+}
+
+func testExistingArraySetType(
+	t *testing.T,
+	id SlabID,
+	baseStorage BaseStorage,
+	expectedTypeInfo testTypeInfo,
+	expectedCount uint64,
+) {
+	newTypeInfo := testTypeInfo{value: expectedTypeInfo.value + 1}
+
+	// Create storage from existing data
+	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
+
+	// Load existing array by ID
+	array, err := NewArrayWithRootID(storage, id)
+	require.NoError(t, err)
+	require.Equal(t, expectedCount, array.Count())
+	require.Equal(t, expectedTypeInfo, array.Type())
+
+	// Modify type info of existing array
+	err = array.SetType(newTypeInfo)
+	require.NoError(t, err)
+	require.Equal(t, expectedCount, array.Count())
+	require.Equal(t, newTypeInfo, array.Type())
+
+	// Commit data in storage
+	err = storage.FastCommit(runtime.NumCPU())
+	require.NoError(t, err)
+
+	// Create storage from existing data
+	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
+
+	// Load existing array again from storage
+	array2, err := NewArrayWithRootID(storage2, id)
+	require.NoError(t, err)
+	require.Equal(t, expectedCount, array2.Count())
+	require.Equal(t, newTypeInfo, array2.Type())
+}
+
+func testExistingInlinedArraySetType(
+	t *testing.T,
+	parentID SlabID,
+	inlinedChildIndex int,
+	baseStorage BaseStorage,
+	expectedTypeInfo testTypeInfo,
+	expectedCount uint64,
+) {
+	newTypeInfo := testTypeInfo{value: expectedTypeInfo.value + 1}
+
+	// Create storage from existing data
+	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
+
+	// Load existing array by ID
+	parentArray, err := NewArrayWithRootID(storage, parentID)
+	require.NoError(t, err)
+
+	element, err := parentArray.Get(uint64(inlinedChildIndex))
+	require.NoError(t, err)
+
+	childArray, ok := element.(*Array)
+	require.True(t, ok)
+
+	require.Equal(t, expectedCount, childArray.Count())
+	require.Equal(t, expectedTypeInfo, childArray.Type())
+
+	// Modify type info of existing array
+	err = childArray.SetType(newTypeInfo)
+	require.NoError(t, err)
+	require.Equal(t, expectedCount, childArray.Count())
+	require.Equal(t, newTypeInfo, childArray.Type())
+
+	// Commit data in storage
+	err = storage.FastCommit(runtime.NumCPU())
+	require.NoError(t, err)
+
+	// Create storage from existing data
+	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
+
+	// Load existing array again from storage
+	parentArray2, err := NewArrayWithRootID(storage2, parentID)
+	require.NoError(t, err)
+
+	element2, err := parentArray2.Get(uint64(inlinedChildIndex))
+	require.NoError(t, err)
+
+	childArray2, ok := element2.(*Array)
+	require.True(t, ok)
+
+	require.Equal(t, expectedCount, childArray2.Count())
+	require.Equal(t, newTypeInfo, childArray2.Type())
 }

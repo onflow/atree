@@ -5493,6 +5493,25 @@ func (m *OrderedMap) Type() TypeInfo {
 	return nil
 }
 
+func (m *OrderedMap) SetType(typeInfo TypeInfo) error {
+	extraData := m.root.ExtraData()
+	extraData.TypeInfo = typeInfo
+
+	m.root.SetExtraData(extraData)
+
+	if m.Inlined() {
+		// Map is inlined.
+
+		// Notify parent container so parent slab is saved in storage with updated TypeInfo of inlined array.
+		return m.notifyParentIfNeeded()
+	}
+
+	// Map is standalone.
+
+	// Store modified root slab in storage since typeInfo is part of extraData stored in root slab.
+	return storeSlab(m.Storage, m.root)
+}
+
 func (m *OrderedMap) String() string {
 	iterator, err := m.ReadOnlyIterator()
 	if err != nil {

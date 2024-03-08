@@ -3600,16 +3600,9 @@ func (a *Array) SetType(typeInfo TypeInfo) error {
 
 	if a.Inlined() {
 		// Array is inlined.
-		// Notify parent container so parent slab is saved in storage with updated TypeInfo of inlined array.
-		found, err := a.parentUpdater()
-		if err != nil {
-			return err
-		}
-		if !found {
-			a.parentUpdater = nil
-		}
 
-		return nil
+		// Notify parent container so parent slab is saved in storage with updated TypeInfo of inlined array.
+		return a.notifyParentIfNeeded()
 	}
 
 	// Array is standalone.

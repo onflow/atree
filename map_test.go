@@ -7661,7 +7661,11 @@ func TestMapEncodeDecode(t *testing.T) {
 				// flag: has inlined slab + map data
 				0x08,
 
-				// inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x81,
 				// inlined array extra data
 				0xd8, 0xf7,
@@ -7724,7 +7728,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, 2, len(meta.childrenHeaders))
 		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
 
-		const inlinedExtraDataSize = 6
+		const inlinedExtraDataSize = 8
 		require.Equal(t, uint32(len(stored[id3])-inlinedExtraDataSize+slabIDSize), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
@@ -7804,24 +7808,30 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// 2 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x81,
+				0x18, 0x2b,
+				// element 1: array of inlined extra data
 				0x82,
 				// element 0
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
 				0x1b, 0xa9, 0x3a, 0x2d, 0x6f, 0x53, 0x49, 0xaa, 0xdd,
-				// element 1
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -7993,13 +8003,16 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// 2 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x82,
 				// element 0
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info
 				0x18, 0x2c,
 				// count: 1
 				0x01,
@@ -8009,7 +8022,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info
 				0x18, 0x2b,
 				// count: 1
 				0x01,
@@ -8184,14 +8196,20 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// 4 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x81,
+				0x18, 0x2b,
+				// element 1: array of inlined extra data
 				0x84,
 				// element 0
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -8201,7 +8219,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -8211,7 +8230,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -8221,7 +8241,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -8454,13 +8475,16 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// 4 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of type info
+				0x80,
+				// element 1: array of extra data
 				0x84,
 				// element 0
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info: 44
 				0x18, 0x2c,
 				// count: 1
 				0x01,
@@ -8471,7 +8495,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info: 46
 				0x18, 0x2e,
 				// count: 1
 				0x01,
@@ -8482,7 +8505,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info: 43
 				0x18, 0x2b,
 				// count: 1
 				0x01,
@@ -8493,7 +8515,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info: 45
 				0x18, 0x2d,
 				// count: 1
 				0x01,
@@ -8721,14 +8742,20 @@ func TestMapEncodeDecode(t *testing.T) {
 				// flag: map data
 				0x08,
 
-				// 4 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x81,
+				0x18, 0x2b,
+				// element 1: array of inlined extra data
 				0x84,
 				// element 0
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -8738,7 +8765,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -8748,7 +8776,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -8757,7 +8786,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -8904,14 +8934,20 @@ func TestMapEncodeDecode(t *testing.T) {
 				// flag: map data
 				0x08,
 
-				// 4 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x81,
+				0x18, 0x2b,
+				// element 1: array of inlined extra data
 				0x84,
 				// element 0
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -8921,7 +8957,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -8931,7 +8968,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -8940,7 +8978,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				0xd8, 0xf8,
 				0x83,
 				// type info
-				0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -9202,13 +9241,16 @@ func TestMapEncodeDecode(t *testing.T) {
 				// flag: map data
 				0x08,
 
-				// 4 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x84,
 				// element 0
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info
 				0x18, 0x2b,
 				// count: 1
 				0x01,
@@ -9218,7 +9260,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info
 				0x18, 0x2c,
 				// count: 1
 				0x01,
@@ -9228,7 +9269,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info
 				0x18, 0x2d,
 				// count: 1
 				0x01,
@@ -9237,7 +9277,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info
 				0x18, 0x2e,
 				// count: 1
 				0x01,
@@ -9385,13 +9424,16 @@ func TestMapEncodeDecode(t *testing.T) {
 				// flag: map data
 				0x08,
 
-				// 4 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x84,
 				// element 0
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info
 				0x18, 0x2b,
 				// count: 1
 				0x01,
@@ -9401,7 +9443,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info
 				0x18, 0x2c,
 				// count: 1
 				0x01,
@@ -9411,7 +9452,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info
 				0x18, 0x2d,
 				// count: 1
 				0x01,
@@ -9420,7 +9460,6 @@ func TestMapEncodeDecode(t *testing.T) {
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info
 				0x18, 0x2e,
 				// count: 1
 				0x01,
@@ -10511,13 +10550,16 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// array of inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x81,
 				// element 0
 				// inlined map extra data
 				0xd8, 0xf8,
 				0x83,
-				// type info
 				0x18, 0x2b,
 				// count: 1
 				0x01,
@@ -10986,13 +11028,16 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// array of inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x81,
 				// element 0
 				// inlined array extra data
 				0xd8, 0xf7,
 				0x81,
-				// type info
 				0x18, 0x2b,
 
 				// the following encoded data is valid CBOR
@@ -11281,7 +11326,11 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// 1 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x81,
 				// element 0
 				// inlined composite extra data
@@ -11449,7 +11498,11 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// 1 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x81,
 				// element 0
 				// inlined composite extra data
@@ -11624,7 +11677,11 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// 1 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x81,
 				// element 0
 				// inlined composite extra data
@@ -11814,7 +11871,12 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// 3 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x81,
+				0xd8, 0xf6, 0x18, 0x2b,
+				// element 1: array of inlined extra data
 				0x83,
 				// element 0
 				// inlined composite extra data
@@ -11823,7 +11885,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// map extra data
 				0x83,
 				// type info
-				0xd8, 0xf6, 0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 2
 				0x02,
 				// seed
@@ -11842,7 +11905,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// map extra data
 				0x83,
 				// type info
-				0xd8, 0xf6, 0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 2
 				0x02,
 				// seed
@@ -11861,7 +11925,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// map extra data
 				0x83,
 				// type info
-				0xd8, 0xf6, 0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 2
 				0x02,
 				// seed
@@ -12050,7 +12115,12 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// 2 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x81,
+				0xd8, 0xf6, 0x18, 0x2b,
+				// element 1: array of inlined extra data
 				0x82,
 				// element 0
 				// inlined map extra data
@@ -12059,7 +12129,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// map extra data
 				0x83,
 				// type info
-				0xd8, 0xf6, 0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 2
 				0x02,
 				// seed
@@ -12077,7 +12148,8 @@ func TestMapEncodeDecode(t *testing.T) {
 				// map extra data
 				0x83,
 				// type info
-				0xd8, 0xf6, 0x18, 0x2b,
+				0xd8, 0xf6,
+				0x00,
 				// count: 1
 				0x01,
 				// seed
@@ -12248,7 +12320,11 @@ func TestMapEncodeDecode(t *testing.T) {
 				// seed
 				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
 
-				// 2 inlined slab extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x82,
 				// element 0
 				// inlined composite extra data

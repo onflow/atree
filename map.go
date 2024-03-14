@@ -494,17 +494,21 @@ func (m *MapExtraData) isExtraData() bool {
 	return true
 }
 
+func (m *MapExtraData) Type() TypeInfo {
+	return m.TypeInfo
+}
+
 // Encode encodes extra data as CBOR array:
 //
 //	[type info, count, seed]
-func (m *MapExtraData) Encode(enc *Encoder) error {
+func (m *MapExtraData) Encode(enc *Encoder, encodeTypeInfo encodeTypeInfo) error {
 
 	err := enc.CBOR.EncodeArrayHead(mapExtraDataLength)
 	if err != nil {
 		return NewEncodingError(err)
 	}
 
-	err = m.TypeInfo.Encode(enc.CBOR)
+	err = encodeTypeInfo(enc, m.TypeInfo)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by TypeInfo interface.
 		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode type info")
@@ -2916,7 +2920,8 @@ func (m *MapDataSlab) Encode(enc *Encoder) error {
 
 	// Encode extra data
 	if m.extraData != nil {
-		err = m.extraData.Encode(enc)
+		// Use defaultEncodeTypeInfo to encode root level TypeInfo as is.
+		err = m.extraData.Encode(enc, defaultEncodeTypeInfo)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by MapExtraData.Encode().
 			return err
@@ -3909,7 +3914,8 @@ func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 
 	// Encode extra data if present
 	if m.extraData != nil {
-		err = m.extraData.Encode(enc)
+		// Use defaultEncodeTypeInfo to encode root level TypeInfo as is.
+		err = m.extraData.Encode(enc, defaultEncodeTypeInfo)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by MapExtraData.Encode().
 			return err

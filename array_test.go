@@ -3185,10 +3185,15 @@ func TestArrayEncodeDecode(t *testing.T) {
 				0x18, 0x2a,
 
 				// inlined extra data
+				0x82,
+				// element 0: array of type info
+				0x80,
+				// element 1: array of extra data
 				0x81,
-				// inlined array extra data
+				// array extra data
 				0xd8, 0xf7,
 				0x81,
+				// array type info ref
 				0x18, 0x2b,
 
 				// CBOR encoded array head (fixed size 3 byte)
@@ -3266,6 +3271,10 @@ func TestArrayEncodeDecode(t *testing.T) {
 				0x18, 0x2a,
 
 				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x82,
 				// inlined array extra data
 				0xd8, 0xf7,
@@ -3355,6 +3364,10 @@ func TestArrayEncodeDecode(t *testing.T) {
 				0x18, 0x2a,
 
 				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x82,
 				// inlined array extra data
 				0xd8, 0xf7,
@@ -3455,6 +3468,10 @@ func TestArrayEncodeDecode(t *testing.T) {
 				0x18, 0x2a,
 
 				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x84,
 				// typeInfo3
 				0xd8, 0xf7,
@@ -3596,6 +3613,10 @@ func TestArrayEncodeDecode(t *testing.T) {
 				// array data slab flag
 				0x00,
 				// inlined extra data
+				0x82,
+				// element 0: array of inlined type info
+				0x80,
+				// element 1: array of inlined extra data
 				0x81,
 				// inlined array extra data
 				0xd8, 0xf7,
@@ -3744,6 +3765,10 @@ func TestArrayEncodeDecode(t *testing.T) {
 				// array data slab flag
 				0x00,
 				// inlined extra data
+				0x82,
+				// element 0: array of inlined extra data
+				0x80,
+				// element 1: array of inlined extra data
 				0x82,
 				// inlined array extra data
 				0xd8, 0xf7,
@@ -4065,7 +4090,11 @@ func TestArrayEncodeDecode(t *testing.T) {
 				// array data slab flag (has pointer)
 				0x40,
 
-				// inlined array of extra data
+				// inlined extra data
+				0x82,
+				// element 0: array of type info
+				0x80,
+				// element 1: array of extra data
 				0x81,
 				// type info
 				0xd8, 0xf7,

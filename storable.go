@@ -76,6 +76,8 @@ const (
 	// As of Oct. 2, 2023, Cadence uses tag numbers from 128 to 224.
 	// See runtime/interpreter/encode.go at github.com/onflow/cadence.
 
+	CBORTagTypeInfoRef = 246
+
 	CBORTagInlinedArrayExtraData      = 247
 	CBORTagInlinedMapExtraData        = 248
 	CBORTagInlinedCompactMapExtraData = 249

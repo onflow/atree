@@ -910,7 +910,7 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 	// process the results while encoders are working
 	// we need to capture them inside a map
 	// again so we can apply them in order of keys
-	encSlabByID := make(map[SlabID][]byte)
+	encSlabByID := make(map[SlabID][]byte, len(keysWithOwners))
 	for i := 0; i < len(keysWithOwners); i++ {
 		result := <-results
 		// if any error return

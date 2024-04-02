@@ -19,11 +19,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/rand"
 	"reflect"
+	"sync"
 	"time"
+
+	"github.com/fxamacker/cbor/v2"
 
 	"github.com/onflow/atree"
 )
@@ -540,5 +544,40 @@ func (v mapValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Stor
 }
 
 var typeInfoComparator = func(a atree.TypeInfo, b atree.TypeInfo) bool {
-	return a.Identifier() == b.Identifier()
+	aID, _ := getEncodedTypeInfo(a)
+	bID, _ := getEncodedTypeInfo(b)
+	return aID == bID
+}
+
+func getEncodedTypeInfo(ti atree.TypeInfo) (string, error) {
+	b := getTypeIDBuffer()
+	defer putTypeIDBuffer(b)
+
+	enc := cbor.NewStreamEncoder(b)
+	err := ti.Encode(enc)
+	if err != nil {
+		return "", err
+	}
+	enc.Flush()
+
+	return b.String(), nil
+}
+
+const defaultTypeIDBufferSize = 256
+
+var typeIDBufferPool = sync.Pool{
+	New: func() interface{} {
+		e := new(bytes.Buffer)
+		e.Grow(defaultTypeIDBufferSize)
+		return e
+	},
+}
+
+func getTypeIDBuffer() *bytes.Buffer {
+	return typeIDBufferPool.Get().(*bytes.Buffer)
+}
+
+func putTypeIDBuffer(e *bytes.Buffer) {
+	e.Reset()
+	typeIDBufferPool.Put(e)
 }

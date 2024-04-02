@@ -3007,13 +3007,14 @@ func (m *MapDataSlab) encodeAsInlined(enc *Encoder) error {
 
 func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder) error {
 
-	extraDataIndex := enc.inlinedExtraData().addMapExtraData(m.extraData)
+	extraDataIndex, err := enc.inlinedExtraData().addMapExtraData(m.extraData)
+	if err != nil {
+		return NewEncodingError(err)
+	}
 
 	if extraDataIndex > maxInlinedExtraDataIndex {
 		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit %d", extraDataIndex, maxInlinedExtraDataIndex))
 	}
-
-	var err error
 
 	// Encode tag number and array head of 3 elements
 	err = enc.CBOR.EncodeRawBytes([]byte{
@@ -3067,7 +3068,10 @@ func encodeAsInlinedCompactMap(
 	values []Storable,
 ) error {
 
-	extraDataIndex, cachedKeys := enc.inlinedExtraData().addCompactMapExtraData(extraData, hkeys, keys)
+	extraDataIndex, cachedKeys, err := enc.inlinedExtraData().addCompactMapExtraData(extraData, hkeys, keys)
+	if err != nil {
+		return NewEncodingError(err)
+	}
 
 	if len(keys) != len(cachedKeys) {
 		return NewEncodingError(fmt.Errorf("number of elements %d is different from number of elements in cached compact map type %d", len(keys), len(cachedKeys)))
@@ -3077,8 +3081,6 @@ func encodeAsInlinedCompactMap(
 		// This should never happen because of slab size.
 		return NewEncodingError(fmt.Errorf("extra data index %d exceeds limit %d", extraDataIndex, maxInlinedExtraDataIndex))
 	}
-
-	var err error
 
 	// Encode tag number and array head of 3 elements
 	err = enc.CBOR.EncodeRawBytes([]byte{

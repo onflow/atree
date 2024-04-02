@@ -720,14 +720,15 @@ func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder) error {
 			fmt.Errorf("failed to encode standalone array data slab as inlined"))
 	}
 
-	extraDataIndex := enc.inlinedExtraData().addArrayExtraData(a.extraData)
+	extraDataIndex, err := enc.inlinedExtraData().addArrayExtraData(a.extraData)
+	if err != nil {
+		return NewEncodingError(err)
+	}
 
 	if extraDataIndex > maxInlinedExtraDataIndex {
 		return NewEncodingError(
 			fmt.Errorf("failed to encode inlined array data slab: extra data index %d exceeds limit %d", extraDataIndex, maxInlinedExtraDataIndex))
 	}
-
-	var err error
 
 	// Encode tag number and array head of 3 elements
 	err = enc.CBOR.EncodeRawBytes([]byte{

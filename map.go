@@ -3009,7 +3009,8 @@ func (m *MapDataSlab) encodeAsInlinedMap(enc *Encoder) error {
 
 	extraDataIndex, err := enc.inlinedExtraData().addMapExtraData(m.extraData)
 	if err != nil {
-		return NewEncodingError(err)
+		// err is already categorized by InlinedExtraData.addMapExtraData().
+		return err
 	}
 
 	if extraDataIndex > maxInlinedExtraDataIndex {
@@ -3070,7 +3071,8 @@ func encodeAsInlinedCompactMap(
 
 	extraDataIndex, cachedKeys, err := enc.inlinedExtraData().addCompactMapExtraData(extraData, hkeys, keys)
 	if err != nil {
-		return NewEncodingError(err)
+		// err is already categorized by InlinedExtraData.addCompactMapExtraData().
+		return err
 	}
 
 	if len(keys) != len(cachedKeys) {

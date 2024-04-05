@@ -722,7 +722,8 @@ func (a *ArrayDataSlab) encodeAsInlined(enc *Encoder) error {
 
 	extraDataIndex, err := enc.inlinedExtraData().addArrayExtraData(a.extraData)
 	if err != nil {
-		return NewEncodingError(err)
+		// err is already categorized by InlinedExtraData.addArrayExtraData().
+		return err
 	}
 
 	if extraDataIndex > maxInlinedExtraDataIndex {

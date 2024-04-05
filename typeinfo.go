@@ -129,6 +129,7 @@ func (c *compactMapExtraData) Encode(enc *Encoder, encodeTypeInfo encodeTypeInfo
 	// element 0: map extra data
 	err = c.mapExtraData.Encode(enc, encodeTypeInfo)
 	if err != nil {
+		// err is already categorized by MapExtraData.Encode().
 		return err
 	}
 
@@ -160,7 +161,8 @@ func (c *compactMapExtraData) Encode(enc *Encoder, encodeTypeInfo encodeTypeInfo
 	for _, key := range c.keys {
 		err = key.Encode(enc)
 		if err != nil {
-			return NewEncodingError(err)
+			// Wrap err as external error (if needed) because err is returned by ComparableStorable.Encode().
+			return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode key's storable")
 		}
 	}
 
@@ -195,6 +197,7 @@ func newCompactMapExtraData(
 	// element 0: map extra data
 	mapExtraData, err := newMapExtraData(dec, decodeTypeInfo)
 	if err != nil {
+		// err is already categorized by newMapExtraData().
 		return nil, err
 	}
 
@@ -362,6 +365,7 @@ func (ied *InlinedExtraData) Encode(enc *Encoder) error {
 			return nil
 		})
 		if err != nil {
+			// err is already categorized by ExtraData.Encode().
 			return err
 		}
 	}
@@ -475,18 +479,21 @@ func newInlinedExtraDataFromData(
 		case CBORTagInlinedArrayExtraData:
 			inlinedExtraData[i], err = newArrayExtraData(dec, decodeTypeInfo)
 			if err != nil {
+				// err is already categorized by newArrayExtraData().
 				return nil, nil, err
 			}
 
 		case CBORTagInlinedMapExtraData:
 			inlinedExtraData[i], err = newMapExtraData(dec, decodeTypeInfo)
 			if err != nil {
+				// err is already categorized by newMapExtraData().
 				return nil, nil, err
 			}
 
 		case CBORTagInlinedCompactMapExtraData:
 			inlinedExtraData[i], err = newCompactMapExtraData(dec, decodeTypeInfo, decodeStorable)
 			if err != nil {
+				// err is already categorized by newCompactMapExtraData().
 				return nil, nil, err
 			}
 
@@ -504,6 +511,7 @@ func newInlinedExtraDataFromData(
 func (ied *InlinedExtraData) addArrayExtraData(data *ArrayExtraData) (int, error) {
 	encodedTypeInfo, err := getEncodedTypeInfo(data.TypeInfo)
 	if err != nil {
+		// err is already categorized by getEncodedTypeInfo().
 		return 0, err
 	}
 
@@ -528,6 +536,7 @@ func (ied *InlinedExtraData) addArrayExtraData(data *ArrayExtraData) (int, error
 func (ied *InlinedExtraData) addMapExtraData(data *MapExtraData) (int, error) {
 	encodedTypeInfo, err := getEncodedTypeInfo(data.TypeInfo)
 	if err != nil {
+		// err is already categorized by getEncodedTypeInfo().
 		return 0, err
 	}
 
@@ -546,6 +555,7 @@ func (ied *InlinedExtraData) addCompactMapExtraData(
 
 	encodedTypeInfo, err := getEncodedTypeInfo(data.TypeInfo)
 	if err != nil {
+		// err is already categorized by getEncodedTypeInfo().
 		return 0, nil, err
 	}
 
@@ -644,7 +654,8 @@ func getEncodedTypeInfo(ti TypeInfo) (string, error) {
 	enc := cbor.NewStreamEncoder(b)
 	err := ti.Encode(enc)
 	if err != nil {
-		return "", err
+		// Wrap err as external error (if needed) because err is returned by TypeInfo.Encode().
+		return "", wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode type info")
 	}
 	enc.Flush()
 

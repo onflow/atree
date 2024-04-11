@@ -7,7 +7,7 @@ require (
 	github.com/fxamacker/circlehash v0.3.0
 	github.com/stretchr/testify v1.9.0
 	github.com/zeebo/blake3 v0.2.3
-	lukechampine.com/blake3 v1.2.1
+	lukechampine.com/blake3 v1.2.2
 )
 
 require (

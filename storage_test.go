@@ -1514,7 +1514,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 			},
 
 			// empty array
-			emptyArrayDataRootID: []byte{
+			emptyArrayDataRootID: {
 				// extra data
 				// version
 				0x00,
@@ -1534,7 +1534,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 			},
 
 			// root array data slab
-			arrayDataRootID: []byte{
+			arrayDataRootID: {
 				// extra data
 				// version
 				0x00,

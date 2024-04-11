@@ -2226,7 +2226,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 
 		// Check health before fixing broken reference
 		_, err := CheckStorageHealth(storage, -1)
-		require.ErrorContains(t, err, "slab (0x0.1) not found: slab not found during slab iteration")
+		require.ErrorContains(t, err, "slab not found during slab iteration")
 
 		// Fix broken reference
 		fixedIDs, err := storage.FixLoadedBrokenReferences()

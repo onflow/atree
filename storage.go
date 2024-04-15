@@ -1168,6 +1168,8 @@ func (s *PersistentSlabStorage) FixLoadedBrokenReferences() ([]StorageID, error)
 func (s *PersistentSlabStorage) fixBrokenReferencesInMap(old MapSlab) error {
 	id := old.ID()
 
+	oldExtraData := old.ExtraData()
+
 	// Create an empty map with the same StorgeID, type, and seed as the old map.
 	new := &MapDataSlab{
 		header: MapSlabHeader{
@@ -1175,8 +1177,8 @@ func (s *PersistentSlabStorage) fixBrokenReferencesInMap(old MapSlab) error {
 			size: mapRootDataSlabPrefixSize + hkeyElementsPrefixSize,
 		},
 		extraData: &MapExtraData{
-			TypeInfo: old.ExtraData().TypeInfo,
-			Seed:     old.ExtraData().Seed,
+			TypeInfo: oldExtraData.TypeInfo,
+			Seed:     oldExtraData.Seed,
 		},
 		elements: newHkeyElements(0),
 	}

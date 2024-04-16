@@ -1040,7 +1040,11 @@ func storeSlab(storage SlabStorage, slab Slab) error {
 // fix broken references.  As of April 2024, only 10 registers in testnet (not mainnet)
 // were found to have broken references and they seem to have resulted from a bug
 // that was fixed 2 years ago by https://github.com/onflow/cadence/pull/1565.
-func (s *PersistentSlabStorage) FixLoadedBrokenReferences() ([]StorageID, error) {
+func (s *PersistentSlabStorage) FixLoadedBrokenReferences(needToFix func(old Value) bool) (
+	fixedStorageIDs map[StorageID][]StorageID, // key: root slab ID, value: slab IDs containing broken refs
+	skippedStorageIDs map[StorageID][]StorageID, // key: root slab ID, value: slab IDs containing broken refs
+	err error,
+) {
 
 	// parentOf is used to find root slab from non-root slab.
 	// Broken reference can be in non-root slab, and we need StorageID of root slab
@@ -1119,10 +1123,10 @@ func (s *PersistentSlabStorage) FixLoadedBrokenReferences() ([]StorageID, error)
 	}
 
 	if len(brokenStorageIDs) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	rootSlabStorageIDsWithBrokenData := make(map[StorageID]struct{})
+	rootSlabStorageIDsWithBrokenData := make(map[StorageID][]StorageID)
 	var errs []error
 
 	// Find StorageIDs of root slab for slabs containing broken references.
@@ -1132,26 +1136,35 @@ func (s *PersistentSlabStorage) FixLoadedBrokenReferences() ([]StorageID, error)
 			errs = append(errs, fmt.Errorf("failed to get root slab id for slab %s", id))
 			continue
 		}
-		rootSlabStorageIDsWithBrokenData[rootID] = struct{}{}
+		rootSlabStorageIDsWithBrokenData[rootID] = append(rootSlabStorageIDsWithBrokenData[rootID], id)
 	}
 
-	for rootSlabID := range rootSlabStorageIDsWithBrokenData {
-		rootSlab := s.RetrieveIfLoaded(rootSlabID)
+	for rootStorageID, brokenStorageIDs := range rootSlabStorageIDsWithBrokenData {
+		rootSlab := s.RetrieveIfLoaded(rootStorageID)
 		if rootSlab == nil {
-			errs = append(errs, fmt.Errorf("failed to retrieve loaded root slab %s", rootSlabID))
+			errs = append(errs, fmt.Errorf("failed to retrieve loaded root slab %s", rootStorageID))
 			continue
 		}
 
 		switch rootSlab := rootSlab.(type) {
 		case MapSlab:
-			if rootSlab.ExtraData() == nil {
-				errs = append(errs, fmt.Errorf("failed to fix broken references because slab %s isn't root slab", rootSlab.ID()))
+			value, err := rootSlab.StoredValue(s)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to convert slab %s into value", rootSlab.ID()))
 				continue
 			}
 
-			err := s.fixBrokenReferencesInMap(rootSlab)
-			if err != nil {
-				errs = append(errs, err)
+			if needToFix(value) {
+				err := s.fixBrokenReferencesInMap(rootSlab)
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
+			} else {
+				if skippedStorageIDs == nil {
+					skippedStorageIDs = make(map[StorageID][]StorageID)
+				}
+				skippedStorageIDs[rootStorageID] = brokenStorageIDs
 			}
 
 		default:
@@ -1160,7 +1173,11 @@ func (s *PersistentSlabStorage) FixLoadedBrokenReferences() ([]StorageID, error)
 		}
 	}
 
-	return brokenStorageIDs, errors.Join(errs...)
+	for id := range skippedStorageIDs {
+		delete(rootSlabStorageIDsWithBrokenData, id)
+	}
+
+	return rootSlabStorageIDsWithBrokenData, skippedStorageIDs, errors.Join(errs...)
 }
 
 // fixBrokenReferencesInMap replaces replaces broken map with empty map

@@ -1665,10 +1665,27 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 			require.True(t, found)
 		}
 
-		// Fix broken reference
-		fixedIDs, err := storage.FixLoadedBrokenReferences()
+		var fixedRootIDs map[SlabID][]SlabID
+		var skippedRootIDs map[SlabID][]SlabID
+
+		// Don't fix any broken references
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return false
+		})
 		require.NoError(t, err)
-		require.Equal(t, 0, len(fixedIDs))
+		require.Equal(t, 0, len(fixedRootIDs))
+		require.Equal(t, 0, len(skippedRootIDs))
+
+		// No data is modified because no fix happened
+		require.Equal(t, 0, len(storage.deltas))
+
+		// Fix broken reference
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return true
+		})
+		require.NoError(t, err)
+		require.Equal(t, 0, len(fixedRootIDs))
+		require.Equal(t, 0, len(skippedRootIDs))
 
 		// No data is modified during fixing broken reference
 		require.Equal(t, 0, len(storage.deltas))
@@ -1684,7 +1701,9 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 
 		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 
-		brokenRefSlabID := rootID
+		brokenRefs := map[SlabID][]SlabID{
+			rootID: {rootID},
+		}
 
 		data := map[SlabID][]byte{
 			rootID: {
@@ -1777,11 +1796,36 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		_, err := CheckStorageHealth(storage, -1)
 		require.ErrorContains(t, err, "slab (0x0.1) not found: slab not found during slab iteration")
 
-		// Fix broken reference
-		fixedIDs, err := storage.FixLoadedBrokenReferences()
+		var fixedRootIDs map[SlabID][]SlabID
+		var skippedRootIDs map[SlabID][]SlabID
+
+		// Don't fix any broken references
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return false
+		})
 		require.NoError(t, err)
-		require.Equal(t, 1, len(fixedIDs))
-		require.Equal(t, brokenRefSlabID, fixedIDs[0])
+		require.Equal(t, 0, len(fixedRootIDs))
+		require.Equal(t, len(brokenRefs), len(skippedRootIDs))
+
+		for rootID, slabIDsWithBrokenRef := range brokenRefs {
+			require.ElementsMatch(t, slabIDsWithBrokenRef, skippedRootIDs[rootID])
+		}
+
+		// No data is modified because no fix happened
+		require.Equal(t, 0, len(storage.deltas))
+
+		// Fix broken references
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return true
+		})
+		require.NoError(t, err)
+		require.Equal(t, len(brokenRefs), len(fixedRootIDs))
+
+		for rootID, slabIDsWithBrokenRef := range brokenRefs {
+			require.ElementsMatch(t, slabIDsWithBrokenRef, fixedRootIDs[rootID])
+		}
+
+		require.Equal(t, 0, len(skippedRootIDs))
 		require.Equal(t, 1, len(storage.deltas))
 
 		// Check health after fixing broken reference
@@ -1812,7 +1856,9 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		nonRootDataID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
 		nonRootDataID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		brokenRefSlabID := nonRootDataID2
+		brokenRefs := map[SlabID][]SlabID{
+			rootID: {nonRootDataID2},
+		}
 
 		// Expected serialized slab data with storage id
 		data := map[SlabID][]byte{
@@ -1995,11 +2041,36 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		_, err := CheckStorageHealth(storage, -1)
 		require.ErrorContains(t, err, "slab (0x0.1) not found: slab not found during slab iteration")
 
-		// Fix broken reference
-		fixedIDs, err := storage.FixLoadedBrokenReferences()
+		var fixedRootIDs map[SlabID][]SlabID
+		var skippedRootIDs map[SlabID][]SlabID
+
+		// Don't fix any broken references
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return false
+		})
 		require.NoError(t, err)
-		require.Equal(t, 1, len(fixedIDs))
-		require.Equal(t, brokenRefSlabID, fixedIDs[0])
+		require.Equal(t, 0, len(fixedRootIDs))
+		require.Equal(t, len(brokenRefs), len(skippedRootIDs))
+
+		for rootID, slabIDsWithBrokenRef := range brokenRefs {
+			require.ElementsMatch(t, slabIDsWithBrokenRef, skippedRootIDs[rootID])
+		}
+
+		// No data is modified because no fix happened
+		require.Equal(t, 0, len(storage.deltas))
+
+		// Fix broken reference
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return true
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(fixedRootIDs))
+
+		for rootID, slabIDsWithBrokenRef := range brokenRefs {
+			require.ElementsMatch(t, slabIDsWithBrokenRef, fixedRootIDs[rootID])
+		}
+
+		require.Equal(t, 0, len(skippedRootIDs))
 		require.Equal(t, 3, len(storage.deltas))
 
 		// Check health after fixing broken reference
@@ -2030,7 +2101,9 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		nonRootDataID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
 		nonRootDataID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		brokenRefSlabID := []SlabID{nonRootDataID1, nonRootDataID2}
+		brokenRefs := map[SlabID][]SlabID{
+			rootID: {nonRootDataID1, nonRootDataID2},
+		}
 
 		data := map[SlabID][]byte{
 
@@ -2212,22 +2285,37 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		_, err := CheckStorageHealth(storage, -1)
 		require.ErrorContains(t, err, "slab not found during slab iteration")
 
-		// Fix broken reference
-		fixedIDs, err := storage.FixLoadedBrokenReferences()
-		require.NoError(t, err)
-		require.Equal(t, len(brokenRefSlabID), len(fixedIDs))
-		require.Equal(t, 3, len(storage.deltas))
+		var fixedRootIDs map[SlabID][]SlabID
+		var skippedRootIDs map[SlabID][]SlabID
 
-		for _, expected := range brokenRefSlabID {
-			var found bool
-			for _, actual := range fixedIDs {
-				if actual == expected {
-					found = true
-					break
-				}
-			}
-			require.True(t, found)
+		// Don't fix any broken references
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return false
+		})
+		require.NoError(t, err)
+		require.Equal(t, 0, len(fixedRootIDs))
+		require.Equal(t, len(brokenRefs), len(skippedRootIDs))
+
+		for rootID, slabIDsWithBrokenRef := range brokenRefs {
+			require.ElementsMatch(t, slabIDsWithBrokenRef, skippedRootIDs[rootID])
 		}
+
+		// No data is modified because no fix happened
+		require.Equal(t, 0, len(storage.deltas))
+
+		// Fix broken reference
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return true
+		})
+		require.NoError(t, err)
+		require.Equal(t, len(brokenRefs), len(fixedRootIDs))
+
+		for rootID, slabIDsWithBrokenRef := range brokenRefs {
+			require.ElementsMatch(t, slabIDsWithBrokenRef, fixedRootIDs[rootID])
+		}
+
+		require.Equal(t, 0, len(skippedRootIDs))
+		require.Equal(t, 3, len(storage.deltas))
 
 		// Check health after fixing broken reference
 		rootIDs, err := CheckStorageHealth(storage, -1)
@@ -2258,7 +2346,9 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		nonRootDataID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 		nestedContainerRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
 
-		brokenRefSlabID := []SlabID{nestedContainerRootID}
+		brokenRefs := map[SlabID][]SlabID{
+			nestedContainerRootID: {nestedContainerRootID},
+		}
 
 		data := map[SlabID][]byte{
 
@@ -2484,11 +2574,36 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		_, err := CheckStorageHealth(storage, -1)
 		require.ErrorContains(t, err, "slab (0x0.1) not found: slab not found during slab iteration")
 
-		// Fix broken reference
-		fixedIDs, err := storage.FixLoadedBrokenReferences()
+		var fixedRootIDs map[SlabID][]SlabID
+		var skippedRootIDs map[SlabID][]SlabID
+
+		// Don't fix any broken references
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return false
+		})
 		require.NoError(t, err)
-		require.Equal(t, len(brokenRefSlabID), len(fixedIDs))
-		require.Equal(t, brokenRefSlabID[0], fixedIDs[0])
+		require.Equal(t, 0, len(fixedRootIDs))
+		require.Equal(t, len(brokenRefs), len(skippedRootIDs))
+
+		for rootID, slabIDsWithBrokenRef := range brokenRefs {
+			require.ElementsMatch(t, slabIDsWithBrokenRef, skippedRootIDs[rootID])
+		}
+
+		// No data is modified because no fix happened
+		require.Equal(t, 0, len(storage.deltas))
+
+		// Fix broken reference
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return true
+		})
+		require.NoError(t, err)
+		require.Equal(t, len(brokenRefs), len(fixedRootIDs))
+
+		for rootID, slabIDsWithBrokenRef := range brokenRefs {
+			require.ElementsMatch(t, slabIDsWithBrokenRef, fixedRootIDs[rootID])
+		}
+
+		require.Equal(t, 0, len(skippedRootIDs))
 		require.Equal(t, 1, len(storage.deltas))
 
 		// Check health after fixing broken reference
@@ -2512,5 +2627,348 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, found)
 		require.Equal(t, fixedData[nestedContainerRootID], savedData)
+	})
+
+	t.Run("selectively fix maps", func(t *testing.T) {
+		rootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		nonRootDataID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		nonRootDataID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}} // containing broken ref
+
+		rootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}} // containing broken ref
+
+		rootIDs := []SlabID{rootID1, rootID2}
+
+		brokenRefs := map[SlabID][]SlabID{
+			rootID1: {nonRootDataID2},
+			rootID2: {rootID2},
+		}
+
+		data := map[SlabID][]byte{
+			// metadata slab
+			rootID1: {
+				// extra data
+				// version
+				0x00,
+				// flag: root + map meta
+				0x89,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
+				// type info: "map"
+				0x18, 0x2A,
+				// count: 8
+				0x08,
+				// seed
+				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
+
+				// version
+				0x00,
+				// flag: root + meta
+				0x89,
+				// child header count
+				0x00, 0x02,
+				// child header 1 (storage id, first key, size)
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x01, 0x02,
+				// child header 2
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				0x00, 0x00, 0x00, 0xfe,
+			},
+
+			// data slab
+			nonRootDataID1: {
+				// version
+				0x00,
+				// flag: map data
+				0x08,
+				// next storage id
+				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 4)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				// hkey: 1
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				// hkey: 2
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				// hkey: 3
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+
+				// elements (array of 4 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				// element: [aaaaaaaaaaaaaaaaaaaaaa:aaaaaaaaaaaaaaaaaaaaaa]
+				0x82,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
+				// element: [bbbbbbbbbbbbbbbbbbbbbb:bbbbbbbbbbbbbbbbbbbbbb]
+				0x82,
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
+				0x76, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62, 0x62,
+				// element: [cccccccccccccccccccccc:cccccccccccccccccccccc]
+				0x82,
+				0x76, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63,
+				0x76, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63,
+				// element: [dddddddddddddddddddddd:dddddddddddddddddddddd]
+				0x82,
+				0x76, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64,
+				0x76, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64,
+			},
+
+			// data slab
+			nonRootDataID2: {
+				// version
+				0x00,
+				// flag: has pointer + map data
+				0x48,
+				// next storage id
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 4)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20,
+				// hkey: 4
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				// hkey: 5
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+				// hkey: 6
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06,
+				// hkey: 7
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07,
+
+				// elements (array of 4 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+				// element: [eeeeeeeeeeeeeeeeeeeeee:eeeeeeeeeeeeeeeeeeeeee]
+				0x82,
+				0x76, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65,
+				0x76, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65,
+				// element: [ffffffffffffffffffffff:ffffffffffffffffffffff]
+				0x82,
+				0x76, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66,
+				0x76, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66,
+				// element: [gggggggggggggggggggggg:gggggggggggggggggggggg]
+				0x82,
+				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
+				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
+				// element: [hhhhhhhhhhhhhhhhhhhhhh:SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
+				0x82,
+				0x76, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68,
+				0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+			},
+
+			// map data slab
+			rootID2: {
+				// extra data
+				// version
+				0x00,
+				// flag: root + map data
+				0x88,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
+				// type info
+				0x18, 0x2a,
+				// count: 1
+				0x01,
+				// seed
+				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x4a,
+
+				// version
+				0x00,
+				// flag: root + map data
+				0x88,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 1)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// elements (array of 1 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				// element: [uint64(0):SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
+				0x82,
+				0xd8, 0xa4, 0x00,
+				0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+			},
+		}
+
+		fixedData := map[SlabID][]byte{
+			rootID1: {
+				// version
+				0x10,
+				// flag: root + map data
+				0x88,
+
+				// extra data
+				// CBOR encoded array of 3 elements
+				0x83,
+				// type info
+				0x18, 0x2a,
+				// count: 0
+				0x00,
+				// seed
+				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 1)
+				0x59, 0x00, 0x00,
+
+				// elements (array of 0 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x99, 0x00, 0x00,
+			},
+
+			rootID2: {
+				// version
+				0x10,
+				// flag: root + map data
+				0x88,
+
+				// extra data
+				// CBOR encoded array of 3 elements
+				0x83,
+				// type info
+				0x18, 0x2a,
+				// count: 0
+				0x00,
+				// seed
+				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x4a,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 1)
+				0x59, 0x00, 0x00,
+
+				// elements (array of 0 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x99, 0x00, 0x00,
+			},
+		}
+
+		storage := newTestPersistentStorageWithData(t, data)
+
+		// Load data in storage
+		for id := range data {
+			_, found, err := storage.Retrieve(id)
+			require.NoError(t, err)
+			require.True(t, found)
+		}
+
+		// Check health before fixing broken reference
+		_, err := CheckStorageHealth(storage, -1)
+		require.ErrorContains(t, err, "slab not found during slab iteration")
+
+		var fixedRootIDs map[SlabID][]SlabID
+		var skippedRootIDs map[SlabID][]SlabID
+
+		// Don't fix any broken references
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return false
+		})
+		require.NoError(t, err)
+		require.Equal(t, 0, len(fixedRootIDs))
+		require.Equal(t, len(brokenRefs), len(skippedRootIDs))
+
+		for rootID, slabIDsWithBrokenRef := range brokenRefs {
+			require.ElementsMatch(t, slabIDsWithBrokenRef, skippedRootIDs[rootID])
+		}
+
+		// No data is modified because no fix happened
+		require.Equal(t, 0, len(storage.deltas))
+
+		// Only fix one map with broken reference
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(v Value) bool {
+			m, ok := v.(*OrderedMap)
+			require.True(t, ok)
+			return rootID1 == m.SlabID()
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(fixedRootIDs))
+		require.Equal(t, brokenRefs[rootID1], fixedRootIDs[rootID1])
+		require.Equal(t, 1, len(skippedRootIDs))
+		require.Equal(t, brokenRefs[rootID2], skippedRootIDs[rootID2])
+		require.Equal(t, 3, len(storage.deltas))
+
+		// Save data in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+		require.Equal(t, 0, len(storage.deltas))
+
+		// Check health after only fixing one map with broken reference
+		_, err = CheckStorageHealth(storage, -1)
+		require.ErrorContains(t, err, "slab not found during slab iteration")
+
+		// Fix remaining map with broken reference
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(v Value) bool {
+			return true
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(fixedRootIDs))
+		require.Equal(t, brokenRefs[rootID2], fixedRootIDs[rootID2])
+		require.Equal(t, 0, len(skippedRootIDs))
+		require.Equal(t, 1, len(storage.deltas))
+
+		// Check health after fixing remaining maps with broken reference
+		returnedRootIDs, err := CheckStorageHealth(storage, -1)
+		require.NoError(t, err)
+		require.Equal(t, len(rootIDs), len(returnedRootIDs))
+
+		// Save data in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+		require.Equal(t, 0, len(storage.deltas))
+
+		// Check encoded data
+		baseStorage := storage.baseStorage.(*InMemBaseStorage)
+		require.Equal(t, 2, len(baseStorage.segments))
+
+		savedData, found, err := baseStorage.Retrieve(rootID1)
+		require.NoError(t, err)
+		require.True(t, found)
+		require.Equal(t, fixedData[rootID1], savedData)
+
+		savedData, found, err = baseStorage.Retrieve(rootID2)
+		require.NoError(t, err)
+		require.True(t, found)
+		require.Equal(t, fixedData[rootID2], savedData)
 	})
 }

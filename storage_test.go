@@ -2977,12 +2977,12 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 
-		expectedRefIDs := []StorageID{}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3007,12 +3007,12 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root data slab without refs", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 
-		expectedRefIDs := []StorageID{}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3039,13 +3039,13 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root data slab with ref to nested element", func(t *testing.T) {
-		parentRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		parentRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
 
-		expectedRefIDs := []StorageID{childRootID}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{childRootID}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			parentRootID: {
 				// extra data
 				// version
@@ -3093,13 +3093,13 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root data slab with broken ref", func(t *testing.T) {
-		parentRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		parentRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
 
-		expectedRefIDs := []StorageID{}
-		expectedBrokenRefIDs := []StorageID{childRootID}
+		expectedRefIDs := []SlabID{}
+		expectedBrokenRefIDs := []SlabID{childRootID}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			parentRootID: {
 				// extra data
 				// version
@@ -3126,14 +3126,14 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		expectedRefIDs := []StorageID{nonRootID1, nonRootID2}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3183,7 +3183,7 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
 			},
 
-			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... StorageID(...)]
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
 			nonRootID2: {
 				// version
 				0x00,
@@ -3212,14 +3212,14 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to first data slab", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		expectedRefIDs := []StorageID{nonRootID2}
-		expectedBrokenRefIDs := []StorageID{nonRootID1}
+		expectedRefIDs := []SlabID{nonRootID2}
+		expectedBrokenRefIDs := []SlabID{nonRootID1}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3247,7 +3247,7 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 				0x00, 0x00, 0x01, 0x0e,
 			},
 
-			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... StorageID(...)]
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
 			nonRootID2: {
 				// version
 				0x00,
@@ -3276,16 +3276,16 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with ref", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		childRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
 
-		expectedRefIDs := []StorageID{nonRootID1, nonRootID2, childRootID}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{nonRootID1, nonRootID2, childRootID}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3335,7 +3335,7 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
 			},
 
-			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... StorageID(...)]
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
 			nonRootID2: {
 				// version
 				0x00,
@@ -3385,16 +3385,16 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to nested element", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		childRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
 
-		expectedRefIDs := []StorageID{nonRootID1, nonRootID2}
-		expectedBrokenRefIDs := []StorageID{childRootID}
+		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
+		expectedBrokenRefIDs := []SlabID{childRootID}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3444,7 +3444,7 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
 			},
 
-			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... StorageID(...)]
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
 			nonRootID2: {
 				// version
 				0x00,
@@ -3473,14 +3473,14 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("3-level of nested containers", func(t *testing.T) {
-		parentRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		gchildRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		parentRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		gchildRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		expectedRefIDs := []StorageID{childRootID, gchildRootID}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{childRootID, gchildRootID}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			parentRootID: {
 				// extra data
 				// version
@@ -3553,12 +3553,12 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 
-		expectedRefIDs := []StorageID{}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3600,12 +3600,12 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root data slab without refs", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 
-		expectedRefIDs := []StorageID{}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3651,13 +3651,13 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root data slab with ref", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
 
-		expectedRefIDs := []StorageID{childRootID}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{childRootID}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3726,13 +3726,13 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root data slab with broken ref", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
 
-		expectedRefIDs := []StorageID{}
-		expectedBrokenRefIDs := []StorageID{childRootID}
+		expectedRefIDs := []SlabID{}
+		expectedBrokenRefIDs := []SlabID{childRootID}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3780,14 +3780,14 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		expectedRefIDs := []StorageID{nonRootID1, nonRootID2}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			// metadata slab
 			rootID: {
 				// extra data
@@ -3924,14 +3924,14 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to first data slab", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		expectedRefIDs := []StorageID{nonRootID2}
-		expectedBrokenRefIDs := []StorageID{nonRootID1}
+		expectedRefIDs := []SlabID{nonRootID2}
+		expectedBrokenRefIDs := []SlabID{nonRootID1}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			// metadata slab
 			rootID: {
 				// extra data
@@ -4019,16 +4019,16 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with ref", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		childRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
 
-		expectedRefIDs := []StorageID{nonRootID1, nonRootID2, childRootID}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{nonRootID1, nonRootID2, childRootID}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			// metadata slab
 			rootID: {
 				// extra data
@@ -4200,16 +4200,16 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to nested element", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		childRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
 
-		expectedRefIDs := []StorageID{nonRootID1, nonRootID2}
-		expectedBrokenRefIDs := []StorageID{childRootID}
+		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
+		expectedBrokenRefIDs := []SlabID{childRootID}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			// metadata slab
 			rootID: {
 				// extra data
@@ -4345,14 +4345,14 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("3-level containers", func(t *testing.T) {
-		rootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		gchildRootID := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		gchildRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 
-		expectedRefIDs := []StorageID{childRootID, gchildRootID}
-		expectedBrokenRefIDs := []StorageID{}
+		expectedRefIDs := []SlabID{childRootID, gchildRootID}
+		expectedBrokenRefIDs := []SlabID{}
 
-		data := map[StorageID][]byte{
+		data := map[SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -4444,10 +4444,10 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 
 func testGetAllChildReferences(
 	t *testing.T,
-	data map[StorageID][]byte,
-	rootID StorageID,
-	expectedRefIDs []StorageID,
-	expectedBrokenRefIDs []StorageID,
+	data map[SlabID][]byte,
+	rootID SlabID,
+	expectedRefIDs []SlabID,
+	expectedBrokenRefIDs []SlabID,
 ) {
 	storage := newTestPersistentStorageWithData(t, data)
 

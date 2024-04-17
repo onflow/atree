@@ -1299,9 +1299,9 @@ func (s *PersistentSlabStorage) existIfLoaded(id SlabID) bool {
 
 // GetAllChildReferences returns child references of given slab (all levels),
 // including nested container and theirs child references.
-func (s *PersistentSlabStorage) GetAllChildReferences(id StorageID) (
-	references []StorageID,
-	brokenReferences []StorageID,
+func (s *PersistentSlabStorage) GetAllChildReferences(id SlabID) (
+	references []SlabID,
+	brokenReferences []SlabID,
 	err error,
 ) {
 	slab, found, err := s.Retrieve(id)

@@ -558,6 +558,10 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 
 				storageIDStorable, ok := childStorable.(StorageIDStorable)
 				if !ok {
+					nextChildStorables = append(
+						nextChildStorables,
+						childStorable.ChildStorables()...,
+					)
 					continue
 				}
 

@@ -893,6 +893,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 		id2 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 2}}
 		id3 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 3}}
 		id4 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		id5 := StorageID{Address: address, Index: StorageIndex{0, 0, 0, 0, 0, 0, 0, 5}}
 
 		data := map[StorageID][]byte{
 			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:270 count:11} ]
@@ -969,8 +970,30 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 				0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
 			},
 
-			// (data slab) next: 0, data: [0]
+			// (data slab) next: 0, data: [SomeValue(StorageID(...))]
 			id4: {
+				// extra data
+				// version
+				0x00,
+				// extra data flag
+				0x80,
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2b,
+
+				// version
+				0x00,
+				// array data slab flag
+				0x80,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x01,
+				// CBOR encoded array elements
+				0xd8, cborTagSomeValue, 0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+			},
+
+			// (data slab) next: 0, data: [0]
+			id5: {
 				// extra data
 				// version
 				0x00,

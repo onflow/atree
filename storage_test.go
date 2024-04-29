@@ -1851,6 +1851,160 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, fixedData[rootID], savedData)
 	})
 
+	t.Run("broken nested storable in root map data slab", func(t *testing.T) {
+
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+
+		brokenRefs := map[SlabID][]SlabID{
+			rootID: {rootID},
+		}
+
+		data := map[SlabID][]byte{
+			rootID: {
+				// extra data
+				// version
+				0x00,
+				// flag: root + map data
+				0x88,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
+				// type info
+				0x18, 0x2a,
+				// count: 1
+				0x01,
+				// seed
+				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
+
+				// version
+				0x00,
+				// flag: root + map data
+				0x88,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 1)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// elements (array of 1 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				// element: [uint64(0):SomeValue(SlabID(0x0.1))]
+				0x82,
+				0xd8, 0xa4, 0x00,
+				0xd8, cborTagSomeValue, 0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+			},
+		}
+
+		fixedData := map[SlabID][]byte{
+			rootID: {
+				// version
+				0x10,
+				// flag: root + map data
+				0x88,
+
+				// extra data
+				// CBOR encoded array of 3 elements
+				0x83,
+				// type info
+				0x18, 0x2a,
+				// count: 0
+				0x00,
+				// seed
+				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 1)
+				0x59, 0x00, 0x00,
+
+				// elements (array of 0 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x99, 0x00, 0x00,
+			},
+		}
+
+		storage := newTestPersistentStorageWithData(t, data)
+
+		// Load data in storage
+		for id := range data {
+			_, found, err := storage.Retrieve(id)
+			require.NoError(t, err)
+			require.True(t, found)
+		}
+
+		// Check health before fixing broken reference
+		_, err := CheckStorageHealth(storage, -1)
+		require.ErrorContains(t, err, "slab (0x0.1) not found: slab not found during slab iteration")
+
+		var fixedRootIDs map[SlabID][]SlabID
+		var skippedRootIDs map[SlabID][]SlabID
+
+		// Don't fix any broken references
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return false
+		})
+		require.NoError(t, err)
+		require.Equal(t, 0, len(fixedRootIDs))
+		require.Equal(t, len(brokenRefs), len(skippedRootIDs))
+
+		for rootID, slabIDsWithBrokenRef := range brokenRefs {
+			require.ElementsMatch(t, slabIDsWithBrokenRef, skippedRootIDs[rootID])
+		}
+
+		// No data is modified because no fix happened
+		require.Equal(t, 0, len(storage.deltas))
+
+		// Fix broken references
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+			return true
+		})
+		require.NoError(t, err)
+		require.Equal(t, len(brokenRefs), len(fixedRootIDs))
+
+		for rootID, slabIDsWithBrokenRef := range brokenRefs {
+			require.ElementsMatch(t, slabIDsWithBrokenRef, fixedRootIDs[rootID])
+		}
+
+		require.Equal(t, 0, len(skippedRootIDs))
+		require.Equal(t, 1, len(storage.deltas))
+
+		// Check health after fixing broken reference
+		rootIDs, err := CheckStorageHealth(storage, -1)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(rootIDs))
+
+		_, ok := rootIDs[rootID]
+		require.True(t, ok)
+
+		// Save data in storage
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+		require.Equal(t, 0, len(storage.deltas))
+
+		// Check encoded data
+		baseStorage := storage.baseStorage.(*InMemBaseStorage)
+		require.Equal(t, 1, len(baseStorage.segments))
+
+		savedData, found, err := baseStorage.Retrieve(rootID)
+		require.NoError(t, err)
+		require.True(t, found)
+		require.Equal(t, fixedData[rootID], savedData)
+	})
+
 	t.Run("broken non-root map data slab", func(t *testing.T) {
 		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 		nonRootDataID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
@@ -3092,6 +3246,60 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 		testGetAllChildReferences(t, data, parentRootID, expectedRefIDs, expectedBrokenRefIDs)
 	})
 
+	t.Run("root data slab with ref in nested storable", func(t *testing.T) {
+		parentRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+
+		expectedRefIDs := []SlabID{childRootID}
+		expectedBrokenRefIDs := []SlabID{}
+
+		data := map[SlabID][]byte{
+			parentRootID: {
+				// extra data
+				// version
+				0x00,
+				// extra data flag
+				0x80,
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// version
+				0x00,
+				// array data slab flag
+				0x80,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x01,
+				// CBOR encoded array elements
+				0xd8, cborTagSomeValue, 0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			},
+
+			childRootID: {
+				// extra data
+				// version
+				0x00,
+				// extra data flag
+				0x80,
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// version
+				0x00,
+				// array data slab flag
+				0x80,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x01,
+				// CBOR encoded array elements
+				0xd8, 0xa4, 0x00,
+			},
+		}
+
+		testGetAllChildReferences(t, data, parentRootID, expectedRefIDs, expectedBrokenRefIDs)
+	})
+
 	t.Run("root data slab with broken ref", func(t *testing.T) {
 		parentRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
 		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
@@ -3698,6 +3906,81 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 				0x82,
 				0xd8, 0xa4, 0x00,
 				0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+			},
+
+			childRootID: {
+				// extra data
+				// version
+				0x00,
+				// extra data flag
+				0x80,
+				// array of extra data
+				0x81,
+				// type info
+				0x18, 0x2a,
+
+				// version
+				0x00,
+				// array data slab flag
+				0x80,
+				// CBOR encoded array head (fixed size 3 byte)
+				0x99, 0x00, 0x01,
+				// CBOR encoded array elements
+				0xd8, 0xa4, 0x00,
+			},
+		}
+
+		testGetAllChildReferences(t, data, rootID, expectedRefIDs, expectedBrokenRefIDs)
+	})
+
+	t.Run("root data slab with ref in nested storable", func(t *testing.T) {
+		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+
+		expectedRefIDs := []SlabID{childRootID}
+		expectedBrokenRefIDs := []SlabID{}
+
+		data := map[SlabID][]byte{
+			rootID: {
+				// extra data
+				// version
+				0x00,
+				// flag: root + map data
+				0x88,
+				// extra data (CBOR encoded array of 3 elements)
+				0x83,
+				// type info
+				0x18, 0x2a,
+				// count: 1
+				0x01,
+				// seed
+				0x1b, 0x52, 0xa8, 0x78, 0x3, 0x85, 0x2c, 0xaa, 0x49,
+
+				// version
+				0x00,
+				// flag: root + map data
+				0x88,
+
+				// the following encoded data is valid CBOR
+
+				// elements (array of 3 elements)
+				0x83,
+
+				// level: 0
+				0x00,
+
+				// hkeys (byte string of length 8 * 1)
+				0x5b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+				// hkey: 0
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+				// elements (array of 1 elements)
+				// each element is encoded as CBOR array of 2 elements (key, value)
+				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				// element: [uint64(0):uint64(0)]
+				0x82,
+				0xd8, 0xa4, 0x00,
+				0xd8, cborTagSomeValue, 0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 			},
 
 			childRootID: {

@@ -1128,40 +1128,60 @@ func (s *PersistentSlabStorage) FixLoadedBrokenReferences(needToFix func(old Val
 			return false
 		}
 
-		var isMetaDataSlab bool
-
 		switch slab.(type) {
-		case *ArrayMetaDataSlab, *MapMetaDataSlab:
-			isMetaDataSlab = true
+		case *ArrayMetaDataSlab, *MapMetaDataSlab: // metadata slabs
+			var foundBrokenRef bool
+
+			for _, childStorable := range slab.ChildStorables() {
+
+				if slabIDStorable, ok := childStorable.(SlabIDStorable); ok {
+
+					childID := SlabID(slabIDStorable)
+
+					// Track parent-child relationship of root slabs and non-root slabs.
+					parentOf[childID] = id
+
+					if !s.existIfLoaded(childID) {
+						foundBrokenRef = true
+					}
+
+					// Continue with remaining child storables to track parent-child relationship.
+				}
+			}
+
+			return foundBrokenRef
+
+		default: // data slabs
+			childStorables := slab.ChildStorables()
+
+			for len(childStorables) > 0 {
+
+				var nextChildStorables []Storable
+
+				for _, childStorable := range childStorables {
+
+					if slabIDStorable, ok := childStorable.(SlabIDStorable); ok {
+
+						if !s.existIfLoaded(SlabID(slabIDStorable)) {
+							return true
+						}
+
+						continue
+					}
+
+					// Append child storables of this childStorable to
+					// handle nested SlabIDStorable, such as Cadence SomeValue.
+					nextChildStorables = append(
+						nextChildStorables,
+						childStorable.ChildStorables()...,
+					)
+				}
+
+				childStorables = nextChildStorables
+			}
+
+			return false
 		}
-
-		var foundBrokenRef bool
-		for _, childStorable := range slab.ChildStorables() {
-
-			slabIDStorable, ok := childStorable.(SlabIDStorable)
-			if !ok {
-				continue
-			}
-
-			childID := SlabID(slabIDStorable)
-
-			// Track parent-child relationship of root slabs and non-root slabs.
-			if isMetaDataSlab {
-				parentOf[childID] = id
-			}
-
-			if s.existIfLoaded(childID) {
-				continue
-			}
-
-			foundBrokenRef = true
-
-			if !isMetaDataSlab {
-				return true
-			}
-		}
-
-		return foundBrokenRef
 	}
 
 	var brokenSlabIDs []SlabID
@@ -1330,6 +1350,11 @@ func (s *PersistentSlabStorage) getAllChildReferences(slab Slab) (
 
 			slabIDStorable, ok := childStorable.(SlabIDStorable)
 			if !ok {
+				nextChildStorables = append(
+					nextChildStorables,
+					childStorable.ChildStorables()...,
+				)
+
 				continue
 			}
 

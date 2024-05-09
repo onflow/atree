@@ -4823,14 +4823,32 @@ func testGetAllChildReferences(
 }
 
 func TestStorageNondeterministicFastCommit(t *testing.T) {
-	numberOfAccounts := 10
+	t.Run("0 slabs", func(t *testing.T) {
+		numberOfAccounts := 0
+		numberOfSlabsPerAccount := 0
+		testStorageNondeterministicFastCommit(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
 
-	t.Run("small", func(t *testing.T) {
+	t.Run("1 slabs", func(t *testing.T) {
+		numberOfAccounts := 1
+		numberOfSlabsPerAccount := 1
+		testStorageNondeterministicFastCommit(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+
+	t.Run("10 slabs", func(t *testing.T) {
+		numberOfAccounts := 1
 		numberOfSlabsPerAccount := 10
 		testStorageNondeterministicFastCommit(t, numberOfAccounts, numberOfSlabsPerAccount)
 	})
 
-	t.Run("large", func(t *testing.T) {
+	t.Run("100 slabs", func(t *testing.T) {
+		numberOfAccounts := 10
+		numberOfSlabsPerAccount := 10
+		testStorageNondeterministicFastCommit(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+
+	t.Run("10_000 slabs", func(t *testing.T) {
+		numberOfAccounts := 10
 		numberOfSlabsPerAccount := 1_000
 		testStorageNondeterministicFastCommit(t, numberOfAccounts, numberOfSlabsPerAccount)
 	})

@@ -1560,3 +1560,151 @@ func (s *PersistentSlabStorage) getAllChildReferences(slab Slab) (
 
 	return references, brokenReferences, nil
 }
+
+func (s *PersistentSlabStorage) BatchPreload(ids []SlabID, numWorkers int) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	minCountForBatchPreload := 11
+	if len(ids) < minCountForBatchPreload {
+
+		for _, id := range ids {
+			// fetch from base storage last
+			data, ok, err := s.baseStorage.Retrieve(id)
+			if err != nil {
+				// Wrap err as external error (if needed) because err is returned by BaseStorage interface.
+				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", id))
+			}
+			if !ok {
+				continue
+			}
+
+			slab, err := DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
+			if err != nil {
+				// err is already categorized by DecodeSlab().
+				return err
+			}
+
+			// save decoded slab to cache
+			s.cache[id] = slab
+		}
+
+		return nil
+	}
+
+	type slabToBeDecoded struct {
+		slabID SlabID
+		data   []byte
+	}
+
+	type decodedSlab struct {
+		slabID SlabID
+		slab   Slab
+		err    error
+	}
+
+	// Define decoder (worker) to decode slabs in parallel
+	decoder := func(wg *sync.WaitGroup, done <-chan struct{}, jobs <-chan slabToBeDecoded, results chan<- decodedSlab) {
+		defer wg.Done()
+
+		for slabData := range jobs {
+			// Check if goroutine is signaled to stop before proceeding.
+			select {
+			case <-done:
+				return
+			default:
+			}
+
+			id := slabData.slabID
+			data := slabData.data
+
+			slab, err := DecodeSlab(id, data, s.cborDecMode, s.DecodeStorable, s.DecodeTypeInfo)
+			// err is already categorized by DecodeSlab().
+			results <- decodedSlab{
+				slabID: id,
+				slab:   slab,
+				err:    err,
+			}
+		}
+	}
+
+	if numWorkers > len(ids) {
+		numWorkers = len(ids)
+	}
+
+	var wg sync.WaitGroup
+
+	// Construct done signal channel
+	done := make(chan struct{})
+
+	// Construct job queue
+	jobs := make(chan slabToBeDecoded, len(ids))
+
+	// Construct result queue
+	results := make(chan decodedSlab, len(ids))
+
+	defer func() {
+		// This ensures that all goroutines are stopped before output channel is closed.
+
+		// Wait for all goroutines to finish
+		wg.Wait()
+
+		// Close output channel
+		close(results)
+	}()
+
+	// Preallocate cache map if empty
+	if len(s.cache) == 0 {
+		s.cache = make(map[SlabID]Slab, len(ids))
+	}
+
+	// Launch workers
+	wg.Add(numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		go decoder(&wg, done, jobs, results)
+	}
+
+	// Send jobs
+	jobCount := 0
+	{
+		// Need to close input channel (jobs) here because
+		// if there isn't any job in jobs channel,
+		// done is never processed inside loop "for slabData := range jobs".
+		defer close(jobs)
+
+		for _, id := range ids {
+			// fetch from base storage last
+			data, ok, err := s.baseStorage.Retrieve(id)
+			if err != nil {
+				// Closing done channel signals goroutines to stop.
+				close(done)
+				// Wrap err as external error (if needed) because err is returned by BaseStorage interface.
+				return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", id))
+			}
+			if !ok {
+				continue
+			}
+
+			jobs <- slabToBeDecoded{id, data}
+			jobCount++
+		}
+	}
+
+	// Process results
+	for i := 0; i < jobCount; i++ {
+		result := <-results
+
+		if result.err != nil {
+			// Closing done channel signals goroutines to stop.
+			close(done)
+			// result.err is already categorized by DecodeSlab().
+			return result.err
+		}
+
+		// save decoded slab to cache
+		s.cache[result.slabID] = result.slab
+	}
+
+	return nil
+}

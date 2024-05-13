@@ -976,6 +976,12 @@ func (s *PersistentSlabStorage) NonderterministicFastCommit(numWorkers int) erro
 		}
 	}
 
+	// slabIDsWithOwner contains slab IDs with owner:
+	// - modified slab IDs are stored from front to back
+	// - deleted slab IDs are stored from back to front
+	// This is to avoid extra allocations.
+	slabIDsWithOwner := make([]StorageID, len(s.deltas))
+
 	// Modified slabs need to be encoded (in parallel) and stored in underlying storage.
 	modifiedSlabCount := 0
 	// Deleted slabs need to be removed from underlying storage.
@@ -986,11 +992,18 @@ func (s *PersistentSlabStorage) NonderterministicFastCommit(numWorkers int) erro
 			continue
 		}
 		if v == nil {
+			index := len(slabIDsWithOwner) - 1 - deletedSlabCount
+			slabIDsWithOwner[index] = k
 			deletedSlabCount++
 		} else {
+			slabIDsWithOwner[modifiedSlabCount] = k
 			modifiedSlabCount++
 		}
 	}
+
+	modifiedSlabIDs := slabIDsWithOwner[:modifiedSlabCount]
+
+	deletedSlabIDs := slabIDsWithOwner[len(slabIDsWithOwner)-deletedSlabCount:]
 
 	if modifiedSlabCount == 0 && deletedSlabCount == 0 {
 		return nil
@@ -998,15 +1011,7 @@ func (s *PersistentSlabStorage) NonderterministicFastCommit(numWorkers int) erro
 
 	if modifiedSlabCount < 2 {
 		// Avoid goroutine overhead
-		ids := make([]StorageID, 0, modifiedSlabCount+deletedSlabCount)
-		for k := range s.deltas {
-			// Ignore slabs not owned by accounts
-			if k.Address == AddressUndefined {
-				continue
-			}
-			ids = append(ids, k)
-		}
-
+		ids := append(modifiedSlabIDs, deletedSlabIDs...)
 		return s.commit(ids)
 	}
 
@@ -1042,17 +1047,8 @@ func (s *PersistentSlabStorage) NonderterministicFastCommit(numWorkers int) erro
 	}
 
 	// Send jobs
-	deletedSlabIDs := make([]StorageID, 0, deletedSlabCount)
-	for k, v := range s.deltas {
-		// ignore the ones that are not owned by accounts
-		if k.Address == AddressUndefined {
-			continue
-		}
-		if v == nil {
-			deletedSlabIDs = append(deletedSlabIDs, k)
-		} else {
-			jobs <- slabToBeEncoded{k, v}
-		}
+	for _, id := range modifiedSlabIDs {
+		jobs <- slabToBeEncoded{id, s.deltas[id]}
 	}
 	close(jobs)
 

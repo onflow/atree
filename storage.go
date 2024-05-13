@@ -1010,8 +1010,10 @@ func (s *PersistentSlabStorage) NondeterministicFastCommit(numWorkers int) error
 	}
 
 	if modifiedSlabCount < 2 {
-		// Avoid goroutine overhead
-		ids := append(modifiedSlabIDs, deletedSlabIDs...)
+		// Avoid goroutine overhead.
+		// Return after committing modified and deleted slabs.
+		ids := modifiedSlabIDs
+		ids = append(ids, deletedSlabIDs...)
 		return s.commit(ids)
 	}
 

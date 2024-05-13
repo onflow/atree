@@ -918,9 +918,9 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 	return nil
 }
 
-// NonderterministicFastCommit commits changes in nondeterministic order.
+// NondeterministicFastCommit commits changes in nondeterministic order.
 // This is used by migration program when ordering isn't required.
-func (s *PersistentSlabStorage) NonderterministicFastCommit(numWorkers int) error {
+func (s *PersistentSlabStorage) NondeterministicFastCommit(numWorkers int) error {
 	// No changes
 	if len(s.deltas) == 0 {
 		return nil

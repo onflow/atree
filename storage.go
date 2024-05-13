@@ -1529,12 +1529,16 @@ func (s *PersistentSlabStorage) getAllChildReferences(slab Slab) (
 	return references, brokenReferences, nil
 }
 
+// BatchPreload decodeds and caches slabs of given ids in parallel.
+// This is useful for storage health or data validation in migration programs.
 func (s *PersistentSlabStorage) BatchPreload(ids []SlabID, numWorkers int) error {
 	if len(ids) == 0 {
 		return nil
 	}
 
-	minCountForBatchPreload := 11
+	// Use 11 for min slab count for parallel decoding because micro benchmarks showed
+	// performance regression for <= 10 slabs when decoding slabs in parallel.
+	const minCountForBatchPreload = 11
 	if len(ids) < minCountForBatchPreload {
 
 		for _, id := range ids {

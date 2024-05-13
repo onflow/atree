@@ -4561,7 +4561,7 @@ func testStorageNondeterministicFastCommit(t *testing.T, numberOfAccounts int, n
 	require.Equal(t, slabSize, storage.DeltasSizeWithoutTempAddresses())
 
 	// Commit deltas
-	err = storage.NonderterministicFastCommit(10)
+	err = storage.NondeterministicFastCommit(10)
 	require.NoError(t, err)
 
 	require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
@@ -4584,7 +4584,7 @@ func testStorageNondeterministicFastCommit(t *testing.T, numberOfAccounts int, n
 	}
 
 	// Commit deltas
-	err = storage.NonderterministicFastCommit(10)
+	err = storage.NondeterministicFastCommit(10)
 	require.NoError(t, err)
 
 	require.Equal(t, 0, storage.Count())

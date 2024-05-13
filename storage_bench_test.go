@@ -105,7 +105,7 @@ func benchmarkNondeterministicFastCommit(b *testing.B, seed int64, numberOfSlabs
 
 			b.StartTimer()
 
-			err := storage.NonderterministicFastCommit(runtime.NumCPU())
+			err := storage.NondeterministicFastCommit(runtime.NumCPU())
 			require.NoError(b, err)
 		}
 	})

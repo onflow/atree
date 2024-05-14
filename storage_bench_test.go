@@ -143,19 +143,19 @@ func benchmarkRetrieve(b *testing.B, seed int64, numberOfSlabs int) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(b, err)
 
-	encodedSlabs := make(map[SlabID][]byte)
-	ids := make([]SlabID, 0, numberOfSlabs)
+	encodedSlabs := make(map[StorageID][]byte)
+	ids := make([]StorageID, 0, numberOfSlabs)
 	for i := 0; i < numberOfSlabs; i++ {
 		addr := generateRandomAddress(r)
 
-		var index SlabIndex
+		var index StorageIndex
 		binary.BigEndian.PutUint64(index[:], uint64(i))
 
-		id := SlabID{addr, index}
+		id := StorageID{addr, index}
 
 		slab := generateLargeSlab(id)
 
-		data, err := EncodeSlab(slab, encMode)
+		data, err := Encode(slab, encMode)
 		require.NoError(b, err)
 
 		encodedSlabs[id] = data
@@ -190,19 +190,19 @@ func benchmarkBatchPreload(b *testing.B, seed int64, numberOfSlabs int) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(b, err)
 
-	encodedSlabs := make(map[SlabID][]byte)
-	ids := make([]SlabID, 0, numberOfSlabs)
+	encodedSlabs := make(map[StorageID][]byte)
+	ids := make([]StorageID, 0, numberOfSlabs)
 	for i := 0; i < numberOfSlabs; i++ {
 		addr := generateRandomAddress(r)
 
-		var index SlabIndex
+		var index StorageIndex
 		binary.BigEndian.PutUint64(index[:], uint64(i))
 
-		id := SlabID{addr, index}
+		id := StorageID{addr, index}
 
 		slab := generateLargeSlab(id)
 
-		data, err := EncodeSlab(slab, encMode)
+		data, err := Encode(slab, encMode)
 		require.NoError(b, err)
 
 		encodedSlabs[id] = data

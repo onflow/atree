@@ -1531,7 +1531,7 @@ func (s *PersistentSlabStorage) getAllChildReferences(slab Slab) (
 
 // BatchPreload decodeds and caches slabs of given ids in parallel.
 // This is useful for storage health or data validation in migration programs.
-func (s *PersistentSlabStorage) BatchPreload(ids []SlabID, numWorkers int) error {
+func (s *PersistentSlabStorage) BatchPreload(ids []StorageID, numWorkers int) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -1566,12 +1566,12 @@ func (s *PersistentSlabStorage) BatchPreload(ids []SlabID, numWorkers int) error
 	}
 
 	type slabToBeDecoded struct {
-		slabID SlabID
+		slabID StorageID
 		data   []byte
 	}
 
 	type decodedSlab struct {
-		slabID SlabID
+		slabID StorageID
 		slab   Slab
 		err    error
 	}
@@ -1628,7 +1628,7 @@ func (s *PersistentSlabStorage) BatchPreload(ids []SlabID, numWorkers int) error
 
 	// Preallocate cache map if empty
 	if len(s.cache) == 0 {
-		s.cache = make(map[SlabID]Slab, len(ids))
+		s.cache = make(map[StorageID]Slab, len(ids))
 	}
 
 	// Launch workers

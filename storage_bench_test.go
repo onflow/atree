@@ -132,3 +132,122 @@ func BenchmarkStorageNondeterministicFastCommit(b *testing.B) {
 	benchmarkNondeterministicFastCommit(b, fixedSeed, 100_000)
 	benchmarkNondeterministicFastCommit(b, fixedSeed, 1_000_000)
 }
+
+func benchmarkRetrieve(b *testing.B, seed int64, numberOfSlabs int) {
+
+	r := rand.New(rand.NewSource(seed))
+
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(b, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(b, err)
+
+	encodedSlabs := make(map[StorageID][]byte)
+	ids := make([]StorageID, 0, numberOfSlabs)
+	for i := 0; i < numberOfSlabs; i++ {
+		addr := generateRandomAddress(r)
+
+		var index StorageIndex
+		binary.BigEndian.PutUint64(index[:], uint64(i))
+
+		id := StorageID{addr, index}
+
+		slab := generateLargeSlab(id)
+
+		data, err := Encode(slab, encMode)
+		require.NoError(b, err)
+
+		encodedSlabs[id] = data
+		ids = append(ids, id)
+	}
+
+	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+
+			baseStorage := NewInMemBaseStorageFromMap(encodedSlabs)
+			storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+
+			b.StartTimer()
+
+			for _, id := range ids {
+				_, found, err := storage.Retrieve(id)
+				require.True(b, found)
+				require.NoError(b, err)
+			}
+		}
+	})
+}
+
+func benchmarkBatchPreload(b *testing.B, seed int64, numberOfSlabs int) {
+
+	r := rand.New(rand.NewSource(seed))
+
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(b, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(b, err)
+
+	encodedSlabs := make(map[StorageID][]byte)
+	ids := make([]StorageID, 0, numberOfSlabs)
+	for i := 0; i < numberOfSlabs; i++ {
+		addr := generateRandomAddress(r)
+
+		var index StorageIndex
+		binary.BigEndian.PutUint64(index[:], uint64(i))
+
+		id := StorageID{addr, index}
+
+		slab := generateLargeSlab(id)
+
+		data, err := Encode(slab, encMode)
+		require.NoError(b, err)
+
+		encodedSlabs[id] = data
+		ids = append(ids, id)
+	}
+
+	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+
+			baseStorage := NewInMemBaseStorageFromMap(encodedSlabs)
+			storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+
+			b.StartTimer()
+
+			err = storage.BatchPreload(ids, runtime.NumCPU())
+			require.NoError(b, err)
+
+			for _, id := range ids {
+				_, found, err := storage.Retrieve(id)
+				require.True(b, found)
+				require.NoError(b, err)
+			}
+		}
+	})
+}
+
+func BenchmarkStorageRetrieve(b *testing.B) {
+	fixedSeed := int64(1234567) // intentionally use fixed constant rather than time, etc.
+
+	benchmarkRetrieve(b, fixedSeed, 10)
+	benchmarkRetrieve(b, fixedSeed, 100)
+	benchmarkRetrieve(b, fixedSeed, 1_000)
+	benchmarkRetrieve(b, fixedSeed, 10_000)
+	benchmarkRetrieve(b, fixedSeed, 100_000)
+	benchmarkRetrieve(b, fixedSeed, 1_000_000)
+}
+
+func BenchmarkStorageBatchPreload(b *testing.B) {
+	fixedSeed := int64(1234567) // intentionally use fixed constant rather than time, etc.
+
+	benchmarkBatchPreload(b, fixedSeed, 10)
+	benchmarkBatchPreload(b, fixedSeed, 100)
+	benchmarkBatchPreload(b, fixedSeed, 1_000)
+	benchmarkBatchPreload(b, fixedSeed, 10_000)
+	benchmarkBatchPreload(b, fixedSeed, 100_000)
+	benchmarkBatchPreload(b, fixedSeed, 1_000_000)
+}

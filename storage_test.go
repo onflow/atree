@@ -19,6 +19,7 @@
 package atree
 
 import (
+	"encoding/binary"
 	"errors"
 	"math/rand"
 	"runtime"
@@ -4931,4 +4932,173 @@ func testStorageNondeterministicFastCommit(t *testing.T, numberOfAccounts int, n
 		require.False(t, found)
 		require.Nil(t, storedValue)
 	}
+}
+
+func TestStorageBatchPreload(t *testing.T) {
+	t.Run("0 slab", func(t *testing.T) {
+		numberOfAccounts := 0
+		numberOfSlabsPerAccount := 0
+		testStorageBatchPreload(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+
+	t.Run("1 slab", func(t *testing.T) {
+		numberOfAccounts := 1
+		numberOfSlabsPerAccount := 1
+		testStorageBatchPreload(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+
+	t.Run("10 slab", func(t *testing.T) {
+		numberOfAccounts := 1
+		numberOfSlabsPerAccount := 10
+		testStorageBatchPreload(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+
+	t.Run("100 slabs", func(t *testing.T) {
+		numberOfAccounts := 10
+		numberOfSlabsPerAccount := 10
+		testStorageBatchPreload(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+
+	t.Run("10_000 slabs", func(t *testing.T) {
+		numberOfAccounts := 10
+		numberOfSlabsPerAccount := 1_000
+		testStorageBatchPreload(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+}
+
+func testStorageBatchPreload(t *testing.T, numberOfAccounts int, numberOfSlabsPerAccount int) {
+
+	indexesByAddress := make(map[Address]uint64)
+
+	generateSlabID := func(address Address) StorageID {
+		nextIndex := indexesByAddress[address] + 1
+
+		var idx StorageIndex
+		binary.BigEndian.PutUint64(idx[:], nextIndex)
+
+		indexesByAddress[address] = nextIndex
+
+		return NewStorageID(address, idx)
+	}
+
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	r := newRand(t)
+
+	encodedSlabs := make(map[StorageID][]byte)
+
+	// Generate and encode slabs
+	for i := 0; i < numberOfAccounts; i++ {
+
+		addr := generateRandomAddress(r)
+
+		for j := 0; j < numberOfSlabsPerAccount; j++ {
+
+			slabID := generateSlabID(addr)
+
+			slab := generateRandomSlab(slabID, r)
+
+			encodedSlabs[slabID], err = Encode(slab, encMode)
+			require.NoError(t, err)
+		}
+	}
+
+	baseStorage := NewInMemBaseStorageFromMap(encodedSlabs)
+	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+
+	ids := make([]StorageID, 0, len(encodedSlabs))
+	for id := range encodedSlabs {
+		ids = append(ids, id)
+	}
+
+	// Batch preload slabs from base storage
+	err = storage.BatchPreload(ids, runtime.NumCPU())
+	require.NoError(t, err)
+	require.Equal(t, len(encodedSlabs), len(storage.cache))
+	require.Equal(t, 0, len(storage.deltas))
+
+	// Compare encoded data
+	for id, data := range encodedSlabs {
+		cachedData, err := Encode(storage.cache[id], encMode)
+		require.NoError(t, err)
+
+		require.Equal(t, cachedData, data)
+	}
+}
+
+func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
+
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	r := newRand(t)
+
+	t.Run("empty storage", func(t *testing.T) {
+		const numberOfSlabs = 10
+
+		ids := make([]StorageID, numberOfSlabs)
+		for i := 0; i < numberOfSlabs; i++ {
+			var index StorageIndex
+			binary.BigEndian.PutUint64(index[:], uint64(i))
+
+			ids[i] = NewStorageID(generateRandomAddress(r), index)
+		}
+
+		baseStorage := NewInMemBaseStorage()
+		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+
+		err := storage.BatchPreload(ids, runtime.NumCPU())
+		require.NoError(t, err)
+
+		require.Equal(t, 0, len(storage.cache))
+		require.Equal(t, 0, len(storage.deltas))
+	})
+
+	t.Run("non-empty storage", func(t *testing.T) {
+		const numberOfSlabs = 10
+
+		ids := make([]StorageID, numberOfSlabs)
+		encodedSlabs := make(map[StorageID][]byte)
+
+		for i := 0; i < numberOfSlabs; i++ {
+			var index StorageIndex
+			binary.BigEndian.PutUint64(index[:], uint64(i))
+
+			id := NewStorageID(generateRandomAddress(r), index)
+
+			slab := generateRandomSlab(id, r)
+
+			encodedSlabs[id], err = Encode(slab, encMode)
+			require.NoError(t, err)
+
+			ids[i] = id
+		}
+
+		// Append a slab ID that doesn't exist in storage.
+		ids = append(ids, NewStorageID(generateRandomAddress(r), StorageIndex{numberOfSlabs}))
+
+		baseStorage := NewInMemBaseStorageFromMap(encodedSlabs)
+		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+
+		err := storage.BatchPreload(ids, runtime.NumCPU())
+		require.NoError(t, err)
+
+		require.Equal(t, len(encodedSlabs), len(storage.cache))
+		require.Equal(t, 0, len(storage.deltas))
+
+		// Compare encoded data
+		for id, data := range encodedSlabs {
+			cachedData, err := Encode(storage.cache[id], encMode)
+			require.NoError(t, err)
+
+			require.Equal(t, cachedData, data)
+		}
+	})
 }

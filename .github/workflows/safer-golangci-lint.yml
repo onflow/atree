@@ -4,6 +4,38 @@
 # Safer GitHub Actions Workflow for golangci-lint.
 # https://github.com/x448/safer-golangci-lint 
 #
+# safer-golangci-lint.yml
+#
+# This workflow downloads, verifies, and runs golangci-lint in a
+# deterministic, reviewable, and safe manner.
+#
+# To use:
+#   Step 1. Copy this file into [your_github_repo]/.github/workflows/
+#   Step 2. There's no step 2 if you like the default settings.
+#
+# See golangci-lint docs for more info at
+# https://github.com/golangci/golangci-lint
+#
+# 100% of the script for downloading, installing, and running golangci-lint
+# is embedded in this file. The embedded SHA-256 digest is used to verify the
+# downloaded golangci-lint tarball (golangci-lint-1.xx.x-linux-amd64.tar.gz).
+#
+# The embedded SHA-256 digest matches golangci-lint-1.xx.x-checksums.txt at
+# https://github.com/golangci/golangci-lint/releases
+#
+# To use a newer version of golangci-lint, change these values:
+#   1. GOLINTERS_VERSION
+#   2. GOLINTERS_TGZ_DGST
+#
+# Release v1.52.2 (May 14, 2023)
+#   - Bump Go to 1.20
+#   - Bump actions/setup-go to v4
+#   - Bump golangci-lint to 1.52.2
+#   - Hash of golangci-lint-1.52.2-linux-amd64.tar.gz
+#     - SHA-256: c9cf72d12058a131746edd409ed94ccd578fbd178899d1ed41ceae3ce5f54501
+#                This SHA-256 digest matches golangci-lint-1.52.2-checksums.txt at
+#                https://github.com/golangci/golangci-lint/releases
+#
 name: linters
 
 # Remove default permissions and grant only what is required in each job.
@@ -17,9 +49,9 @@ on:
 
 env:
   GO_VERSION: '1.20'
-  GOLINTERS_VERSION: 1.53.3
+  GOLINTERS_VERSION: 1.52.2
   GOLINTERS_ARCH: linux-amd64
-  GOLINTERS_TGZ_DGST: 4f62007ca96372ccba54760e2ed39c2446b40ec24d9a90c21aad9f2fdf6cf0da
+  GOLINTERS_TGZ_DGST: c9cf72d12058a131746edd409ed94ccd578fbd178899d1ed41ceae3ce5f54501
   GOLINTERS_TIMEOUT: 15m
   OPENSSL_DGST_CMD: openssl dgst -sha256 -r
   CURL_CMD: curl --proto =https --tlsv1.2 --location --silent --show-error --fail
@@ -32,12 +64,12 @@ jobs:
       contents: read
     steps:
       - name: Checkout source
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
       - name: Setup Go
-        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
           check-latest: true

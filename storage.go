@@ -1037,17 +1037,19 @@ func (s *PersistentSlabStorage) NondeterministicFastCommit(numWorkers int) error
 	modifiedSlabCount := 0
 	// Deleted slabs need to be removed from underlying storage.
 	deletedSlabCount := 0
-	for k, v := range s.deltas {
+	for id, slab := range s.deltas {
 		// Ignore slabs not owned by accounts
-		if k.address == AddressUndefined {
+		if id.address == AddressUndefined {
 			continue
 		}
-		if v == nil {
+		if slab == nil {
+			// Set deleted slab ID from the end of slabIDsWithOwner.
 			index := len(slabIDsWithOwner) - 1 - deletedSlabCount
-			slabIDsWithOwner[index] = k
+			slabIDsWithOwner[index] = id
 			deletedSlabCount++
 		} else {
-			slabIDsWithOwner[modifiedSlabCount] = k
+			// Set modified slab ID from the start of slabIDsWithOwner.
+			slabIDsWithOwner[modifiedSlabCount] = id
 			modifiedSlabCount++
 		}
 	}

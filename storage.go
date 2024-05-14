@@ -726,12 +726,17 @@ func (s *PersistentSlabStorage) sortedOwnedDeltaKeys() []StorageID {
 }
 
 func (s *PersistentSlabStorage) Commit() error {
-	var err error
 
 	// this part ensures the keys are sorted so commit operation is deterministic
 	keysWithOwners := s.sortedOwnedDeltaKeys()
 
-	for _, id := range keysWithOwners {
+	return s.commit(keysWithOwners)
+}
+
+func (s *PersistentSlabStorage) commit(keys []StorageID) error {
+	var err error
+
+	for _, id := range keys {
 		slab := s.deltas[id]
 
 		// deleted slabs
@@ -897,6 +902,204 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 		// store
 		err = s.baseStorage.Store(id, data)
 		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by BaseStorage interface.
+			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
+		}
+
+		s.cache[id] = s.deltas[id]
+		// It's safe to remove slab from deltas because
+		// iteration is on non-temp slabs and temp slabs
+		// are still in deltas.
+		delete(s.deltas, id)
+	}
+
+	// Do NOT reset deltas because slabs with empty address are not saved.
+
+	return nil
+}
+
+// NondeterministicFastCommit commits changes in nondeterministic order.
+// This is used by migration program when ordering isn't required.
+func (s *PersistentSlabStorage) NondeterministicFastCommit(numWorkers int) error {
+	// No changes
+	if len(s.deltas) == 0 {
+		return nil
+	}
+
+	type slabToBeEncoded struct {
+		slabID StorageID
+		slab   Slab
+	}
+
+	type encodedSlab struct {
+		slabID StorageID
+		data   []byte
+		err    error
+	}
+
+	// Define encoder (worker) to encode slabs in parallel
+	encoder := func(
+		wg *sync.WaitGroup,
+		done <-chan struct{},
+		jobs <-chan slabToBeEncoded,
+		results chan<- encodedSlab,
+	) {
+		defer wg.Done()
+
+		for job := range jobs {
+			// Check if goroutine is signaled to stop before proceeding.
+			select {
+			case <-done:
+				return
+			default:
+			}
+
+			id := job.slabID
+			slab := job.slab
+
+			if slab == nil {
+				results <- encodedSlab{
+					slabID: id,
+					data:   nil,
+					err:    nil,
+				}
+				continue
+			}
+
+			// Serialize
+			data, err := Encode(slab, s.cborEncMode)
+			results <- encodedSlab{
+				slabID: id,
+				data:   data,
+				err:    err,
+			}
+		}
+	}
+
+	// slabIDsWithOwner contains slab IDs with owner:
+	// - modified slab IDs are stored from front to back
+	// - deleted slab IDs are stored from back to front
+	// This is to avoid extra allocations.
+	slabIDsWithOwner := make([]StorageID, len(s.deltas))
+
+	// Modified slabs need to be encoded (in parallel) and stored in underlying storage.
+	modifiedSlabCount := 0
+	// Deleted slabs need to be removed from underlying storage.
+	deletedSlabCount := 0
+	for id, slab := range s.deltas {
+		// Ignore slabs not owned by accounts
+		if id.Address == AddressUndefined {
+			continue
+		}
+		if slab == nil {
+			// Set deleted slab ID from the end of slabIDsWithOwner.
+			index := len(slabIDsWithOwner) - 1 - deletedSlabCount
+			slabIDsWithOwner[index] = id
+			deletedSlabCount++
+		} else {
+			// Set modified slab ID from the start of slabIDsWithOwner.
+			slabIDsWithOwner[modifiedSlabCount] = id
+			modifiedSlabCount++
+		}
+	}
+
+	modifiedSlabIDs := slabIDsWithOwner[:modifiedSlabCount]
+
+	deletedSlabIDs := slabIDsWithOwner[len(slabIDsWithOwner)-deletedSlabCount:]
+
+	if modifiedSlabCount == 0 && deletedSlabCount == 0 {
+		return nil
+	}
+
+	if modifiedSlabCount < 2 {
+		// Avoid goroutine overhead.
+		// Return after committing modified and deleted slabs.
+		ids := modifiedSlabIDs
+		ids = append(ids, deletedSlabIDs...)
+		return s.commit(ids)
+	}
+
+	if numWorkers > modifiedSlabCount {
+		numWorkers = modifiedSlabCount
+	}
+
+	var wg sync.WaitGroup
+
+	// Create done signal channel
+	done := make(chan struct{})
+
+	// Create job queue
+	jobs := make(chan slabToBeEncoded, modifiedSlabCount)
+
+	// Create result queue
+	results := make(chan encodedSlab, modifiedSlabCount)
+
+	defer func() {
+		// This ensures that all goroutines are stopped before output channel is closed.
+
+		// Wait for all goroutines to finish
+		wg.Wait()
+
+		// Close output channel
+		close(results)
+	}()
+
+	// Launch workers to encode slabs
+	wg.Add(numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		go encoder(&wg, done, jobs, results)
+	}
+
+	// Send jobs
+	for _, id := range modifiedSlabIDs {
+		jobs <- slabToBeEncoded{id, s.deltas[id]}
+	}
+	close(jobs)
+
+	// Remove deleted slabs from underlying storage.
+	for _, id := range deletedSlabIDs {
+
+		err := s.baseStorage.Remove(id)
+		if err != nil {
+			// Closing done channel signals goroutines to stop.
+			close(done)
+			// Wrap err as external error (if needed) because err is returned by BaseStorage interface.
+			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", id))
+		}
+
+		// Deleted slabs are removed from deltas and added to read cache so that:
+		// 1. next read is from in-memory read cache
+		// 2. deleted slabs are not re-committed in next commit
+		s.cache[id] = nil
+		delete(s.deltas, id)
+	}
+
+	// Process encoded slabs
+	for i := 0; i < modifiedSlabCount; i++ {
+		result := <-results
+
+		if result.err != nil {
+			// Closing done channel signals goroutines to stop.
+			close(done)
+			// result.err is already categorized by Encode().
+			return result.err
+		}
+
+		id := result.slabID
+		data := result.data
+
+		if data == nil {
+			// Closing done channel signals goroutines to stop.
+			close(done)
+			// This is unexpected because deleted slabs are processed separately.
+			return NewEncodingErrorf("unexpectd encoded empty data")
+		}
+
+		// Store
+		err := s.baseStorage.Store(id, data)
+		if err != nil {
+			// Closing done channel signals goroutines to stop.
+			close(done)
 			// Wrap err as external error (if needed) because err is returned by BaseStorage interface.
 			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
 		}

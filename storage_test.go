@@ -409,8 +409,8 @@ func TestBasicSlabStorageStore(t *testing.T) {
 	r := newRand(t)
 	address := Address{1}
 	slabs := map[StorageID]Slab{
-		{address, StorageIndex{1}}: generateRandomSlab(address, r),
-		{address, StorageIndex{2}}: generateRandomSlab(address, r),
+		{address, StorageIndex{1}}: generateRandomSlab(StorageID{address, StorageIndex{1}}, r),
+		{address, StorageIndex{2}}: generateRandomSlab(StorageID{address, StorageIndex{2}}, r),
 	}
 
 	// Store values
@@ -421,7 +421,7 @@ func TestBasicSlabStorageStore(t *testing.T) {
 
 	// Overwrite stored values
 	for id := range slabs {
-		slab := generateRandomSlab(id.Address, r)
+		slab := generateRandomSlab(id, r)
 		slabs[id] = slab
 		err := storage.Store(id, slab)
 		require.NoError(t, err)
@@ -443,7 +443,7 @@ func TestBasicSlabStorageRetrieve(t *testing.T) {
 
 	r := newRand(t)
 	id := StorageID{Address{1}, StorageIndex{1}}
-	slab := generateRandomSlab(id.Address, r)
+	slab := generateRandomSlab(id, r)
 
 	// Retrieve value from empty storage
 	retrievedSlab, found, err := storage.Retrieve(id)
@@ -473,7 +473,7 @@ func TestBasicSlabStorageRemove(t *testing.T) {
 
 	r := newRand(t)
 	id := StorageID{Address{1}, StorageIndex{1}}
-	slab := generateRandomSlab(id.Address, r)
+	slab := generateRandomSlab(id, r)
 
 	// Remove value from empty storage
 	err := storage.Remove(id)
@@ -543,7 +543,7 @@ func TestBasicSlabStorageStorageIDs(t *testing.T) {
 
 	// Store values
 	for id := range wantIDs {
-		err := storage.Store(id, generateRandomSlab(id.Address, r))
+		err := storage.Store(id, generateRandomSlab(id, r))
 		require.NoError(t, err)
 	}
 
@@ -566,9 +566,9 @@ func TestBasicSlabStorageSlabIterat(t *testing.T) {
 	id3 := StorageID{Address: address, Index: index.Next()}
 
 	want := map[StorageID]Slab{
-		id1: generateRandomSlab(id1.Address, r),
-		id2: generateRandomSlab(id2.Address, r),
-		id3: generateRandomSlab(id3.Address, r),
+		id1: generateRandomSlab(id1, r),
+		id2: generateRandomSlab(id2, r),
+		id3: generateRandomSlab(id3, r),
 	}
 
 	storage := NewBasicSlabStorage(nil, nil, nil, nil)
@@ -639,8 +639,8 @@ func TestPersistentStorage(t *testing.T) {
 		permStorageID, err := NewStorageIDFromRawBytes([]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
 		require.NoError(t, err)
 
-		slab1 := generateRandomSlab(tempStorageID.Address, r)
-		slab2 := generateRandomSlab(permStorageID.Address, r)
+		slab1 := generateRandomSlab(tempStorageID, r)
+		slab2 := generateRandomSlab(permStorageID, r)
 
 		// no temp ids should be in the base storage
 		err = storage.Store(tempStorageID, slab1)
@@ -721,8 +721,10 @@ func TestPersistentStorage(t *testing.T) {
 		numberOfSlabsPerAccount := 10
 
 		r := newRand(t)
+
 		baseStorage := newAccessOrderTrackerBaseStorage()
 		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
+
 		baseStorage2 := newAccessOrderTrackerBaseStorage()
 		storageWithFastCommit := NewPersistentSlabStorage(baseStorage2, encMode, decMode, nil, nil)
 
@@ -732,16 +734,19 @@ func TestPersistentStorage(t *testing.T) {
 		for i := 0; i < numberOfAccounts; i++ {
 			for j := 0; j < numberOfSlabsPerAccount; j++ {
 				addr := generateRandomAddress(r)
-				slab := generateRandomSlab(addr, r)
-				slabSize += uint64(slab.ByteSize())
 
 				storageID, err := storage.GenerateStorageID(addr)
 				require.NoError(t, err)
+
+				slab := generateRandomSlab(storageID, r)
+				slabSize += uint64(slab.ByteSize())
+
 				err = storage.Store(storageID, slab)
 				require.NoError(t, err)
 
 				storageID2, err := storageWithFastCommit.GenerateStorageID(addr)
 				require.NoError(t, err)
+
 				err = storageWithFastCommit.Store(storageID2, slab)
 				require.NoError(t, err)
 
@@ -1072,16 +1077,38 @@ func TestPersistentStorageGenerateStorageID(t *testing.T) {
 	})
 }
 
-func generateRandomSlab(address Address, r *rand.Rand) Slab {
+func generateRandomSlab(id StorageID, r *rand.Rand) Slab {
 	storable := Uint64Value(r.Uint64())
 
 	return &ArrayDataSlab{
 		header: ArraySlabHeader{
-			id:    NewStorageID(address, StorageIndex{1}),
+			id:    id,
 			size:  arrayRootDataSlabPrefixSize + storable.ByteSize(),
 			count: 1,
 		},
 		elements: []Storable{storable},
+	}
+}
+
+func generateLargeSlab(id StorageID) Slab {
+
+	const elementCount = 100
+
+	storables := make([]Storable, elementCount)
+	size := uint32(0)
+	for i := 0; i < elementCount; i++ {
+		storable := Uint64Value(uint64(i))
+		size += storable.ByteSize()
+		storables[i] = storable
+	}
+
+	return &ArrayDataSlab{
+		header: ArraySlabHeader{
+			id:    id,
+			size:  arrayRootDataSlabPrefixSize + size,
+			count: elementCount,
+		},
+		elements: storables,
 	}
 }
 
@@ -4793,4 +4820,115 @@ func testGetAllChildReferences(
 
 	require.Equal(t, len(expectedBrokenRefIDs), len(brokenRefs))
 	require.ElementsMatch(t, expectedBrokenRefIDs, brokenRefs)
+}
+
+func TestStorageNondeterministicFastCommit(t *testing.T) {
+	t.Run("0 slabs", func(t *testing.T) {
+		numberOfAccounts := 0
+		numberOfSlabsPerAccount := 0
+		testStorageNondeterministicFastCommit(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+
+	t.Run("1 slabs", func(t *testing.T) {
+		numberOfAccounts := 1
+		numberOfSlabsPerAccount := 1
+		testStorageNondeterministicFastCommit(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+
+	t.Run("10 slabs", func(t *testing.T) {
+		numberOfAccounts := 1
+		numberOfSlabsPerAccount := 10
+		testStorageNondeterministicFastCommit(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+
+	t.Run("100 slabs", func(t *testing.T) {
+		numberOfAccounts := 10
+		numberOfSlabsPerAccount := 10
+		testStorageNondeterministicFastCommit(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+
+	t.Run("10_000 slabs", func(t *testing.T) {
+		numberOfAccounts := 10
+		numberOfSlabsPerAccount := 1_000
+		testStorageNondeterministicFastCommit(t, numberOfAccounts, numberOfSlabsPerAccount)
+	})
+}
+
+func testStorageNondeterministicFastCommit(t *testing.T, numberOfAccounts int, numberOfSlabsPerAccount int) {
+	encMode, err := cbor.EncOptions{}.EncMode()
+	require.NoError(t, err)
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	r := newRand(t)
+
+	baseStorage := NewInMemBaseStorage()
+	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
+
+	encodedSlabs := make(map[StorageID][]byte)
+	slabSize := uint64(0)
+
+	// Storage slabs
+	for i := 0; i < numberOfAccounts; i++ {
+
+		addr := generateRandomAddress(r)
+
+		for j := 0; j < numberOfSlabsPerAccount; j++ {
+
+			slabID, err := storage.GenerateStorageID(addr)
+			require.NoError(t, err)
+
+			slab := generateRandomSlab(slabID, r)
+			slabSize += uint64(slab.ByteSize())
+
+			err = storage.Store(slabID, slab)
+			require.NoError(t, err)
+
+			// capture data for accuracy testing
+			encodedSlabs[slabID], err = Encode(slab, encMode)
+			require.NoError(t, err)
+		}
+	}
+
+	require.Equal(t, uint(len(encodedSlabs)), storage.DeltasWithoutTempAddresses())
+	require.Equal(t, slabSize, storage.DeltasSizeWithoutTempAddresses())
+
+	// Commit deltas
+	err = storage.NondeterministicFastCommit(10)
+	require.NoError(t, err)
+
+	require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
+	require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
+	require.Equal(t, len(encodedSlabs), storage.Count())
+
+	// Compare encoded data
+	for sid, value := range encodedSlabs {
+		storedValue, found, err := baseStorage.Retrieve(sid)
+		require.NoError(t, err)
+		require.True(t, found)
+		require.Equal(t, value, storedValue)
+	}
+
+	// Remove all slabs from storage
+	for sid := range encodedSlabs {
+		err = storage.Remove(sid)
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
+	}
+
+	// Commit deltas
+	err = storage.NondeterministicFastCommit(10)
+	require.NoError(t, err)
+
+	require.Equal(t, 0, storage.Count())
+	require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
+
+	// Check remove functionality
+	for sid := range encodedSlabs {
+		storedValue, found, err := storage.Retrieve(sid)
+		require.NoError(t, err)
+		require.False(t, found)
+		require.Nil(t, storedValue)
+	}
 }

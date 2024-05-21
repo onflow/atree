@@ -34,6 +34,7 @@ const (
 	cborTagUInt32Value = 163
 	cborTagUInt64Value = 164
 	cborTagSomeValue   = 165
+	cborTagHashableMap = 166
 )
 
 type HashableValue interface {
@@ -634,6 +635,19 @@ func compare(storage SlabStorage, value Value, storable Storable) (bool, error) 
 		}
 
 		return compare(storage, v.Value, other.Storable)
+
+	case *HashableMap:
+		other, err := storable.StoredValue(storage)
+		if err != nil {
+			return false, err
+		}
+
+		otherMap, ok := other.(*OrderedMap)
+		if !ok {
+			return false, nil
+		}
+
+		return v.m.ValueID() == otherMap.ValueID(), nil
 	}
 
 	return false, fmt.Errorf("value %T not supported for comparison", value)
@@ -783,4 +797,48 @@ func (*mutableStorable) ChildStorables() []Storable {
 func (*mutableStorable) Encode(*Encoder) error {
 	// no-op for testing
 	return nil
+}
+
+type HashableMap struct {
+	m *OrderedMap
+}
+
+var _ Value = &HashableMap{}
+var _ HashableValue = &HashableMap{}
+
+func NewHashableMap(m *OrderedMap) *HashableMap {
+	return &HashableMap{m}
+}
+
+func (v *HashableMap) Storable(storage SlabStorage, address Address, maxInlineSize uint64) (Storable, error) {
+	return v.m.Storable(storage, address, maxInlineSize)
+}
+
+func (v *HashableMap) HashInput(scratch []byte) ([]byte, error) {
+	const (
+		cborTypeByteString = 0x40
+
+		valueIDLength          = len(ValueID{})
+		cborTagNumSize         = 2
+		cborByteStringHeadSize = 1
+		cborByteStringSize     = valueIDLength
+		hashInputSize          = cborTagNumSize + cborByteStringHeadSize + cborByteStringSize
+	)
+
+	var buf []byte
+	if len(scratch) >= hashInputSize {
+		buf = scratch[:hashInputSize]
+	} else {
+		buf = make([]byte, hashInputSize)
+	}
+
+	// CBOR tag number
+	buf[0], buf[1] = 0xd8, cborTagHashableMap
+
+	// CBOR byte string head
+	buf[2] = cborTypeByteString | byte(valueIDLength)
+
+	vid := v.m.ValueID()
+	copy(buf[3:], vid[:])
+	return buf, nil
 }

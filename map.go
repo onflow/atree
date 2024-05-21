@@ -5746,13 +5746,36 @@ func (i *mutableMapIterator) NextValue() (Value, error) {
 	return v, nil
 }
 
+type ReadOnlyMapIteratorMutationCallback func(mutatedValue Value)
+
 type readOnlyMapIterator struct {
-	m              *OrderedMap
-	nextDataSlabID SlabID
-	elemIterator   *mapElementIterator
+	m                     *OrderedMap
+	nextDataSlabID        SlabID
+	elemIterator          *mapElementIterator
+	keyMutationCallback   ReadOnlyMapIteratorMutationCallback
+	valueMutationCallback ReadOnlyMapIteratorMutationCallback
 }
 
+// defaultReadOnlyMapIteratorMutatinCallback is no-op.
+var defaultReadOnlyMapIteratorMutatinCallback ReadOnlyMapIteratorMutationCallback = func(Value) {}
+
 var _ MapIterator = &readOnlyMapIterator{}
+
+func (i *readOnlyMapIterator) setMutationCallback(key, value Value) {
+	if k, ok := key.(mutableValueNotifier); ok {
+		k.setParentUpdater(func() (found bool, err error) {
+			i.keyMutationCallback(key)
+			return true, NewReadOnlyIteratorElementMutationError(i.m.ValueID(), k.ValueID())
+		})
+	}
+
+	if v, ok := value.(mutableValueNotifier); ok {
+		v.setParentUpdater(func() (found bool, err error) {
+			i.valueMutationCallback(value)
+			return true, NewReadOnlyIteratorElementMutationError(i.m.ValueID(), v.ValueID())
+		})
+	}
+}
 
 func (i *readOnlyMapIterator) Next() (key Value, value Value, err error) {
 	if i.elemIterator == nil {
@@ -5785,6 +5808,8 @@ func (i *readOnlyMapIterator) Next() (key Value, value Value, err error) {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
 			return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get map value's stored value")
 		}
+
+		i.setMutationCallback(key, value)
 
 		return key, value, nil
 	}
@@ -5821,6 +5846,8 @@ func (i *readOnlyMapIterator) NextKey() (key Value, err error) {
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get map key's stored value")
 		}
 
+		i.setMutationCallback(key, nil)
+
 		return key, nil
 	}
 
@@ -5855,6 +5882,8 @@ func (i *readOnlyMapIterator) NextValue() (value Value, err error) {
 			// Wrap err as external error (if needed) because err is returned by Storable interface.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get map value's stored value")
 		}
+
+		i.setMutationCallback(nil, value)
 
 		return value, nil
 	}
@@ -5932,9 +5961,31 @@ func (m *OrderedMap) Iterator(comparator ValueComparator, hip HashInputProvider)
 }
 
 // ReadOnlyIterator returns readonly iterator for map elements.
-// If elements are mutated, those changes are not guaranteed to persist.
-// NOTE: Use readonly iterator if mutation is not needed for better performance.
+// If elements are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback is needed (e.g. for logging mutation, etc.), use ReadOnlyIteratorWithMutationCallback().
 func (m *OrderedMap) ReadOnlyIterator() (MapIterator, error) {
+	return m.ReadOnlyIteratorWithMutationCallback(nil, nil)
+}
+
+// ReadOnlyIteratorWithMutationCallback returns readonly iterator for map elements.
+// keyMutatinCallback and valueMutationCallback are useful for logging, etc. with
+// more context when mutation occurs.  Mutation handling here is the same with or
+// without these callbacks.
+// If elements are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// - keyMutatinCallback and valueMutationCallback are called if provided
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback isn't needed, use ReadOnlyIterator().
+func (m *OrderedMap) ReadOnlyIteratorWithMutationCallback(
+	keyMutatinCallback ReadOnlyMapIteratorMutationCallback,
+	valueMutationCallback ReadOnlyMapIteratorMutationCallback,
+) (MapIterator, error) {
 	if m.Count() == 0 {
 		return emptyReadOnlyMapIterator, nil
 	}
@@ -5945,6 +5996,14 @@ func (m *OrderedMap) ReadOnlyIterator() (MapIterator, error) {
 		return nil, err
 	}
 
+	if keyMutatinCallback == nil {
+		keyMutatinCallback = defaultReadOnlyMapIteratorMutatinCallback
+	}
+
+	if valueMutationCallback == nil {
+		valueMutationCallback = defaultReadOnlyMapIteratorMutatinCallback
+	}
+
 	return &readOnlyMapIterator{
 		m:              m,
 		nextDataSlabID: dataSlab.next,
@@ -5952,6 +6011,8 @@ func (m *OrderedMap) ReadOnlyIterator() (MapIterator, error) {
 			storage:  m.Storage,
 			elements: dataSlab.elements,
 		},
+		keyMutationCallback:   keyMutatinCallback,
+		valueMutationCallback: valueMutationCallback,
 	}, nil
 }
 
@@ -5987,8 +6048,36 @@ func (m *OrderedMap) Iterate(comparator ValueComparator, hip HashInputProvider, 
 	return iterateMap(iterator, fn)
 }
 
-func (m *OrderedMap) IterateReadOnly(fn MapEntryIterationFunc) error {
-	iterator, err := m.ReadOnlyIterator()
+// IterateReadOnly iterates readonly map elements.
+// If elements are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback is needed (e.g. for logging mutation, etc.), use IterateReadOnlyWithMutationCallback().
+func (m *OrderedMap) IterateReadOnly(
+	fn MapEntryIterationFunc,
+) error {
+	return m.IterateReadOnlyWithMutationCallback(fn, nil, nil)
+}
+
+// IterateReadOnlyWithMutationCallback iterates readonly map elements.
+// keyMutatinCallback and valueMutationCallback are useful for logging, etc. with
+// more context when mutation occurs.  Mutation handling here is the same with or
+// without these callbacks.
+// If elements are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// - keyMutatinCallback/valueMutationCallback is called if provided
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback isn't needed, use IterateReadOnly().
+func (m *OrderedMap) IterateReadOnlyWithMutationCallback(
+	fn MapEntryIterationFunc,
+	keyMutatinCallback ReadOnlyMapIteratorMutationCallback,
+	valueMutationCallback ReadOnlyMapIteratorMutationCallback,
+) error {
+	iterator, err := m.ReadOnlyIteratorWithMutationCallback(keyMutatinCallback, valueMutationCallback)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by OrderedMap.ReadOnlyIterator().
 		return err
@@ -6028,8 +6117,35 @@ func (m *OrderedMap) IterateKeys(comparator ValueComparator, hip HashInputProvid
 	return iterateMapKeys(iterator, fn)
 }
 
-func (m *OrderedMap) IterateReadOnlyKeys(fn MapElementIterationFunc) error {
-	iterator, err := m.ReadOnlyIterator()
+// IterateReadOnlyKeys iterates readonly map keys.
+// If keys are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of key containers return ReadOnlyIteratorElementMutationError.
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback is needed (e.g. for logging mutation, etc.), use IterateReadOnlyKeysWithMutationCallback().
+func (m *OrderedMap) IterateReadOnlyKeys(
+	fn MapElementIterationFunc,
+) error {
+	return m.IterateReadOnlyKeysWithMutationCallback(fn, nil)
+}
+
+// IterateReadOnlyKeysWithMutationCallback iterates readonly map keys.
+// keyMutatinCallback is useful for logging, etc. with more context
+// when mutation occurs.  Mutation handling here is the same with or
+// without this callback.
+// If keys are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of key containers return ReadOnlyIteratorElementMutationError.
+// - keyMutatinCallback is called if provided
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback isn't needed, use IterateReadOnlyKeys().
+func (m *OrderedMap) IterateReadOnlyKeysWithMutationCallback(
+	fn MapElementIterationFunc,
+	keyMutatinCallback ReadOnlyMapIteratorMutationCallback,
+) error {
+	iterator, err := m.ReadOnlyIteratorWithMutationCallback(keyMutatinCallback, nil)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by OrderedMap.ReadOnlyIterator().
 		return err
@@ -6069,8 +6185,35 @@ func (m *OrderedMap) IterateValues(comparator ValueComparator, hip HashInputProv
 	return iterateMapValues(iterator, fn)
 }
 
-func (m *OrderedMap) IterateReadOnlyValues(fn MapElementIterationFunc) error {
-	iterator, err := m.ReadOnlyIterator()
+// IterateReadOnlyValues iterates readonly map values.
+// If values are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback is needed (e.g. for logging mutation, etc.), use IterateReadOnlyValuesWithMutationCallback().
+func (m *OrderedMap) IterateReadOnlyValues(
+	fn MapElementIterationFunc,
+) error {
+	return m.IterateReadOnlyValuesWithMutationCallback(fn, nil)
+}
+
+// IterateReadOnlyValuesWithMutationCallback iterates readonly map values.
+// valueMutationCallback is useful for logging, etc. with more context
+// when mutation occurs.  Mutation handling here is the same with or
+// without this callback.
+// If values are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// - keyMutatinCallback is called if provided
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback isn't needed, use IterateReadOnlyValues().
+func (m *OrderedMap) IterateReadOnlyValuesWithMutationCallback(
+	fn MapElementIterationFunc,
+	valueMutationCallback ReadOnlyMapIteratorMutationCallback,
+) error {
+	iterator, err := m.ReadOnlyIteratorWithMutationCallback(nil, valueMutationCallback)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by OrderedMap.ReadOnlyIterator().
 		return err

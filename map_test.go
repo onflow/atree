@@ -1306,6 +1306,887 @@ func TestReadOnlyMapIterate(t *testing.T) {
 	})
 }
 
+func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
+
+	SetThreshold(256)
+	defer SetThreshold(1024)
+
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	storage := newTestPersistentStorage(t)
+	digesterBuilder := newBasicDigesterBuilder()
+
+	var mutationError *ReadOnlyIteratorElementMutationError
+
+	t.Run("mutate inlined map key from IterateReadOnly", func(t *testing.T) {
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// child map key {}
+		childMapKey, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childMapKey.Inlined())
+
+		// parent map {{}: 0}
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, NewHashableMap(childMapKey), Uint64Value(0))
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+		require.True(t, childMapKey.Inlined())
+
+		// Iterate elements and modify key
+		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyWithMutationCallback(
+			func(k Value, v Value) (resume bool, err error) {
+				c, ok := k.(*OrderedMap)
+				require.True(t, ok)
+				require.True(t, c.Inlined())
+
+				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingStorable)
+
+				return true, err
+			},
+			func(k Value) {
+				keyMutationCallbackCalled = true
+				require.Equal(t, childMapKey.ValueID(), k.(mutableValueNotifier).ValueID())
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, keyMutationCallbackCalled)
+		require.False(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate inlined map value from IterateReadOnly", func(t *testing.T) {
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// child map {}
+		childMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childMap.Inlined())
+
+		// parent map {0: {}}
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(0), childMap)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+		require.True(t, childMap.Inlined())
+
+		// Iterate elements and modify value
+		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyWithMutationCallback(
+			func(k Value, v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.True(t, c.Inlined())
+
+				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingStorable)
+
+				return true, err
+			},
+			func(k Value) {
+				keyMutationCallbackCalled = true
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+				require.Equal(t, childMap.ValueID(), v.(mutableValueNotifier).ValueID())
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.False(t, keyMutationCallbackCalled)
+		require.True(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate inlined map key from IterateReadOnlyKeys", func(t *testing.T) {
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// child map key {}
+		childMapKey, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childMapKey.Inlined())
+
+		// parent map {{}: 0}
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, NewHashableMap(childMapKey), Uint64Value(0))
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+		require.True(t, childMapKey.Inlined())
+
+		// Iterate and modify key
+		var keyMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyKeysWithMutationCallback(
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.True(t, c.Inlined())
+
+				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingStorable)
+
+				return true, err
+			},
+			func(v Value) {
+				keyMutationCallbackCalled = true
+				require.Equal(t, childMapKey.ValueID(), v.(mutableValueNotifier).ValueID())
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, keyMutationCallbackCalled)
+	})
+
+	t.Run("mutate inlined map value from IterateReadOnlyValues", func(t *testing.T) {
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// child map {}
+		childMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childMap.Inlined())
+
+		// parent map {0: {}}
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(0), childMap)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+		require.True(t, childMap.Inlined())
+
+		// Iterate and modify value
+		var valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyValuesWithMutationCallback(
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.True(t, c.Inlined())
+
+				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(1), Uint64Value(1))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingStorable)
+
+				return true, err
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+				require.Equal(t, childMap.ValueID(), v.(mutableValueNotifier).ValueID())
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate not inlined map key from IterateReadOnly", func(t *testing.T) {
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// child map key {}
+		childMapKey, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childMapKey.Inlined())
+
+		// Inserting elements into childMapKey so it can't be inlined
+		const size = 20
+		for i := 0; i < size; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			existingStorable, err := childMapKey.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// parent map {{...}: 0}
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, NewHashableMap(childMapKey), Uint64Value(0))
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+		require.False(t, childMapKey.Inlined())
+
+		// Iterate elements and modify key
+		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyWithMutationCallback(
+			func(k Value, v Value) (resume bool, err error) {
+				c, ok := k.(*OrderedMap)
+				require.True(t, ok)
+				require.False(t, c.Inlined())
+
+				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingKeyStorable)
+				require.Nil(t, existingValueStorable)
+
+				return true, err
+			},
+			func(k Value) {
+				keyMutationCallbackCalled = true
+				require.Equal(t, childMapKey.ValueID(), k.(mutableValueNotifier).ValueID())
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, keyMutationCallbackCalled)
+		require.False(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate not inlined map value from IterateReadOnly", func(t *testing.T) {
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// child map {}
+		childMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childMap.Inlined())
+
+		// parent map {0: {}}
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(0), childMap)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+		require.True(t, childMap.Inlined())
+
+		// Inserting elements into childMap until it is no longer inlined
+		for i := 0; childMap.Inlined(); i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Iterate elements and modify value
+		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyWithMutationCallback(
+			func(k Value, v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.False(t, c.Inlined())
+
+				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingKeyStorable)
+				require.Nil(t, existingValueStorable)
+
+				return true, err
+			},
+			func(k Value) {
+				keyMutationCallbackCalled = true
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+				require.Equal(t, childMap.ValueID(), v.(mutableValueNotifier).ValueID())
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.False(t, keyMutationCallbackCalled)
+		require.True(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate not inlined map key from IterateReadOnlyKeys", func(t *testing.T) {
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// child map key {}
+		childMapKey, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childMapKey.Inlined())
+
+		// Inserting elements into childMap so it can't be inlined.
+		const size = 20
+		for i := 0; i < size; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			existingStorable, err := childMapKey.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// parent map {{...}: 0}
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, NewHashableMap(childMapKey), Uint64Value(0))
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+		require.False(t, childMapKey.Inlined())
+
+		// Iterate and modify key
+		var keyMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyKeysWithMutationCallback(
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.False(t, c.Inlined())
+
+				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingKeyStorable)
+				require.Nil(t, existingValueStorable)
+
+				return true, err
+			},
+			func(v Value) {
+				keyMutationCallbackCalled = true
+				require.Equal(t, childMapKey.ValueID(), v.(mutableValueNotifier).ValueID())
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, keyMutationCallbackCalled)
+	})
+
+	t.Run("mutate not inlined map value from IterateReadOnlyValues", func(t *testing.T) {
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// child map {}
+		childMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childMap.Inlined())
+
+		// parent map {0: {}}
+		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(0), childMap)
+		require.NoError(t, err)
+		require.Nil(t, existingStorable)
+		require.True(t, childMap.Inlined())
+
+		// Inserting elements into childMap until it is no longer inlined
+		for i := 0; childMap.Inlined(); i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Iterate and modify value
+		var valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyValuesWithMutationCallback(
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.False(t, c.Inlined())
+
+				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingKeyStorable)
+				require.Nil(t, existingValueStorable)
+
+				return true, err
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+				require.Equal(t, childMap.ValueID(), v.(mutableValueNotifier).ValueID())
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate inlined map key in collision from IterateReadOnly", func(t *testing.T) {
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// childMapKey1 {}
+		childMapKey1, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		// childMapKey2 {}
+		childMapKey2, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// parentMap {{}:0, {}:1} with all elements in the same collision group
+		for i, m := range []*OrderedMap{childMapKey1, childMapKey2} {
+			k := NewHashableMap(m)
+			v := Uint64Value(i)
+
+			digests := []Digest{Digest(0)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+			// This is needed because Digest is called again on OrderedMap when inserting collision element.
+			digesterBuilder.On("Digest", m).Return(mockDigester{digests})
+
+			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Iterate element and modify key
+		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyWithMutationCallback(
+			func(k Value, v Value) (resume bool, err error) {
+				c, ok := k.(*OrderedMap)
+				require.True(t, ok)
+				require.True(t, c.Inlined())
+
+				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingStorable)
+
+				return true, err
+			},
+			func(k Value) {
+				keyMutationCallbackCalled = true
+				vid := k.(mutableValueNotifier).ValueID()
+				require.True(t, childMapKey1.ValueID() == vid || childMapKey2.ValueID() == vid)
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, keyMutationCallbackCalled)
+		require.False(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate inlined map value in collision from IterateReadOnly", func(t *testing.T) {
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// childMap1 {}
+		childMap1, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		// childMap2 {}
+		childMap2, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// parentMap {0: {}, 1:{}} with all elements in the same collision group
+		for i, m := range []*OrderedMap{childMap1, childMap2} {
+			k := Uint64Value(i)
+
+			digests := []Digest{Digest(0)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, m)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Iterate elements and modify values
+		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyWithMutationCallback(
+			func(k Value, v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.True(t, c.Inlined())
+
+				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(1), Uint64Value(1))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingStorable)
+
+				return true, err
+			},
+			func(k Value) {
+				keyMutationCallbackCalled = true
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+				vid := v.(mutableValueNotifier).ValueID()
+				require.True(t, childMap1.ValueID() == vid || childMap2.ValueID() == vid)
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.False(t, keyMutationCallbackCalled)
+		require.True(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate inlined map key in collision from IterateReadOnlyKeys", func(t *testing.T) {
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// childMapKey1 {}
+		childMapKey1, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		// childMapKey2 {}
+		childMapKey2, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// parentMap {{}: 0, {}: 1} with all elements in the same collision group
+		for i, m := range []*OrderedMap{childMapKey1, childMapKey2} {
+			k := NewHashableMap(m)
+			v := Uint64Value(i)
+
+			digests := []Digest{Digest(0)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+			// This is needed because Digest is called again on OrderedMap when inserting collision element.
+			digesterBuilder.On("Digest", m).Return(mockDigester{digests})
+
+			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Iterate and modify keys
+		var keyMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyKeysWithMutationCallback(
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.True(t, c.Inlined())
+
+				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingStorable)
+
+				return true, err
+			},
+			func(v Value) {
+				keyMutationCallbackCalled = true
+				vid := v.(mutableValueNotifier).ValueID()
+				require.True(t, childMapKey1.ValueID() == vid || childMapKey2.ValueID() == vid)
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, keyMutationCallbackCalled)
+	})
+
+	t.Run("mutate inlined map value in collision from IterateReadOnlyValues", func(t *testing.T) {
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// childMap1 {}
+		childMap1, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		// childMap2 {}
+		childMap2, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// parentMap {0: {}, 1:{}} with all elements in the same collision group
+		for i, m := range []*OrderedMap{childMap1, childMap2} {
+			k := Uint64Value(i)
+
+			digests := []Digest{Digest(0)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, m)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Iterate and modify values
+		var valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyValuesWithMutationCallback(
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.True(t, c.Inlined())
+
+				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingStorable)
+
+				return true, err
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+				vid := v.(mutableValueNotifier).ValueID()
+				require.True(t, childMap1.ValueID() == vid || childMap2.ValueID() == vid)
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate not inlined map key in collision from IterateReadOnly", func(t *testing.T) {
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// childMapKey1 {}
+		childMapKey1, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		const size = 20
+		for i := 0; i < size; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+
+			existingStorable, err := childMapKey1.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// childMapKey2 {}
+		childMapKey2, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		for i := 0; i < size; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+
+			existingStorable, err := childMapKey2.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// parentMap {0: {}, 1:{}} with all elements in the same collision group
+		for i, m := range []*OrderedMap{childMapKey1, childMapKey2} {
+			k := NewHashableMap(m)
+			v := Uint64Value(i)
+
+			digests := []Digest{Digest(0)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+			// This is needed because Digest is called again on OrderedMap when inserting collision element.
+			digesterBuilder.On("Digest", m).Return(mockDigester{digests})
+
+			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Iterate elements and modify keys
+		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyWithMutationCallback(
+			func(k Value, v Value) (resume bool, err error) {
+				c, ok := k.(*OrderedMap)
+				require.True(t, ok)
+				require.False(t, c.Inlined())
+
+				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingKeyStorable)
+				require.Nil(t, existingValueStorable)
+
+				return true, err
+			},
+			func(k Value) {
+				keyMutationCallbackCalled = true
+				vid := k.(mutableValueNotifier).ValueID()
+				require.True(t, childMapKey1.ValueID() == vid || childMapKey2.ValueID() == vid)
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, keyMutationCallbackCalled)
+		require.False(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate not inlined map value in collision from IterateReadOnly", func(t *testing.T) {
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// childMap1 {}
+		childMap1, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		// childMap2 {}
+		childMap2, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// parentMap {0: {}, 1:{}} with all elements in the same collision group
+		for i, m := range []*OrderedMap{childMap1, childMap2} {
+			k := Uint64Value(i)
+
+			digests := []Digest{Digest(0)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, m)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		for i := 0; childMap1.Inlined(); i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+
+			existingStorable, err := childMap1.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		for i := 0; childMap2.Inlined(); i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+
+			existingStorable, err := childMap2.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Iterate elements and modify values
+		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyWithMutationCallback(
+			func(k Value, v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.False(t, c.Inlined())
+
+				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingKeyStorable)
+				require.Nil(t, existingValueStorable)
+
+				return true, err
+			},
+			func(k Value) {
+				keyMutationCallbackCalled = true
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+				vid := v.(mutableValueNotifier).ValueID()
+				require.True(t, childMap1.ValueID() == vid || childMap2.ValueID() == vid)
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.False(t, keyMutationCallbackCalled)
+		require.True(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate not inlined map key in collision from IterateReadOnlyKeys", func(t *testing.T) {
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// childMapKey1 {}
+		childMapKey1, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		size := 20
+		for i := 0; i < size; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+
+			existingStorable, err := childMapKey1.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// childMapKey2 {}
+		childMapKey2, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		for i := 0; i < size; i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+
+			existingStorable, err := childMapKey2.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// parentMap {0: {}, 1:{}} with all elements in the same collision group
+		for i, m := range []*OrderedMap{childMapKey1, childMapKey2} {
+			k := NewHashableMap(m)
+			v := Uint64Value(i)
+
+			digests := []Digest{Digest(0)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+			// This is needed because Digest is called again on OrderedMap when inserting collision element.
+			digesterBuilder.On("Digest", m).Return(mockDigester{digests})
+
+			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Iterate and modify keys
+		var keyMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyKeysWithMutationCallback(
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.False(t, c.Inlined())
+
+				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingKeyStorable)
+				require.Nil(t, existingValueStorable)
+
+				return true, err
+			},
+			func(v Value) {
+				keyMutationCallbackCalled = true
+				vid := v.(mutableValueNotifier).ValueID()
+				require.True(t, childMapKey1.ValueID() == vid || childMapKey2.ValueID() == vid)
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, keyMutationCallbackCalled)
+	})
+
+	t.Run("mutate not inlined map value in collision from IterateReadOnlyValues", func(t *testing.T) {
+		digesterBuilder := &mockDigesterBuilder{}
+
+		// childMap1 {}
+		childMap1, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		// childMap2 {}
+		childMap2, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		parentMap, err := NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		// parentMap {0: {}, 1:{}} with all elements in the same collision group
+		for i, m := range []*OrderedMap{childMap1, childMap2} {
+			k := Uint64Value(i)
+
+			digests := []Digest{Digest(0)}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+
+			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, m)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		for i := 0; childMap1.Inlined(); i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+
+			existingStorable, err := childMap1.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		for i := 0; childMap2.Inlined(); i++ {
+			k := Uint64Value(i)
+			v := Uint64Value(i)
+
+			existingStorable, err := childMap2.Set(compare, hashInputProvider, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Iterate and modify values
+		var valueMutationCallbackCalled bool
+		err = parentMap.IterateReadOnlyValuesWithMutationCallback(
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*OrderedMap)
+				require.True(t, ok)
+				require.False(t, c.Inlined())
+
+				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingKeyStorable)
+				require.Nil(t, existingValueStorable)
+
+				return true, err
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+				vid := v.(mutableValueNotifier).ValueID()
+				require.True(t, childMap1.ValueID() == vid || childMap2.ValueID() == vid)
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, valueMutationCallbackCalled)
+	})
+}
+
 func TestMutableMapIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {

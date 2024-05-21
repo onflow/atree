@@ -909,6 +909,178 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 	})
 }
 
+func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
+
+	SetThreshold(256)
+	defer SetThreshold(1024)
+
+	typeInfo := testTypeInfo{42}
+	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	storage := newTestPersistentStorage(t)
+
+	var mutationError *ReadOnlyIteratorElementMutationError
+
+	t.Run("mutate inlined element from IterateReadOnly", func(t *testing.T) {
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		// child array []
+		childArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childArray.Inlined())
+
+		// parent array [[]]
+		err = parentArray.Append(childArray)
+		require.NoError(t, err)
+		require.True(t, childArray.Inlined())
+
+		// Iterate and modify element
+		var valueMutationCallbackCalled bool
+		err = parentArray.IterateReadOnlyWithMutationCallback(
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*Array)
+				require.True(t, ok)
+				require.True(t, c.Inlined())
+
+				err = c.Append(Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+
+				return true, err
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate inlined element from IterateReadOnlyRange", func(t *testing.T) {
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		// child array []
+		childArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childArray.Inlined())
+
+		// parent array [[]]
+		err = parentArray.Append(childArray)
+		require.NoError(t, err)
+		require.True(t, childArray.Inlined())
+
+		// Iterate and modify element
+		var valueMutationCallbackCalled bool
+		err = parentArray.IterateReadOnlyRangeWithMutationCallback(
+			0,
+			parentArray.Count(),
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*Array)
+				require.True(t, ok)
+				require.True(t, c.Inlined())
+
+				err = c.Append(Uint64Value(0))
+				require.ErrorAs(t, err, &mutationError)
+
+				return true, err
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate not inlined array element from IterateReadOnly", func(t *testing.T) {
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		// child array []
+		childArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childArray.Inlined())
+
+		// parent array [[]]
+		err = parentArray.Append(childArray)
+		require.NoError(t, err)
+		require.True(t, childArray.Inlined())
+
+		// Inserting elements into childArray so it can't be inlined
+		for i := 0; childArray.Inlined(); i++ {
+			v := Uint64Value(i)
+			err = childArray.Append(v)
+			require.NoError(t, err)
+		}
+
+		// Iterate and modify element
+		var valueMutationCallbackCalled bool
+		err = parentArray.IterateReadOnlyWithMutationCallback(
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*Array)
+				require.True(t, ok)
+				require.False(t, c.Inlined())
+
+				existingStorable, err := c.Remove(0)
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingStorable)
+
+				return true, err
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, valueMutationCallbackCalled)
+	})
+
+	t.Run("mutate not inlined array element from IterateReadOnlyRange", func(t *testing.T) {
+		parentArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+
+		// child array []
+		childArray, err := NewArray(storage, address, typeInfo)
+		require.NoError(t, err)
+		require.False(t, childArray.Inlined())
+
+		// parent array [[]]
+		err = parentArray.Append(childArray)
+		require.NoError(t, err)
+		require.True(t, childArray.Inlined())
+
+		// Inserting elements into childArray so it can't be inlined
+		for i := 0; childArray.Inlined(); i++ {
+			v := Uint64Value(i)
+			err = childArray.Append(v)
+			require.NoError(t, err)
+		}
+
+		// Iterate and modify element
+		var valueMutationCallbackCalled bool
+		err = parentArray.IterateReadOnlyRangeWithMutationCallback(
+			0,
+			parentArray.Count(),
+			func(v Value) (resume bool, err error) {
+				c, ok := v.(*Array)
+				require.True(t, ok)
+				require.False(t, c.Inlined())
+
+				existingStorable, err := c.Remove(0)
+				require.ErrorAs(t, err, &mutationError)
+				require.Nil(t, existingStorable)
+
+				return true, err
+			},
+			func(v Value) {
+				valueMutationCallbackCalled = true
+			})
+
+		require.ErrorAs(t, err, &mutationError)
+		require.True(t, valueMutationCallbackCalled)
+	})
+}
+
 func TestMutableArrayIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {

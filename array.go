@@ -3345,14 +3345,29 @@ func (i *mutableArrayIterator) Next() (Value, error) {
 	return v, nil
 }
 
+type ReadOnlyArrayIteratorMutationCallback func(mutatedValue Value)
+
 type readOnlyArrayIterator struct {
-	array           *Array
-	dataSlab        *ArrayDataSlab
-	indexInDataSlab uint64
-	remainingCount  uint64 // needed for range iteration
+	array                 *Array
+	dataSlab              *ArrayDataSlab
+	indexInDataSlab       uint64
+	remainingCount        uint64 // needed for range iteration
+	valueMutationCallback ReadOnlyArrayIteratorMutationCallback
 }
 
+// defaultReadOnlyArrayIteratorMutatinCallback is no-op.
+var defaultReadOnlyArrayIteratorMutatinCallback ReadOnlyArrayIteratorMutationCallback = func(Value) {}
+
 var _ ArrayIterator = &readOnlyArrayIterator{}
+
+func (i *readOnlyArrayIterator) setMutationCallback(value Value) {
+	if v, ok := value.(mutableValueNotifier); ok {
+		v.setParentUpdater(func() (found bool, err error) {
+			i.valueMutationCallback(value)
+			return true, NewReadOnlyIteratorElementMutationError(i.array.ValueID(), v.ValueID())
+		})
+	}
+}
 
 func (i *readOnlyArrayIterator) CanMutate() bool {
 	return false
@@ -3405,6 +3420,8 @@ func (i *readOnlyArrayIterator) Next() (Value, error) {
 	i.indexInDataSlab++
 	i.remainingCount--
 
+	i.setMutationCallback(element)
+
 	return element, nil
 }
 
@@ -3428,9 +3445,29 @@ func (a *Array) Iterator() (ArrayIterator, error) {
 }
 
 // ReadOnlyIterator returns readonly iterator for array elements.
-// If elements are mutated, those changes are not guaranteed to persist.
-// NOTE: Use readonly iterator if mutation is not needed for better performance.
+// If elements are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback is needed (e.g. for logging mutation, etc.), use ReadOnlyIteratorWithMutationCallback().
 func (a *Array) ReadOnlyIterator() (ArrayIterator, error) {
+	return a.ReadOnlyIteratorWithMutationCallback(nil)
+}
+
+// ReadOnlyIteratorWithMutationCallback returns readonly iterator for array elements.
+// valueMutationCallback is useful for logging, etc. with more context when mutation
+// occurs.  Mutation handling here is the same with or without callback.
+// If elements are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// - valueMutationCallback is called if provided
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback isn't needed, use ReadOnlyIterator().
+func (a *Array) ReadOnlyIteratorWithMutationCallback(
+	valueMutationCallback ReadOnlyArrayIteratorMutationCallback,
+) (ArrayIterator, error) {
 	if a.Count() == 0 {
 		return emptyReadOnlyArrayIterator, nil
 	}
@@ -3441,10 +3478,15 @@ func (a *Array) ReadOnlyIterator() (ArrayIterator, error) {
 		return nil, err
 	}
 
+	if valueMutationCallback == nil {
+		valueMutationCallback = defaultReadOnlyArrayIteratorMutatinCallback
+	}
+
 	return &readOnlyArrayIterator{
-		array:          a,
-		dataSlab:       slab,
-		remainingCount: a.Count(),
+		array:                 a,
+		dataSlab:              slab,
+		remainingCount:        a.Count(),
+		valueMutationCallback: valueMutationCallback,
 	}, nil
 }
 
@@ -3470,7 +3512,37 @@ func (a *Array) RangeIterator(startIndex uint64, endIndex uint64) (ArrayIterator
 	}, nil
 }
 
-func (a *Array) ReadOnlyRangeIterator(startIndex uint64, endIndex uint64) (ArrayIterator, error) {
+// ReadOnlyRangeIterator iterates readonly array elements from
+// specified startIndex to endIndex.
+// If elements are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback is needed (e.g. for logging mutation, etc.), use ReadOnlyRangeIteratorWithMutationCallback().
+func (a *Array) ReadOnlyRangeIterator(
+	startIndex uint64,
+	endIndex uint64,
+) (ArrayIterator, error) {
+	return a.ReadOnlyRangeIteratorWithMutationCallback(startIndex, endIndex, nil)
+}
+
+// ReadOnlyRangeIteratorWithMutationCallback iterates readonly array elements
+// from specified startIndex to endIndex.
+// valueMutationCallback is useful for logging, etc. with more context when
+// mutation occurs.  Mutation handling here is the same with or without callback.
+// If elements are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// - valueMutationCallback is called if provided
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback isn't needed, use ReadOnlyRangeIterator().
+func (a *Array) ReadOnlyRangeIteratorWithMutationCallback(
+	startIndex uint64,
+	endIndex uint64,
+	valueMutationCallback ReadOnlyArrayIteratorMutationCallback,
+) (ArrayIterator, error) {
 	count := a.Count()
 
 	if startIndex > count || endIndex > count {
@@ -3511,11 +3583,16 @@ func (a *Array) ReadOnlyRangeIterator(startIndex uint64, endIndex uint64) (Array
 		}
 	}
 
+	if valueMutationCallback == nil {
+		valueMutationCallback = defaultReadOnlyArrayIteratorMutatinCallback
+	}
+
 	return &readOnlyArrayIterator{
-		array:           a,
-		dataSlab:        dataSlab,
-		indexInDataSlab: index,
-		remainingCount:  numberOfElements,
+		array:                 a,
+		dataSlab:              dataSlab,
+		indexInDataSlab:       index,
+		remainingCount:        numberOfElements,
+		valueMutationCallback: valueMutationCallback,
 	}, nil
 }
 
@@ -3551,8 +3628,33 @@ func (a *Array) Iterate(fn ArrayIterationFunc) error {
 	return iterateArray(iterator, fn)
 }
 
+// IterateReadOnly iterates readonly array elements.
+// If elements are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback is needed (e.g. for logging mutation, etc.), use IterateReadOnlyWithMutationCallback().
 func (a *Array) IterateReadOnly(fn ArrayIterationFunc) error {
-	iterator, err := a.ReadOnlyIterator()
+	return a.IterateReadOnlyWithMutationCallback(fn, nil)
+}
+
+// IterateReadOnlyWithMutationCallback iterates readonly array elements.
+// valueMutationCallback is useful for logging, etc. with more context
+// when mutation occurs.  Mutation handling here is the same with or
+// without this callback.
+// If values are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// - valueMutatinCallback is called if provided
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback isn't needed, use IterateReadOnly().
+func (a *Array) IterateReadOnlyWithMutationCallback(
+	fn ArrayIterationFunc,
+	valueMutationCallback ReadOnlyArrayIteratorMutationCallback,
+) error {
+	iterator, err := a.ReadOnlyIteratorWithMutationCallback(valueMutationCallback)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Array.ReadOnlyIterator().
 		return err
@@ -3569,8 +3671,40 @@ func (a *Array) IterateRange(startIndex uint64, endIndex uint64, fn ArrayIterati
 	return iterateArray(iterator, fn)
 }
 
-func (a *Array) IterateReadOnlyRange(startIndex uint64, endIndex uint64, fn ArrayIterationFunc) error {
-	iterator, err := a.ReadOnlyRangeIterator(startIndex, endIndex)
+// IterateReadOnlyRange iterates readonly array elements from specified startIndex to endIndex.
+// If elements are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback is needed (e.g. for logging mutation, etc.), use IterateReadOnlyRangeWithMutatinoCallback().
+func (a *Array) IterateReadOnlyRange(
+	startIndex uint64,
+	endIndex uint64,
+	fn ArrayIterationFunc,
+) error {
+	return a.IterateReadOnlyRangeWithMutationCallback(startIndex, endIndex, fn, nil)
+}
+
+// IterateReadOnlyRangeWithMutationCallback iterates readonly array elements
+// from specified startIndex to endIndex.
+// valueMutationCallback is useful for logging, etc. with more context
+// when mutation occurs.  Mutation handling here is the same with or
+// without this callback.
+// If values are mutated:
+// - those changes are not guaranteed to persist.
+// - mutation functions of child containers return ReadOnlyIteratorElementMutationError.
+// - valueMutatinCallback is called if provided
+// NOTE:
+// Use readonly iterator if mutation is not needed for better performance.
+// If callback isn't needed, use IterateReadOnlyRange().
+func (a *Array) IterateReadOnlyRangeWithMutationCallback(
+	startIndex uint64,
+	endIndex uint64,
+	fn ArrayIterationFunc,
+	valueMutationCallback ReadOnlyArrayIteratorMutationCallback,
+) error {
+	iterator, err := a.ReadOnlyRangeIteratorWithMutationCallback(startIndex, endIndex, valueMutationCallback)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Array.ReadOnlyRangeIterator().
 		return err

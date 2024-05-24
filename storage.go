@@ -969,8 +969,10 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 	return nil
 }
 
-// NondeterministicFastCommit commits changes in nondeterministic order.
-// This is used by migration program when ordering isn't required.
+// NondeterministicFastCommit commits changed slabs in nondeterministic order.
+// Encoded slab data is deterministic (e.g. array and map iteration is deterministic).
+// IMPORTANT: This function is used by migration programs when commit order of slabs
+// is not required to be deterministic (while preserving deterministic array and map iteration).
 func (s *PersistentSlabStorage) NondeterministicFastCommit(numWorkers int) error {
 	// No changes
 	if len(s.deltas) == 0 {

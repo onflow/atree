@@ -1,7 +1,7 @@
 /*
  * Atree - Scalable Arrays and Ordered Maps
  *
- * Copyright 2022 Dapper Labs, Inc.
+ * Copyright Flow Foundation
  * Copyright 2021 Faye Amacker
  *
  * Licensed under the Apache License, Version 2.0 (the "License");

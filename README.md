@@ -80,4 +80,4 @@ The Atree library is licensed under the terms of the Apache license. See [LICENS
 
 Logo is based on the artwork of Raisul Hadi licensed under Creative Commons.
 
-Copyright © 2021-2022 Dapper Labs, Inc.
+Copyright © 2021-2024 Flow Foundation

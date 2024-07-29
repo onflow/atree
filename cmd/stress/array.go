@@ -21,6 +21,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -28,11 +29,17 @@ import (
 	"github.com/onflow/atree"
 )
 
+type arrayOpType int
+
 const (
-	arrayAppendOp = iota
+	arrayAppendOp arrayOpType = iota
 	arrayInsertOp
 	arraySetOp
 	arrayRemoveOp
+	arrayMutateChildContainerAfterGet
+	arrayMutateChildContainerAfterAppend
+	arrayMutateChildContainerAfterInsert
+	arrayMutateChildContainerAfterSet
 	maxArrayOp
 )
 
@@ -43,10 +50,14 @@ type arrayStatus struct {
 
 	count uint64 // number of elements in array
 
-	appendOps uint64
-	insertOps uint64
-	setOps    uint64
-	removeOps uint64
+	appendOps                          uint64
+	insertOps                          uint64
+	setOps                             uint64
+	removeOps                          uint64
+	mutateChildContainerAfterGetOps    uint64
+	mutateChildContainerAfterAppendOps uint64
+	mutateChildContainerAfterInsertOps uint64
+	mutateChildContainerAfterSetOps    uint64
 }
 
 var _ Status = &arrayStatus{}
@@ -64,7 +75,7 @@ func (status *arrayStatus) String() string {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	return fmt.Sprintf("duration %s, heapAlloc %d MiB, %d elements, %d appends, %d sets, %d inserts, %d removes",
+	return fmt.Sprintf("duration %s, heapAlloc %d MiB, %d elements, %d appends, %d sets, %d inserts, %d removes, %d Get mutations, %d Append mutations, %d Insert mutations, %d Set mutations",
 		duration.Truncate(time.Second).String(),
 		m.Alloc/1024/1024,
 		status.count,
@@ -72,38 +83,44 @@ func (status *arrayStatus) String() string {
 		status.setOps,
 		status.insertOps,
 		status.removeOps,
+		status.mutateChildContainerAfterGetOps,
+		status.mutateChildContainerAfterAppendOps,
+		status.mutateChildContainerAfterInsertOps,
+		status.mutateChildContainerAfterSetOps,
 	)
 }
 
-func (status *arrayStatus) incAppend() {
+func (status *arrayStatus) incOp(op arrayOpType, newTotalCount uint64) {
 	status.lock.Lock()
 	defer status.lock.Unlock()
 
-	status.appendOps++
-	status.count++
-}
+	switch op {
+	case arrayAppendOp:
+		status.appendOps++
 
-func (status *arrayStatus) incSet() {
-	status.lock.Lock()
-	defer status.lock.Unlock()
+	case arrayInsertOp:
+		status.insertOps++
 
-	status.setOps++
-}
+	case arraySetOp:
+		status.setOps++
 
-func (status *arrayStatus) incInsert() {
-	status.lock.Lock()
-	defer status.lock.Unlock()
+	case arrayRemoveOp:
+		status.removeOps++
 
-	status.insertOps++
-	status.count++
-}
+	case arrayMutateChildContainerAfterGet:
+		status.mutateChildContainerAfterGetOps++
 
-func (status *arrayStatus) incRemove() {
-	status.lock.Lock()
-	defer status.lock.Unlock()
+	case arrayMutateChildContainerAfterAppend:
+		status.mutateChildContainerAfterAppendOps++
 
-	status.removeOps++
-	status.count--
+	case arrayMutateChildContainerAfterInsert:
+		status.mutateChildContainerAfterInsertOps++
+
+	case arrayMutateChildContainerAfterSet:
+		status.mutateChildContainerAfterSetOps++
+	}
+
+	status.count = newTotalCount
 }
 
 func (status *arrayStatus) Write() {
@@ -113,12 +130,10 @@ func (status *arrayStatus) Write() {
 func testArray(
 	storage *atree.PersistentSlabStorage,
 	address atree.Address,
-	typeInfo atree.TypeInfo,
-	maxLength uint64,
 	status *arrayStatus,
-	minHeapAllocMiB uint64,
-	maxHeapAllocMiB uint64,
 ) {
+
+	typeInfo := newArrayTypeInfo()
 
 	// Create new array
 	array, err := atree.NewArray(storage, address, typeInfo)
@@ -127,12 +142,12 @@ func testArray(
 		return
 	}
 
-	// values contains array elements in the same order.  It is used to check data loss.
-	values := make([]atree.Value, 0, maxLength)
+	// expectedValues contains array elements in the same order.  It is used to check data loss.
+	expectedValues := make(arrayValue, 0, flagMaxLength)
 
 	reduceHeapAllocs := false
 
-	opCount := uint64(0)
+	opCountForStorageHealthCheck := uint64(0)
 
 	var m runtime.MemStats
 
@@ -140,10 +155,10 @@ func testArray(
 		runtime.ReadMemStats(&m)
 		allocMiB := m.Alloc / 1024 / 1024
 
-		if !reduceHeapAllocs && allocMiB > maxHeapAllocMiB {
+		if !reduceHeapAllocs && allocMiB > flagMaxHeapAllocMiB {
 			fmt.Printf("\nHeapAlloc is %d MiB, removing elements to reduce allocs...\n", allocMiB)
 			reduceHeapAllocs = true
-		} else if reduceHeapAllocs && allocMiB < minHeapAllocMiB {
+		} else if reduceHeapAllocs && allocMiB < flagMinHeapAllocMiB {
 			fmt.Printf("\nHeapAlloc is %d MiB, resuming random operation...\n", allocMiB)
 			reduceHeapAllocs = false
 		}
@@ -178,245 +193,404 @@ func testArray(
 			fmt.Printf("\nHeapAlloc is %d MiB after cleanup and forced gc\n", allocMiB)
 
 			// Prevent infinite loop that doesn't do useful work.
-			if allocMiB > maxHeapAllocMiB {
+			if allocMiB > flagMaxHeapAllocMiB {
 				// This shouldn't happen unless there's a memory leak.
 				fmt.Fprintf(
 					os.Stderr,
 					"Exiting because allocMiB %d > maxMapHeapAlloMiB %d with empty map\n",
 					allocMiB,
-					maxHeapAllocMiB)
+					flagMaxHeapAllocMiB)
 				return
 			}
 		}
 
-		nextOp := r.Intn(maxArrayOp)
-
-		if array.Count() == maxLength || reduceHeapAllocs {
-			nextOp = arrayRemoveOp
+		var forceRemove bool
+		if array.Count() == flagMaxLength || reduceHeapAllocs {
+			forceRemove = true
 		}
 
-		switch nextOp {
-
-		case arrayAppendOp:
-			opCount++
-
-			nestedLevels := r.Intn(maxNestedLevels)
-			v, err := randomValue(storage, address, nestedLevels)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
-				return
-			}
-
-			copiedValue, err := copyValue(storage, atree.Address{}, v)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
-				return
-			}
-
-			// Append to values
-			values = append(values, copiedValue)
-
-			// Append to array
-			err = array.Append(v)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to append %s: %s", v, err)
-				return
-			}
-
-			// Update status
-			status.incAppend()
-
-		case arraySetOp:
-			opCount++
-
-			if array.Count() == 0 {
-				continue
-			}
-
-			k := r.Intn(int(array.Count()))
-
-			nestedLevels := r.Intn(maxNestedLevels)
-			v, err := randomValue(storage, address, nestedLevels)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
-				return
-			}
-
-			copiedValue, err := copyValue(storage, atree.Address{}, v)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
-				return
-			}
-
-			oldV := values[k]
-
-			// Update values
-			values[k] = copiedValue
-
-			// Update array
-			existingStorable, err := array.Set(uint64(k), v)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to set %s at index %d: %s", v, k, err)
-				return
-			}
-
-			// Compare overwritten value from array with overwritten value from values
-			existingValue, err := existingStorable.StoredValue(storage)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingStorable, err)
-				return
-			}
-
-			err = valueEqual(oldV, existingValue)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingValue, oldV, err)
-				return
-			}
-
-			// Delete overwritten element from storage
-			err = removeStorable(storage, existingStorable)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove storable %s: %s", existingStorable, err)
-				return
-			}
-
-			err = removeValue(storage, oldV)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove copied overwritten value %s: %s", oldV, err)
-				return
-			}
-
-			// Update status
-			status.incSet()
-
-		case arrayInsertOp:
-			opCount++
-
-			k := r.Intn(int(array.Count() + 1))
-
-			nestedLevels := r.Intn(maxNestedLevels)
-			v, err := randomValue(storage, address, nestedLevels)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to generate random value %s: %s", v, err)
-				return
-			}
-
-			copiedValue, err := copyValue(storage, atree.Address{}, v)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to copy random value %s: %s", v, err)
-				return
-			}
-
-			// Update values
-			if k == int(array.Count()) {
-				values = append(values, copiedValue)
-			} else {
-				values = append(values, nil)
-				copy(values[k+1:], values[k:])
-				values[k] = copiedValue
-			}
-
-			// Update array
-			err = array.Insert(uint64(k), v)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to insert %s into index %d: %s", v, k, err)
-				return
-			}
-
-			// Update status
-			status.incInsert()
-
-		case arrayRemoveOp:
-			if array.Count() == 0 {
-				continue
-			}
-
-			opCount++
-
-			k := r.Intn(int(array.Count()))
-
-			oldV := values[k]
-
-			// Update values
-			copy(values[k:], values[k+1:])
-			values[len(values)-1] = nil
-			values = values[:len(values)-1]
-
-			// Update array
-			existingStorable, err := array.Remove(uint64(k))
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove element at index %d: %s", k, err)
-				return
-			}
-
-			// Compare removed value from array with removed value from values
-			existingValue, err := existingStorable.StoredValue(storage)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to convert %s to value: %s", existingStorable, err)
-				return
-			}
-
-			err = valueEqual(oldV, existingValue)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to compare %s and %s: %s", existingValue, oldV, err)
-				return
-			}
-
-			// Delete removed element from storage
-			err = removeStorable(storage, existingStorable)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove element %s: %s", existingStorable, err)
-				return
-			}
-
-			err = removeValue(storage, oldV)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to remove copied removed value %s: %s", oldV, err)
-				return
-			}
-
-			// Update status
-			status.incRemove()
+		var prevOp arrayOpType
+		expectedValues, prevOp, err = modifyArray(expectedValues, array, maxNestedLevels, forceRemove)
+		if err != nil {
+			fmt.Fprint(os.Stderr, err.Error())
+			return
 		}
+
+		opCountForStorageHealthCheck++
+
+		// Update status
+		status.incOp(prevOp, array.Count())
 
 		// Check array elements against values after every op
-		err = checkArrayDataLoss(array, values)
+		err = checkArrayDataLoss(expectedValues, array)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return
 		}
 
-		if opCount >= 100 {
-			opCount = 0
-			rootIDs, err := atree.CheckStorageHealth(storage, -1)
+		if opCountForStorageHealthCheck >= flagMinOpsForStorageHealthCheck {
+			opCountForStorageHealthCheck = 0
+
+			if !checkStorageHealth(storage, array.SlabID()) {
+				return
+			}
+
+			// Commit slabs to storage so slabs are encoded and then decoded at next op.
+			err = storage.FastCommit(runtime.NumCPU())
 			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
+				fmt.Fprintf(os.Stderr, "Failed to commit to storage: %s", err)
 				return
 			}
-			ids := make([]atree.SlabID, 0, len(rootIDs))
-			for id := range rootIDs {
-				// filter out root ids with empty address
-				if !id.HasTempAddress() {
-					ids = append(ids, id)
-				}
-			}
-			if len(ids) != 1 || ids[0] != array.SlabID() {
-				fmt.Fprintf(os.Stderr, "root slab ids %v in storage, want %s\n", ids, array.SlabID())
-				return
-			}
+
+			// Drop cache after commit to force slab decoding at next op.
+			storage.DropCache()
 		}
 	}
 }
 
-func checkArrayDataLoss(array *atree.Array, values []atree.Value) error {
+func nextArrayOp(
+	expectedValues arrayValue,
+	array *atree.Array,
+	nestedLevels int,
+	forceRemove bool,
+) (arrayOpType, error) {
+
+	if forceRemove {
+		if array.Count() == 0 {
+			return 0, fmt.Errorf("failed to force remove array elements because array has no elements")
+		}
+		return arrayRemoveOp, nil
+	}
+
+	if array.Count() == 0 {
+		return arrayAppendOp, nil
+	}
+
+	for {
+		nextOp := arrayOpType(r.Intn(int(maxArrayOp)))
+
+		switch nextOp {
+		case arrayMutateChildContainerAfterAppend,
+			arrayMutateChildContainerAfterInsert,
+			arrayMutateChildContainerAfterSet:
+
+			if nestedLevels-1 > 0 {
+				return nextOp, nil
+			}
+
+			// New child container can't be created because next nestedLevels is 0.
+			// Try another array operation.
+
+		case arrayMutateChildContainerAfterGet:
+			if hasChildContainerInArray(expectedValues) {
+				return nextOp, nil
+			}
+
+			// Array doesn't have child container, try another array operation.
+
+		default:
+			return nextOp, nil
+		}
+	}
+}
+
+func modifyArray(
+	expectedValues arrayValue,
+	array *atree.Array,
+	nestedLevels int,
+	forceRemove bool,
+) (arrayValue, arrayOpType, error) {
+
+	storage := array.Storage
+	address := array.Address()
+
+	nextOp, err := nextArrayOp(expectedValues, array, nestedLevels, forceRemove)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	switch nextOp {
+	case arrayAppendOp, arrayMutateChildContainerAfterAppend:
+
+		var nextNestedLevels int
+
+		switch nextOp {
+		case arrayAppendOp:
+			nextNestedLevels = r.Intn(nestedLevels)
+		case arrayMutateChildContainerAfterAppend:
+			nextNestedLevels = nestedLevels - 1
+		default:
+			panic("not reachable")
+		}
+
+		// Create new chid child
+		expectedChildValue, child, err := randomValue(storage, address, nextNestedLevels)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to generate random value %s: %s", child, err)
+		}
+
+		// Update expectedValues
+		expectedValues = append(expectedValues, expectedChildValue)
+
+		// Update array
+		err = array.Append(child)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to append %s: %s", child, err)
+		}
+
+		if nextOp == arrayMutateChildContainerAfterAppend {
+			index := len(expectedValues) - 1
+
+			expectedValues[index], err = modifyContainer(expectedValues[index], child, nextNestedLevels)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to modify child container at index %d: %w", index, err)
+			}
+		}
+
+	case arraySetOp, arrayMutateChildContainerAfterSet:
+
+		var nextNestedLevels int
+
+		switch nextOp {
+		case arraySetOp:
+			nextNestedLevels = r.Intn(nestedLevels)
+		case arrayMutateChildContainerAfterSet:
+			nextNestedLevels = nestedLevels - 1
+		default:
+			panic("not reachable")
+		}
+
+		// Create new child child
+		expectedChildValue, child, err := randomValue(storage, address, nextNestedLevels)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to generate random value %s: %s", child, err)
+		}
+
+		index := r.Intn(int(array.Count()))
+
+		oldExpectedValue := expectedValues[index]
+
+		// Update expectedValues
+		expectedValues[index] = expectedChildValue
+
+		// Update array
+		existingStorable, err := array.Set(uint64(index), child)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to set %s at index %d: %s", child, index, err)
+		}
+
+		// Compare overwritten value from array with overwritten value from expectedValues
+		existingValue, err := existingStorable.StoredValue(storage)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingStorable, err)
+		}
+
+		err = valueEqual(oldExpectedValue, existingValue)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to compare %s and %s: %s", existingValue, oldExpectedValue, err)
+		}
+
+		// Delete overwritten element from storage
+		err = removeStorable(storage, existingStorable)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to remove storable %s: %s", existingStorable, err)
+		}
+
+		if nextOp == arrayMutateChildContainerAfterSet {
+			expectedValues[index], err = modifyContainer(expectedValues[index], child, nextNestedLevels)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to modify child container at index %d: %w", index, err)
+			}
+		}
+
+	case arrayInsertOp, arrayMutateChildContainerAfterInsert:
+
+		var nextNestedLevels int
+
+		switch nextOp {
+		case arrayInsertOp:
+			nextNestedLevels = r.Intn(nestedLevels)
+		case arrayMutateChildContainerAfterInsert:
+			nextNestedLevels = nestedLevels - 1
+		default:
+			panic("not reachable")
+		}
+
+		// Create new child child
+		expectedChildValue, child, err := randomValue(storage, address, nextNestedLevels)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to generate random value %s: %s", child, err)
+		}
+
+		index := r.Intn(int(array.Count() + 1))
+
+		// Update expectedValues
+		if index == int(array.Count()) {
+			expectedValues = append(expectedValues, expectedChildValue)
+		} else {
+			expectedValues = append(expectedValues, nil)
+			copy(expectedValues[index+1:], expectedValues[index:])
+			expectedValues[index] = expectedChildValue
+		}
+
+		// Update array
+		err = array.Insert(uint64(index), child)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to insert %s into index %d: %s", child, index, err)
+		}
+
+		if nextOp == arrayMutateChildContainerAfterInsert {
+			expectedValues[index], err = modifyContainer(expectedValues[index], child, nextNestedLevels)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to modify child container at index %d: %w", index, err)
+			}
+		}
+
+	case arrayRemoveOp:
+		index := r.Intn(int(array.Count()))
+
+		oldExpectedValue := expectedValues[index]
+
+		// Update expectedValues
+		copy(expectedValues[index:], expectedValues[index+1:])
+		expectedValues[len(expectedValues)-1] = nil
+		expectedValues = expectedValues[:len(expectedValues)-1]
+
+		// Update array
+		existingStorable, err := array.Remove(uint64(index))
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to remove element at index %d: %s", index, err)
+		}
+
+		// Compare removed value from array with removed value from values
+		existingValue, err := existingStorable.StoredValue(storage)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingStorable, err)
+		}
+
+		err = valueEqual(oldExpectedValue, existingValue)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to compare %s and %s: %s", existingValue, oldExpectedValue, err)
+		}
+
+		// Delete removed element from storage
+		err = removeStorable(storage, existingStorable)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to remove element %s: %s", existingStorable, err)
+		}
+
+	case arrayMutateChildContainerAfterGet:
+		index, found := getRandomChildContainerIndexInArray(expectedValues)
+		if !found {
+			// arrayMutateChildContainerAfterGet op can't be performed because there isn't any child container in this array.
+			// Try another array operation.
+			return modifyArray(expectedValues, array, nestedLevels, forceRemove)
+		}
+
+		child, err := array.Get(uint64(index))
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get element from array at index %d: %s", index, err)
+		}
+
+		expectedValues[index], err = modifyContainer(expectedValues[index], child, nestedLevels-1)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to modify child container at index %d: %w", index, err)
+		}
+	}
+
+	return expectedValues, nextOp, nil
+}
+
+func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels int) (expected atree.Value, err error) {
+
+	switch value := value.(type) {
+	case *atree.Array:
+		expectedArrayValue, ok := expectedValue.(arrayValue)
+		if !ok {
+			return nil, fmt.Errorf("failed to get expected value of type arrayValue: got %T", expectedValue)
+		}
+
+		expectedValue, _, err = modifyArray(expectedArrayValue, value, nestedLevels, false)
+		if err != nil {
+			return nil, err
+		}
+
+	case *atree.OrderedMap:
+		expectedMapValue, ok := expectedValue.(mapValue)
+		if !ok {
+			return nil, fmt.Errorf("failed to get expected value of type mapValue: got %T", expectedValue)
+		}
+
+		expectedValue, _, err = modifyMap(expectedMapValue, value, nestedLevels, false)
+		if err != nil {
+			return nil, err
+		}
+
+	default:
+		return nil, fmt.Errorf("failed to get container: got %T", value)
+	}
+
+	return expectedValue, nil
+}
+
+func hasChildContainerInArray(expectedValues arrayValue) bool {
+	for _, v := range expectedValues {
+		switch v.(type) {
+		case arrayValue, mapValue:
+			return true
+		}
+	}
+	return false
+}
+
+func getRandomChildContainerIndexInArray(expectedValues arrayValue) (index int, found bool) {
+	indexes := make([]int, 0, len(expectedValues))
+	for i, v := range expectedValues {
+		switch v.(type) {
+		case arrayValue, mapValue:
+			indexes = append(indexes, i)
+		}
+	}
+	if len(indexes) == 0 {
+		return 0, false
+	}
+	return indexes[r.Intn(len(indexes))], true
+}
+
+func checkStorageHealth(storage *atree.PersistentSlabStorage, rootSlabID atree.SlabID) bool {
+	rootIDs, err := atree.CheckStorageHealth(storage, -1)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return false
+	}
+
+	// Filter out slabs with temp address because
+	// child array/map values used for data loss check is stored with temp address.
+	ids := make([]atree.SlabID, 0, len(rootIDs))
+	for id := range rootIDs {
+		// filter out root ids with empty address
+		if !id.HasTempAddress() {
+			ids = append(ids, id)
+		}
+	}
+
+	if len(ids) != 1 || ids[0] != rootSlabID {
+		fmt.Fprintf(os.Stderr, "root slab ids %v in storage, want %s\n", ids, rootSlabID)
+		return false
+	}
+
+	return true
+}
+
+func checkArrayDataLoss(expectedValues arrayValue, array *atree.Array) error {
 
 	// Check array has the same number of elements as values
-	if array.Count() != uint64(len(values)) {
-		return fmt.Errorf("Count() %d != len(values) %d", array.Count(), len(values))
+	if array.Count() != uint64(len(expectedValues)) {
+		return fmt.Errorf("Count() %d != len(values) %d", array.Count(), len(expectedValues))
 	}
 
 	// Check every element
-	for i, v := range values {
+	for i, v := range expectedValues {
 		convertedValue, err := array.Get(uint64(i))
 		if err != nil {
 			return fmt.Errorf("failed to get element at %d: %w", i, err)
@@ -427,5 +601,30 @@ func checkArrayDataLoss(array *atree.Array, values []atree.Value) error {
 		}
 	}
 
+	if flagCheckSlabEnabled {
+		err := checkArraySlab(array)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+func checkArraySlab(array *atree.Array) error {
+	err := atree.VerifyArray(array, array.Address(), array.Type(), typeInfoComparator, hashInputProvider, true)
+	if err != nil {
+		return err
+	}
+
+	return atree.VerifyArraySerialization(
+		array,
+		cborDecMode,
+		cborEncMode,
+		decodeStorable,
+		decodeTypeInfo,
+		func(a, b atree.Storable) bool {
+			return reflect.DeepEqual(a, b)
+		},
+	)
 }

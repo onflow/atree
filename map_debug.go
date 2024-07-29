@@ -66,53 +66,58 @@ func GetMapStats(m *OrderedMap) (MapStats, error) {
 				return MapStats{}, err
 			}
 
-			if slab.IsData() {
+			switch slab := slab.(type) {
+			case *MapDataSlab:
 				dataSlabCount++
 
-				leaf := slab.(*MapDataSlab)
-				elementGroups := []elements{leaf.elements}
+				elementGroups := []elements{slab.elements}
 
 				for len(elementGroups) > 0 {
 
 					var nestedElementGroups []elements
 
-					for i := 0; i < len(elementGroups); i++ {
-
-						elems := elementGroups[i]
-
-						for j := 0; j < int(elems.Count()); j++ {
-							elem, err := elems.Element(j)
+					for _, group := range elementGroups {
+						for i := 0; i < int(group.Count()); i++ {
+							elem, err := group.Element(i)
 							if err != nil {
 								// Don't need to wrap error as external error because err is already categorized by elements.Element().
 								return MapStats{}, err
 							}
 
-							if group, ok := elem.(elementGroup); ok {
-								if !group.Inline() {
+							switch e := elem.(type) {
+							case elementGroup:
+								nestedGroup := e
+
+								if !nestedGroup.Inline() {
 									collisionDataSlabCount++
 								}
 
-								nested, err := group.Elements(m.Storage)
+								nested, err := nestedGroup.Elements(m.Storage)
 								if err != nil {
 									// Don't need to wrap error as external error because err is already categorized by elementGroup.Elements().
 									return MapStats{}, err
 								}
+
 								nestedElementGroups = append(nestedElementGroups, nested)
 
-							} else {
-								e := elem.(*singleElement)
+							case *singleElement:
 								if _, ok := e.key.(SlabIDStorable); ok {
 									storableDataSlabCount++
 								}
 								if _, ok := e.value.(SlabIDStorable); ok {
 									storableDataSlabCount++
 								}
+								// This handles use case of inlined array or map value containing SlabID
+								ids := getSlabIDFromStorable(e.value, nil)
+								storableDataSlabCount += uint64(len(ids))
 							}
 						}
 					}
+
 					elementGroups = nestedElementGroups
 				}
-			} else {
+
+			case *MapMetaDataSlab:
 				metaDataSlabCount++
 
 				for _, storable := range slab.ChildStorables() {
@@ -170,12 +175,12 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 				return nil, err
 			}
 
-			if slab.IsData() {
-				dataSlab := slab.(*MapDataSlab)
-				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, dataSlab))
+			switch slab := slab.(type) {
+			case *MapDataSlab:
+				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, slab))
 
-				for i := 0; i < int(dataSlab.elements.Count()); i++ {
-					elem, err := dataSlab.elements.Element(i)
+				for i := 0; i < int(slab.elements.Count()); i++ {
+					elem, err := slab.elements.Element(i)
 					if err != nil {
 						// Don't need to wrap error as external error because err is already categorized by elements.Element().
 						return nil, err
@@ -188,16 +193,10 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 					}
 				}
 
-				childStorables := dataSlab.ChildStorables()
-				for _, e := range childStorables {
-					if id, ok := e.(SlabIDStorable); ok {
-						overflowIDs = append(overflowIDs, SlabID(id))
-					}
-				}
+				overflowIDs = getSlabIDFromStorable(slab, overflowIDs)
 
-			} else {
-				meta := slab.(*MapMetaDataSlab)
-				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, meta))
+			case *MapMetaDataSlab:
+				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, slab))
 
 				for _, storable := range slab.ChildStorables() {
 					id, ok := storable.(SlabIDStorable)
@@ -247,8 +246,30 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 	return dumps, nil
 }
 
-func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
+func VerifyMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool) error {
+	return verifyMap(m, address, typeInfo, tic, hip, inlineEnabled, map[SlabID]struct{}{})
+}
 
+func verifyMap(m *OrderedMap, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool, slabIDs map[SlabID]struct{}) error {
+
+	// Verify map address (independent of array inlined status)
+	if address != m.Address() {
+		return NewFatalError(fmt.Errorf("map address %v, got %v", address, m.Address()))
+	}
+
+	// Verify map value ID (independent of array inlined status)
+	err := verifyMapValueID(m)
+	if err != nil {
+		return err
+	}
+
+	// Verify map slab ID (dependent of array inlined status)
+	err = verifyMapSlabID(m)
+	if err != nil {
+		return err
+	}
+
+	// Verify map extra data
 	extraData := m.root.ExtraData()
 	if extraData == nil {
 		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", m.root.SlabID()))
@@ -270,10 +291,19 @@ func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip Hash
 		return NewFatalError(fmt.Errorf("root slab %d seed is uninitialized", m.root.SlabID()))
 	}
 
-	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := validMapSlab(
-		m.Storage, m.digesterBuilder, tic, hip, m.root.SlabID(), 0, nil, []SlabID{}, []SlabID{}, []Digest{})
+	v := &mapVerifier{
+		storage:         m.Storage,
+		address:         address,
+		digesterBuilder: m.digesterBuilder,
+		tic:             tic,
+		hip:             hip,
+		inlineEnabled:   inlineEnabled,
+	}
+
+	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := v.verifySlab(
+		m.root, 0, nil, []SlabID{}, []SlabID{}, []Digest{}, slabIDs)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by validMapSlab().
+		// Don't need to wrap error as external error because err is already categorized by verifySlab().
 		return err
 	}
 
@@ -315,17 +345,23 @@ func ValidMap(m *OrderedMap, typeInfo TypeInfo, tic TypeInfoComparator, hip Hash
 	return nil
 }
 
-func validMapSlab(
-	storage SlabStorage,
-	digesterBuilder DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
-	id SlabID,
+type mapVerifier struct {
+	storage         SlabStorage
+	address         Address
+	digesterBuilder DigesterBuilder
+	tic             TypeInfoComparator
+	hip             HashInputProvider
+	inlineEnabled   bool
+}
+
+func (v *mapVerifier) verifySlab(
+	slab MapSlab,
 	level int,
 	headerFromParentSlab *MapSlabHeader,
 	dataSlabIDs []SlabID,
 	nextDataSlabIDs []SlabID,
 	firstKeys []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint64,
 	_dataSlabIDs []SlabID,
@@ -334,10 +370,30 @@ func validMapSlab(
 	err error,
 ) {
 
-	slab, err := getMapSlab(storage, id)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getMapSlab().
-		return 0, nil, nil, nil, err
+	id := slab.Header().slabID
+
+	// Verify SlabID is unique
+	if _, exist := slabIDs[id]; exist {
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("found duplicate slab ID %s", id))
+	}
+
+	slabIDs[id] = struct{}{}
+
+	// Verify slab address (independent of map inlined status)
+	if v.address != id.address {
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("map slab address %v, got %v", v.address, id.address))
+	}
+
+	// Verify that inlined slab is not in storage
+	if slab.Inlined() {
+		_, exist, err := v.storage.Retrieve(id)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by Storage interface.
+			return 0, nil, nil, nil, wrapErrorAsExternalErrorIfNeeded(err)
+		}
+		if exist {
+			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s is in storage", id))
+		}
 	}
 
 	if level > 0 {
@@ -367,89 +423,155 @@ func validMapSlab(
 		}
 	}
 
-	if slab.IsData() {
+	switch slab := slab.(type) {
+	case *MapDataSlab:
+		return v.verifyDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys, slabIDs)
 
-		dataSlab, ok := slab.(*MapDataSlab)
-		if !ok {
-			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("slab %d is not MapDataSlab", id))
-		}
+	case *MapMetaDataSlab:
+		return v.verifyMetaDataSlab(slab, level, dataSlabIDs, nextDataSlabIDs, firstKeys, slabIDs)
 
-		// Verify data slab's elements
-		elementCount, elementSize, err := validMapElements(storage, digesterBuilder, tic, hip, id, dataSlab.elements, 0, nil)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by validMapElements().
-			return 0, nil, nil, nil, err
-		}
+	default:
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapSlab is either *MapDataSlab or *MapMetaDataSlab, got %T", slab))
+	}
+}
 
-		// Verify slab's first key
-		if dataSlab.elements.firstKey() != dataSlab.header.firstKey {
-			return 0, nil, nil, nil, NewFatalError(
-				fmt.Errorf("data slab %d header first key %d is wrong, want %d",
-					id, dataSlab.header.firstKey, dataSlab.elements.firstKey()))
-		}
+func (v *mapVerifier) verifyDataSlab(
+	dataSlab *MapDataSlab,
+	level int,
+	dataSlabIDs []SlabID,
+	nextDataSlabIDs []SlabID,
+	firstKeys []Digest,
+	slabIDs map[SlabID]struct{},
+) (
+	elementCount uint64,
+	_dataSlabIDs []SlabID,
+	_nextDataSlabIDs []SlabID,
+	_firstKeys []Digest,
+	err error,
+) {
+	id := dataSlab.header.slabID
 
-		// Verify that aggregated element size + slab prefix is the same as header.size
-		computedSize := uint32(mapDataSlabPrefixSize)
-		if level == 0 {
-			computedSize = uint32(mapRootDataSlabPrefixSize)
-		}
-		computedSize += elementSize
-
-		if computedSize != dataSlab.header.size {
-			return 0, nil, nil, nil, NewFatalError(
-				fmt.Errorf("data slab %d header size %d is wrong, want %d",
-					id, dataSlab.header.size, computedSize))
-		}
-
-		// Verify any size flag
-		if dataSlab.anySize {
-			return 0, nil, nil, nil, NewFatalError(
-				fmt.Errorf("data slab %d anySize %t is wrong, want false",
-					id, dataSlab.anySize))
-		}
-
-		// Verify collision group flag
-		if dataSlab.collisionGroup {
-			return 0, nil, nil, nil, NewFatalError(
-				fmt.Errorf("data slab %d collisionGroup %t is wrong, want false",
-					id, dataSlab.collisionGroup))
-		}
-
-		dataSlabIDs = append(dataSlabIDs, id)
-
-		if dataSlab.next != SlabIDUndefined {
-			nextDataSlabIDs = append(nextDataSlabIDs, dataSlab.next)
-		}
-
-		firstKeys = append(firstKeys, dataSlab.header.firstKey)
-
-		return elementCount, dataSlabIDs, nextDataSlabIDs, firstKeys, nil
+	if !dataSlab.IsData() {
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapDataSlab %s is not data", id))
 	}
 
-	meta, ok := slab.(*MapMetaDataSlab)
-	if !ok {
-		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("slab %d is not MapMetaDataSlab", id))
+	// Verify data slab's elements
+	elementCount, elementSize, err := v.verifyElements(id, dataSlab.elements, 0, nil, slabIDs)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by verifyElements().
+		return 0, nil, nil, nil, err
+	}
+
+	// Verify slab's first key
+	if dataSlab.elements.firstKey() != dataSlab.header.firstKey {
+		return 0, nil, nil, nil, NewFatalError(
+			fmt.Errorf("data slab %d header first key %d is wrong, want %d",
+				id, dataSlab.header.firstKey, dataSlab.elements.firstKey()))
+	}
+
+	// Verify that only root slab can be inlined
+	if dataSlab.Inlined() {
+		if level > 0 {
+			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("non-root slab %s is inlined", id))
+		}
+		if dataSlab.extraData == nil {
+			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s doesn't have extra data", id))
+		}
+		if dataSlab.next != SlabIDUndefined {
+			return 0, nil, nil, nil, NewFatalError(fmt.Errorf("inlined slab %s has next slab ID", id))
+		}
+	}
+
+	// Verify that aggregated element size + slab prefix is the same as header.size
+	computedSize := uint32(mapDataSlabPrefixSize)
+	if level == 0 {
+		computedSize = uint32(mapRootDataSlabPrefixSize)
+		if dataSlab.Inlined() {
+			computedSize = uint32(inlinedMapDataSlabPrefixSize)
+		}
+	}
+	computedSize += elementSize
+
+	if computedSize != dataSlab.header.size {
+		return 0, nil, nil, nil, NewFatalError(
+			fmt.Errorf("data slab %d header size %d is wrong, want %d",
+				id, dataSlab.header.size, computedSize))
+	}
+
+	// Verify any size flag
+	if dataSlab.anySize {
+		return 0, nil, nil, nil, NewFatalError(
+			fmt.Errorf("data slab %d anySize %t is wrong, want false",
+				id, dataSlab.anySize))
+	}
+
+	// Verify collision group flag
+	if dataSlab.collisionGroup {
+		return 0, nil, nil, nil, NewFatalError(
+			fmt.Errorf("data slab %d collisionGroup %t is wrong, want false",
+				id, dataSlab.collisionGroup))
+	}
+
+	dataSlabIDs = append(dataSlabIDs, id)
+
+	if dataSlab.next != SlabIDUndefined {
+		nextDataSlabIDs = append(nextDataSlabIDs, dataSlab.next)
+	}
+
+	firstKeys = append(firstKeys, dataSlab.header.firstKey)
+
+	return elementCount, dataSlabIDs, nextDataSlabIDs, firstKeys, nil
+}
+
+func (v *mapVerifier) verifyMetaDataSlab(
+	metaSlab *MapMetaDataSlab,
+	level int,
+	dataSlabIDs []SlabID,
+	nextDataSlabIDs []SlabID,
+	firstKeys []Digest,
+	slabIDs map[SlabID]struct{},
+) (
+	elementCount uint64,
+	_dataSlabIDs []SlabID,
+	_nextDataSlabIDs []SlabID,
+	_firstKeys []Digest,
+	err error,
+) {
+	id := metaSlab.header.slabID
+
+	if metaSlab.IsData() {
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapMetaDataSlab %s is data", id))
+	}
+
+	if metaSlab.Inlined() {
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("MapMetaDataSlab %s can't be inlined", id))
 	}
 
 	if level == 0 {
 		// Verify that root slab has more than one child slabs
-		if len(meta.childrenHeaders) < 2 {
+		if len(metaSlab.childrenHeaders) < 2 {
 			return 0, nil, nil, nil, NewFatalError(
 				fmt.Errorf("root metadata slab %d has %d children, want at least 2 children ",
-					id, len(meta.childrenHeaders)))
+					id, len(metaSlab.childrenHeaders)))
 		}
 	}
 
 	elementCount = 0
-	for i := 0; i < len(meta.childrenHeaders); i++ {
-		h := meta.childrenHeaders[i]
+	for i := 0; i < len(metaSlab.childrenHeaders); i++ {
+		h := metaSlab.childrenHeaders[i]
+
+		childSlab, err := getMapSlab(v.storage, h.slabID)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by getMapSlab().
+			return 0, nil, nil, nil, err
+		}
 
 		// Verify child slabs
 		count := uint64(0)
 		count, dataSlabIDs, nextDataSlabIDs, firstKeys, err =
-			validMapSlab(storage, digesterBuilder, tic, hip, h.slabID, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys)
+			v.verifySlab(childSlab, level+1, &h, dataSlabIDs, nextDataSlabIDs, firstKeys, slabIDs)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by validMapSlab().
+			// Don't need to wrap error as external error because err is already categorized by verifySlab().
 			return 0, nil, nil, nil, err
 		}
 
@@ -457,53 +579,50 @@ func validMapSlab(
 	}
 
 	// Verify slab header first key
-	if meta.childrenHeaders[0].firstKey != meta.header.firstKey {
+	if metaSlab.childrenHeaders[0].firstKey != metaSlab.header.firstKey {
 		return 0, nil, nil, nil, NewFatalError(
 			fmt.Errorf("metadata slab %d header first key %d is wrong, want %d",
-				id, meta.header.firstKey, meta.childrenHeaders[0].firstKey))
+				id, metaSlab.header.firstKey, metaSlab.childrenHeaders[0].firstKey))
 	}
 
 	// Verify that child slab's first keys are sorted.
-	sortedHKey := sort.SliceIsSorted(meta.childrenHeaders, func(i, j int) bool {
-		return meta.childrenHeaders[i].firstKey < meta.childrenHeaders[j].firstKey
+	sortedHKey := sort.SliceIsSorted(metaSlab.childrenHeaders, func(i, j int) bool {
+		return metaSlab.childrenHeaders[i].firstKey < metaSlab.childrenHeaders[j].firstKey
 	})
 	if !sortedHKey {
-		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d child slab's first key isn't sorted %+v", id, meta.childrenHeaders))
+		return 0, nil, nil, nil, NewFatalError(fmt.Errorf("metadata slab %d child slab's first key isn't sorted %+v", id, metaSlab.childrenHeaders))
 	}
 
 	// Verify that child slab's first keys are unique.
-	if len(meta.childrenHeaders) > 1 {
-		prev := meta.childrenHeaders[0].firstKey
-		for _, h := range meta.childrenHeaders[1:] {
+	if len(metaSlab.childrenHeaders) > 1 {
+		prev := metaSlab.childrenHeaders[0].firstKey
+		for _, h := range metaSlab.childrenHeaders[1:] {
 			if prev == h.firstKey {
 				return 0, nil, nil, nil, NewFatalError(
 					fmt.Errorf("metadata slab %d child header first key isn't unique %v",
-						id, meta.childrenHeaders))
+						id, metaSlab.childrenHeaders))
 			}
 			prev = h.firstKey
 		}
 	}
 
 	// Verify slab header's size
-	computedSize := uint32(len(meta.childrenHeaders)*mapSlabHeaderSize) + mapMetaDataSlabPrefixSize
-	if computedSize != meta.header.size {
+	computedSize := uint32(len(metaSlab.childrenHeaders)*mapSlabHeaderSize) + mapMetaDataSlabPrefixSize
+	if computedSize != metaSlab.header.size {
 		return 0, nil, nil, nil, NewFatalError(
 			fmt.Errorf("metadata slab %d header size %d is wrong, want %d",
-				id, meta.header.size, computedSize))
+				id, metaSlab.header.size, computedSize))
 	}
 
 	return elementCount, dataSlabIDs, nextDataSlabIDs, firstKeys, nil
 }
 
-func validMapElements(
-	storage SlabStorage,
-	db DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
+func (v *mapVerifier) verifyElements(
 	id SlabID,
 	elements elements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint64,
 	elementSize uint32,
@@ -512,23 +631,20 @@ func validMapElements(
 
 	switch elems := elements.(type) {
 	case *hkeyElements:
-		return validMapHkeyElements(storage, db, tic, hip, id, elems, digestLevel, hkeyPrefixes)
+		return v.verifyHkeyElements(id, elems, digestLevel, hkeyPrefixes, slabIDs)
 	case *singleElements:
-		return validMapSingleElements(storage, db, tic, hip, id, elems, digestLevel, hkeyPrefixes)
+		return v.verifySingleElements(id, elems, digestLevel, hkeyPrefixes, slabIDs)
 	default:
 		return 0, 0, NewFatalError(fmt.Errorf("slab %d has unknown elements type %T at digest level %d", id, elements, digestLevel))
 	}
 }
 
-func validMapHkeyElements(
-	storage SlabStorage,
-	db DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
+func (v *mapVerifier) verifyHkeyElements(
 	id SlabID,
 	elements *hkeyElements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint64,
 	elementSize uint32,
@@ -572,6 +688,10 @@ func validMapHkeyElements(
 	for i := 0; i < len(elements.elems); i++ {
 		e := elements.elems[i]
 
+		hkeys := make([]Digest, len(hkeyPrefixes)+1)
+		copy(hkeys, hkeyPrefixes)
+		hkeys[len(hkeys)-1] = elements.hkeys[i]
+
 		elementSize += digestSize
 
 		// Verify element size is <= inline size
@@ -583,21 +703,17 @@ func validMapHkeyElements(
 			}
 		}
 
-		if group, ok := e.(elementGroup); ok {
-
-			ge, err := group.Elements(storage)
+		switch e := e.(type) {
+		case elementGroup:
+			group, err := e.Elements(v.storage)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by elementGroup.Elements().
 				return 0, 0, err
 			}
 
-			hkeys := make([]Digest, len(hkeyPrefixes)+1)
-			copy(hkeys, hkeyPrefixes)
-			hkeys[len(hkeys)-1] = elements.hkeys[i]
-
-			count, size, err := validMapElements(storage, db, tic, hip, id, ge, digestLevel+1, hkeys)
+			count, size, err := v.verifyElements(id, group, digestLevel+1, hkeys, slabIDs)
 			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by validMapElement().
+				// Don't need to wrap error as external error because err is already categorized by verifyElements().
 				return 0, 0, err
 			}
 
@@ -616,21 +732,11 @@ func validMapHkeyElements(
 
 			elementCount += count
 
-		} else {
-
-			se, ok := e.(*singleElement)
-			if !ok {
-				return 0, 0, NewFatalError(fmt.Errorf("data slab %d element type %T is wrong, want *singleElement", id, e))
-			}
-
-			hkeys := make([]Digest, len(hkeyPrefixes)+1)
-			copy(hkeys, hkeyPrefixes)
-			hkeys[len(hkeys)-1] = elements.hkeys[i]
-
+		case *singleElement:
 			// Verify element
-			computedSize, maxDigestLevel, err := validSingleElement(storage, db, tic, hip, se, hkeys)
+			computedSize, maxDigestLevel, err := v.verifySingleElement(e, hkeys, slabIDs)
 			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by validSingleElement().
+				// Don't need to wrap error as external error because err is already categorized by verifySingleElement().
 				return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
 			}
 
@@ -644,6 +750,9 @@ func validMapHkeyElements(
 			elementSize += computedSize
 
 			elementCount++
+
+		default:
+			return 0, 0, NewFatalError(fmt.Errorf("data slab %d element type %T is wrong, want either elementGroup or *singleElement", id, e))
 		}
 	}
 
@@ -655,15 +764,12 @@ func validMapHkeyElements(
 	return elementCount, elementSize, nil
 }
 
-func validMapSingleElements(
-	storage SlabStorage,
-	db DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
+func (v *mapVerifier) verifySingleElements(
 	id SlabID,
 	elements *singleElements,
 	digestLevel uint,
 	hkeyPrefixes []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	elementCount uint64,
 	elementSize uint32,
@@ -682,9 +788,9 @@ func validMapSingleElements(
 	for _, e := range elements.elems {
 
 		// Verify element
-		computedSize, maxDigestLevel, err := validSingleElement(storage, db, tic, hip, e, hkeyPrefixes)
+		computedSize, maxDigestLevel, err := v.verifySingleElement(e, hkeyPrefixes, slabIDs)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by validSingleElement().
+			// Don't need to wrap error as external error because err is already categorized by verifySingleElement().
 			return 0, 0, fmt.Errorf("data slab %d: %w", id, err)
 		}
 
@@ -713,42 +819,80 @@ func validMapSingleElements(
 	return uint64(len(elements.elems)), elementSize, nil
 }
 
-func validSingleElement(
-	storage SlabStorage,
-	db DigesterBuilder,
-	tic TypeInfoComparator,
-	hip HashInputProvider,
+func (v *mapVerifier) verifySingleElement(
 	e *singleElement,
 	digests []Digest,
+	slabIDs map[SlabID]struct{},
 ) (
 	size uint32,
 	digestMaxLevel uint,
 	err error,
 ) {
+	// Verify key storable's size is less than size limit
+	if e.key.ByteSize() > uint32(maxInlineMapKeySize) {
+		return 0, 0, NewFatalError(
+			fmt.Errorf(
+				"map element key %s size %d exceeds size limit %d",
+				e.key, e.key.ByteSize(), maxInlineMapKeySize,
+			))
+	}
+
+	// Verify value storable's size is less than size limit
+	valueSizeLimit := maxInlineMapValueSize(uint64(e.key.ByteSize()))
+	if e.value.ByteSize() > uint32(valueSizeLimit) {
+		return 0, 0, NewFatalError(
+			fmt.Errorf(
+				"map element value %s size %d exceeds size limit %d",
+				e.value, e.value.ByteSize(), valueSizeLimit,
+			))
+	}
 
 	// Verify key
-	kv, err := e.key.StoredValue(storage)
+	kv, err := e.key.StoredValue(v.storage)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Stroable interface.
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("element %s key can't be converted to value", e))
 	}
 
-	err = ValidValue(kv, nil, tic, hip)
+	err = verifyValue(kv, v.address, nil, v.tic, v.hip, v.inlineEnabled, slabIDs)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by ValidValue().
+		// Don't need to wrap error as external error because err is already categorized by verifyValue().
 		return 0, 0, fmt.Errorf("element %s key isn't valid: %w", e, err)
 	}
 
 	// Verify value
-	vv, err := e.value.StoredValue(storage)
+	vv, err := e.value.StoredValue(v.storage)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Stroable interface.
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("element %s value can't be converted to value", e))
 	}
 
-	err = ValidValue(vv, nil, tic, hip)
+	switch e := e.value.(type) {
+	case SlabIDStorable:
+		// Verify not-inlined value > inline size, or can't be inlined
+		if v.inlineEnabled {
+			err = verifyNotInlinedValueStatusAndSize(vv, uint32(valueSizeLimit))
+			if err != nil {
+				return 0, 0, err
+			}
+		}
+
+	case *ArrayDataSlab:
+		// Verify inlined element's inlined status
+		if !e.Inlined() {
+			return 0, 0, NewFatalError(fmt.Errorf("inlined array inlined status is false"))
+		}
+
+	case *MapDataSlab:
+		// Verify inlined element's inlined status
+		if !e.Inlined() {
+			return 0, 0, NewFatalError(fmt.Errorf("inlined map inlined status is false"))
+		}
+	}
+
+	err = verifyValue(vv, v.address, nil, v.tic, v.hip, v.inlineEnabled, slabIDs)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by ValidValue().
+		// Don't need to wrap error as external error because err is already categorized by verifyValue().
 		return 0, 0, fmt.Errorf("element %s value isn't valid: %w", e, err)
 	}
 
@@ -759,7 +903,7 @@ func validSingleElement(
 	}
 
 	// Verify digest
-	digest, err := db.Digest(hip, kv)
+	digest, err := v.digesterBuilder.Digest(v.hip, kv)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by DigesterBuilder interface.
 		return 0, 0, wrapErrorfAsExternalErrorIfNeeded(err, "failed to create digester")
@@ -778,21 +922,21 @@ func validSingleElement(
 	return computedSize, digest.Levels(), nil
 }
 
-func ValidValue(value Value, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider) error {
+func verifyValue(value Value, address Address, typeInfo TypeInfo, tic TypeInfoComparator, hip HashInputProvider, inlineEnabled bool, slabIDs map[SlabID]struct{}) error {
 	switch v := value.(type) {
 	case *Array:
-		return ValidArray(v, typeInfo, tic, hip)
+		return verifyArray(v, address, typeInfo, tic, hip, inlineEnabled, slabIDs)
 	case *OrderedMap:
-		return ValidMap(v, typeInfo, tic, hip)
+		return verifyMap(v, address, typeInfo, tic, hip, inlineEnabled, slabIDs)
 	}
 	return nil
 }
 
-// ValidMapSerialization traverses ordered map tree and verifies serialization
+// VerifyMapSerialization traverses ordered map tree and verifies serialization
 // by encoding, decoding, and re-encoding slabs.
 // It compares in-memory objects of original slab with decoded slab.
 // It also compares encoded data of original slab with encoded data of decoded slab.
-func ValidMapSerialization(
+func VerifyMapSerialization(
 	m *OrderedMap,
 	cborDecMode cbor.DecMode,
 	cborEncMode cbor.EncMode,
@@ -800,157 +944,146 @@ func ValidMapSerialization(
 	decodeTypeInfo TypeInfoDecoder,
 	compare StorableComparator,
 ) error {
-	return validMapSlabSerialization(
-		m.Storage,
-		m.root.SlabID(),
-		cborDecMode,
-		cborEncMode,
-		decodeStorable,
-		decodeTypeInfo,
-		compare,
-	)
-}
-
-func validMapSlabSerialization(
-	storage SlabStorage,
-	id SlabID,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
-
-	slab, err := getMapSlab(storage, id)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getMapSlab().
-		return err
+	// Skip verification of inlined map serialization.
+	if m.Inlined() {
+		return nil
 	}
 
+	v := &serializationVerifier{
+		storage:        m.Storage,
+		cborDecMode:    cborDecMode,
+		cborEncMode:    cborEncMode,
+		decodeStorable: decodeStorable,
+		decodeTypeInfo: decodeTypeInfo,
+		compare:        compare,
+	}
+	return v.verifyMapSlab(m.root)
+}
+
+func (v *serializationVerifier) verifyMapSlab(slab MapSlab) error {
+
+	id := slab.SlabID()
+
 	// Encode slab
-	data, err := Encode(slab, cborEncMode)
+	data, err := EncodeSlab(slab, v.cborEncMode)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err
 	}
 
 	// Decode encoded slab
-	decodedSlab, err := DecodeSlab(id, data, cborDecMode, decodeStorable, decodeTypeInfo)
+	decodedSlab, err := DecodeSlab(id, data, v.cborDecMode, v.decodeStorable, v.decodeTypeInfo)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by DecodeSlab().
 		return err
 	}
 
 	// Re-encode decoded slab
-	dataFromDecodedSlab, err := Encode(decodedSlab, cborEncMode)
+	dataFromDecodedSlab, err := EncodeSlab(decodedSlab, v.cborEncMode)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by Encode().
 		return err
 	}
 
+	// Verify encoding is deterministic (encoded data of original slab is same as encoded data of decoded slab)
+	if !bytes.Equal(data, dataFromDecodedSlab) {
+		return NewFatalError(fmt.Errorf("encoded data of original slab %s is different from encoded data of decoded slab, got %v, want %v",
+			id, dataFromDecodedSlab, data))
+	}
+
 	// Extra check: encoded data size == header.size
-	encodedSlabSize, err := computeSlabSize(data)
+	// This check is skipped for slabs with inlined compact map because
+	// encoded size and slab size differ for inlined composites.
+	// For inlined composites, digests and field keys are encoded in
+	// compact map extra data section for reuse, and only compact map field
+	// values are encoded in non-extra data section.
+	// This reduces encoding size because compact map values of the same
+	// compact map type can reuse encoded type info, seed, digests, and field names.
+	// TODO: maybe add size check for slabs with inlined compact map by decoding entire slab.
+	inlinedComposite, err := hasInlinedComposite(data)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by computeSlabSize().
+		// Don't need to wrap error as external error because err is already categorized by hasInlinedComposite().
 		return err
 	}
-
-	if slab.Header().size != uint32(encodedSlabSize) {
-		return NewFatalError(
-			fmt.Errorf("slab %d encoded size %d != header.size %d",
-				id, encodedSlabSize, slab.Header().size))
-	}
-
-	// Compare encoded data of original slab with encoded data of decoded slab
-	if !bytes.Equal(data, dataFromDecodedSlab) {
-		return NewFatalError(
-			fmt.Errorf("slab %d encoded data is different from decoded slab's encoded data, got %v, want %v",
-				id, dataFromDecodedSlab, data))
-	}
-
-	if slab.IsData() {
-		dataSlab, ok := slab.(*MapDataSlab)
-		if !ok {
-			return NewFatalError(fmt.Errorf("slab %d is not MapDataSlab", id))
+	if !inlinedComposite {
+		encodedSlabSize, err := computeSize(data)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by computeSize().
+			return err
 		}
 
+		if slab.Header().size != uint32(encodedSlabSize) {
+			return NewFatalError(
+				fmt.Errorf("slab %d encoded size %d != header.size %d",
+					id, encodedSlabSize, slab.Header().size))
+		}
+	}
+
+	switch slab := slab.(type) {
+	case *MapDataSlab:
 		decodedDataSlab, ok := decodedSlab.(*MapDataSlab)
 		if !ok {
 			return NewFatalError(fmt.Errorf("decoded slab %d is not MapDataSlab", id))
 		}
 
 		// Compare slabs
-		err = mapDataSlabEqual(
-			dataSlab,
-			decodedDataSlab,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		err = v.mapDataSlabEqual(slab, decodedDataSlab)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by mapDataSlabEqual().
 			return fmt.Errorf("data slab %d round-trip serialization failed: %w", id, err)
 		}
 
 		return nil
-	}
 
-	metaSlab, ok := slab.(*MapMetaDataSlab)
-	if !ok {
-		return NewFatalError(fmt.Errorf("slab %d is not MapMetaDataSlab", id))
-	}
-
-	decodedMetaSlab, ok := decodedSlab.(*MapMetaDataSlab)
-	if !ok {
-		return NewFatalError(fmt.Errorf("decoded slab %d is not MapMetaDataSlab", id))
-	}
-
-	// Compare slabs
-	err = mapMetaDataSlabEqual(metaSlab, decodedMetaSlab)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by mapMetaDataSlabEqual().
-		return fmt.Errorf("metadata slab %d round-trip serialization failed: %w", id, err)
-	}
-
-	for _, h := range metaSlab.childrenHeaders {
-		// Verify child slabs
-		err = validMapSlabSerialization(
-			storage,
-			h.slabID,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by validMapSlabSerialization().
-			return err
+	case *MapMetaDataSlab:
+		decodedMetaSlab, ok := decodedSlab.(*MapMetaDataSlab)
+		if !ok {
+			return NewFatalError(fmt.Errorf("decoded slab %d is not MapMetaDataSlab", id))
 		}
-	}
 
-	return nil
+		// Compare slabs
+		err = v.mapMetaDataSlabEqual(slab, decodedMetaSlab)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by mapMetaDataSlabEqual().
+			return fmt.Errorf("metadata slab %d round-trip serialization failed: %w", id, err)
+		}
+
+		for _, h := range slab.childrenHeaders {
+			slab, err := getMapSlab(v.storage, h.slabID)
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by getMapSlab().
+				return err
+			}
+
+			// Verify child slabs
+			err = v.verifyMapSlab(slab)
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by verifyMapSlab().
+				return err
+			}
+		}
+
+		return nil
+
+	default:
+		return NewFatalError(fmt.Errorf("MapSlab is either *MapDataSlab or *MapMetaDataSlab, got %T", slab))
+	}
 }
 
-func mapDataSlabEqual(
-	expected *MapDataSlab,
-	actual *MapDataSlab,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapDataSlabEqual(expected, actual *MapDataSlab) error {
+
+	_, _, _, actualDecodedFromCompactMap := expected.canBeEncodedAsCompactMap()
 
 	// Compare extra data
-	err := mapExtraDataEqual(expected.extraData, actual.extraData)
+	err := mapExtraDataEqual(expected.extraData, actual.extraData, actualDecodedFromCompactMap)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by mapExtraDataEqual().
 		return err
+	}
+
+	// Compare inlined
+	if expected.inlined != actual.inlined {
+		return NewFatalError(fmt.Errorf("inlined %t is wrong, want %t", actual.inlined, expected.inlined))
 	}
 
 	// Compare next
@@ -969,21 +1102,19 @@ func mapDataSlabEqual(
 	}
 
 	// Compare header
-	if !reflect.DeepEqual(expected.header, actual.header) {
+	if actualDecodedFromCompactMap {
+		if expected.header.slabID != actual.header.slabID {
+			return NewFatalError(fmt.Errorf("header.slabID %s is wrong, want %s", actual.header.slabID, expected.header.slabID))
+		}
+		if expected.header.size != actual.header.size {
+			return NewFatalError(fmt.Errorf("header.size %d is wrong, want %d", actual.header.size, expected.header.size))
+		}
+	} else if !reflect.DeepEqual(expected.header, actual.header) {
 		return NewFatalError(fmt.Errorf("header %+v is wrong, want %+v", actual.header, expected.header))
 	}
 
 	// Compare elements
-	err = mapElementsEqual(
-		expected.elements,
-		actual.elements,
-		storage,
-		cborDecMode,
-		cborEncMode,
-		decodeStorable,
-		decodeTypeInfo,
-		compare,
-	)
+	err = v.mapElementsEqual(expected.elements, actual.elements, actualDecodedFromCompactMap)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by mapElementsEqual().
 		return err
@@ -992,16 +1123,7 @@ func mapDataSlabEqual(
 	return nil
 }
 
-func mapElementsEqual(
-	expected elements,
-	actual elements,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapElementsEqual(expected, actual elements, actualDecodedFromCompactMap bool) error {
 	switch expectedElems := expected.(type) {
 
 	case *hkeyElements:
@@ -1009,48 +1131,21 @@ func mapElementsEqual(
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return mapHkeyElementsEqual(
-			expectedElems,
-			actualElems,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		return v.mapHkeyElementsEqual(expectedElems, actualElems, actualDecodedFromCompactMap)
 
 	case *singleElements:
 		actualElems, ok := actual.(*singleElements)
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return mapSingleElementsEqual(
-			expectedElems,
-			actualElems,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		return v.mapSingleElementsEqual(expectedElems, actualElems)
 
 	}
 
 	return nil
 }
 
-func mapHkeyElementsEqual(
-	expected *hkeyElements,
-	actual *hkeyElements,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapHkeyElementsEqual(expected, actual *hkeyElements, actualDecodedFromCompactMap bool) error {
 
 	if expected.level != actual.level {
 		return NewFatalError(fmt.Errorf("hkeyElements level %d is wrong, want %d", actual.level, expected.level))
@@ -1060,12 +1155,12 @@ func mapHkeyElementsEqual(
 		return NewFatalError(fmt.Errorf("hkeyElements size %d is wrong, want %d", actual.size, expected.size))
 	}
 
-	if len(expected.hkeys) == 0 {
-		if len(actual.hkeys) != 0 {
-			return NewFatalError(fmt.Errorf("hkeyElements hkeys %v is wrong, want %v", actual.hkeys, expected.hkeys))
-		}
-	} else {
-		if !reflect.DeepEqual(expected.hkeys, actual.hkeys) {
+	if len(expected.hkeys) != len(actual.hkeys) {
+		return NewFatalError(fmt.Errorf("hkeyElements hkeys len %d is wrong, want %d", len(actual.hkeys), len(expected.hkeys)))
+	}
+
+	if !actualDecodedFromCompactMap {
+		if len(expected.hkeys) > 0 && !reflect.DeepEqual(expected.hkeys, actual.hkeys) {
 			return NewFatalError(fmt.Errorf("hkeyElements hkeys %v is wrong, want %v", actual.hkeys, expected.hkeys))
 		}
 	}
@@ -1074,39 +1169,37 @@ func mapHkeyElementsEqual(
 		return NewFatalError(fmt.Errorf("hkeyElements elems len %d is wrong, want %d", len(actual.elems), len(expected.elems)))
 	}
 
-	for i := 0; i < len(expected.elems); i++ {
-		expectedEle := expected.elems[i]
-		actualEle := actual.elems[i]
+	if actualDecodedFromCompactMap {
+		for _, expectedEle := range expected.elems {
+			found := false
+			for _, actualEle := range actual.elems {
+				err := v.mapElementEqual(expectedEle, actualEle, actualDecodedFromCompactMap)
+				if err == nil {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return NewFatalError(fmt.Errorf("hkeyElements elem %v is not found", expectedEle))
+			}
+		}
+	} else {
+		for i := 0; i < len(expected.elems); i++ {
+			expectedEle := expected.elems[i]
+			actualEle := actual.elems[i]
 
-		err := mapElementEqual(
-			expectedEle,
-			actualEle,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by mapElementEqual().
-			return err
+			err := v.mapElementEqual(expectedEle, actualEle, actualDecodedFromCompactMap)
+			if err != nil {
+				// Don't need to wrap error as external error because err is already categorized by mapElementEqual().
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
-func mapSingleElementsEqual(
-	expected *singleElements,
-	actual *singleElements,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapSingleElementsEqual(expected, actual *singleElements) error {
 
 	if expected.level != actual.level {
 		return NewFatalError(fmt.Errorf("singleElements level %d is wrong, want %d", actual.level, expected.level))
@@ -1124,16 +1217,7 @@ func mapSingleElementsEqual(
 		expectedElem := expected.elems[i]
 		actualElem := actual.elems[i]
 
-		err := mapSingleElementEqual(
-			expectedElem,
-			actualElem,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		err := v.mapSingleElementEqual(expectedElem, actualElem)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by mapSingleElementEqual().
 			return err
@@ -1143,16 +1227,7 @@ func mapSingleElementsEqual(
 	return nil
 }
 
-func mapElementEqual(
-	expected element,
-	actual element,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapElementEqual(expected, actual element, actualDecodedFromCompactMap bool) error {
 	switch expectedElem := expected.(type) {
 
 	case *singleElement:
@@ -1160,64 +1235,27 @@ func mapElementEqual(
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return mapSingleElementEqual(
-			expectedElem,
-			actualElem,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		return v.mapSingleElementEqual(expectedElem, actualElem)
 
 	case *inlineCollisionGroup:
 		actualElem, ok := actual.(*inlineCollisionGroup)
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return mapElementsEqual(
-			expectedElem.elements,
-			actualElem.elements,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		return v.mapElementsEqual(expectedElem.elements, actualElem.elements, actualDecodedFromCompactMap)
 
 	case *externalCollisionGroup:
 		actualElem, ok := actual.(*externalCollisionGroup)
 		if !ok {
 			return NewFatalError(fmt.Errorf("elements type %T is wrong, want %T", actual, expected))
 		}
-		return mapExternalCollisionElementsEqual(
-			expectedElem,
-			actualElem,
-			storage,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
-
+		return v.mapExternalCollisionElementsEqual(expectedElem, actualElem)
 	}
 
 	return nil
 }
 
-func mapExternalCollisionElementsEqual(
-	expected *externalCollisionGroup,
-	actual *externalCollisionGroup,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapExternalCollisionElementsEqual(expected, actual *externalCollisionGroup) error {
 
 	if expected.size != actual.size {
 		return NewFatalError(fmt.Errorf("externalCollisionGroup size %d is wrong, want %d", actual.size, expected.size))
@@ -1227,100 +1265,96 @@ func mapExternalCollisionElementsEqual(
 		return NewFatalError(fmt.Errorf("externalCollisionGroup id %d is wrong, want %d", actual.slabID, expected.slabID))
 	}
 
-	// Compare external collision slab
-	err := validMapSlabSerialization(
-		storage,
-		expected.slabID,
-		cborDecMode,
-		cborEncMode,
-		decodeStorable,
-		decodeTypeInfo,
-		compare,
-	)
+	slab, err := getMapSlab(v.storage, expected.slabID)
 	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by validMapSlabSerialization().
+		// Don't need to wrap error as external error because err is already categorized by getMapSlab().
+		return err
+	}
+
+	// Compare external collision slab
+	err = v.verifyMapSlab(slab)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by verifyMapSlab().
 		return err
 	}
 
 	return nil
 }
 
-func mapSingleElementEqual(
-	expected *singleElement,
-	actual *singleElement,
-	storage SlabStorage,
-	cborDecMode cbor.DecMode,
-	cborEncMode cbor.EncMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	compare StorableComparator,
-) error {
+func (v *serializationVerifier) mapSingleElementEqual(expected, actual *singleElement) error {
 
 	if expected.size != actual.size {
 		return NewFatalError(fmt.Errorf("singleElement size %d is wrong, want %d", actual.size, expected.size))
 	}
 
-	if !compare(expected.key, actual.key) {
+	if !v.compare(expected.key, actual.key) {
 		return NewFatalError(fmt.Errorf("singleElement key %v is wrong, want %v", actual.key, expected.key))
 	}
 
 	// Compare key stored in a separate slab
 	if idStorable, ok := expected.key.(SlabIDStorable); ok {
 
-		v, err := idStorable.StoredValue(storage)
+		value, err := idStorable.StoredValue(v.storage)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
 			return err
 		}
 
-		err = ValidValueSerialization(
-			v,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		err = v.verifyValue(value)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ValidValueSerialization().
+			// Don't need to wrap error as external error because err is already categorized by verifyValue().
 			return err
 		}
 	}
 
-	if !compare(expected.value, actual.value) {
-		return NewFatalError(fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value))
-	}
+	// Compare nested element
+	switch ee := expected.value.(type) {
+	case SlabIDStorable: // Compare not-inlined element
+		if !v.compare(expected.value, actual.value) {
+			return NewFatalError(fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value))
+		}
 
-	// Compare value stored in a separate slab
-	if idStorable, ok := expected.value.(SlabIDStorable); ok {
-
-		v, err := idStorable.StoredValue(storage)
+		value, err := ee.StoredValue(v.storage)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
 			return err
 		}
 
-		err = ValidValueSerialization(
-			v,
-			cborDecMode,
-			cborEncMode,
-			decodeStorable,
-			decodeTypeInfo,
-			compare,
-		)
+		err = v.verifyValue(value)
 		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ValidValueSerialization().
+			// Don't need to wrap error as external error because err is already categorized by verifyVaue().
 			return err
+		}
+
+	case *ArrayDataSlab: // Compare inlined array element
+		ae, ok := actual.value.(*ArrayDataSlab)
+		if !ok {
+			return NewFatalError(fmt.Errorf("expect element as *ArrayDataSlab, actual %T", ae))
+		}
+
+		return v.arrayDataSlabEqual(ee, ae)
+
+	case *MapDataSlab: // Compare inlined map element
+		ae, ok := actual.value.(*MapDataSlab)
+		if !ok {
+			return NewFatalError(fmt.Errorf("expect element as *MapDataSlab, actual %T", ae))
+		}
+
+		return v.mapDataSlabEqual(ee, ae)
+
+	default:
+		if !v.compare(expected.value, actual.value) {
+			return NewFatalError(fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value))
 		}
 	}
 
 	return nil
 }
 
-func mapMetaDataSlabEqual(expected, actual *MapMetaDataSlab) error {
+func (v *serializationVerifier) mapMetaDataSlabEqual(expected, actual *MapMetaDataSlab) error {
 
 	// Compare extra data
-	err := mapExtraDataEqual(expected.extraData, actual.extraData)
+	err := mapExtraDataEqual(expected.extraData, actual.extraData, false)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by mapExtraDataEqual().
 		return err
@@ -1339,7 +1373,7 @@ func mapMetaDataSlabEqual(expected, actual *MapMetaDataSlab) error {
 	return nil
 }
 
-func mapExtraDataEqual(expected, actual *MapExtraData) error {
+func mapExtraDataEqual(expected, actual *MapExtraData, actualDecodedFromCompactMap bool) error {
 
 	if (expected == nil) && (actual == nil) {
 		return nil
@@ -1349,8 +1383,81 @@ func mapExtraDataEqual(expected, actual *MapExtraData) error {
 		return NewFatalError(fmt.Errorf("has extra data is %t, want %t", actual == nil, expected == nil))
 	}
 
-	if !reflect.DeepEqual(*expected, *actual) {
-		return NewFatalError(fmt.Errorf("extra data %+v is wrong, want %+v", *actual, *expected))
+	if !reflect.DeepEqual(expected.TypeInfo, actual.TypeInfo) {
+		return NewFatalError(fmt.Errorf("map extra data type %+v is wrong, want %+v", actual.TypeInfo, expected.TypeInfo))
+	}
+
+	if expected.Count != actual.Count {
+		return NewFatalError(fmt.Errorf("map extra data count %d is wrong, want %d", actual.Count, expected.Count))
+	}
+
+	if !actualDecodedFromCompactMap {
+		if expected.Seed != actual.Seed {
+			return NewFatalError(fmt.Errorf("map extra data seed %d is wrong, want %d", actual.Seed, expected.Seed))
+		}
+	}
+
+	return nil
+}
+
+// verifyMapValueID verifies map ValueID is always the same as
+// root slab's SlabID indepedent of map's inlined status.
+func verifyMapValueID(m *OrderedMap) error {
+	rootSlabID := m.root.Header().slabID
+
+	vid := m.ValueID()
+
+	if !bytes.Equal(vid[:slabAddressSize], rootSlabID.address[:]) {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect first %d bytes of array value ID as %v, got %v",
+				slabAddressSize,
+				rootSlabID.address[:],
+				vid[:slabAddressSize]))
+	}
+
+	if !bytes.Equal(vid[slabAddressSize:], rootSlabID.index[:]) {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect second %d bytes of array value ID as %v, got %v",
+				slabIndexSize,
+				rootSlabID.index[:],
+				vid[slabAddressSize:]))
+	}
+
+	return nil
+}
+
+// verifyMapSlabID verifies map SlabID is either empty for inlined map, or
+// same as root slab's SlabID for not-inlined map.
+func verifyMapSlabID(m *OrderedMap) error {
+	sid := m.SlabID()
+
+	if m.Inlined() {
+		if sid != SlabIDUndefined {
+			return NewFatalError(
+				fmt.Errorf(
+					"expect empty slab ID for inlined array, got %v",
+					sid))
+		}
+		return nil
+	}
+
+	rootSlabID := m.root.Header().slabID
+
+	if sid == SlabIDUndefined {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect non-empty slab ID for not-inlined array, got %v",
+				sid))
+	}
+
+	if sid != rootSlabID {
+		return NewFatalError(
+			fmt.Errorf(
+				"expect array slab ID same as root slab's slab ID %s, got %s",
+				rootSlabID,
+				sid))
 	}
 
 	return nil

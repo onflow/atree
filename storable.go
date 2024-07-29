@@ -37,19 +37,55 @@ type Storable interface {
 	ChildStorables() []Storable
 }
 
-type containerStorable interface {
+// ComparableStorable is an interface that supports comparison and cloning of Storable.
+// This is only used for compact keys.
+type ComparableStorable interface {
 	Storable
-	hasPointer() bool
+
+	// Equal returns true if the given storable is equal to this storable.
+	Equal(Storable) bool
+
+	// Less returns true if the given storable is less than this storable.
+	Less(Storable) bool
+
+	// ID returns a unique identifier.
+	ID() string
+
+	Copy() Storable
+}
+
+// ContainerStorable is an interface that supports Storable containing other storables.
+type ContainerStorable interface {
+	Storable
+
+	// HasPointer returns true if any of its child storables is SlabIDStorable
+	// (references to another slab).  This function is used during encoding.
+	HasPointer() bool
 }
 
 func hasPointer(storable Storable) bool {
-	if cs, ok := storable.(containerStorable); ok {
-		return cs.hasPointer()
+	if cs, ok := storable.(ContainerStorable); ok {
+		return cs.HasPointer()
 	}
 	return false
 }
 
 const (
+	// WARNING: tag numbers defined in here in github.com/onflow/atree
+	// MUST not overlap with tag numbers used by Cadence internal value encoding.
+	// As of Oct. 2, 2023, Cadence uses tag numbers from 128 to 224.
+	// See runtime/interpreter/encode.go at github.com/onflow/cadence.
+
+	CBORTagTypeInfoRef = 246
+
+	CBORTagInlinedArrayExtraData      = 247
+	CBORTagInlinedMapExtraData        = 248
+	CBORTagInlinedCompactMapExtraData = 249
+
+	CBORTagInlinedArray      = 250
+	CBORTagInlinedMap        = 251
+	CBORTagInlinedCompactMap = 252
+
 	CBORTagInlineCollisionGroup   = 253
 	CBORTagExternalCollisionGroup = 254
 
@@ -58,9 +94,9 @@ const (
 
 type SlabIDStorable SlabID
 
-var _ Storable = SlabIDStorable{}
+var _ ContainerStorable = SlabIDStorable{}
 
-func (v SlabIDStorable) hasPointer() bool {
+func (v SlabIDStorable) HasPointer() bool {
 	return true
 }
 
@@ -126,12 +162,11 @@ func (v SlabIDStorable) String() string {
 	return fmt.Sprintf("SlabIDStorable(%d)", v)
 }
 
-// Encode is a wrapper for Storable.Encode()
-func Encode(storable Storable, encMode cbor.EncMode) ([]byte, error) {
+func EncodeSlab(slab Slab, encMode cbor.EncMode) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := NewEncoder(&buf, encMode)
 
-	err := storable.Encode(enc)
+	err := slab.Encode(enc)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Storable interface.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable")

@@ -20,6 +20,7 @@ package atree
 
 import (
 	"flag"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -91,6 +92,18 @@ type testTypeInfo struct {
 
 var _ TypeInfo = testTypeInfo{}
 
+func (i testTypeInfo) Copy() TypeInfo {
+	return i
+}
+
+func (i testTypeInfo) IsComposite() bool {
+	return false
+}
+
+func (i testTypeInfo) Identifier() string {
+	return fmt.Sprintf("uint64(%d)", i)
+}
+
 func (i testTypeInfo) Encode(enc *cbor.StreamEncoder) error {
 	return enc.EncodeUint64(i.value)
 }
@@ -100,13 +113,50 @@ func (i testTypeInfo) Equal(other TypeInfo) bool {
 	return ok && i.value == otherTestTypeInfo.value
 }
 
+const testCompositeTypeInfoTagNum = 246
+
+type testCompositeTypeInfo struct {
+	value uint64
+}
+
+var _ TypeInfo = testCompositeTypeInfo{}
+
+func (i testCompositeTypeInfo) Copy() TypeInfo {
+	return i
+}
+
+func (i testCompositeTypeInfo) IsComposite() bool {
+	return true
+}
+
+func (i testCompositeTypeInfo) Identifier() string {
+	return fmt.Sprintf("composite(%d)", i)
+}
+
+func (i testCompositeTypeInfo) Encode(enc *cbor.StreamEncoder) error {
+	err := enc.EncodeTagHead(testCompositeTypeInfoTagNum)
+	if err != nil {
+		return err
+	}
+	return enc.EncodeUint64(i.value)
+}
+
+func (i testCompositeTypeInfo) Equal(other TypeInfo) bool {
+	otherTestTypeInfo, ok := other.(testCompositeTypeInfo)
+	return ok && i.value == otherTestTypeInfo.value
+}
+
 func typeInfoComparator(a, b TypeInfo) bool {
-	x, ok := a.(testTypeInfo)
-	if !ok {
+	switch a := a.(type) {
+	case testTypeInfo:
+		return a.Equal(b)
+
+	case testCompositeTypeInfo:
+		return a.Equal(b)
+
+	default:
 		return false
 	}
-	y, ok := b.(testTypeInfo)
-	return ok && x.value == y.value
 }
 
 func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
@@ -148,6 +198,15 @@ func newTestPersistentStorageWithBaseStorage(t testing.TB, baseStorage BaseStora
 		decodeStorable,
 		decodeTypeInfo,
 	)
+}
+
+func newTestPersistentStorageWithBaseStorageAndDeltas(t testing.TB, baseStorage BaseStorage, data map[SlabID][]byte) *PersistentSlabStorage {
+	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
+	for id, b := range data {
+		err := storage.baseStorage.Store(id, b)
+		require.NoError(t, err)
+	}
+	return storage
 }
 
 func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
@@ -264,80 +323,118 @@ func (s *InMemBaseStorage) ResetReporter() {
 	s.segmentsTouched = make(map[SlabID]struct{})
 }
 
-func valueEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
-	switch a.(type) {
+func valueEqual(t *testing.T, expected Value, actual Value) {
+	switch expected := expected.(type) {
+	case arrayValue:
+		actual, ok := actual.(*Array)
+		require.True(t, ok)
+
+		arrayEqual(t, expected, actual)
+
 	case *Array:
-		arrayEqual(t, tic, a, b)
+		require.FailNow(t, "expected value shouldn't be *Array")
+
+	case mapValue:
+		actual, ok := actual.(*OrderedMap)
+		require.True(t, ok)
+
+		mapEqual(t, expected, actual)
+
 	case *OrderedMap:
-		mapEqual(t, tic, a, b)
+		require.FailNow(t, "expected value shouldn't be *OrderedMap")
+
 	default:
-		require.Equal(t, a, b)
+		require.Equal(t, expected, actual)
 	}
 }
 
-func arrayEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
-	array1, ok := a.(*Array)
-	require.True(t, ok)
+func arrayEqual(t *testing.T, expected arrayValue, actual *Array) {
+	require.Equal(t, uint64(len(expected)), actual.Count())
 
-	array2, ok := b.(*Array)
-	require.True(t, ok)
-
-	require.True(t, tic(array1.Type(), array2.Type()))
-	require.Equal(t, array1.Address(), array2.Address())
-	require.Equal(t, array1.Count(), array2.Count())
-	require.Equal(t, array1.SlabID(), array2.SlabID())
-
-	iterator1, err := array1.Iterator()
+	iterator, err := actual.ReadOnlyIterator()
 	require.NoError(t, err)
 
-	iterator2, err := array2.Iterator()
-	require.NoError(t, err)
-
+	i := 0
 	for {
-		value1, err := iterator1.Next()
+		actualValue, err := iterator.Next()
 		require.NoError(t, err)
 
-		value2, err := iterator2.Next()
-		require.NoError(t, err)
-
-		valueEqual(t, tic, value1, value2)
-
-		if value1 == nil || value2 == nil {
+		if actualValue == nil {
 			break
 		}
+
+		valueEqual(t, expected[i], actualValue)
+		i++
 	}
+	require.Equal(t, len(expected), i)
 }
 
-func mapEqual(t *testing.T, tic TypeInfoComparator, a Value, b Value) {
-	m1, ok := a.(*OrderedMap)
-	require.True(t, ok)
+func mapEqual(t *testing.T, expected mapValue, actual *OrderedMap) {
+	require.Equal(t, uint64(len(expected)), actual.Count())
 
-	m2, ok := b.(*OrderedMap)
-	require.True(t, ok)
-
-	require.True(t, tic(m1.Type(), m2.Type()))
-	require.Equal(t, m1.Address(), m2.Address())
-	require.Equal(t, m1.Count(), m2.Count())
-	require.Equal(t, m1.SlabID(), m2.SlabID())
-
-	iterator1, err := m1.Iterator()
+	iterator, err := actual.ReadOnlyIterator()
 	require.NoError(t, err)
 
-	iterator2, err := m2.Iterator()
-	require.NoError(t, err)
-
+	i := 0
 	for {
-		key1, value1, err := iterator1.Next()
+		actualKey, actualValue, err := iterator.Next()
 		require.NoError(t, err)
 
-		key2, value2, err := iterator2.Next()
-		require.NoError(t, err)
-
-		valueEqual(t, tic, key1, key2)
-		valueEqual(t, tic, value1, value2)
-
-		if key1 == nil || key2 == nil {
+		if actualKey == nil {
 			break
 		}
+
+		expectedValue, exist := expected[actualKey]
+		require.True(t, exist)
+
+		valueEqual(t, expectedValue, actualValue)
+		i++
 	}
+	require.Equal(t, len(expected), i)
+}
+
+func valueIDToSlabID(vid ValueID) SlabID {
+	var id SlabID
+	copy(id.address[:], vid[:slabAddressSize])
+	copy(id.index[:], vid[slabAddressSize:])
+	return id
+}
+
+func testInlinedMapIDs(t *testing.T, address Address, m *OrderedMap) {
+	testInlinedSlabIDAndValueID(t, address, m.SlabID(), m.ValueID())
+}
+
+func testNotInlinedMapIDs(t *testing.T, address Address, m *OrderedMap) {
+	testNotInlinedSlabIDAndValueID(t, address, m.SlabID(), m.ValueID())
+}
+
+func testInlinedSlabIDAndValueID(t *testing.T, expectedAddress Address, slabID SlabID, valueID ValueID) {
+	require.Equal(t, SlabIDUndefined, slabID)
+
+	require.Equal(t, expectedAddress[:], valueID[:slabAddressSize])
+	require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+}
+
+func testNotInlinedSlabIDAndValueID(t *testing.T, expectedAddress Address, slabID SlabID, valueID ValueID) {
+	require.Equal(t, expectedAddress, slabID.address)
+	require.NotEqual(t, SlabIndexUndefined, slabID.index)
+
+	require.Equal(t, slabID.address[:], valueID[:slabAddressSize])
+	require.Equal(t, slabID.index[:], valueID[slabAddressSize:])
+}
+
+type arrayValue []Value
+
+var _ Value = &arrayValue{}
+
+func (v arrayValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+	panic("not reachable")
+}
+
+type mapValue map[Value]Value
+
+var _ Value = &mapValue{}
+
+func (v mapValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+	panic("not reachable")
 }

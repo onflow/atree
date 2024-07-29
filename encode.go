@@ -28,21 +28,39 @@ import (
 // Encoder writes atree slabs to io.Writer.
 type Encoder struct {
 	io.Writer
-	CBOR    *cbor.StreamEncoder
-	Scratch [64]byte
+	CBOR              *cbor.StreamEncoder
+	Scratch           [64]byte
+	encMode           cbor.EncMode
+	_inlinedExtraData *InlinedExtraData
 }
 
 func NewEncoder(w io.Writer, encMode cbor.EncMode) *Encoder {
 	streamEncoder := encMode.NewStreamEncoder(w)
 	return &Encoder{
-		Writer: w,
-		CBOR:   streamEncoder,
+		Writer:  w,
+		CBOR:    streamEncoder,
+		encMode: encMode,
 	}
+}
+
+func (enc *Encoder) inlinedExtraData() *InlinedExtraData {
+	if enc._inlinedExtraData == nil {
+		enc._inlinedExtraData = newInlinedExtraData()
+	}
+	return enc._inlinedExtraData
+}
+
+func (enc *Encoder) hasInlinedExtraData() bool {
+	if enc._inlinedExtraData == nil {
+		return false
+	}
+	return !enc._inlinedExtraData.empty()
 }
 
 type StorableDecoder func(
 	decoder *cbor.StreamDecoder,
 	storableSlabID SlabID,
+	inlinedExtraData []ExtraData,
 ) (
 	Storable,
 	error,
@@ -101,7 +119,7 @@ func DecodeSlab(
 
 	case slabStorable:
 		cborDec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
-		storable, err := decodeStorable(cborDec, id)
+		storable, err := decodeStorable(cborDec, id, nil)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode slab storable")
@@ -116,7 +134,6 @@ func DecodeSlab(
 	}
 }
 
-// TODO: make it inline
 func GetUintCBORSize(n uint64) uint32 {
 	if n <= 23 {
 		return 1

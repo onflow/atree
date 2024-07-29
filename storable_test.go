@@ -34,6 +34,7 @@ const (
 	cborTagUInt32Value = 163
 	cborTagUInt64Value = 164
 	cborTagSomeValue   = 165
+	cborTagHashableMap = 166
 )
 
 type HashableValue interface {
@@ -333,6 +334,7 @@ type StringValue struct {
 var _ Value = StringValue{}
 var _ Storable = StringValue{}
 var _ HashableValue = StringValue{}
+var _ ComparableStorable = StringValue{}
 
 func NewStringValue(s string) StringValue {
 	size := GetUintCBORSize(uint64(len(s))) + uint32(len(s))
@@ -343,6 +345,28 @@ func (v StringValue) ChildStorables() []Storable { return nil }
 
 func (v StringValue) StoredValue(_ SlabStorage) (Value, error) {
 	return v, nil
+}
+
+func (v StringValue) Equal(other Storable) bool {
+	if _, ok := other.(StringValue); !ok {
+		return false
+	}
+	return v.str == other.(StringValue).str
+}
+
+func (v StringValue) Less(other Storable) bool {
+	if _, ok := other.(StringValue); !ok {
+		return false
+	}
+	return v.str < other.(StringValue).str
+}
+
+func (v StringValue) ID() string {
+	return v.str
+}
+
+func (v StringValue) Copy() Storable {
+	return v
 }
 
 func (v StringValue) Storable(storage SlabStorage, address Address, maxInlineSize uint64) (Storable, error) {
@@ -430,7 +454,7 @@ func (v StringValue) String() string {
 	return v.str
 }
 
-func decodeStorable(dec *cbor.StreamDecoder, id SlabID) (Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, id SlabID, inlinedExtraData []ExtraData) (Storable, error) {
 	t, err := dec.NextType()
 	if err != nil {
 		return nil, err
@@ -451,6 +475,15 @@ func decodeStorable(dec *cbor.StreamDecoder, id SlabID) (Storable, error) {
 		}
 
 		switch tagNumber {
+		case CBORTagInlinedArray:
+			return DecodeInlinedArrayStorable(dec, decodeStorable, id, inlinedExtraData)
+
+		case CBORTagInlinedMap:
+			return DecodeInlinedMapStorable(dec, decodeStorable, id, inlinedExtraData)
+
+		case CBORTagInlinedCompactMap:
+			return DecodeInlinedCompactMapStorable(dec, decodeStorable, id, inlinedExtraData)
+
 		case CBORTagSlabID:
 			return DecodeSlabIDStorable(dec)
 
@@ -492,7 +525,7 @@ func decodeStorable(dec *cbor.StreamDecoder, id SlabID) (Storable, error) {
 			return Uint64Value(n), nil
 
 		case cborTagSomeValue:
-			storable, err := decodeStorable(dec, id)
+			storable, err := decodeStorable(dec, id, inlinedExtraData)
 			if err != nil {
 				return nil, err
 			}
@@ -507,12 +540,43 @@ func decodeStorable(dec *cbor.StreamDecoder, id SlabID) (Storable, error) {
 }
 
 func decodeTypeInfo(dec *cbor.StreamDecoder) (TypeInfo, error) {
-	value, err := dec.DecodeUint64()
+	t, err := dec.NextType()
 	if err != nil {
 		return nil, err
 	}
 
-	return testTypeInfo{value: value}, nil
+	switch t {
+	case cbor.UintType:
+		value, err := dec.DecodeUint64()
+		if err != nil {
+			return nil, err
+		}
+
+		return testTypeInfo{value: value}, nil
+
+	case cbor.TagType:
+		tagNum, err := dec.DecodeTagNumber()
+		if err != nil {
+			return nil, err
+		}
+
+		switch tagNum {
+		case testCompositeTypeInfoTagNum:
+			value, err := dec.DecodeUint64()
+			if err != nil {
+				return nil, err
+			}
+
+			return testCompositeTypeInfo{value: value}, nil
+
+		default:
+			return nil, fmt.Errorf("failed to decode type info")
+		}
+
+	default:
+		return nil, fmt.Errorf("failed to decode type info")
+	}
+
 }
 
 func compare(storage SlabStorage, value Value, storable Storable) (bool, error) {
@@ -571,6 +635,19 @@ func compare(storage SlabStorage, value Value, storable Storable) (bool, error) 
 		}
 
 		return compare(storage, v.Value, other.Storable)
+
+	case *HashableMap:
+		other, err := storable.StoredValue(storage)
+		if err != nil {
+			return false, err
+		}
+
+		otherMap, ok := other.(*OrderedMap)
+		if !ok {
+			return false, nil
+		}
+
+		return v.m.ValueID() == otherMap.ValueID(), nil
 	}
 
 	return false, fmt.Errorf("value %T not supported for comparison", value)
@@ -635,11 +712,11 @@ type SomeStorable struct {
 	Storable Storable
 }
 
-var _ Storable = SomeStorable{}
+var _ ContainerStorable = SomeStorable{}
 
-func (v SomeStorable) hasPointer() bool {
-	if ms, ok := v.Storable.(containerStorable); ok {
-		return ms.hasPointer()
+func (v SomeStorable) HasPointer() bool {
+	if ms, ok := v.Storable.(ContainerStorable); ok {
+		return ms.HasPointer()
 	}
 	return false
 }
@@ -677,25 +754,25 @@ func (v SomeStorable) String() string {
 	return fmt.Sprintf("%s", v.Storable)
 }
 
-type mutableValue struct {
+type testMutableValue struct {
 	storable *mutableStorable
 }
 
-var _ Value = &mutableValue{}
+var _ Value = &testMutableValue{}
 
-func newMutableValue(storableSize uint32) *mutableValue {
-	return &mutableValue{
+func newTestMutableValue(storableSize uint32) *testMutableValue {
+	return &testMutableValue{
 		storable: &mutableStorable{
 			size: storableSize,
 		},
 	}
 }
 
-func (v *mutableValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+func (v *testMutableValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
 	return v.storable, nil
 }
 
-func (v *mutableValue) updateStorableSize(n uint32) {
+func (v *testMutableValue) updateStorableSize(n uint32) {
 	v.storable.size = n
 }
 
@@ -710,7 +787,7 @@ func (s *mutableStorable) ByteSize() uint32 {
 }
 
 func (s *mutableStorable) StoredValue(SlabStorage) (Value, error) {
-	return &mutableValue{s}, nil
+	return &testMutableValue{s}, nil
 }
 
 func (*mutableStorable) ChildStorables() []Storable {
@@ -720,4 +797,48 @@ func (*mutableStorable) ChildStorables() []Storable {
 func (*mutableStorable) Encode(*Encoder) error {
 	// no-op for testing
 	return nil
+}
+
+type HashableMap struct {
+	m *OrderedMap
+}
+
+var _ Value = &HashableMap{}
+var _ HashableValue = &HashableMap{}
+
+func NewHashableMap(m *OrderedMap) *HashableMap {
+	return &HashableMap{m}
+}
+
+func (v *HashableMap) Storable(storage SlabStorage, address Address, maxInlineSize uint64) (Storable, error) {
+	return v.m.Storable(storage, address, maxInlineSize)
+}
+
+func (v *HashableMap) HashInput(scratch []byte) ([]byte, error) {
+	const (
+		cborTypeByteString = 0x40
+
+		valueIDLength          = len(ValueID{})
+		cborTagNumSize         = 2
+		cborByteStringHeadSize = 1
+		cborByteStringSize     = valueIDLength
+		hashInputSize          = cborTagNumSize + cborByteStringHeadSize + cborByteStringSize
+	)
+
+	var buf []byte
+	if len(scratch) >= hashInputSize {
+		buf = scratch[:hashInputSize]
+	} else {
+		buf = make([]byte, hashInputSize)
+	}
+
+	// CBOR tag number
+	buf[0], buf[1] = 0xd8, cborTagHashableMap
+
+	// CBOR byte string head
+	buf[2] = cborTypeByteString | byte(valueIDLength)
+
+	vid := v.m.ValueID()
+	copy(buf[3:], vid[:])
+	return buf, nil
 }

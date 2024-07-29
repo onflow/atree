@@ -19,31 +19,231 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/onflow/atree"
 
 	"github.com/fxamacker/cbor/v2"
 )
 
-type testTypeInfo struct {
-	value uint64
+const (
+	maxArrayTypeValue = 10
+	maxMapTypeValue   = 10
+
+	arrayTypeTagNum     = 246
+	mapTypeTagNum       = 245
+	compositeTypeTagNum = 244
+)
+
+type arrayTypeInfo struct {
+	value int
 }
 
-var _ atree.TypeInfo = testTypeInfo{}
-
-func (i testTypeInfo) Encode(e *cbor.StreamEncoder) error {
-	return e.EncodeUint64(i.value)
+func newArrayTypeInfo() arrayTypeInfo {
+	return arrayTypeInfo{value: r.Intn(maxArrayTypeValue)}
 }
 
-func (i testTypeInfo) Equal(other atree.TypeInfo) bool {
-	otherTestTypeInfo, ok := other.(testTypeInfo)
-	return ok && i.value == otherTestTypeInfo.value
+var _ atree.TypeInfo = arrayTypeInfo{}
+
+func (i arrayTypeInfo) Copy() atree.TypeInfo {
+	return i
+}
+
+func (i arrayTypeInfo) IsComposite() bool {
+	return false
+}
+
+func (i arrayTypeInfo) Identifier() string {
+	return fmt.Sprintf("array(%d)", i)
+}
+
+func (i arrayTypeInfo) Encode(e *cbor.StreamEncoder) error {
+	err := e.EncodeTagHead(arrayTypeTagNum)
+	if err != nil {
+		return err
+	}
+	return e.EncodeInt64(int64(i.value))
+}
+
+func (i arrayTypeInfo) Equal(other atree.TypeInfo) bool {
+	otherArrayTypeInfo, ok := other.(arrayTypeInfo)
+	return ok && i.value == otherArrayTypeInfo.value
+}
+
+type mapTypeInfo struct {
+	value int
+}
+
+var _ atree.TypeInfo = mapTypeInfo{}
+
+func newMapTypeInfo() mapTypeInfo {
+	return mapTypeInfo{value: r.Intn(maxMapTypeValue)}
+}
+
+func (i mapTypeInfo) Copy() atree.TypeInfo {
+	return i
+}
+
+func (i mapTypeInfo) IsComposite() bool {
+	return false
+}
+
+func (i mapTypeInfo) Identifier() string {
+	return fmt.Sprintf("map(%d)", i)
+}
+
+func (i mapTypeInfo) Encode(e *cbor.StreamEncoder) error {
+	err := e.EncodeTagHead(mapTypeTagNum)
+	if err != nil {
+		return err
+	}
+	return e.EncodeInt64(int64(i.value))
+}
+
+func (i mapTypeInfo) Equal(other atree.TypeInfo) bool {
+	otherMapTypeInfo, ok := other.(mapTypeInfo)
+	return ok && i.value == otherMapTypeInfo.value
+}
+
+var compositeFieldNames = []string{"a", "b", "c"}
+
+type compositeTypeInfo struct {
+	fieldStartIndex int // inclusive start index of fieldNames
+	fieldEndIndex   int // exclusive end index of fieldNames
+}
+
+var _ atree.TypeInfo = mapTypeInfo{}
+
+// newCompositeTypeInfo creates one of 10 compositeTypeInfo randomly.
+// 10 possible composites:
+// - ID: composite(0_0), field names: []
+// - ID: composite(0_1), field names: ["a"]
+// - ID: composite(0_2), field names: ["a", "b"]
+// - ID: composite(0_3), field names: ["a", "b", "c"]
+// - ID: composite(1_1), field names: []
+// - ID: composite(1_2), field names: ["b"]
+// - ID: composite(1_3), field names: ["b", "c"]
+// - ID: composite(2_2), field names: []
+// - ID: composite(2_3), field names: ["c"]
+// - ID: composite(3_3), field names: []
+func newCompositeTypeInfo() compositeTypeInfo {
+	// startIndex is [0, 3]
+	startIndex := r.Intn(len(compositeFieldNames) + 1)
+
+	// count is [0, 3]
+	count := r.Intn(len(compositeFieldNames) - startIndex + 1)
+
+	endIndex := startIndex + count
+	if endIndex > len(compositeFieldNames) {
+		panic("not reachable")
+	}
+
+	return compositeTypeInfo{fieldStartIndex: startIndex, fieldEndIndex: endIndex}
+}
+
+func (i compositeTypeInfo) getFieldNames() []string {
+	return compositeFieldNames[i.fieldStartIndex:i.fieldEndIndex]
+}
+
+func (i compositeTypeInfo) Copy() atree.TypeInfo {
+	return i
+}
+
+func (i compositeTypeInfo) IsComposite() bool {
+	return true
+}
+
+func (i compositeTypeInfo) Identifier() string {
+	return fmt.Sprintf("composite(%d_%d)", i.fieldStartIndex, i.fieldEndIndex)
+}
+
+func (i compositeTypeInfo) Encode(e *cbor.StreamEncoder) error {
+	err := e.EncodeTagHead(compositeTypeTagNum)
+	if err != nil {
+		return err
+	}
+	err = e.EncodeArrayHead(2)
+	if err != nil {
+		return err
+	}
+	err = e.EncodeInt64(int64(i.fieldStartIndex))
+	if err != nil {
+		return err
+	}
+	return e.EncodeInt64(int64(i.fieldEndIndex))
+}
+
+func (i compositeTypeInfo) Equal(other atree.TypeInfo) bool {
+	otherCompositeTypeInfo, ok := other.(compositeTypeInfo)
+	if !ok {
+		return false
+	}
+	return i.fieldStartIndex == otherCompositeTypeInfo.fieldStartIndex &&
+		i.fieldEndIndex == otherCompositeTypeInfo.fieldEndIndex
 }
 
 func decodeTypeInfo(dec *cbor.StreamDecoder) (atree.TypeInfo, error) {
-	value, err := dec.DecodeUint64()
+	num, err := dec.DecodeTagNumber()
 	if err != nil {
 		return nil, err
 	}
+	switch num {
+	case arrayTypeTagNum:
+		value, err := dec.DecodeInt64()
+		if err != nil {
+			return nil, err
+		}
 
-	return testTypeInfo{value: value}, nil
+		return arrayTypeInfo{value: int(value)}, nil
+
+	case mapTypeTagNum:
+		value, err := dec.DecodeInt64()
+		if err != nil {
+			return nil, err
+		}
+
+		return mapTypeInfo{value: int(value)}, nil
+
+	case compositeTypeTagNum:
+		count, err := dec.DecodeArrayHead()
+		if err != nil {
+			return nil, err
+		}
+		if count != 2 {
+			return nil, fmt.Errorf(
+				"failed to decode composite type info: expect 2 elemets, got %d elements",
+				count,
+			)
+		}
+
+		startIndex, err := dec.DecodeInt64()
+		if err != nil {
+			return nil, err
+		}
+
+		endIndex, err := dec.DecodeInt64()
+		if err != nil {
+			return nil, err
+		}
+
+		if endIndex < startIndex {
+			return nil, fmt.Errorf(
+				"failed to decode composite type info: endIndex %d < startIndex %d",
+				endIndex,
+				startIndex,
+			)
+		}
+
+		if endIndex > int64(len(compositeFieldNames)) {
+			return nil, fmt.Errorf(
+				"failed to decode composite type info: endIndex %d > len(compositeFieldNames) %d",
+				endIndex,
+				len(compositeFieldNames))
+		}
+
+		return compositeTypeInfo{fieldStartIndex: int(startIndex), fieldEndIndex: int(endIndex)}, nil
+
+	default:
+		return nil, fmt.Errorf("failed to decode type info with tag number %d", num)
+	}
 }

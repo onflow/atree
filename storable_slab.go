@@ -50,10 +50,9 @@ func NewStorableSlab(storage SlabStorage, address Address, storable Storable) (S
 		storable: storable,
 	}
 
-	err = storage.Store(id, slab)
+	err = storeSlab(storage, slab)
 	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
+		return nil, err
 	}
 
 	return SlabIDStorable(id), nil
@@ -91,6 +90,10 @@ func (s *StorableSlab) Encode(enc *Encoder) error {
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Storable interface.
 		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable")
+	}
+
+	if enc.hasInlinedExtraData() {
+		return NewEncodingError(fmt.Errorf("failed to encode storable slab because storable contains inlined array/map"))
 	}
 
 	return nil

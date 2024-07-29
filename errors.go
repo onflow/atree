@@ -456,6 +456,24 @@ func (e *MapElementCountError) Error() string {
 	return e.msg
 }
 
+// ReadOnlyIteratorElementMutationError is the error returned when readonly iterator element is mutated.
+type ReadOnlyIteratorElementMutationError struct {
+	containerValueID ValueID
+	elementValueID   ValueID
+}
+
+// NewReadOnlyIteratorElementMutationError creates ReadOnlyIteratorElementMutationError.
+func NewReadOnlyIteratorElementMutationError(containerValueID, elementValueID ValueID) error {
+	return NewFatalError(&ReadOnlyIteratorElementMutationError{
+		containerValueID: containerValueID,
+		elementValueID:   elementValueID,
+	})
+}
+
+func (e *ReadOnlyIteratorElementMutationError) Error() string {
+	return fmt.Sprintf("element (%s) cannot be mutated because it is from readonly iterator of container (%s)", e.elementValueID, e.containerValueID)
+}
+
 func wrapErrorAsExternalErrorIfNeeded(err error) error {
 	return wrapErrorfAsExternalErrorIfNeeded(err, "")
 }

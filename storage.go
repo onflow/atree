@@ -136,6 +136,11 @@ func (id SlabID) AddressAsUint64() uint64 {
 	return binary.BigEndian.Uint64(id.address[:])
 }
 
+// Address returns the address of SlabID.
+func (id SlabID) Address() Address {
+	return id.address
+}
+
 func (id SlabID) IndexAsUint64() uint64 {
 	return binary.BigEndian.Uint64(id.index[:])
 }

@@ -73,8 +73,27 @@ func hasPointer(storable Storable) bool {
 const (
 	// WARNING: tag numbers defined in here in github.com/onflow/atree
 	// MUST not overlap with tag numbers used by Cadence internal value encoding.
-	// As of Oct. 2, 2023, Cadence uses tag numbers from 128 to 224.
+	// As of Aug. 14, 2024, Cadence uses tag numbers from 128 to 230.
 	// See runtime/interpreter/encode.go at github.com/onflow/cadence.
+
+	// Atree reserves CBOR tag numbers [240, 255] for internal use.
+	// Applications must use non-overlapping CBOR tag numbers to encode
+	// elements managed by atree containers.
+	minInternalCBORTagNumber = 240
+	maxInternalCBORTagNumber = 255
+
+	// Reserved CBOR tag numbers for atree internal use.
+
+	// Replace _ when new tag number is needed (use higher tag numbers first).
+	// Atree will use higher tag numbers first because Cadence will use lower tag numbers first.
+	// This approach allows more flexibility in case we need to revisit ranges used by Atree and Cadence.
+
+	_ = 240
+	_ = 241
+	_ = 242
+	_ = 243
+	_ = 244
+	_ = 245
 
 	CBORTagTypeInfoRef = 246
 
@@ -91,6 +110,22 @@ const (
 
 	CBORTagSlabID = 255
 )
+
+// IsCBORTagNumberRangeAvailable returns true if the specified range is not reserved for internal use by atree.
+// Applications must only use available (unreserved) CBOR tag numbers to encode elements in atree managed containers.
+func IsCBORTagNumberRangeAvailable(minTagNum, maxTagNum uint64) (bool, error) {
+	if minTagNum > maxTagNum {
+		return false, NewUserError(fmt.Errorf("min CBOR tag number %d must be <= max CBOR tag number %d", minTagNum, maxTagNum))
+	}
+
+	return maxTagNum < minInternalCBORTagNumber || minTagNum > maxInternalCBORTagNumber, nil
+}
+
+// ReservedCBORTagNumberRange returns minTagNum and maxTagNum of the range of CBOR tag numbers
+// reserved for internal use by atree.
+func ReservedCBORTagNumberRange() (minTagNum, maxTagNum uint64) {
+	return minInternalCBORTagNumber, maxInternalCBORTagNumber
+}
 
 type SlabIDStorable SlabID
 

@@ -170,6 +170,17 @@ func TestSlabIDAddressAsUint64(t *testing.T) {
 	})
 }
 
+func TestSlabIDAddress(t *testing.T) {
+	t.Run("temp", func(t *testing.T) {
+		id := NewSlabID(Address{}, SlabIndex{1})
+		require.Equal(t, Address{}, id.Address())
+	})
+	t.Run("perm", func(t *testing.T) {
+		id := NewSlabID(Address{0, 0, 0, 0, 0, 0, 0, 1}, SlabIndex{1})
+		require.Equal(t, Address{0, 0, 0, 0, 0, 0, 0, 1}, id.Address())
+	})
+}
+
 func TestSlabIDIndexAsUint64(t *testing.T) {
 	t.Run("temp", func(t *testing.T) {
 		id := NewSlabID(Address{}, SlabIndex{})

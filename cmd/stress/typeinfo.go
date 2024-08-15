@@ -29,10 +29,6 @@ import (
 const (
 	maxArrayTypeValue = 10
 	maxMapTypeValue   = 10
-
-	arrayTypeTagNum     = 246
-	mapTypeTagNum       = 245
-	compositeTypeTagNum = 244
 )
 
 type arrayTypeInfo struct {
@@ -51,10 +47,6 @@ func (i arrayTypeInfo) Copy() atree.TypeInfo {
 
 func (i arrayTypeInfo) IsComposite() bool {
 	return false
-}
-
-func (i arrayTypeInfo) Identifier() string {
-	return fmt.Sprintf("array(%d)", i)
 }
 
 func (i arrayTypeInfo) Encode(e *cbor.StreamEncoder) error {
@@ -86,10 +78,6 @@ func (i mapTypeInfo) Copy() atree.TypeInfo {
 
 func (i mapTypeInfo) IsComposite() bool {
 	return false
-}
-
-func (i mapTypeInfo) Identifier() string {
-	return fmt.Sprintf("map(%d)", i)
 }
 
 func (i mapTypeInfo) Encode(e *cbor.StreamEncoder) error {
@@ -151,10 +139,6 @@ func (i compositeTypeInfo) Copy() atree.TypeInfo {
 
 func (i compositeTypeInfo) IsComposite() bool {
 	return true
-}
-
-func (i compositeTypeInfo) Identifier() string {
-	return fmt.Sprintf("composite(%d_%d)", i.fieldStartIndex, i.fieldEndIndex)
 }
 
 func (i compositeTypeInfo) Encode(e *cbor.StreamEncoder) error {

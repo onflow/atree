@@ -32,11 +32,62 @@ import (
 // This file contains value implementations for testing purposes.
 
 const (
+	reservedMinTagNum                 = 161
+	reservedMinTagNumForContainerType = 230
+	reservedMaxTagNum                 = 239
+)
+
+const (
+	// CBOR tag numbers used to encode elements.
+
 	cborTagUInt8Value  = 161
 	cborTagUInt16Value = 162
 	cborTagUInt32Value = 163
 	cborTagUInt64Value = 164
+
+	// CBOR tag numbers in this block cannot exceed 230 (reservedMinTagNumForContainerType).
 )
+
+const (
+	// CBOR tag numbers used to encode container types.
+	// Replace _ when new tag number is needed (use lower tag numbers first).
+
+	arrayTypeTagNum = reservedMinTagNumForContainerType + iota
+	compositeTypeTagNum
+	mapTypeTagNum
+	_
+	_
+	_
+	_
+	_
+	_
+	_
+)
+
+func init() {
+	// Check if the CBOR tag number range is reserved for internal use by atree.
+	// Smoke tests must only use available (unreserved by atree) CBOR tag numbers
+	// to encode elements in atree managed containers.
+
+	// As of Aug 15, 2024:
+	// - Atree reserves CBOR tag numbers [240, 255] for atree internal use.
+	// - Smoke tests reserve CBOR tag numbers [161, 239] to encode elements.
+
+	tagNumOK, err := atree.IsCBORTagNumberRangeAvailable(reservedMinTagNum, reservedMaxTagNum)
+	if err != nil {
+		panic(err)
+	}
+
+	if !tagNumOK {
+		atreeMinTagNum, atreeMaxTagNum := atree.ReservedCBORTagNumberRange()
+		panic(fmt.Errorf(
+			"smoke test tag numbers [%d, %d] overlaps with atree internal tag numbers [%d, %d]",
+			reservedMinTagNum,
+			reservedMaxTagNum,
+			atreeMinTagNum,
+			atreeMaxTagNum))
+	}
+}
 
 type Uint8Value uint8
 

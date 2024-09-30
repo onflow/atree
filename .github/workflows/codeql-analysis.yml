@@ -10,12 +10,9 @@ on:
     - 'feature/**'
     - 'v**'  
   pull_request:
-    branches:
-    - main
-    - 'feature/**'
-    - 'v**'
+    # Run CodeQL on PR in all branches.
   schedule:
-    - cron: '30 5 * * 4'
+    - cron: '45 12 * * *' # Daily at 12:45 UTC / 7:45 AM Central
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}

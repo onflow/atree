@@ -5,10 +5,7 @@ permissions: {}
 
 on:
   push:
-    branches:
-    - main
-    - 'feature/**'
-    - 'v**'  
+    # Run CodeQL on push in all branches.  
   pull_request:
     # Run CodeQL on PR in all branches.
   schedule:

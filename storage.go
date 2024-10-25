@@ -594,6 +594,16 @@ type PersistentSlabStorage struct {
 
 var _ SlabStorage = &PersistentSlabStorage{}
 
+// HasUnsavedChanges returns true if there are any modified and unsaved slabs in storage with given address.
+func (s *PersistentSlabStorage) HasUnsavedChanges(address Address) bool {
+	for k := range s.deltas {
+		if k.address == address {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 
 	var slabs []struct {
@@ -601,6 +611,7 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 		Slab
 	}
 
+	// Get slabs connected to slab from base storage and append those slabs to slabs slice.
 	appendChildStorables := func(slab Slab) error {
 		childStorables := slab.ChildStorables()
 
@@ -659,6 +670,7 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 		return nil
 	}
 
+	// Append slab and slabs connected to it to slabs slice.
 	appendSlab := func(id SlabID, slab Slab) error {
 		slabs = append(slabs, struct {
 			SlabID

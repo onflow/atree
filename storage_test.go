@@ -618,15 +618,18 @@ func TestPersistentStorage(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
+	tempAddress := Address{}
+	permAddress := Address{1, 0, 0, 0, 0, 0, 0, 0}
+
 	t.Run("empty storage", func(t *testing.T) {
 		baseStorage := NewInMemBaseStorage()
 		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
-		tempSlabID, err := NewSlabIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
-		require.NoError(t, err)
+		slabIndex := SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}
 
-		permSlabID, err := NewSlabIDFromRawBytes([]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
-		require.NoError(t, err)
+		tempSlabID := NewSlabID(tempAddress, slabIndex)
+
+		permSlabID := NewSlabID(permAddress, slabIndex)
 
 		_, found, err := storage.Retrieve(tempSlabID)
 		require.NoError(t, err)
@@ -639,6 +642,8 @@ func TestPersistentStorage(t *testing.T) {
 		require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
 		require.Equal(t, uint(0), storage.Deltas())
 		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
+		require.False(t, storage.HasUnsavedChanges(tempAddress))
+		require.False(t, storage.HasUnsavedChanges(permAddress))
 	})
 
 	t.Run("temp address", func(t *testing.T) {
@@ -648,11 +653,11 @@ func TestPersistentStorage(t *testing.T) {
 		baseStorage := NewInMemBaseStorage()
 		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
-		tempSlabID, err := NewSlabIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
-		require.NoError(t, err)
+		slabIndex := SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}
 
-		permSlabID, err := NewSlabIDFromRawBytes([]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
-		require.NoError(t, err)
+		tempSlabID := NewSlabID(tempAddress, slabIndex)
+
+		permSlabID := NewSlabID(permAddress, slabIndex)
 
 		slab1 := generateRandomSlab(tempSlabID, r)
 		slab2 := generateRandomSlab(permSlabID, r)
@@ -660,7 +665,10 @@ func TestPersistentStorage(t *testing.T) {
 		// no temp ids should be in the base storage
 		err = storage.Store(tempSlabID, slab1)
 		require.NoError(t, err)
+
 		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
+		require.True(t, storage.HasUnsavedChanges(tempAddress))
+		require.False(t, storage.HasUnsavedChanges(permAddress))
 
 		err = storage.Store(permSlabID, slab2)
 		require.NoError(t, err)
@@ -669,6 +677,8 @@ func TestPersistentStorage(t *testing.T) {
 		require.Equal(t, uint(2), storage.Deltas())
 		require.True(t, storage.DeltasSizeWithoutTempAddresses() > 0)
 		require.Equal(t, uint64(slab2.ByteSize()), storage.DeltasSizeWithoutTempAddresses())
+		require.True(t, storage.HasUnsavedChanges(tempAddress))
+		require.True(t, storage.HasUnsavedChanges(permAddress))
 
 		err = storage.Commit()
 		require.NoError(t, err)
@@ -676,6 +686,8 @@ func TestPersistentStorage(t *testing.T) {
 		require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
 		require.Equal(t, uint(1), storage.Deltas())
 		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
+		require.True(t, storage.HasUnsavedChanges(tempAddress)) // Temp slabs are still in deltas after commit.
+		require.False(t, storage.HasUnsavedChanges(permAddress))
 
 		// Slab with temp slab id is NOT persisted in base storage.
 		_, found, err := baseStorage.Retrieve(tempSlabID)
@@ -701,15 +713,23 @@ func TestPersistentStorage(t *testing.T) {
 		err = storage.Remove(permSlabID)
 		require.NoError(t, err)
 
+		require.True(t, storage.HasUnsavedChanges(tempAddress))
+		require.True(t, storage.HasUnsavedChanges(permAddress))
+
 		// Remove slab with temp slab id
 		err = storage.Remove(tempSlabID)
 		require.NoError(t, err)
 
 		require.Equal(t, uint(1), storage.DeltasWithoutTempAddresses())
 		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
+		require.True(t, storage.HasUnsavedChanges(tempAddress))
+		require.True(t, storage.HasUnsavedChanges(permAddress))
 
 		err = storage.Commit()
 		require.NoError(t, err)
+
+		require.True(t, storage.HasUnsavedChanges(tempAddress))
+		require.False(t, storage.HasUnsavedChanges(permAddress))
 
 		// Slab with perm slab id is removed from base storage.
 		_, found, err = baseStorage.Retrieve(permSlabID)

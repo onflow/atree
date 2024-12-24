@@ -22,6 +22,14 @@ type Value interface {
 	Storable(SlabStorage, Address, uint64) (Storable, error)
 }
 
+// WrapperValue is an interface that supports value wrapping another value.
+type WrapperValue interface {
+	Value
+
+	// UnwrapAtreeValue returns innermost wrapped Value and wrapper size.
+	UnwrapAtreeValue() (Value, uint64)
+}
+
 type ValueComparator func(SlabStorage, Value, Storable) (bool, error)
 
 type StorableComparator func(Storable, Storable) bool
@@ -35,4 +43,13 @@ type mutableValueNotifier interface {
 	setParentUpdater(parentUpdater)
 	Inlined() bool
 	Inlinable(uint64) bool
+}
+
+func unwrapValue(v Value) (Value, uint64) {
+	switch v := v.(type) {
+	case WrapperValue:
+		return v.UnwrapAtreeValue()
+	default:
+		return v, 0
+	}
 }

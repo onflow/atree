@@ -63,11 +63,28 @@ type ContainerStorable interface {
 	HasPointer() bool
 }
 
+// WrapperStorable is an interface that supports storable wrapping another storable.
+type WrapperStorable interface {
+	Storable
+
+	// UnwrapAtreeStorable returns innermost wrapped Storable.
+	UnwrapAtreeStorable() Storable
+}
+
 func hasPointer(storable Storable) bool {
 	if cs, ok := storable.(ContainerStorable); ok {
 		return cs.HasPointer()
 	}
 	return false
+}
+
+func unwrapStorable(s Storable) Storable {
+	switch s := s.(type) {
+	case WrapperStorable:
+		return s.UnwrapAtreeStorable()
+	default:
+		return s
+	}
 }
 
 const (

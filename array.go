@@ -2772,9 +2772,18 @@ func (a *Array) setParentUpdater(f parentUpdater) {
 // setCallbackWithChild sets up callback function with child value (child)
 // so parent array (a) can be notified when child value is modified.
 func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64) {
-	c, ok := child.(mutableValueNotifier)
+	// Unwrap child value if needed (e.g. interpreter.SomeValue)
+	unwrappedChild, wrapperSize := unwrapValue(child)
+
+	c, ok := unwrappedChild.(mutableValueNotifier)
 	if !ok {
 		return
+	}
+
+	if maxInlineSize < wrapperSize {
+		maxInlineSize = 0
+	} else {
+		maxInlineSize -= wrapperSize
 	}
 
 	vid := c.ValueID()
@@ -2809,6 +2818,8 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 			return false, err
 		}
 
+		storable = unwrapStorable(storable)
+
 		// Verify retrieved element is either SlabIDStorable or Slab, with identical value ID.
 		switch storable := storable.(type) {
 		case SlabIDStorable:
@@ -2827,14 +2838,18 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64
 			return false, nil
 		}
 
+		// NOTE: Must reset child using original child (not unwrapped child)
+
 		// Set child value with parent array using updated index.
-		// Set() calls c.Storable() which returns inlined or not-inlined child storable.
-		existingValueStorable, err := a.set(adjustedIndex, c)
+		// Set() calls child.Storable() which returns inlined or not-inlined child storable.
+		existingValueStorable, err := a.set(adjustedIndex, child)
 		if err != nil {
 			return false, err
 		}
 
 		// Verify overwritten storable has identical value ID.
+
+		existingValueStorable = unwrapStorable(existingValueStorable)
 
 		switch existingValueStorable := existingValueStorable.(type) {
 		case SlabIDStorable:

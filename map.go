@@ -4892,9 +4892,18 @@ func (m *OrderedMap) setCallbackWithChild(
 	child Value,
 	maxInlineSize uint64,
 ) {
-	c, ok := child.(mutableValueNotifier)
+	// Unwrap child value if needed (e.g. interpreter.SomeValue)
+	unwrappedChild, wrapperSize := unwrapValue(child)
+
+	c, ok := unwrappedChild.(mutableValueNotifier)
 	if !ok {
 		return
+	}
+
+	if maxInlineSize < wrapperSize {
+		maxInlineSize = 0
+	} else {
+		maxInlineSize -= wrapperSize
 	}
 
 	vid := c.ValueID()
@@ -4921,6 +4930,8 @@ func (m *OrderedMap) setCallbackWithChild(
 			return false, err
 		}
 
+		valueStorable = unwrapStorable(valueStorable)
+
 		// Verify retrieved element value is either SlabIDStorable or Slab, with identical value ID.
 		switch valueStorable := valueStorable.(type) {
 		case SlabIDStorable:
@@ -4939,14 +4950,18 @@ func (m *OrderedMap) setCallbackWithChild(
 			return false, nil
 		}
 
+		// NOTE: Must reset child using original child (not unwrapped child)
+
 		// Set child value with parent map using same key.
-		// Set() calls c.Storable() which returns inlined or not-inlined child storable.
-		existingValueStorable, err := m.set(comparator, hip, key, c)
+		// Set() calls child.Storable() which returns inlined or not-inlined child storable.
+		existingValueStorable, err := m.set(comparator, hip, key, child)
 		if err != nil {
 			return false, err
 		}
 
 		// Verify overwritten storable has identical value ID.
+
+		existingValueStorable = unwrapStorable(existingValueStorable)
 
 		switch existingValueStorable := existingValueStorable.(type) {
 		case SlabIDStorable:

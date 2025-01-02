@@ -2938,38 +2938,84 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
-	switch s := existingStorable.(type) {
-	case ArraySlab: // inlined array slab
-		err = s.Uninline(a.Storage)
-		if err != nil {
-			return nil, err
-		}
-		existingStorable = SlabIDStorable(s.SlabID())
-		existingValueID = slabIDToValueID(s.SlabID())
-
-	case MapSlab: // inlined map slab
-		err = s.Uninline(a.Storage)
-		if err != nil {
-			return nil, err
-		}
-		existingStorable = SlabIDStorable(s.SlabID())
-		existingValueID = slabIDToValueID(s.SlabID())
-
-	case SlabIDStorable: // uninlined slab
-		existingValueID = slabIDToValueID(SlabID(s))
+	existingStorable, existingValueID, _, err = a.uninlineStorableIfNeeded(existingStorable)
+	if err != nil {
+		return nil, err
 	}
 
 	// Remove overwritten array/map's ValueID from mutableElementIndex if:
 	// - new value isn't array/map, or
 	// - new value is array/map with different value ID
 	if existingValueID != emptyValueID {
-		newValue, ok := value.(mutableValueNotifier)
+		unwrappedValue, _ := unwrapValue(value)
+		newValue, ok := unwrappedValue.(mutableValueNotifier)
 		if !ok || existingValueID != newValue.ValueID() {
 			delete(a.mutableElementIndex, existingValueID)
 		}
 	}
 
 	return existingStorable, nil
+}
+
+// uninlineStorableIfNeeded uninlines given storable if needed, and
+// returns uninlined Storable and its ValueID.
+// If given storable is a WrapperStorable, this function uninlines
+// wrapped storable if needed and returns a new WrapperStorable
+// with wrapped uninlined storable and its ValidID.
+func (a *Array) uninlineStorableIfNeeded(storable Storable) (Storable, ValueID, bool, error) {
+
+	switch s := storable.(type) {
+	case ArraySlab: // inlined array slab
+		err := s.Uninline(a.Storage)
+		if err != nil {
+			return nil, emptyValueID, false, err
+		}
+
+		slabID := s.SlabID()
+
+		newStorable := SlabIDStorable(slabID)
+		valueID := slabIDToValueID(slabID)
+
+		return newStorable, valueID, true, nil
+
+	case MapSlab: // inlined map slab
+		err := s.Uninline(a.Storage)
+		if err != nil {
+			return nil, emptyValueID, false, err
+		}
+
+		slabID := s.SlabID()
+
+		newStorable := SlabIDStorable(slabID)
+		valueID := slabIDToValueID(slabID)
+
+		return newStorable, valueID, true, nil
+
+	case SlabIDStorable: // uninlined slab
+		valueID := slabIDToValueID(SlabID(s))
+
+		return storable, valueID, false, nil
+
+	case WrapperStorable:
+		unwrappedStorable := unwrapStorable(s)
+
+		// Uninline wrapped storable if needed.
+		uninlinedWrappedStorable, valueID, uninlined, err := a.uninlineStorableIfNeeded(unwrappedStorable)
+		if err != nil {
+			return nil, emptyValueID, false, err
+		}
+
+		if !uninlined {
+			return storable, valueID, uninlined, nil
+		}
+
+		// Create a new WrapperStorable with uninlinedWrappedStorable
+		newStorable := s.WrapAtreeStorable(uninlinedWrappedStorable)
+
+		return newStorable, valueID, uninlined, nil
+	}
+
+	return storable, emptyValueID, false, nil
 }
 
 func (a *Array) set(index uint64, value Value) (Storable, error) {
@@ -3083,39 +3129,20 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 		return nil, err
 	}
 
-	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
+	// If removed storable is an inlined slab, uninline the slab and store it in storage.
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
-	switch s := storable.(type) {
-	case ArraySlab:
-		err = s.Uninline(a.Storage)
-		if err != nil {
-			return nil, err
-		}
-		storable = SlabIDStorable(s.SlabID())
+	removedStorable, removedValueID, _, err := a.uninlineStorableIfNeeded(storable)
+	if err != nil {
+		return nil, err
+	}
 
-		// Delete removed element ValueID from mutableElementIndex
-		removedValueID := slabIDToValueID(s.SlabID())
-		delete(a.mutableElementIndex, removedValueID)
-
-	case MapSlab:
-		err = s.Uninline(a.Storage)
-		if err != nil {
-			return nil, err
-		}
-		storable = SlabIDStorable(s.SlabID())
-
-		// Delete removed element ValueID from mutableElementIndex
-		removedValueID := slabIDToValueID(s.SlabID())
-		delete(a.mutableElementIndex, removedValueID)
-
-	case SlabIDStorable:
-		// Delete removed element ValueID from mutableElementIndex
-		removedValueID := slabIDToValueID(SlabID(s))
+	// Delete removed element ValueID from mutableElementIndex
+	if removedValueID != emptyValueID {
 		delete(a.mutableElementIndex, removedValueID)
 	}
 
-	return storable, nil
+	return removedStorable, nil
 }
 
 func (a *Array) remove(index uint64) (Storable, error) {
@@ -3376,7 +3403,10 @@ var defaultReadOnlyArrayIteratorMutatinCallback ReadOnlyArrayIteratorMutationCal
 var _ ArrayIterator = &readOnlyArrayIterator{}
 
 func (i *readOnlyArrayIterator) setMutationCallback(value Value) {
-	if v, ok := value.(mutableValueNotifier); ok {
+
+	unwrappedChild, _ := unwrapValue(value)
+
+	if v, ok := unwrappedChild.(mutableValueNotifier); ok {
 		v.setParentUpdater(func() (found bool, err error) {
 			i.valueMutationCallback(value)
 			return true, NewReadOnlyIteratorElementMutationError(i.array.ValueID(), v.ValueID())

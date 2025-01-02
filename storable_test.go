@@ -1032,6 +1032,16 @@ func (s SomeStorable) UnwrapAtreeStorable() Storable {
 	return storable
 }
 
+func (s SomeStorable) WrapAtreeStorable(storable Storable) Storable {
+	_, nestedLevels := s.nonSomeStorable()
+
+	newStorable := SomeStorable{Storable: storable}
+	for i := 1; i < int(nestedLevels); i++ {
+		newStorable = SomeStorable{Storable: newStorable}
+	}
+	return newStorable
+}
+
 type testMutableValue struct {
 	storable *mutableStorable
 }

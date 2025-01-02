@@ -69,6 +69,9 @@ type WrapperStorable interface {
 
 	// UnwrapAtreeStorable returns innermost wrapped Storable.
 	UnwrapAtreeStorable() Storable
+
+	// WrapAtreeStorable returns a new WrapperStorable with given storable as innermost wrapped storable.
+	WrapAtreeStorable(Storable) Storable
 }
 
 func hasPointer(storable Storable) bool {

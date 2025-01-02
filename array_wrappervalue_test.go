@@ -226,8 +226,6 @@ var modifyArrayValueFunc = func(
 
 		} else {
 
-			expectedValues[index] = expectedModifiedV
-
 			if needToResetModifiedValue {
 				existingStorable, err := array.Set(uint64(index), modifiedV)
 				if err != nil {
@@ -239,20 +237,31 @@ var modifyArrayValueFunc = func(
 
 				wrappedStorable := unwrapStorable(existingStorable)
 
+				var overwrittenSlabID SlabID
+
 				switch wrappedStorable := wrappedStorable.(type) {
 				case ArraySlab, MapSlab:
 					require.Fail(t, "overwritten storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
 
 				case SlabIDStorable:
-					id := SlabID(wrappedStorable)
+					overwrittenSlabID = SlabID(wrappedStorable)
 
 					// Verify SlabID has the same address
-					require.Equal(t, array.Address(), id.Address())
+					require.Equal(t, array.Address(), overwrittenSlabID.Address())
+				}
 
+				existingValue, err := existingStorable.StoredValue(storage)
+				require.NoError(t, err)
+
+				valueEqual(t, expectedValues[index], existingValue)
+
+				if overwrittenSlabID != SlabIDUndefined {
 					// Remove slabs from storage given we are not interested in removed element
-					err = storage.Remove(id)
+					err = storage.Remove(overwrittenSlabID)
 					require.NoError(t, err)
 				}
+
+				expectedValues[index] = expectedModifiedV
 			}
 		}
 
@@ -536,31 +545,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 					require.NoError(t, err)
 
 					if tc.mustSetModifiedElementInArray {
-						existingStorable, err := array.Set(i, newV)
-						require.NoError(t, err)
-						require.NotNil(t, existingStorable)
-
-						existingValue, err := existingStorable.StoredValue(storage)
-						require.NoError(t, err)
-						valueEqual(t, expected, existingValue)
-
-						// Verify overwritten storable is not inlined slabs
-						wrappedStorable := unwrapStorable(existingStorable)
-
-						switch wrappedStorable := wrappedStorable.(type) {
-						case ArraySlab, MapSlab:
-							require.Fail(t, "overwritten storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
-
-						case SlabIDStorable:
-							id := SlabID(wrappedStorable)
-
-							// Verify SlabID has the same address
-							require.Equal(t, array.Address(), id.Address())
-
-							// Remove slabs from storage given we are not interested in removed element
-							err = storage.Remove(id)
-							require.NoError(t, err)
-						}
+						testSetElementFromArray(t, storage, array, i, newV, expected)
 					}
 
 					expectedValues[i] = newExpectedV
@@ -672,31 +657,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 					require.NoError(t, err)
 
 					if tc.mustSetModifiedElementInArray {
-						existingStorable, err := array.Set(i, newV)
-						require.NoError(t, err)
-						require.NotNil(t, existingStorable)
-
-						existingValue, err := existingStorable.StoredValue(storage)
-						require.NoError(t, err)
-						valueEqual(t, expected, existingValue)
-
-						// Verify overwritten storable is not inlined slabs
-						wrappedStorable := unwrapStorable(existingStorable)
-
-						switch wrappedStorable := wrappedStorable.(type) {
-						case ArraySlab, MapSlab:
-							require.Fail(t, "overwritten storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
-
-						case SlabIDStorable:
-							id := SlabID(wrappedStorable)
-
-							// Verify SlabID has the same address
-							require.Equal(t, array.Address(), id.Address())
-
-							// Remove slabs from storage given we are not interested in removed element
-							err = storage.Remove(id)
-							require.NoError(t, err)
-						}
+						testSetElementFromArray(t, storage, array, i, newV, expected)
 					}
 
 					expectedValues[i] = newExpectedV
@@ -796,30 +757,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 				for i := 0; i < arraySize; i++ {
 					v, expected := tc.newElement(storage)
 
-					existingStorable, err := array.Set(uint64(i), v)
-					require.NoError(t, err)
-
-					existingValue, err := existingStorable.StoredValue(storage)
-					require.NoError(t, err)
-					valueEqual(t, expectedValues[i], existingValue)
-
-					// Verify overwritten storable is not inlined slabs
-					wrappedStorable := unwrapStorable(existingStorable)
-
-					switch wrappedStorable := wrappedStorable.(type) {
-					case ArraySlab, MapSlab:
-						require.Fail(t, "overwritten storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
-
-					case SlabIDStorable:
-						id := SlabID(wrappedStorable)
-
-						// Verify SlabID has the same address
-						require.Equal(t, array.Address(), id.Address())
-
-						// Remove slabs from storage given we are not interested in removed element
-						err = storage.Remove(id)
-						require.NoError(t, err)
-					}
+					testSetElementFromArray(t, storage, array, uint64(i), v, expectedValues[i])
 
 					expectedValues[i] = expected
 				}
@@ -846,31 +784,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 					require.NoError(t, err)
 
 					if tc.mustSetModifiedElementInArray {
-						existingStorable, err := array.Set(i, newV)
-						require.NoError(t, err)
-						require.NotNil(t, existingStorable)
-
-						existingValue, err := existingStorable.StoredValue(storage)
-						require.NoError(t, err)
-						valueEqual(t, expected, existingValue)
-
-						// Verify overwritten storable is not inlined slabs
-						wrappedStorable := unwrapStorable(existingStorable)
-
-						switch wrappedStorable := wrappedStorable.(type) {
-						case ArraySlab, MapSlab:
-							require.Fail(t, "overwritten storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
-
-						case SlabIDStorable:
-							id := SlabID(wrappedStorable)
-
-							// Verify SlabID has the same address
-							require.Equal(t, array.Address(), id.Address())
-
-							// Remove slabs from storage given we are not interested in removed element
-							err = storage.Remove(id)
-							require.NoError(t, err)
-						}
+						testSetElementFromArray(t, storage, array, i, newV, expected)
 					}
 
 					expectedValues[i] = newExpectedV
@@ -1014,31 +928,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 								require.NoError(t, err)
 
 								if tc.mustSetModifiedElementInArray {
-									existingStorable, err := array.Set(i, newV)
-									require.NoError(t, err)
-									require.NotNil(t, existingStorable)
-
-									existingValue, err := existingStorable.StoredValue(storage)
-									require.NoError(t, err)
-									valueEqual(t, expected, existingValue)
-
-									// Verify overwritten storable is not inlined slabs
-									wrappedStorable := unwrapStorable(existingStorable)
-
-									switch wrappedStorable := wrappedStorable.(type) {
-									case ArraySlab, MapSlab:
-										require.Fail(t, "overwritten storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
-
-									case SlabIDStorable:
-										id := SlabID(wrappedStorable)
-
-										// Verify SlabID has the same address
-										require.Equal(t, array.Address(), id.Address())
-
-										// Remove slabs from storage given we are not interested in removed element
-										err = storage.Remove(id)
-										require.NoError(t, err)
-									}
+									testSetElementFromArray(t, storage, array, i, newV, expected)
 								}
 
 								expectedValues[i] = newExpectedV
@@ -1056,30 +946,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 
 							removeIndex := r.Intn(int(array.Count()))
 
-							existingStorable, err := array.Remove(uint64(removeIndex))
-							require.NoError(t, err)
-
-							existingValue, err := existingStorable.StoredValue(storage)
-							require.NoError(t, err)
-							valueEqual(t, expectedValues[removeIndex], existingValue)
-
-							// Verify overwritten storable is not inlined slabs
-							wrappedStorable := unwrapStorable(existingStorable)
-
-							switch wrappedStorable := wrappedStorable.(type) {
-							case ArraySlab, MapSlab:
-								require.Fail(t, "removed storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
-
-							case SlabIDStorable:
-								id := SlabID(wrappedStorable)
-
-								// Verify SlabID has the same address
-								require.Equal(t, array.Address(), id.Address())
-
-								// Remove slabs from storage given we are not interested in removed element
-								err = storage.Remove(id)
-								require.NoError(t, err)
-							}
+							testRemoveElementFromArray(t, storage, array, uint64(removeIndex), expectedValues[removeIndex])
 
 							expectedValues = append(expectedValues[:removeIndex], expectedValues[removeIndex+1:]...)
 						}
@@ -1213,31 +1080,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 						for i := 0; i < arraySize; i++ {
 							v, expectedV := tc.newElement(storage)
 
-							existingStorable, err := array.Set(uint64(i), v)
-							require.NoError(t, err)
-							require.NotNil(t, existingStorable)
-
-							existingValue, err := existingStorable.StoredValue(storage)
-							require.NoError(t, err)
-							valueEqual(t, expectedValues[i], existingValue)
-
-							// Verify overwritten storable is not inlined slabs
-							wrappedStorable := unwrapStorable(existingStorable)
-
-							switch wrappedStorable := wrappedStorable.(type) {
-							case ArraySlab, MapSlab:
-								require.Fail(t, "overwritten storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
-
-							case SlabIDStorable:
-								id := SlabID(wrappedStorable)
-
-								// Verify SlabID has the same address
-								require.Equal(t, array.Address(), id.Address())
-
-								// Remove slabs from storage given we are not interested in removed element
-								err = storage.Remove(id)
-								require.NoError(t, err)
-							}
+							testSetElementFromArray(t, storage, array, uint64(i), v, expectedValues[i])
 
 							expectedValues[i] = expectedV
 						}
@@ -1265,31 +1108,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 								require.NoError(t, err)
 
 								if tc.mustSetModifiedElementInArray {
-									existingStorable, err := array.Set(i, newV)
-									require.NoError(t, err)
-									require.NotNil(t, existingStorable)
-
-									existingValue, err := existingStorable.StoredValue(storage)
-									require.NoError(t, err)
-									valueEqual(t, expected, existingValue)
-
-									// Verify overwritten storable is not inlined slabs
-									wrappedStorable := unwrapStorable(existingStorable)
-
-									switch wrappedStorable := wrappedStorable.(type) {
-									case ArraySlab, MapSlab:
-										require.Fail(t, "overwritten storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
-
-									case SlabIDStorable:
-										id := SlabID(wrappedStorable)
-
-										// Verify SlabID has the same address
-										require.Equal(t, array.Address(), id.Address())
-
-										// Remove slabs from storage given we are not interested in removed element
-										err = storage.Remove(id)
-										require.NoError(t, err)
-									}
+									testSetElementFromArray(t, storage, array, i, newV, expected)
 								}
 
 								expectedValues[i] = newExpectedV
@@ -1307,30 +1126,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 							removeIndex := r.Intn(int(array.Count()))
 
-							existingStorable, err := array.Remove(uint64(removeIndex))
-							require.NoError(t, err)
-
-							existingValue, err := existingStorable.StoredValue(storage)
-							require.NoError(t, err)
-							valueEqual(t, expectedValues[removeIndex], existingValue)
-
-							// Verify overwritten storable is not inlined slabs
-							wrappedStorable := unwrapStorable(existingStorable)
-
-							switch wrappedStorable := wrappedStorable.(type) {
-							case ArraySlab, MapSlab:
-								require.Fail(t, "removed storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
-
-							case SlabIDStorable:
-								id := SlabID(wrappedStorable)
-
-								// Verify SlabID has the same address
-								require.Equal(t, array.Address(), id.Address())
-
-								// Remove slabs from storage given we are not interested in removed element
-								err = storage.Remove(id)
-								require.NoError(t, err)
-							}
+							testRemoveElementFromArray(t, storage, array, uint64(removeIndex), expectedValues[removeIndex])
 
 							expectedValues = append(expectedValues[:removeIndex], expectedValues[removeIndex+1:]...)
 						}
@@ -2183,8 +1979,12 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 		// Set elements
 
 		var setCount int
-		for setCount < int(array.Count())/2 {
-			setCount = r.Intn(int(array.Count()) + 1)
+		if array.Count() <= 10 {
+			setCount = int(array.Count())
+		} else {
+			for setCount < int(array.Count())/2 {
+				setCount = r.Intn(int(array.Count()) + 1)
+			}
 		}
 
 		setIndex := make([]int, 0, setCount)
@@ -2467,8 +2267,12 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 		// Set elements
 
 		var setCount int
-		for setCount < int(array.Count())/2 {
-			setCount = r.Intn(int(array.Count()) + 1)
+		if array.Count() <= 10 {
+			setCount = int(array.Count())
+		} else {
+			for setCount < int(array.Count())/2 {
+				setCount = r.Intn(int(array.Count()) + 1)
+			}
 		}
 
 		setIndex := make([]int, 0, setCount)
@@ -2768,8 +2572,12 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 		// Set elements
 
 		var setCount int
-		for setCount < int(array.Count())/2 {
-			setCount = r.Intn(int(array.Count()) + 1)
+		if array.Count() <= 10 {
+			setCount = int(array.Count())
+		} else {
+			for setCount < int(array.Count())/2 {
+				setCount = r.Intn(int(array.Count()) + 1)
+			}
 		}
 
 		setIndex := make([]int, 0, setCount)

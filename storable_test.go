@@ -592,6 +592,56 @@ func decodeStorable(dec *cbor.StreamDecoder, id SlabID, inlinedExtraData []Extra
 			}
 			return SomeStorable{Storable: storable}, nil
 
+		case cborTagSomeValueWithNestedLevels:
+			count, err := dec.DecodeArrayHead()
+			if err != nil {
+				return nil, fmt.Errorf(
+					"invalid some value with nested levels encoding: %w",
+					err,
+				)
+			}
+
+			if count != someStorableWithMultipleNestedLevelsArrayCount {
+				return nil, fmt.Errorf(
+					"invalid array count for some value with nested levels encoding: got %d, expect %d",
+					count, someStorableWithMultipleNestedLevelsArrayCount,
+				)
+			}
+
+			nestedLevels, err := dec.DecodeUint64()
+			if err != nil {
+				return nil, fmt.Errorf(
+					"invalid nested levels for some value with nested levels encoding: %w",
+					err,
+				)
+			}
+
+			if nestedLevels <= 1 {
+				return nil, fmt.Errorf(
+					"invalid nested levels for some value with nested levels encoding: got %d, expect > 1",
+					nestedLevels,
+				)
+			}
+
+			nonSomeStorable, err := decodeStorable(dec, id, inlinedExtraData)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"invalid nonSomeStorable for some value with nested levels encoding: %w",
+					err,
+				)
+			}
+
+			storable := SomeStorable{
+				Storable: nonSomeStorable,
+			}
+			for i := uint64(1); i < nestedLevels; i++ {
+				storable = SomeStorable{
+					Storable: storable,
+				}
+			}
+
+			return storable, nil
+
 		default:
 			return nil, fmt.Errorf("invalid tag number %d", tagNumber)
 		}

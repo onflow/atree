@@ -1307,45 +1307,9 @@ func (v *serializationVerifier) mapSingleElementEqual(expected, actual *singleEl
 		}
 	}
 
-	// Compare nested element
-	switch ee := expected.value.(type) {
-	case SlabIDStorable: // Compare not-inlined element
-		if !v.compare(expected.value, actual.value) {
-			return NewFatalError(fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value))
-		}
-
-		value, err := ee.StoredValue(v.storage)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
-			return err
-		}
-
-		err = v.verifyValue(value)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by verifyVaue().
-			return err
-		}
-
-	case *ArrayDataSlab: // Compare inlined array element
-		ae, ok := actual.value.(*ArrayDataSlab)
-		if !ok {
-			return NewFatalError(fmt.Errorf("expect element as *ArrayDataSlab, actual %T", ae))
-		}
-
-		return v.arrayDataSlabEqual(ee, ae)
-
-	case *MapDataSlab: // Compare inlined map element
-		ae, ok := actual.value.(*MapDataSlab)
-		if !ok {
-			return NewFatalError(fmt.Errorf("expect element as *MapDataSlab, actual %T", ae))
-		}
-
-		return v.mapDataSlabEqual(ee, ae)
-
-	default:
-		if !v.compare(expected.value, actual.value) {
-			return NewFatalError(fmt.Errorf("singleElement value %v is wrong, want %v", actual.value, expected.value))
-		}
+	err := v.compareStorable(expected.value, actual.value)
+	if err != nil {
+		return NewFatalError(fmt.Errorf("failed to compare singleElement value with key %s: %s", expected.key, err))
 	}
 
 	return nil

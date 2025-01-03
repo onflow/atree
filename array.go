@@ -2963,6 +2963,9 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 // wrapped storable if needed and returns a new WrapperStorable
 // with wrapped uninlined storable and its ValidID.
 func uninlineStorableIfNeeded(storage SlabStorage, storable Storable) (Storable, ValueID, bool, error) {
+	if storable == nil {
+		return storable, emptyValueID, false, nil
+	}
 
 	switch s := storable.(type) {
 	case ArraySlab: // inlined array slab

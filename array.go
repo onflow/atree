@@ -2938,7 +2938,7 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
-	existingStorable, existingValueID, _, err = a.uninlineStorableIfNeeded(existingStorable)
+	existingStorable, existingValueID, _, err = uninlineStorableIfNeeded(a.Storage, existingStorable)
 	if err != nil {
 		return nil, err
 	}
@@ -2962,11 +2962,11 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 // If given storable is a WrapperStorable, this function uninlines
 // wrapped storable if needed and returns a new WrapperStorable
 // with wrapped uninlined storable and its ValidID.
-func (a *Array) uninlineStorableIfNeeded(storable Storable) (Storable, ValueID, bool, error) {
+func uninlineStorableIfNeeded(storage SlabStorage, storable Storable) (Storable, ValueID, bool, error) {
 
 	switch s := storable.(type) {
 	case ArraySlab: // inlined array slab
-		err := s.Uninline(a.Storage)
+		err := s.Uninline(storage)
 		if err != nil {
 			return nil, emptyValueID, false, err
 		}
@@ -2979,7 +2979,7 @@ func (a *Array) uninlineStorableIfNeeded(storable Storable) (Storable, ValueID, 
 		return newStorable, valueID, true, nil
 
 	case MapSlab: // inlined map slab
-		err := s.Uninline(a.Storage)
+		err := s.Uninline(storage)
 		if err != nil {
 			return nil, emptyValueID, false, err
 		}
@@ -3000,7 +3000,7 @@ func (a *Array) uninlineStorableIfNeeded(storable Storable) (Storable, ValueID, 
 		unwrappedStorable := unwrapStorable(s)
 
 		// Uninline wrapped storable if needed.
-		uninlinedWrappedStorable, valueID, uninlined, err := a.uninlineStorableIfNeeded(unwrappedStorable)
+		uninlinedWrappedStorable, valueID, uninlined, err := uninlineStorableIfNeeded(storage, unwrappedStorable)
 		if err != nil {
 			return nil, emptyValueID, false, err
 		}
@@ -3132,7 +3132,7 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 	// If removed storable is an inlined slab, uninline the slab and store it in storage.
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
-	removedStorable, removedValueID, _, err := a.uninlineStorableIfNeeded(storable)
+	removedStorable, removedValueID, _, err := uninlineStorableIfNeeded(a.Storage, storable)
 	if err != nil {
 		return nil, err
 	}

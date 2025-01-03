@@ -287,9 +287,9 @@ func newArrayWrapperValueTestCases(
 
 	return []arrayWrapperValueTestCase{
 
-		// Test arrays of SomeValue(uint64)
+		// Test arrays [SomeValue(uint64)]
 		{
-			name:                          "SomeValue(uint64)",
+			name:                          "[SomeValue(uint64)]",
 			modifyName:                    "modify wrapped primitive",
 			wrapperValueNestedLevels:      1,
 			mustSetModifiedElementInArray: true,
@@ -297,9 +297,9 @@ func newArrayWrapperValueTestCases(
 			modifyElement:                 modifyWrapperValueFunc(t, 1, modifyRandomUint64ValueFunc(r)),
 		},
 
-		// Test arrays of SomeValue(SomeValue(uint64))
+		// Test arrays [SomeValue(SomeValue(uint64))]
 		{
-			name:                          "SomeValue(SomeValue(uint64))",
+			name:                          "[SomeValue(SomeValue(uint64))]",
 			modifyName:                    "modify wrapped primitive",
 			wrapperValueNestedLevels:      2,
 			mustSetModifiedElementInArray: true,
@@ -307,9 +307,9 @@ func newArrayWrapperValueTestCases(
 			modifyElement:                 modifyWrapperValueFunc(t, 2, modifyRandomUint64ValueFunc(r)),
 		},
 
-		// Test arrays of SomeValue([uint64]))
+		// Test arrays [SomeValue([uint64]))]
 		{
-			name:                          "SomeValue([uint64])",
+			name:                          "[SomeValue([uint64])]",
 			modifyName:                    "modify wrapped array",
 			wrapperValueNestedLevels:      1,
 			mustSetModifiedElementInArray: false,
@@ -317,9 +317,9 @@ func newArrayWrapperValueTestCases(
 			modifyElement:                 modifyWrapperValueFunc(t, 1, modifyArrayValueFunc(t, true, modifyRandomUint64ValueFunc(r))),
 		},
 
-		// Test arrays of SomeValue(SomeValue([uint64])))
+		// Test arrays [SomeValue(SomeValue([uint64])))]
 		{
-			name:                          "SomeValue(SomeValue([uint64]))",
+			name:                          "[SomeValue(SomeValue([uint64]))]",
 			modifyName:                    "modify wrapped array",
 			wrapperValueNestedLevels:      2,
 			mustSetModifiedElementInArray: false,
@@ -327,9 +327,9 @@ func newArrayWrapperValueTestCases(
 			modifyElement:                 modifyWrapperValueFunc(t, 2, modifyArrayValueFunc(t, true, modifyRandomUint64ValueFunc(r))),
 		},
 
-		// Test arrays of SomeValue([SomeValue(uint64)]))
+		// Test arrays [SomeValue([SomeValue(uint64)]))]
 		{
-			name:                          "SomeValue([SomeValue(uint64)])",
+			name:                          "[SomeValue([SomeValue(uint64)])]",
 			modifyName:                    "modify wrapped array",
 			wrapperValueNestedLevels:      1,
 			mustSetModifiedElementInArray: false,
@@ -337,9 +337,9 @@ func newArrayWrapperValueTestCases(
 			modifyElement:                 modifyWrapperValueFunc(t, 1, modifyArrayValueFunc(t, true, modifyWrapperValueFunc(t, 1, modifyRandomUint64ValueFunc(r)))),
 		},
 
-		// Test arrays of SomeValue(SomeValue([SomeValue(SomeValue(uint64))])))
+		// Test arrays [SomeValue(SomeValue([SomeValue(SomeValue(uint64))])))]
 		{
-			name:                          "SomeValue(SomeValue([SomeValue(SomeValue(uint64))]))",
+			name:                          "[SomeValue(SomeValue([SomeValue(SomeValue(uint64))]))]",
 			modifyName:                    "modify wrapped array",
 			wrapperValueNestedLevels:      2,
 			mustSetModifiedElementInArray: false,
@@ -347,9 +347,9 @@ func newArrayWrapperValueTestCases(
 			modifyElement:                 modifyWrapperValueFunc(t, 2, modifyArrayValueFunc(t, true, modifyWrapperValueFunc(t, 2, modifyRandomUint64ValueFunc(r)))),
 		},
 
-		// Test arrays of SomeValue([SomeValue([SomeValue(uint64)])])) and modify innermost array
+		// Test arrays [SomeValue([SomeValue([SomeValue(uint64)])]))] and modify innermost array
 		{
-			name:                          "SomeValue([SomeValue([SomeValue(uint64)])])",
+			name:                          "[SomeValue([SomeValue([SomeValue(uint64)])])]",
 			modifyName:                    "modify wrapped level-2 array",
 			wrapperValueNestedLevels:      1,
 			mustSetModifiedElementInArray: false,
@@ -388,9 +388,9 @@ func newArrayWrapperValueTestCases(
 								modifyRandomUint64ValueFunc(r)))))),
 		},
 
-		// Test arrays of SomeValue([SomeValue([SomeValue(uint64)])])) and remove element from middle array
+		// Test arrays [SomeValue([SomeValue([SomeValue(uint64)])]))] and remove element from middle array
 		{
-			name:                          "SomeValue([SomeValue([SomeValue(uint64)])])",
+			name:                          "[SomeValue([SomeValue([SomeValue(uint64)])])]",
 			modifyName:                    "remove element from wrapped level-1 array",
 			wrapperValueNestedLevels:      1,
 			mustSetModifiedElementInArray: false,
@@ -421,7 +421,7 @@ func newArrayWrapperValueTestCases(
 		},
 
 		{
-			name:                          "SomeValue([SomeValue([SomeValue(uint64)])])",
+			name:                          "[SomeValue([SomeValue([SomeValue(uint64)])])]",
 			modifyName:                    "modify element in wrapped level-1 array",
 			wrapperValueNestedLevels:      1,
 			mustSetModifiedElementInArray: false,
@@ -545,7 +545,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 					require.NoError(t, err)
 
 					if tc.mustSetModifiedElementInArray {
-						testSetElementFromArray(t, storage, array, i, newV, expected)
+						testSetElementInArray(t, storage, array, i, newV, expected)
 					}
 
 					expectedValues[i] = newExpectedV
@@ -657,7 +657,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 					require.NoError(t, err)
 
 					if tc.mustSetModifiedElementInArray {
-						testSetElementFromArray(t, storage, array, i, newV, expected)
+						testSetElementInArray(t, storage, array, i, newV, expected)
 					}
 
 					expectedValues[i] = newExpectedV
@@ -757,7 +757,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 				for i := 0; i < arraySize; i++ {
 					v, expected := tc.newElement(storage)
 
-					testSetElementFromArray(t, storage, array, uint64(i), v, expectedValues[i])
+					testSetElementInArray(t, storage, array, uint64(i), v, expectedValues[i])
 
 					expectedValues[i] = expected
 				}
@@ -784,7 +784,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 					require.NoError(t, err)
 
 					if tc.mustSetModifiedElementInArray {
-						testSetElementFromArray(t, storage, array, i, newV, expected)
+						testSetElementInArray(t, storage, array, i, newV, expected)
 					}
 
 					expectedValues[i] = newExpectedV
@@ -928,7 +928,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 								require.NoError(t, err)
 
 								if tc.mustSetModifiedElementInArray {
-									testSetElementFromArray(t, storage, array, i, newV, expected)
+									testSetElementInArray(t, storage, array, i, newV, expected)
 								}
 
 								expectedValues[i] = newExpectedV
@@ -1080,7 +1080,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 						for i := 0; i < arraySize; i++ {
 							v, expectedV := tc.newElement(storage)
 
-							testSetElementFromArray(t, storage, array, uint64(i), v, expectedValues[i])
+							testSetElementInArray(t, storage, array, uint64(i), v, expectedValues[i])
 
 							expectedValues[i] = expectedV
 						}
@@ -1108,7 +1108,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 								require.NoError(t, err)
 
 								if tc.mustSetModifiedElementInArray {
-									testSetElementFromArray(t, storage, array, i, newV, expected)
+									testSetElementInArray(t, storage, array, i, newV, expected)
 								}
 
 								expectedValues[i] = newExpectedV
@@ -1995,7 +1995,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 			index := r.Intn(int(array.Count()))
 
-			testSetElementFromArray(t, storage, array, uint64(index), v, expectedValues[index])
+			testSetElementInArray(t, storage, array, uint64(index), v, expectedValues[index])
 
 			expectedValues[index] = expected
 
@@ -2981,7 +2981,7 @@ func testArrayMutableElementIndex(t *testing.T, v Value) {
 	require.Equal(t, 0, len(originalMutableIndex))
 }
 
-func testSetElementFromArray(t *testing.T, storage SlabStorage, array *Array, index uint64, newValue Value, expected Value) {
+func testSetElementInArray(t *testing.T, storage SlabStorage, array *Array, index uint64, newValue Value, expected Value) {
 	existingStorable, err := array.Set(index, newValue)
 	require.NoError(t, err)
 	require.NotNil(t, existingStorable)

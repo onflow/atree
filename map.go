@@ -5171,20 +5171,10 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
-	switch s := storable.(type) {
-	case ArraySlab: // inlined array slab
-		err = s.Uninline(m.Storage)
-		if err != nil {
-			return nil, err
-		}
-		storable = SlabIDStorable(s.SlabID())
 
-	case MapSlab: // inlined map slab
-		err = s.Uninline(m.Storage)
-		if err != nil {
-			return nil, err
-		}
-		storable = SlabIDStorable(s.SlabID())
+	storable, _, _, err = uninlineStorableIfNeeded(m.Storage, storable)
+	if err != nil {
+		return nil, err
 	}
 
 	return storable, nil
@@ -5274,20 +5264,15 @@ func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, k
 	// If overwritten storable is an inlined slab, uninline the slab and store it in storage.
 	// This is to prevent potential data loss because the overwritten inlined slab was not in
 	// storage and any future changes to it would have been lost.
-	switch s := valueStorable.(type) {
-	case ArraySlab:
-		err = s.Uninline(m.Storage)
-		if err != nil {
-			return nil, nil, err
-		}
-		valueStorable = SlabIDStorable(s.SlabID())
 
-	case MapSlab:
-		err = s.Uninline(m.Storage)
-		if err != nil {
-			return nil, nil, err
-		}
-		valueStorable = SlabIDStorable(s.SlabID())
+	keyStorable, _, _, err = uninlineStorableIfNeeded(m.Storage, keyStorable)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	valueStorable, _, _, err = uninlineStorableIfNeeded(m.Storage, valueStorable)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return keyStorable, valueStorable, nil
@@ -5777,14 +5762,19 @@ var defaultReadOnlyMapIteratorMutatinCallback ReadOnlyMapIteratorMutationCallbac
 var _ MapIterator = &readOnlyMapIterator{}
 
 func (i *readOnlyMapIterator) setMutationCallback(key, value Value) {
-	if k, ok := key.(mutableValueNotifier); ok {
+
+	unwrappedKey, _ := unwrapValue(key)
+
+	if k, ok := unwrappedKey.(mutableValueNotifier); ok {
 		k.setParentUpdater(func() (found bool, err error) {
 			i.keyMutationCallback(key)
 			return true, NewReadOnlyIteratorElementMutationError(i.m.ValueID(), k.ValueID())
 		})
 	}
 
-	if v, ok := value.(mutableValueNotifier); ok {
+	unwrappedValue, _ := unwrapValue(value)
+
+	if v, ok := unwrappedValue.(mutableValueNotifier); ok {
 		v.setParentUpdater(func() (found bool, err error) {
 			i.valueMutationCallback(value)
 			return true, NewReadOnlyIteratorElementMutationError(i.m.ValueID(), v.ValueID())

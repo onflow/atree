@@ -2986,8 +2986,6 @@ func testSetElementInArray(t *testing.T, storage SlabStorage, array *Array, inde
 	require.NoError(t, err)
 	require.NotNil(t, existingStorable)
 
-	var overwrittenSlabID SlabID
-
 	// Verify wrapped storable doesn't contain inlined slab
 
 	wrappedStorable := unwrapStorable(existingStorable)
@@ -2997,7 +2995,7 @@ func testSetElementInArray(t *testing.T, storage SlabStorage, array *Array, inde
 		require.Fail(t, "overwritten storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
 
 	case SlabIDStorable:
-		overwrittenSlabID = SlabID(wrappedStorable)
+		overwrittenSlabID := SlabID(wrappedStorable)
 
 		// Verify SlabID has the same address
 		require.Equal(t, array.Address(), overwrittenSlabID.Address())
@@ -3009,20 +3007,13 @@ func testSetElementInArray(t *testing.T, storage SlabStorage, array *Array, inde
 	require.NoError(t, err)
 	valueEqual(t, expected, existingValue)
 
-	// Remove overwritten slabs from storage
-
-	if overwrittenSlabID != SlabIDUndefined {
-		err = storage.Remove(overwrittenSlabID)
-		require.NoError(t, err)
-	}
+	removeFromStorage(t, storage, existingValue)
 }
 
 func testRemoveElementFromArray(t *testing.T, storage SlabStorage, array *Array, index uint64, expected Value) {
 	existingStorable, err := array.Remove(index)
 	require.NoError(t, err)
 	require.NotNil(t, existingStorable)
-
-	var removedSlabID SlabID
 
 	// Verify wrapped storable doesn't contain inlined slab
 
@@ -3033,7 +3024,7 @@ func testRemoveElementFromArray(t *testing.T, storage SlabStorage, array *Array,
 		require.Fail(t, "removed storable shouldn't be (wrapped) ArraySlab or MapSlab: %s", existingStorable)
 
 	case SlabIDStorable:
-		removedSlabID = SlabID(wrappedStorable)
+		removedSlabID := SlabID(wrappedStorable)
 
 		// Verify SlabID has the same address
 		require.Equal(t, array.Address(), removedSlabID.Address())
@@ -3045,11 +3036,7 @@ func testRemoveElementFromArray(t *testing.T, storage SlabStorage, array *Array,
 	require.NoError(t, err)
 	valueEqual(t, expected, existingValue)
 
-	// Remove slabs from storage
-	if removedSlabID != SlabIDUndefined {
-		err = storage.Remove(removedSlabID)
-		require.NoError(t, err)
-	}
+	removeFromStorage(t, storage, existingValue)
 }
 
 func getRandomUniquePositiveNumbers(r *rand.Rand, nonInclusiveMax int, count int) []int {
@@ -3065,4 +3052,59 @@ func getRandomUniquePositiveNumbers(r *rand.Rand, nonInclusiveMax int, count int
 	}
 
 	return slice
+}
+
+func removeFromStorage(t *testing.T, storage SlabStorage, v Value) {
+	switch v := v.(type) {
+	case *Array:
+		rootSlabID := v.SlabID()
+
+		// Remove all elements from storage
+		for v.Count() > 0 {
+			existingStorable, err := v.Remove(uint64(0))
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+
+			removeFromStorage(t, storage, existingValue)
+		}
+
+		// Remove root slab from storage
+		err := storage.Remove(rootSlabID)
+		require.NoError(t, err)
+
+	case *OrderedMap:
+		rootSlabID := v.SlabID()
+
+		keys := make([]Value, 0, v.Count())
+		err := v.IterateReadOnlyKeys(func(key Value) (bool, error) {
+			keys = append(keys, key)
+			return true, nil
+		})
+		require.NoError(t, err)
+
+		for _, key := range keys {
+			existingKeyStorable, existingValueStorable, err := v.Remove(compare, hashInputProvider, key)
+			require.NoError(t, err)
+
+			existingKey, err := existingKeyStorable.StoredValue(storage)
+			require.NoError(t, err)
+
+			removeFromStorage(t, storage, existingKey)
+
+			existingValue, err := existingValueStorable.StoredValue(storage)
+			require.NoError(t, err)
+
+			removeFromStorage(t, storage, existingValue)
+		}
+
+		// Remove root slab from storage
+		err = storage.Remove(rootSlabID)
+		require.NoError(t, err)
+
+	case WrapperValue:
+		wrappedValue, _ := v.UnwrapAtreeValue()
+		removeFromStorage(t, storage, wrappedValue)
+	}
 }

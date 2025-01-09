@@ -594,6 +594,10 @@ func (ied *InlinedExtraData) empty() bool {
 func makeCompactMapTypeID(encodedTypeInfo string, names []ComparableStorable) string {
 	const separator = ","
 
+	if len(names) == 0 {
+		return encodedTypeInfo
+	}
+
 	if len(names) == 1 {
 		return encodedTypeInfo + separator + names[0].ID()
 	}

@@ -93,6 +93,8 @@ var (
 	flagSeedHex                              string
 	flagMinHeapAllocMiB, flagMaxHeapAllocMiB uint64
 	flagMinOpsForStorageHealthCheck          uint64
+	flagAlwaysUseWrapperValue                bool
+	flagIterationCount                       uint64
 )
 
 func main() {
@@ -104,6 +106,8 @@ func main() {
 	flag.StringVar(&flagSeedHex, "seed", "", "seed for prng in hex (default is Unix time)")
 	flag.Uint64Var(&flagMinHeapAllocMiB, "minheap", 1000, "min HeapAlloc in MiB to stop extra removal of elements")
 	flag.Uint64Var(&flagMaxHeapAllocMiB, "maxheap", 2000, "max HeapAlloc in MiB to trigger extra removal of elements")
+	flag.BoolVar(&flagAlwaysUseWrapperValue, "wrappervalue", false, "always use wrapper value")
+	flag.Uint64Var(&flagIterationCount, "count", 0, "(testing) number of ops")
 
 	flag.Parse()
 

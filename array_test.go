@@ -5178,6 +5178,16 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 	typeInfo := testTypeInfo{42}
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
+	runTest := func(name string, f func(useWrapperValue bool) func(*testing.T)) {
+		for _, useWrapperValue := range []bool{false, true} {
+			if useWrapperValue {
+				name += ", use wrapper value"
+			}
+
+			t.Run(name, f(useWrapperValue))
+		}
+	}
+
 	t.Run("empty", func(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
@@ -5191,686 +5201,725 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		testArrayLoadedElements(t, array, nil)
 	})
 
-	t.Run("root data slab with simple values", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 3
-		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
-
-		// parent array: 1 root data slab
-		require.Equal(t, 1, len(storage.deltas))
-		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-	})
-
-	t.Run("root data slab with composite values", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 3
-		array, values, _ := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
-
-		// parent array: 1 root data slab
-		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+arraySize, len(storage.deltas))
-		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-	})
-
-	t.Run("root data slab with composite values, unload composite element from front to back", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 3
-		array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
-
-		// parent array: 1 root data slab
-		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+arraySize, len(storage.deltas))
-		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-
-		// Unload composite element from front to back
-		for i := 0; i < len(values); i++ {
-			slabID := childSlabIDs[i]
-
-			err := storage.Remove(slabID)
-			require.NoError(t, err)
-
-			expectedValues := values[i+1:]
-			testArrayLoadedElements(t, array, expectedValues)
-		}
-	})
-
-	t.Run("root data slab with composite values, unload composite element from back to front", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 3
-		array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
-
-		// parent array: 1 root data slab
-		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+arraySize, len(storage.deltas))
-		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-
-		// Unload composite element from back to front
-		for i := len(values) - 1; i >= 0; i-- {
-			slabID := childSlabIDs[i]
-
-			err := storage.Remove(slabID)
-			require.NoError(t, err)
-
-			expectedValues := values[:i]
-			testArrayLoadedElements(t, array, expectedValues)
-		}
-	})
-
-	t.Run("root data slab with composite values, unload composite element in the middle", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 3
-		array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
-
-		// parent array: 1 root data slab
-		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+arraySize, len(storage.deltas))
-		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-
-		// Unload composite element in the middle
-		unloadValueIndex := 1
-
-		slabID := childSlabIDs[unloadValueIndex]
-
-		err := storage.Remove(slabID)
-		require.NoError(t, err)
-
-		copy(values[unloadValueIndex:], values[unloadValueIndex+1:])
-		values = values[:len(values)-1]
-
-		testArrayLoadedElements(t, array, values)
-	})
-
-	t.Run("root data slab with composite values, unload composite elements during iteration", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 3
-		array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
-
-		// parent array: 1 root data slab
-		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+arraySize, len(storage.deltas))
-		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-
-		i := 0
-		err := array.IterateReadOnlyLoadedValues(func(v Value) (bool, error) {
-			// At this point, iterator returned first element (v).
-
-			// Remove all other nested composite elements (except first element) from storage.
-			for _, slabID := range childSlabIDs[1:] {
-				err := storage.Remove(slabID)
-				require.NoError(t, err)
-			}
-
-			require.Equal(t, 0, i)
-			valueEqual(t, values[0], v)
-			i++
-			return true, nil
-		})
-
-		require.NoError(t, err)
-		require.Equal(t, 1, i) // Only first element is iterated because other elements are remove during iteration.
-	})
-
-	t.Run("root data slab with simple and composite values, unload composite element", func(t *testing.T) {
-		const arraySize = 3
-
-		// Create an array with nested composite value at specified index
-		for childArrayIndex := 0; childArrayIndex < arraySize; childArrayIndex++ {
+	runTest("root data slab with simple values", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
-			array, values, childSlabID := createArrayWithSimpleAndChildArrayValues(t, storage, address, typeInfo, arraySize, childArrayIndex)
+			const arraySize = 3
+			array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize, useWrapperValue)
 
 			// parent array: 1 root data slab
-			// nested composite element: 1 root data slab
-			require.Equal(t, 2, len(storage.deltas))
+			require.Equal(t, 1, len(storage.deltas))
+			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
+
+			testArrayLoadedElements(t, array, values)
+		}
+	})
+
+	runTest("root data slab with composite values", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 3
+			array, values, _ := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array: 1 root data slab
+			// nested composite elements: 1 root data slab for each
+			require.Equal(t, 1+arraySize, len(storage.deltas))
+			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
+
+			testArrayLoadedElements(t, array, values)
+		}
+	})
+
+	runTest("root data slab with composite values, unload composite element from front to back", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 3
+			array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array: 1 root data slab
+			// nested composite elements: 1 root data slab for each
+			require.Equal(t, 1+arraySize, len(storage.deltas))
 			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, values)
 
-			// Unload composite element
-			err := storage.Remove(childSlabID)
-			require.NoError(t, err)
+			// Unload composite element from front to back
+			for i := 0; i < len(values); i++ {
+				slabID := childSlabIDs[i]
 
-			copy(values[childArrayIndex:], values[childArrayIndex+1:])
-			values = values[:len(values)-1]
+				err := storage.Remove(slabID)
+				require.NoError(t, err)
 
-			testArrayLoadedElements(t, array, values)
+				expectedValues := values[i+1:]
+				testArrayLoadedElements(t, array, expectedValues)
+			}
 		}
 	})
 
-	t.Run("root metadata slab with simple values", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 20
-		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
-
-		// parent array: 1 root metadata slab, 2 data slabs
-		require.Equal(t, 3, len(storage.deltas))
-		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-	})
-
-	t.Run("root metadata slab with composite values", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 20
-		array, values, _ := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
-
-		// parent array: 1 root metadata slab, 2 data slabs
-		// nested composite value element: 1 root data slab for each
-		require.Equal(t, 3+arraySize, len(storage.deltas))
-		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-	})
-
-	t.Run("root metadata slab with composite values, unload composite element from front to back", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 20
-		array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
-
-		// parent array: 1 root metadata slab, 2 data slabs
-		// nested composite value element: 1 root data slab for each
-		require.Equal(t, 3+arraySize, len(storage.deltas))
-		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-
-		// Unload composite element from front to back
-		for i := 0; i < len(childSlabIDs); i++ {
-			slabID := childSlabIDs[i]
-
-			err := storage.Remove(slabID)
-			require.NoError(t, err)
-
-			expectedValues := values[i+1:]
-			testArrayLoadedElements(t, array, expectedValues)
-		}
-	})
-
-	t.Run("root metadata slab with composite values, unload composite element from back to front", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 20
-		array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
-
-		// parent array: 1 root metadata slab, 2 data slabs
-		// nested composite value element: 1 root data slab for each
-		require.Equal(t, 3+arraySize, len(storage.deltas))
-		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-
-		// Unload composite element from back to front
-		for i := len(childSlabIDs) - 1; i >= 0; i-- {
-			slabID := childSlabIDs[i]
-
-			err := storage.Remove(slabID)
-			require.NoError(t, err)
-
-			expectedValues := values[:i]
-			testArrayLoadedElements(t, array, expectedValues)
-		}
-	})
-
-	t.Run("root metadata slab with composite values, unload composite element in the middle", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 20
-		array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
-
-		// parent array: 1 root metadata slab, 2 data slabs
-		// nested composite value element: 1 root data slab for each
-		require.Equal(t, 3+arraySize, len(storage.deltas))
-		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-
-		// Unload composite element in the middle
-		for _, index := range []int{4, 14} {
-
-			slabID := childSlabIDs[index]
-
-			err := storage.Remove(slabID)
-			require.NoError(t, err)
-
-			copy(values[index:], values[index+1:])
-			values = values[:len(values)-1]
-
-			testArrayLoadedElements(t, array, values)
-		}
-	})
-
-	t.Run("root metadata slab with simple and composite values, unload composite element", func(t *testing.T) {
-		const arraySize = 20
-
-		// Create an array with composite value at specified index.
-		for childArrayIndex := 0; childArrayIndex < arraySize; childArrayIndex++ {
+	runTest("root data slab with composite values, unload composite element from back to front", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
-			array, values, childSlabID := createArrayWithSimpleAndChildArrayValues(t, storage, address, typeInfo, arraySize, childArrayIndex)
+			const arraySize = 3
+			array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array: 1 root data slab
+			// nested composite elements: 1 root data slab for each
+			require.Equal(t, 1+arraySize, len(storage.deltas))
+			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
+
+			testArrayLoadedElements(t, array, values)
+
+			// Unload composite element from back to front
+			for i := len(values) - 1; i >= 0; i-- {
+				slabID := childSlabIDs[i]
+
+				err := storage.Remove(slabID)
+				require.NoError(t, err)
+
+				expectedValues := values[:i]
+				testArrayLoadedElements(t, array, expectedValues)
+			}
+		}
+	})
+
+	runTest("root data slab with composite values, unload composite element in the middle", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 3
+			array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array: 1 root data slab
+			// nested composite elements: 1 root data slab for each
+			require.Equal(t, 1+arraySize, len(storage.deltas))
+			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
+
+			testArrayLoadedElements(t, array, values)
+
+			// Unload composite element in the middle
+			unloadValueIndex := 1
+
+			slabID := childSlabIDs[unloadValueIndex]
+
+			err := storage.Remove(slabID)
+			require.NoError(t, err)
+
+			copy(values[unloadValueIndex:], values[unloadValueIndex+1:])
+			values = values[:len(values)-1]
+
+			testArrayLoadedElements(t, array, values)
+		}
+	})
+
+	runTest("root data slab with composite values, unload composite elements during iteration", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 3
+			array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array: 1 root data slab
+			// nested composite elements: 1 root data slab for each
+			require.Equal(t, 1+arraySize, len(storage.deltas))
+			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
+
+			testArrayLoadedElements(t, array, values)
+
+			i := 0
+			err := array.IterateReadOnlyLoadedValues(func(v Value) (bool, error) {
+				// At this point, iterator returned first element (v).
+
+				// Remove all other nested composite elements (except first element) from storage.
+				for _, slabID := range childSlabIDs[1:] {
+					err := storage.Remove(slabID)
+					require.NoError(t, err)
+				}
+
+				require.Equal(t, 0, i)
+				valueEqual(t, values[0], v)
+				i++
+				return true, nil
+			})
+
+			require.NoError(t, err)
+			require.Equal(t, 1, i) // Only first element is iterated because other elements are remove during iteration.
+		}
+	})
+
+	runTest("root data slab with simple and composite values, unload composite element", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			const arraySize = 3
+
+			// Create an array with nested composite value at specified index
+			for childArrayIndex := 0; childArrayIndex < arraySize; childArrayIndex++ {
+				storage := newTestPersistentStorage(t)
+
+				array, values, childSlabID := createArrayWithSimpleAndChildArrayValues(t, storage, address, typeInfo, arraySize, childArrayIndex, useWrapperValue)
+
+				// parent array: 1 root data slab
+				// nested composite element: 1 root data slab
+				require.Equal(t, 2, len(storage.deltas))
+				require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
+
+				testArrayLoadedElements(t, array, values)
+
+				// Unload composite element
+				err := storage.Remove(childSlabID)
+				require.NoError(t, err)
+
+				copy(values[childArrayIndex:], values[childArrayIndex+1:])
+				values = values[:len(values)-1]
+
+				testArrayLoadedElements(t, array, values)
+			}
+		}
+	})
+
+	runTest("root metadata slab with simple values", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 20
+			array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array: 1 root metadata slab, 2 data slabs
+			require.Equal(t, 3, len(storage.deltas))
+			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
+
+			testArrayLoadedElements(t, array, values)
+		}
+	})
+
+	runTest("root metadata slab with composite values", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 20
+			array, values, _ := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
 
 			// parent array: 1 root metadata slab, 2 data slabs
 			// nested composite value element: 1 root data slab for each
-			require.Equal(t, 3+1, len(storage.deltas))
+			require.Equal(t, 3+arraySize, len(storage.deltas))
+			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
+
+			testArrayLoadedElements(t, array, values)
+		}
+	})
+
+	runTest("root metadata slab with composite values, unload composite element from front to back", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 20
+			array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array: 1 root metadata slab, 2 data slabs
+			// nested composite value element: 1 root data slab for each
+			require.Equal(t, 3+arraySize, len(storage.deltas))
 			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, values)
 
-			// Unload composite value
-			err := storage.Remove(childSlabID)
-			require.NoError(t, err)
+			// Unload composite element from front to back
+			for i := 0; i < len(childSlabIDs); i++ {
+				slabID := childSlabIDs[i]
 
-			copy(values[childArrayIndex:], values[childArrayIndex+1:])
-			values = values[:len(values)-1]
+				err := storage.Remove(slabID)
+				require.NoError(t, err)
+
+				expectedValues := values[i+1:]
+				testArrayLoadedElements(t, array, expectedValues)
+			}
+		}
+	})
+
+	runTest("root metadata slab with composite values, unload composite element from back to front", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 20
+			array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array: 1 root metadata slab, 2 data slabs
+			// nested composite value element: 1 root data slab for each
+			require.Equal(t, 3+arraySize, len(storage.deltas))
+			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, values)
+
+			// Unload composite element from back to front
+			for i := len(childSlabIDs) - 1; i >= 0; i-- {
+				slabID := childSlabIDs[i]
+
+				err := storage.Remove(slabID)
+				require.NoError(t, err)
+
+				expectedValues := values[:i]
+				testArrayLoadedElements(t, array, expectedValues)
+			}
 		}
 	})
 
-	t.Run("root metadata slab, unload data slab from front to back", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
+	runTest("root metadata slab with composite values, unload composite element in the middle", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
 
-		const arraySize = 30
-		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
+			const arraySize = 20
+			array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
 
-		// parent array (2 levels): 1 root metadata slab, 3 data slabs
-		require.Equal(t, 4, len(storage.deltas))
-		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-
-		metaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
-		require.True(t, ok)
-
-		// Unload data slabs from front to back
-		for i := 0; i < len(metaDataSlab.childrenHeaders); i++ {
-
-			childHeader := metaDataSlab.childrenHeaders[i]
-
-			err := storage.Remove(childHeader.slabID)
-			require.NoError(t, err)
-
-			values = values[childHeader.count:]
+			// parent array: 1 root metadata slab, 2 data slabs
+			// nested composite value element: 1 root data slab for each
+			require.Equal(t, 3+arraySize, len(storage.deltas))
+			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, values)
+
+			// Unload composite element in the middle
+			for _, index := range []int{4, 14} {
+
+				slabID := childSlabIDs[index]
+
+				err := storage.Remove(slabID)
+				require.NoError(t, err)
+
+				copy(values[index:], values[index+1:])
+				values = values[:len(values)-1]
+
+				testArrayLoadedElements(t, array, values)
+			}
 		}
 	})
 
-	t.Run("root metadata slab, unload data slab from back to front", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
+	runTest("root metadata slab with simple and composite values, unload composite element", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			const arraySize = 20
 
-		const arraySize = 30
-		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
+			// Create an array with composite value at specified index.
+			for childArrayIndex := 0; childArrayIndex < arraySize; childArrayIndex++ {
+				storage := newTestPersistentStorage(t)
 
-		// parent array (2 levels): 1 root metadata slab, 3 data slabs
-		require.Equal(t, 4, len(storage.deltas))
-		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
+				array, values, childSlabID := createArrayWithSimpleAndChildArrayValues(t, storage, address, typeInfo, arraySize, childArrayIndex, useWrapperValue)
 
-		testArrayLoadedElements(t, array, values)
+				// parent array: 1 root metadata slab, 2 data slabs
+				// nested composite value element: 1 root data slab for each
+				require.Equal(t, 3+1, len(storage.deltas))
+				require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
-		metaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
-		require.True(t, ok)
+				testArrayLoadedElements(t, array, values)
 
-		// Unload data slabs from back to front
-		for i := len(metaDataSlab.childrenHeaders) - 1; i >= 0; i-- {
+				// Unload composite value
+				err := storage.Remove(childSlabID)
+				require.NoError(t, err)
 
-			childHeader := metaDataSlab.childrenHeaders[i]
+				copy(values[childArrayIndex:], values[childArrayIndex+1:])
+				values = values[:len(values)-1]
 
-			err := storage.Remove(childHeader.slabID)
-			require.NoError(t, err)
+				testArrayLoadedElements(t, array, values)
+			}
+		}
+	})
 
-			values = values[:len(values)-int(childHeader.count)]
+	runTest("root metadata slab, unload data slab from front to back", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 30
+			array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array (2 levels): 1 root metadata slab, 3 data slabs
+			require.Equal(t, 4, len(storage.deltas))
+			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, values)
-		}
-	})
 
-	t.Run("root metadata slab, unload data slab in the middle", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 30
-		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
-
-		// parent array (2 levels): 1 root metadata slab, 3 data slabs
-		require.Equal(t, 4, len(storage.deltas))
-		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
-
-		testArrayLoadedElements(t, array, values)
-
-		metaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
-		require.True(t, ok)
-
-		require.True(t, len(metaDataSlab.childrenHeaders) > 2)
-
-		index := 1
-		childHeader := metaDataSlab.childrenHeaders[index]
-
-		err := storage.Remove(childHeader.slabID)
-		require.NoError(t, err)
-
-		copy(values[metaDataSlab.childrenCountSum[index-1]:], values[metaDataSlab.childrenCountSum[index]:])
-		values = values[:array.Count()-uint64(childHeader.count)]
-
-		testArrayLoadedElements(t, array, values)
-	})
-
-	t.Run("root metadata slab, unload non-root metadata slab from front to back", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 250
-		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
-
-		// parent array (3 levels): 1 root metadata slab, 2 non-root metadata slabs, n data slabs
-		require.Equal(t, 3, getArrayMetaDataSlabCount(storage))
-
-		rootMetaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
-		require.True(t, ok)
-
-		// Unload non-root metadata slabs from front to back
-		for i := 0; i < len(rootMetaDataSlab.childrenHeaders); i++ {
-
-			childHeader := rootMetaDataSlab.childrenHeaders[i]
-
-			err := storage.Remove(childHeader.slabID)
-			require.NoError(t, err)
-
-			values = values[childHeader.count:]
-
-			testArrayLoadedElements(t, array, values)
-		}
-	})
-
-	t.Run("root metadata slab, unload non-root metadata slab from back to front", func(t *testing.T) {
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 250
-		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
-
-		// parent array (3 levels): 1 root metadata slab, 2 child metadata slabs, n data slabs
-		require.Equal(t, 3, getArrayMetaDataSlabCount(storage))
-
-		rootMetaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
-		require.True(t, ok)
-
-		// Unload non-root metadata slabs from back to front
-		for i := len(rootMetaDataSlab.childrenHeaders) - 1; i >= 0; i-- {
-
-			childHeader := rootMetaDataSlab.childrenHeaders[i]
-
-			err := storage.Remove(childHeader.slabID)
-			require.NoError(t, err)
-
-			values = values[childHeader.count:]
-
-			testArrayLoadedElements(t, array, values)
-		}
-	})
-
-	t.Run("root metadata slab with composite values, unload random composite value", func(t *testing.T) {
-
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 500
-		array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
-
-		// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
-		// nested composite elements: 1 root data slab for each
-		require.True(t, len(storage.deltas) > 1+arraySize)
-		require.True(t, getArrayMetaDataSlabCount(storage) > 1)
-
-		testArrayLoadedElements(t, array, values)
-
-		r := newRand(t)
-
-		// Unload random composite element
-		for len(values) > 0 {
-
-			i := r.Intn(len(values))
-
-			slabID := childSlabIDs[i]
-
-			err := storage.Remove(slabID)
-			require.NoError(t, err)
-
-			copy(values[i:], values[i+1:])
-			values = values[:len(values)-1]
-
-			copy(childSlabIDs[i:], childSlabIDs[i+1:])
-			childSlabIDs = childSlabIDs[:len(childSlabIDs)-1]
-
-			testArrayLoadedElements(t, array, values)
-		}
-	})
-
-	t.Run("root metadata slab with composite values, unload random data slab", func(t *testing.T) {
-
-		storage := newTestPersistentStorage(t)
-
-		const arraySize = 500
-		array, values, _ := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
-
-		// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
-		// nested composite elements: 1 root data slab for each
-		require.True(t, len(storage.deltas) > 1+arraySize)
-		require.True(t, getArrayMetaDataSlabCount(storage) > 1)
-
-		testArrayLoadedElements(t, array, values)
-
-		rootMetaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
-		require.True(t, ok)
-
-		type slabInfo struct {
-			id         SlabID
-			startIndex int
-			count      int
-		}
-
-		count := 0
-		var dataSlabInfos []*slabInfo
-		for _, mheader := range rootMetaDataSlab.childrenHeaders {
-			nonrootMetaDataSlab, ok := storage.deltas[mheader.slabID].(*ArrayMetaDataSlab)
+			metaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
-			for _, h := range nonrootMetaDataSlab.childrenHeaders {
-				dataSlabInfo := &slabInfo{id: h.slabID, startIndex: count, count: int(h.count)}
-				dataSlabInfos = append(dataSlabInfos, dataSlabInfo)
-				count += int(h.count)
+			// Unload data slabs from front to back
+			for i := 0; i < len(metaDataSlab.childrenHeaders); i++ {
+
+				childHeader := metaDataSlab.childrenHeaders[i]
+
+				err := storage.Remove(childHeader.slabID)
+				require.NoError(t, err)
+
+				values = values[childHeader.count:]
+
+				testArrayLoadedElements(t, array, values)
 			}
 		}
+	})
 
-		r := newRand(t)
+	runTest("root metadata slab, unload data slab from back to front", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
 
-		// Unload random data slab.
-		for len(dataSlabInfos) > 0 {
-			indexToUnload := r.Intn(len(dataSlabInfos))
+			const arraySize = 30
+			array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize, useWrapperValue)
 
-			slabInfoToUnload := dataSlabInfos[indexToUnload]
+			// parent array (2 levels): 1 root metadata slab, 3 data slabs
+			require.Equal(t, 4, len(storage.deltas))
+			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
-			// Update startIndex for all data slabs after indexToUnload.
-			for i := indexToUnload + 1; i < len(dataSlabInfos); i++ {
-				dataSlabInfos[i].startIndex -= slabInfoToUnload.count
+			testArrayLoadedElements(t, array, values)
+
+			metaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
+			require.True(t, ok)
+
+			// Unload data slabs from back to front
+			for i := len(metaDataSlab.childrenHeaders) - 1; i >= 0; i-- {
+
+				childHeader := metaDataSlab.childrenHeaders[i]
+
+				err := storage.Remove(childHeader.slabID)
+				require.NoError(t, err)
+
+				values = values[:len(values)-int(childHeader.count)]
+
+				testArrayLoadedElements(t, array, values)
 			}
+		}
+	})
 
-			// Remove slabInfo to be unloaded from dataSlabInfos.
-			copy(dataSlabInfos[indexToUnload:], dataSlabInfos[indexToUnload+1:])
-			dataSlabInfos = dataSlabInfos[:len(dataSlabInfos)-1]
+	runTest("root metadata slab, unload data slab in the middle", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
 
-			err := storage.Remove(slabInfoToUnload.id)
+			const arraySize = 30
+			array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array (2 levels): 1 root metadata slab, 3 data slabs
+			require.Equal(t, 4, len(storage.deltas))
+			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
+
+			testArrayLoadedElements(t, array, values)
+
+			metaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
+			require.True(t, ok)
+
+			require.True(t, len(metaDataSlab.childrenHeaders) > 2)
+
+			index := 1
+			childHeader := metaDataSlab.childrenHeaders[index]
+
+			err := storage.Remove(childHeader.slabID)
 			require.NoError(t, err)
 
-			copy(values[slabInfoToUnload.startIndex:], values[slabInfoToUnload.startIndex+slabInfoToUnload.count:])
-			values = values[:len(values)-slabInfoToUnload.count]
+			copy(values[metaDataSlab.childrenCountSum[index-1]:], values[metaDataSlab.childrenCountSum[index]:])
+			values = values[:array.Count()-uint64(childHeader.count)]
 
 			testArrayLoadedElements(t, array, values)
 		}
-
-		require.Equal(t, 0, len(values))
 	})
 
-	t.Run("root metadata slab with composite values, unload random slab", func(t *testing.T) {
+	runTest("root metadata slab, unload non-root metadata slab from front to back", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
 
-		storage := newTestPersistentStorage(t)
+			const arraySize = 250
+			array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize, useWrapperValue)
 
-		const arraySize = 500
-		array, values, _ := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize)
+			// parent array (3 levels): 1 root metadata slab, 2 non-root metadata slabs, n data slabs
+			require.Equal(t, 3, getArrayMetaDataSlabCount(storage))
 
-		// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
-		// nested composite elements: 1 root data slab for each
-		require.True(t, len(storage.deltas) > 1+arraySize)
-		require.True(t, getArrayMetaDataSlabCount(storage) > 1)
-
-		testArrayLoadedElements(t, array, values)
-
-		type slabInfo struct {
-			id         SlabID
-			startIndex int
-			count      int
-			children   []*slabInfo
-		}
-
-		rootMetaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
-		require.True(t, ok)
-
-		var dataSlabCount, metadataSlabCount int
-		nonrootMetadataSlabInfos := make([]*slabInfo, len(rootMetaDataSlab.childrenHeaders))
-		for i, mheader := range rootMetaDataSlab.childrenHeaders {
-
-			nonrootMetadataSlabInfo := &slabInfo{
-				id:         mheader.slabID,
-				startIndex: metadataSlabCount,
-				count:      int(mheader.count),
-			}
-			metadataSlabCount += int(mheader.count)
-
-			nonrootMetadataSlab, ok := storage.deltas[mheader.slabID].(*ArrayMetaDataSlab)
+			rootMetaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
-			children := make([]*slabInfo, len(nonrootMetadataSlab.childrenHeaders))
-			for i, h := range nonrootMetadataSlab.childrenHeaders {
-				children[i] = &slabInfo{
-					id:         h.slabID,
-					startIndex: dataSlabCount,
-					count:      int(h.count),
-				}
-				dataSlabCount += int(h.count)
+			// Unload non-root metadata slabs from front to back
+			for i := 0; i < len(rootMetaDataSlab.childrenHeaders); i++ {
+
+				childHeader := rootMetaDataSlab.childrenHeaders[i]
+
+				err := storage.Remove(childHeader.slabID)
+				require.NoError(t, err)
+
+				values = values[childHeader.count:]
+
+				testArrayLoadedElements(t, array, values)
+			}
+		}
+	})
+
+	runTest("root metadata slab, unload non-root metadata slab from back to front", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 250
+			array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array (3 levels): 1 root metadata slab, 2 child metadata slabs, n data slabs
+			require.Equal(t, 3, getArrayMetaDataSlabCount(storage))
+
+			rootMetaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
+			require.True(t, ok)
+
+			// Unload non-root metadata slabs from back to front
+			for i := len(rootMetaDataSlab.childrenHeaders) - 1; i >= 0; i-- {
+
+				childHeader := rootMetaDataSlab.childrenHeaders[i]
+
+				err := storage.Remove(childHeader.slabID)
+				require.NoError(t, err)
+
+				values = values[childHeader.count:]
+
+				testArrayLoadedElements(t, array, values)
+			}
+		}
+	})
+
+	runTest("root metadata slab with composite values, unload random composite value", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 500
+			array, values, childSlabIDs := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
+			// nested composite elements: 1 root data slab for each
+			require.True(t, len(storage.deltas) > 1+arraySize)
+			require.True(t, getArrayMetaDataSlabCount(storage) > 1)
+
+			testArrayLoadedElements(t, array, values)
+
+			r := newRand(t)
+
+			// Unload random composite element
+			for len(values) > 0 {
+
+				i := r.Intn(len(values))
+
+				slabID := childSlabIDs[i]
+
+				err := storage.Remove(slabID)
+				require.NoError(t, err)
+
+				copy(values[i:], values[i+1:])
+				values = values[:len(values)-1]
+
+				copy(childSlabIDs[i:], childSlabIDs[i+1:])
+				childSlabIDs = childSlabIDs[:len(childSlabIDs)-1]
+
+				testArrayLoadedElements(t, array, values)
+			}
+		}
+	})
+
+	runTest("root metadata slab with composite values, unload random data slab", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
+
+			const arraySize = 500
+			array, values, _ := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
+
+			// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
+			// nested composite elements: 1 root data slab for each
+			require.True(t, len(storage.deltas) > 1+arraySize)
+			require.True(t, getArrayMetaDataSlabCount(storage) > 1)
+
+			testArrayLoadedElements(t, array, values)
+
+			rootMetaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
+			require.True(t, ok)
+
+			type slabInfo struct {
+				id         SlabID
+				startIndex int
+				count      int
 			}
 
-			nonrootMetadataSlabInfo.children = children
-			nonrootMetadataSlabInfos[i] = nonrootMetadataSlabInfo
+			count := 0
+			var dataSlabInfos []*slabInfo
+			for _, mheader := range rootMetaDataSlab.childrenHeaders {
+				nonrootMetaDataSlab, ok := storage.deltas[mheader.slabID].(*ArrayMetaDataSlab)
+				require.True(t, ok)
+
+				for _, h := range nonrootMetaDataSlab.childrenHeaders {
+					dataSlabInfo := &slabInfo{id: h.slabID, startIndex: count, count: int(h.count)}
+					dataSlabInfos = append(dataSlabInfos, dataSlabInfo)
+					count += int(h.count)
+				}
+			}
+
+			r := newRand(t)
+
+			// Unload random data slab.
+			for len(dataSlabInfos) > 0 {
+				indexToUnload := r.Intn(len(dataSlabInfos))
+
+				slabInfoToUnload := dataSlabInfos[indexToUnload]
+
+				// Update startIndex for all data slabs after indexToUnload.
+				for i := indexToUnload + 1; i < len(dataSlabInfos); i++ {
+					dataSlabInfos[i].startIndex -= slabInfoToUnload.count
+				}
+
+				// Remove slabInfo to be unloaded from dataSlabInfos.
+				copy(dataSlabInfos[indexToUnload:], dataSlabInfos[indexToUnload+1:])
+				dataSlabInfos = dataSlabInfos[:len(dataSlabInfos)-1]
+
+				err := storage.Remove(slabInfoToUnload.id)
+				require.NoError(t, err)
+
+				copy(values[slabInfoToUnload.startIndex:], values[slabInfoToUnload.startIndex+slabInfoToUnload.count:])
+				values = values[:len(values)-slabInfoToUnload.count]
+
+				testArrayLoadedElements(t, array, values)
+			}
+
+			require.Equal(t, 0, len(values))
 		}
+	})
 
-		r := newRand(t)
+	runTest("root metadata slab with composite values, unload random slab", func(useWrapperValue bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			storage := newTestPersistentStorage(t)
 
-		const (
-			metadataSlabType int = iota
-			dataSlabType
-			maxSlabType
-		)
+			const arraySize = 500
+			array, values, _ := createArrayWithChildArrays(t, storage, address, typeInfo, arraySize, useWrapperValue)
 
-		for len(nonrootMetadataSlabInfos) > 0 {
+			// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
+			// nested composite elements: 1 root data slab for each
+			require.True(t, len(storage.deltas) > 1+arraySize)
+			require.True(t, getArrayMetaDataSlabCount(storage) > 1)
 
-			var slabInfoToBeRemoved *slabInfo
-			var isLastSlab bool
+			testArrayLoadedElements(t, array, values)
 
-			// Unload random metadata or data slab.
-			switch r.Intn(maxSlabType) {
+			type slabInfo struct {
+				id         SlabID
+				startIndex int
+				count      int
+				children   []*slabInfo
+			}
 
-			case metadataSlabType:
-				// Unload metadata slab at random index.
-				metadataSlabIndex := r.Intn(len(nonrootMetadataSlabInfos))
+			rootMetaDataSlab, ok := array.root.(*ArrayMetaDataSlab)
+			require.True(t, ok)
 
-				isLastSlab = metadataSlabIndex == len(nonrootMetadataSlabInfos)-1
+			var dataSlabCount, metadataSlabCount int
+			nonrootMetadataSlabInfos := make([]*slabInfo, len(rootMetaDataSlab.childrenHeaders))
+			for i, mheader := range rootMetaDataSlab.childrenHeaders {
 
-				slabInfoToBeRemoved = nonrootMetadataSlabInfos[metadataSlabIndex]
+				nonrootMetadataSlabInfo := &slabInfo{
+					id:         mheader.slabID,
+					startIndex: metadataSlabCount,
+					count:      int(mheader.count),
+				}
+				metadataSlabCount += int(mheader.count)
 
-				count := slabInfoToBeRemoved.count
+				nonrootMetadataSlab, ok := storage.deltas[mheader.slabID].(*ArrayMetaDataSlab)
+				require.True(t, ok)
 
-				// Update startIndex for subsequence metadata and data slabs.
-				for i := metadataSlabIndex + 1; i < len(nonrootMetadataSlabInfos); i++ {
-					nonrootMetadataSlabInfos[i].startIndex -= count
-
-					for j := 0; j < len(nonrootMetadataSlabInfos[i].children); j++ {
-						nonrootMetadataSlabInfos[i].children[j].startIndex -= count
+				children := make([]*slabInfo, len(nonrootMetadataSlab.childrenHeaders))
+				for i, h := range nonrootMetadataSlab.childrenHeaders {
+					children[i] = &slabInfo{
+						id:         h.slabID,
+						startIndex: dataSlabCount,
+						count:      int(h.count),
 					}
+					dataSlabCount += int(h.count)
 				}
 
-				copy(nonrootMetadataSlabInfos[metadataSlabIndex:], nonrootMetadataSlabInfos[metadataSlabIndex+1:])
-				nonrootMetadataSlabInfos = nonrootMetadataSlabInfos[:len(nonrootMetadataSlabInfos)-1]
+				nonrootMetadataSlabInfo.children = children
+				nonrootMetadataSlabInfos[i] = nonrootMetadataSlabInfo
+			}
 
-			case dataSlabType:
-				// Unload data slab at randome index.
-				metadataSlabIndex := r.Intn(len(nonrootMetadataSlabInfos))
+			r := newRand(t)
 
-				metaSlabInfo := nonrootMetadataSlabInfos[metadataSlabIndex]
+			const (
+				metadataSlabType int = iota
+				dataSlabType
+				maxSlabType
+			)
 
-				dataSlabIndex := r.Intn(len(metaSlabInfo.children))
+			for len(nonrootMetadataSlabInfos) > 0 {
 
-				slabInfoToBeRemoved = metaSlabInfo.children[dataSlabIndex]
+				var slabInfoToBeRemoved *slabInfo
+				var isLastSlab bool
 
-				isLastSlab = (metadataSlabIndex == len(nonrootMetadataSlabInfos)-1) &&
-					(dataSlabIndex == len(metaSlabInfo.children)-1)
+				// Unload random metadata or data slab.
+				switch r.Intn(maxSlabType) {
 
-				count := slabInfoToBeRemoved.count
+				case metadataSlabType:
+					// Unload metadata slab at random index.
+					metadataSlabIndex := r.Intn(len(nonrootMetadataSlabInfos))
 
-				// Update startIndex for subsequence data slabs.
-				for i := dataSlabIndex + 1; i < len(metaSlabInfo.children); i++ {
-					metaSlabInfo.children[i].startIndex -= count
-				}
+					isLastSlab = metadataSlabIndex == len(nonrootMetadataSlabInfos)-1
 
-				copy(metaSlabInfo.children[dataSlabIndex:], metaSlabInfo.children[dataSlabIndex+1:])
-				metaSlabInfo.children = metaSlabInfo.children[:len(metaSlabInfo.children)-1]
+					slabInfoToBeRemoved = nonrootMetadataSlabInfos[metadataSlabIndex]
 
-				metaSlabInfo.count -= count
+					count := slabInfoToBeRemoved.count
 
-				// Update startIndex for all subsequence metadata slabs.
-				for i := metadataSlabIndex + 1; i < len(nonrootMetadataSlabInfos); i++ {
-					nonrootMetadataSlabInfos[i].startIndex -= count
+					// Update startIndex for subsequence metadata and data slabs.
+					for i := metadataSlabIndex + 1; i < len(nonrootMetadataSlabInfos); i++ {
+						nonrootMetadataSlabInfos[i].startIndex -= count
 
-					for j := 0; j < len(nonrootMetadataSlabInfos[i].children); j++ {
-						nonrootMetadataSlabInfos[i].children[j].startIndex -= count
+						for j := 0; j < len(nonrootMetadataSlabInfos[i].children); j++ {
+							nonrootMetadataSlabInfos[i].children[j].startIndex -= count
+						}
 					}
-				}
 
-				if len(metaSlabInfo.children) == 0 {
 					copy(nonrootMetadataSlabInfos[metadataSlabIndex:], nonrootMetadataSlabInfos[metadataSlabIndex+1:])
 					nonrootMetadataSlabInfos = nonrootMetadataSlabInfos[:len(nonrootMetadataSlabInfos)-1]
+
+				case dataSlabType:
+					// Unload data slab at randome index.
+					metadataSlabIndex := r.Intn(len(nonrootMetadataSlabInfos))
+
+					metaSlabInfo := nonrootMetadataSlabInfos[metadataSlabIndex]
+
+					dataSlabIndex := r.Intn(len(metaSlabInfo.children))
+
+					slabInfoToBeRemoved = metaSlabInfo.children[dataSlabIndex]
+
+					isLastSlab = (metadataSlabIndex == len(nonrootMetadataSlabInfos)-1) &&
+						(dataSlabIndex == len(metaSlabInfo.children)-1)
+
+					count := slabInfoToBeRemoved.count
+
+					// Update startIndex for subsequence data slabs.
+					for i := dataSlabIndex + 1; i < len(metaSlabInfo.children); i++ {
+						metaSlabInfo.children[i].startIndex -= count
+					}
+
+					copy(metaSlabInfo.children[dataSlabIndex:], metaSlabInfo.children[dataSlabIndex+1:])
+					metaSlabInfo.children = metaSlabInfo.children[:len(metaSlabInfo.children)-1]
+
+					metaSlabInfo.count -= count
+
+					// Update startIndex for all subsequence metadata slabs.
+					for i := metadataSlabIndex + 1; i < len(nonrootMetadataSlabInfos); i++ {
+						nonrootMetadataSlabInfos[i].startIndex -= count
+
+						for j := 0; j < len(nonrootMetadataSlabInfos[i].children); j++ {
+							nonrootMetadataSlabInfos[i].children[j].startIndex -= count
+						}
+					}
+
+					if len(metaSlabInfo.children) == 0 {
+						copy(nonrootMetadataSlabInfos[metadataSlabIndex:], nonrootMetadataSlabInfos[metadataSlabIndex+1:])
+						nonrootMetadataSlabInfos = nonrootMetadataSlabInfos[:len(nonrootMetadataSlabInfos)-1]
+					}
 				}
+
+				err := storage.Remove(slabInfoToBeRemoved.id)
+				require.NoError(t, err)
+
+				if isLastSlab {
+					values = values[:slabInfoToBeRemoved.startIndex]
+				} else {
+					copy(values[slabInfoToBeRemoved.startIndex:], values[slabInfoToBeRemoved.startIndex+slabInfoToBeRemoved.count:])
+					values = values[:len(values)-slabInfoToBeRemoved.count]
+				}
+
+				testArrayLoadedElements(t, array, values)
 			}
 
-			err := storage.Remove(slabInfoToBeRemoved.id)
-			require.NoError(t, err)
-
-			if isLastSlab {
-				values = values[:slabInfoToBeRemoved.startIndex]
-			} else {
-				copy(values[slabInfoToBeRemoved.startIndex:], values[slabInfoToBeRemoved.startIndex+slabInfoToBeRemoved.count:])
-				values = values[:len(values)-slabInfoToBeRemoved.count]
-			}
-
-			testArrayLoadedElements(t, array, values)
+			require.Equal(t, 0, len(values))
 		}
-
-		require.Equal(t, 0, len(values))
 	})
 }
 
@@ -5880,6 +5929,7 @@ func createArrayWithSimpleValues(
 	address Address,
 	typeInfo TypeInfo,
 	arraySize int,
+	useWrapperValue bool,
 ) (*Array, []Value) {
 
 	// Create parent array
@@ -5889,10 +5939,19 @@ func createArrayWithSimpleValues(
 	values := make([]Value, arraySize)
 	r := rune('a')
 	for i := 0; i < arraySize; i++ {
-		values[i] = NewStringValue(strings.Repeat(string(r), 20))
+		s := NewStringValue(strings.Repeat(string(r), 20))
 
-		err := array.Append(values[i])
-		require.NoError(t, err)
+		if useWrapperValue {
+			err := array.Append(SomeValue{s})
+			require.NoError(t, err)
+
+			values[i] = someValue{s}
+		} else {
+			err := array.Append(s)
+			require.NoError(t, err)
+
+			values[i] = s
+		}
 	}
 
 	return array, values
@@ -5904,6 +5963,7 @@ func createArrayWithChildArrays(
 	address Address,
 	typeInfo TypeInfo,
 	arraySize int,
+	useWrapperValue bool,
 ) (*Array, []Value, []SlabID) {
 	const childArraySize = 50
 
@@ -5928,12 +5988,20 @@ func createArrayWithChildArrays(
 			expectedChildArrayValues[j] = v
 		}
 
-		expectedValues[i] = arrayValue(expectedChildArrayValues)
 		childSlabIDs[i] = childArray.SlabID()
 
 		// Append nested array to parent
-		err = array.Append(childArray)
-		require.NoError(t, err)
+		if useWrapperValue {
+			err = array.Append(SomeValue{childArray})
+			require.NoError(t, err)
+
+			expectedValues[i] = someValue{arrayValue(expectedChildArrayValues)}
+		} else {
+			err = array.Append(childArray)
+			require.NoError(t, err)
+
+			expectedValues[i] = arrayValue(expectedChildArrayValues)
+		}
 	}
 
 	return array, expectedValues, childSlabIDs
@@ -5946,6 +6014,7 @@ func createArrayWithSimpleAndChildArrayValues(
 	typeInfo TypeInfo,
 	arraySize int,
 	compositeValueIndex int,
+	useWrapperValue bool,
 ) (*Array, []Value, SlabID) {
 	const childArraySize = 50
 
@@ -5973,19 +6042,34 @@ func createArrayWithSimpleAndChildArrayValues(
 				expectedChildArrayValues[j] = v
 			}
 
-			err = array.Append(childArray)
-			require.NoError(t, err)
+			if useWrapperValue {
+				err = array.Append(SomeValue{childArray})
+				require.NoError(t, err)
 
-			expectedValues[i] = arrayValue(expectedChildArrayValues)
+				expectedValues[i] = someValue{arrayValue(expectedChildArrayValues)}
+			} else {
+				err = array.Append(childArray)
+				require.NoError(t, err)
+
+				expectedValues[i] = arrayValue(expectedChildArrayValues)
+			}
+
 			childSlabID = childArray.SlabID()
 		} else {
 			v := NewStringValue(strings.Repeat(string(r), 20))
 			r++
 
-			err = array.Append(v)
-			require.NoError(t, err)
+			if useWrapperValue {
+				err = array.Append(SomeValue{v})
+				require.NoError(t, err)
 
-			expectedValues[i] = v
+				expectedValues[i] = someValue{v}
+			} else {
+				err = array.Append(v)
+				require.NoError(t, err)
+
+				expectedValues[i] = v
+			}
 		}
 	}
 

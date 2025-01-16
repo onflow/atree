@@ -267,6 +267,26 @@ func getLoadedValue(storage SlabStorage, storable Storable) (Value, error) {
 
 		return v, nil
 
+	case WrapperStorable:
+		// Check if wrapped storable is SlabIDStorable.
+		wrappedStorable := unwrapStorable(storable)
+
+		if wrappedSlabIDStorable, isSlabIDStorable := wrappedStorable.(SlabIDStorable); isSlabIDStorable {
+			slab := storage.RetrieveIfLoaded(SlabID(wrappedSlabIDStorable))
+			if slab == nil {
+				// Skip because it references unloaded slab.
+				return nil, nil
+			}
+		}
+
+		v, err := storable.StoredValue(storage)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by Storable interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get storable's stored value")
+		}
+
+		return v, nil
+
 	default:
 		v, err := storable.StoredValue(storage)
 		if err != nil {

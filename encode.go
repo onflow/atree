@@ -96,8 +96,6 @@ func DecodeSlab(
 			return newArrayDataSlabFromData(id, data, decMode, decodeStorable, decodeTypeInfo)
 		case slabArrayMeta:
 			return newArrayMetaDataSlabFromData(id, data, decMode, decodeTypeInfo)
-		case slabBasicArray:
-			return newBasicArrayDataSlabFromData(id, data, decMode, decodeStorable)
 		default:
 			return nil, NewDecodingErrorf("data has invalid head 0x%x", h[:])
 		}

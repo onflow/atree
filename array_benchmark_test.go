@@ -78,8 +78,6 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 
 	require.NoError(b, err)
 
-	// array := NewBasicArray(storage)
-
 	var start time.Time
 	var totalRawDataSize uint32
 	var totalAppendTime time.Duration
@@ -105,7 +103,6 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	storage.DropCache()
 	start = time.Now()
 	array, err = NewArrayWithRootID(storage, arrayID)
-	// array, err := NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue(r)
@@ -125,7 +122,6 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	storage.DropCache()
 	start = time.Now()
 	array, err = NewArrayWithRootID(storage, arrayID)
-	// array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
 	for i := 0; i < numberOfElements; i++ {
@@ -141,7 +137,6 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	storage.DropCache()
 	start = time.Now()
 	array, err = NewArrayWithRootID(storage, arrayID)
-	// array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
 	for i := 0; i < numberOfElements; i++ {
@@ -163,7 +158,6 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	storage.DropCache()
 	start = time.Now()
 	array, err = NewArrayWithRootID(storage, arrayID)
-	// array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
 	for i := 0; i < numberOfElements; i++ {
@@ -178,7 +172,6 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	storage.baseStorage.ResetReporter()
 	storage.DropCache()
 	array, err = NewArrayWithRootID(storage, arrayID)
-	// array, err = NewBasicArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
 	ind := r.Intn(int(array.Count()))

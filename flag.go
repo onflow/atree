@@ -38,7 +38,6 @@ const (
 	slabArrayData
 	slabArrayMeta
 	slabLargeImmutableArray
-	slabBasicArray
 )
 
 type slabMapType int
@@ -71,7 +70,6 @@ const (
 	maskArrayData byte = 0b000_00000
 	maskArrayMeta byte = 0b000_00001
 	// maskLargeImmutableArray byte = 0b000_00010 // not used for now
-	maskBasicArray byte = 0b000_00011 // used for benchmarking
 
 	// Map flags: 3 low bits (4th bit is 0, 5th bit is 1)
 	maskMapData byte = 0b000_01000
@@ -105,9 +103,6 @@ func newArraySlabHead(version byte, t slabArrayType) (*head, error) {
 
 	case slabArrayMeta:
 		h[1] = maskArrayMeta
-
-	case slabBasicArray:
-		h[1] = maskBasicArray
 
 	default:
 		return nil, fmt.Errorf("unsupported array slab type %d", t)
@@ -246,8 +241,6 @@ func (h head) getSlabArrayType() slabArrayType {
 		return slabArrayMeta
 	case 2:
 		return slabLargeImmutableArray
-	case 3:
-		return slabBasicArray
 	default:
 		return slabArrayUndefined
 	}

@@ -1407,22 +1407,22 @@ func verifyMapValueID(m *OrderedMap) error {
 
 	vid := m.ValueID()
 
-	if !bytes.Equal(vid[:slabAddressSize], rootSlabID.address[:]) {
+	if !bytes.Equal(vid[:SlabAddressLength], rootSlabID.address[:]) {
 		return NewFatalError(
 			fmt.Errorf(
 				"expect first %d bytes of array value ID as %v, got %v",
-				slabAddressSize,
+				SlabAddressLength,
 				rootSlabID.address[:],
-				vid[:slabAddressSize]))
+				vid[:SlabAddressLength]))
 	}
 
-	if !bytes.Equal(vid[slabAddressSize:], rootSlabID.index[:]) {
+	if !bytes.Equal(vid[SlabAddressLength:], rootSlabID.index[:]) {
 		return NewFatalError(
 			fmt.Errorf(
 				"expect second %d bytes of array value ID as %v, got %v",
-				slabIndexSize,
+				SlabIndexLength,
 				rootSlabID.index[:],
-				vid[slabAddressSize:]))
+				vid[SlabAddressLength:]))
 	}
 
 	return nil

@@ -180,7 +180,7 @@ func (v SlabIDStorable) Encode(enc *Encoder) error {
 	copy(enc.Scratch[:], v.address[:])
 	copy(enc.Scratch[8:], v.index[:])
 
-	err = enc.CBOR.EncodeBytes(enc.Scratch[:slabIDSize])
+	err = enc.CBOR.EncodeBytes(enc.Scratch[:SlabIDLength])
 	if err != nil {
 		return NewEncodingError(err)
 	}
@@ -190,7 +190,7 @@ func (v SlabIDStorable) Encode(enc *Encoder) error {
 
 func (v SlabIDStorable) ByteSize() uint32 {
 	// tag number (2 bytes) + byte string header (1 byte) + slab id (16 bytes)
-	return 2 + 1 + slabIDSize
+	return 2 + 1 + SlabIDLength
 }
 
 func (v SlabIDStorable) String() string {

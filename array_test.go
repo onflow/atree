@@ -5027,7 +5027,7 @@ func TestArrayMaxInlineElement(t *testing.T) {
 	// Size of root data slab with two elements of max inlined size is target slab size minus
 	// slab id size (next slab id is omitted in root slab), and minus 1 byte
 	// (for rounding when computing max inline array element size).
-	require.Equal(t, targetThreshold-slabIDSize-1, uint64(array.root.Header().size))
+	require.Equal(t, targetThreshold-SlabIDLength-1, uint64(array.root.Header().size))
 
 	testArray(t, storage, typeInfo, address, array, values, false)
 }
@@ -6025,8 +6025,8 @@ func TestArrayID(t *testing.T) {
 	sid := array.SlabID()
 	id := array.ValueID()
 
-	require.Equal(t, sid.address[:], id[:8])
-	require.Equal(t, sid.index[:], id[8:])
+	require.Equal(t, sid.address[:], id[:SlabAddressLength])
+	require.Equal(t, sid.index[:], id[SlabAddressLength:])
 }
 
 func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
@@ -6118,8 +6118,8 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, SlabIDUndefined, childArray.SlabID())
 
 		valueID := childArray.ValueID()
-		require.Equal(t, address[:], valueID[:slabAddressSize])
-		require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+		require.Equal(t, address[:], valueID[:SlabAddressLength])
+		require.NotEqual(t, SlabIndexUndefined[:], valueID[SlabAddressLength:])
 
 		v := NewStringValue(strings.Repeat("a", 9))
 		vSize := v.size
@@ -6245,8 +6245,8 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, SlabIDUndefined, childArray.SlabID())
 
 			valueID := childArray.ValueID()
-			require.Equal(t, address[:], valueID[:slabAddressSize])
-			require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+			require.Equal(t, address[:], valueID[:SlabAddressLength])
+			require.NotEqual(t, SlabIndexUndefined[:], valueID[SlabAddressLength:])
 
 			children[i].array = childArray
 			children[i].valueID = valueID
@@ -6445,8 +6445,8 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, SlabIDUndefined, childArray.SlabID())
 
 			valueID := childArray.ValueID()
-			require.Equal(t, address[:], valueID[:slabAddressSize])
-			require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+			require.Equal(t, address[:], valueID[:SlabAddressLength])
+			require.NotEqual(t, SlabIndexUndefined[:], valueID[SlabAddressLength:])
 
 			children[i].array = childArray
 			children[i].valueID = valueID
@@ -6638,8 +6638,8 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, SlabIDUndefined, childArray.SlabID())
 
 		valueID := childArray.ValueID()
-		require.Equal(t, address[:], valueID[:slabAddressSize])
-		require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+		require.Equal(t, address[:], valueID[:SlabAddressLength])
+		require.NotEqual(t, SlabIndexUndefined[:], valueID[SlabAddressLength:])
 
 		// Get inlined grand child array
 		e, err = childArray.Get(0)
@@ -6652,9 +6652,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
 
 		gValueID := gchildArray.ValueID()
-		require.Equal(t, address[:], gValueID[:slabAddressSize])
-		require.NotEqual(t, SlabIndexUndefined[:], gValueID[slabAddressSize:])
-		require.NotEqual(t, valueID[slabAddressSize:], gValueID[slabAddressSize:])
+		require.Equal(t, address[:], gValueID[:SlabAddressLength])
+		require.NotEqual(t, SlabIndexUndefined[:], gValueID[SlabAddressLength:])
+		require.NotEqual(t, valueID[SlabAddressLength:], gValueID[SlabAddressLength:])
 
 		v := NewStringValue(strings.Repeat("a", 9))
 		vSize := v.size
@@ -6833,8 +6833,8 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, SlabIDUndefined, childArray.SlabID())
 
 		valueID := childArray.ValueID()
-		require.Equal(t, address[:], valueID[:slabAddressSize])
-		require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+		require.Equal(t, address[:], valueID[:SlabAddressLength])
+		require.NotEqual(t, SlabIndexUndefined[:], valueID[SlabAddressLength:])
 
 		// Get inlined grand child array
 		e, err = childArray.Get(0)
@@ -6847,9 +6847,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
 
 		gValueID := gchildArray.ValueID()
-		require.Equal(t, address[:], gValueID[:slabAddressSize])
-		require.NotEqual(t, SlabIndexUndefined[:], gValueID[slabAddressSize:])
-		require.NotEqual(t, valueID[slabAddressSize:], gValueID[slabAddressSize:])
+		require.Equal(t, address[:], gValueID[:SlabAddressLength])
+		require.NotEqual(t, SlabIndexUndefined[:], gValueID[SlabAddressLength:])
+		require.NotEqual(t, valueID[SlabAddressLength:], gValueID[SlabAddressLength:])
 
 		v := NewStringValue(strings.Repeat("a", 9))
 		vSize := v.size
@@ -7066,8 +7066,8 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, SlabIDUndefined, childArray.SlabID())
 
 			valueID := childArray.ValueID()
-			require.Equal(t, address[:], valueID[:slabAddressSize])
-			require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+			require.Equal(t, address[:], valueID[:SlabAddressLength])
+			require.NotEqual(t, SlabIndexUndefined[:], valueID[SlabAddressLength:])
 
 			e, err = childArray.Get(0)
 			require.NoError(t, err)
@@ -7079,9 +7079,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
 
 			gValueID := gchildArray.ValueID()
-			require.Equal(t, address[:], gValueID[:slabAddressSize])
-			require.NotEqual(t, SlabIndexUndefined[:], gValueID[slabAddressSize:])
-			require.NotEqual(t, valueID[slabAddressSize:], gValueID[slabAddressSize:])
+			require.Equal(t, address[:], gValueID[:SlabAddressLength])
+			require.NotEqual(t, SlabIndexUndefined[:], gValueID[SlabAddressLength:])
+			require.NotEqual(t, valueID[SlabAddressLength:], gValueID[SlabAddressLength:])
 
 			children[i] = arrayInfo{
 				array:   childArray,
@@ -7362,8 +7362,8 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, SlabIDUndefined, childArray.SlabID())
 
 			valueID := childArray.ValueID()
-			require.Equal(t, address[:], valueID[:slabAddressSize])
-			require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+			require.Equal(t, address[:], valueID[:SlabAddressLength])
+			require.NotEqual(t, SlabIndexUndefined[:], valueID[SlabAddressLength:])
 
 			e, err = childArray.Get(0)
 			require.NoError(t, err)
@@ -7375,9 +7375,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, SlabIDUndefined, gchildArray.SlabID())
 
 			gValueID := gchildArray.ValueID()
-			require.Equal(t, address[:], gValueID[:slabAddressSize])
-			require.NotEqual(t, SlabIndexUndefined[:], gValueID[slabAddressSize:])
-			require.NotEqual(t, valueID[slabAddressSize:], gValueID[slabAddressSize:])
+			require.Equal(t, address[:], gValueID[:SlabAddressLength])
+			require.NotEqual(t, SlabIndexUndefined[:], gValueID[SlabAddressLength:])
+			require.NotEqual(t, valueID[SlabAddressLength:], gValueID[SlabAddressLength:])
 
 			children[i] = arrayInfo{
 				array:   childArray,
@@ -7695,8 +7695,8 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 		require.Equal(t, SlabIDUndefined, childArray.SlabID())
 
 		valueID := childArray.ValueID()
-		require.Equal(t, address[:], valueID[:slabAddressSize])
-		require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+		require.Equal(t, address[:], valueID[:SlabAddressLength])
+		require.NotEqual(t, SlabIndexUndefined[:], valueID[SlabAddressLength:])
 
 		children[i] = &struct {
 			array       *Array

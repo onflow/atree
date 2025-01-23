@@ -826,7 +826,7 @@ func computeSize(data []byte) (int, error) {
 	size -= inlinedSlabExtrDataSize
 
 	if !h.isRoot() && isDataSlab && !h.hasNextSlabID() {
-		size += slabIDSize
+		size += SlabIDLength
 	}
 
 	return size, nil
@@ -954,22 +954,22 @@ func verifyArrayValueID(a *Array) error {
 
 	vid := a.ValueID()
 
-	if !bytes.Equal(vid[:slabAddressSize], rootSlabID.address[:]) {
+	if !bytes.Equal(vid[:SlabAddressLength], rootSlabID.address[:]) {
 		return NewFatalError(
 			fmt.Errorf(
 				"expect first %d bytes of array value ID as %v, got %v",
-				slabAddressSize,
+				SlabAddressLength,
 				rootSlabID.address[:],
-				vid[:slabAddressSize]))
+				vid[:SlabAddressLength]))
 	}
 
-	if !bytes.Equal(vid[slabAddressSize:], rootSlabID.index[:]) {
+	if !bytes.Equal(vid[SlabAddressLength:], rootSlabID.index[:]) {
 		return NewFatalError(
 			fmt.Errorf(
 				"expect second %d bytes of array value ID as %v, got %v",
-				slabIndexSize,
+				SlabIndexLength,
 				rootSlabID.index[:],
-				vid[slabAddressSize:]))
+				vid[SlabAddressLength:]))
 	}
 
 	return nil

@@ -116,46 +116,46 @@ func TestSlabIDToRawBytes(t *testing.T) {
 	})
 
 	t.Run("undefined", func(t *testing.T) {
-		b := make([]byte, slabIDSize)
+		b := make([]byte, SlabIDLength)
 		size, err := SlabIDUndefined.ToRawBytes(b)
 		require.NoError(t, err)
 
 		want := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 		require.Equal(t, want, b)
-		require.Equal(t, slabIDSize, size)
+		require.Equal(t, SlabIDLength, size)
 	})
 
 	t.Run("temp address", func(t *testing.T) {
 		id := NewSlabID(Address{0, 0, 0, 0, 0, 0, 0, 0}, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		b := make([]byte, slabIDSize)
+		b := make([]byte, SlabIDLength)
 		size, err := id.ToRawBytes(b)
 		require.NoError(t, err)
 
 		want := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
 		require.Equal(t, want, b)
-		require.Equal(t, slabIDSize, size)
+		require.Equal(t, SlabIDLength, size)
 	})
 
 	t.Run("temp index", func(t *testing.T) {
 		id := NewSlabID(Address{0, 0, 0, 0, 0, 0, 0, 1}, SlabIndex{0, 0, 0, 0, 0, 0, 0, 0})
-		b := make([]byte, slabIDSize)
+		b := make([]byte, SlabIDLength)
 		size, err := id.ToRawBytes(b)
 		require.NoError(t, err)
 
 		want := []byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0}
 		require.Equal(t, want, b)
-		require.Equal(t, slabIDSize, size)
+		require.Equal(t, SlabIDLength, size)
 	})
 
 	t.Run("perm", func(t *testing.T) {
 		id := NewSlabID(Address{0, 0, 0, 0, 0, 0, 0, 1}, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		b := make([]byte, slabIDSize)
+		b := make([]byte, SlabIDLength)
 		size, err := id.ToRawBytes(b)
 		require.NoError(t, err)
 
 		want := []byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2}
 		require.Equal(t, want, b)
-		require.Equal(t, slabIDSize, size)
+		require.Equal(t, SlabIDLength, size)
 	})
 }
 

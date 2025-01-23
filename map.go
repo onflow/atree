@@ -61,14 +61,14 @@ const (
 
 	// slab header size: slab index (8 bytes) + size (2 bytes) + first digest (8 bytes)
 	// Support up to 65,535 bytes for slab size limit (default limit is 1536 max bytes).
-	mapSlabHeaderSize = slabIndexSize + 2 + digestSize
+	mapSlabHeaderSize = SlabIndexLength + 2 + digestSize
 
 	// meta data slab prefix size: version (1 byte) + flag (1 byte) + address (8 bytes) + child header count (2 bytes)
 	// Support up to 65,535 children per metadata slab.
-	mapMetaDataSlabPrefixSize = versionAndFlagSize + slabAddressSize + 2
+	mapMetaDataSlabPrefixSize = versionAndFlagSize + SlabAddressLength + 2
 
 	// version (1 byte) + flag (1 byte) + next id (16 bytes)
-	mapDataSlabPrefixSize = versionAndFlagSize + slabIDSize
+	mapDataSlabPrefixSize = versionAndFlagSize + SlabIDLength
 
 	// version (1 byte) + flag (1 byte)
 	mapRootDataSlabPrefixSize = versionAndFlagSize
@@ -2456,7 +2456,7 @@ func newMapDataSlabFromDataV0(
 
 	if !h.isRoot() {
 		// Check data length for next slab ID
-		if len(data) < slabIDSize {
+		if len(data) < SlabIDLength {
 			return nil, NewDecodingErrorf("data is too short for map data slab")
 		}
 
@@ -2468,7 +2468,7 @@ func newMapDataSlabFromDataV0(
 			return nil, err
 		}
 
-		data = data[slabIDSize:]
+		data = data[SlabIDLength:]
 	}
 
 	// Decode elements
@@ -2482,7 +2482,7 @@ func newMapDataSlabFromDataV0(
 	// Compute slab size for version 1.
 	slabSize := versionAndFlagSize + elements.Size()
 	if !h.isRoot() {
-		slabSize += slabIDSize
+		slabSize += SlabIDLength
 	}
 
 	header := MapSlabHeader{
@@ -2557,7 +2557,7 @@ func newMapDataSlabFromDataV1(
 
 	// Decode next slab ID for non-root slab
 	if h.hasNextSlabID() {
-		if len(data) < slabIDSize {
+		if len(data) < SlabIDLength {
 			return nil, NewDecodingErrorf("data is too short for map data slab")
 		}
 
@@ -2567,7 +2567,7 @@ func newMapDataSlabFromDataV1(
 			return nil, err
 		}
 
-		data = data[slabIDSize:]
+		data = data[SlabIDLength:]
 	}
 
 	// Decode elements
@@ -2581,7 +2581,7 @@ func newMapDataSlabFromDataV1(
 	// Compute slab size.
 	slabSize := versionAndFlagSize + elements.Size()
 	if !h.isRoot() {
-		slabSize += slabIDSize
+		slabSize += SlabIDLength
 	}
 
 	header := MapSlabHeader{
@@ -2660,11 +2660,11 @@ func DecodeInlinedCompactMapStorable(
 	if err != nil {
 		return nil, NewDecodingError(err)
 	}
-	if len(b) != slabIndexSize {
+	if len(b) != SlabIndexLength {
 		return nil, NewDecodingError(
 			fmt.Errorf(
 				"failed to decode inlined compact map data: expect %d bytes for slab index, got %d bytes",
-				slabIndexSize,
+				SlabIndexLength,
 				len(b)))
 	}
 
@@ -2799,11 +2799,11 @@ func DecodeInlinedMapStorable(
 	if err != nil {
 		return nil, NewDecodingError(err)
 	}
-	if len(b) != slabIndexSize {
+	if len(b) != SlabIndexLength {
 		return nil, NewDecodingError(
 			fmt.Errorf(
 				"failed to decode inlined compact map data: expect %d bytes for slab index, got %d bytes",
-				slabIndexSize,
+				SlabIndexLength,
 				len(b)))
 	}
 
@@ -3680,7 +3680,7 @@ func newMapMetaDataSlabFromDataV0(
 ) (*MapMetaDataSlab, error) {
 	const (
 		mapMetaDataArrayHeadSizeV0 = 2
-		mapSlabHeaderSizeV0        = slabIDSize + 4 + digestSize
+		mapSlabHeaderSizeV0        = SlabIDLength + 4 + digestSize
 	)
 
 	var err error
@@ -3732,7 +3732,7 @@ func newMapMetaDataSlabFromDataV0(
 			return nil, err
 		}
 
-		firstKeyOffset := offset + slabIDSize
+		firstKeyOffset := offset + SlabIDLength
 		firstKey := binary.BigEndian.Uint64(data[firstKeyOffset:])
 
 		sizeOffset := firstKeyOffset + digestSize
@@ -3818,7 +3818,7 @@ func newMapMetaDataSlabFromDataV1(
 	// Decode shared address of headers
 	var address Address
 	copy(address[:], data[offset:])
-	offset += slabAddressSize
+	offset += SlabAddressLength
 
 	// Decode number of child headers
 	const arrayHeaderSize = 2
@@ -3841,7 +3841,7 @@ func newMapMetaDataSlabFromDataV1(
 		// Decode slab index
 		var index SlabIndex
 		copy(index[:], data[offset:])
-		offset += slabIndexSize
+		offset += SlabIndexLength
 
 		// Decode first key
 		firstKey := binary.BigEndian.Uint64(data[offset:])
@@ -3930,7 +3930,7 @@ func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 	copy(enc.Scratch[:], m.header.slabID.address[:])
 
 	// Encode child header count to scratch
-	const childHeaderCountOffset = slabAddressSize
+	const childHeaderCountOffset = SlabAddressLength
 	binary.BigEndian.PutUint16(
 		enc.Scratch[childHeaderCountOffset:],
 		uint16(len(m.childrenHeaders)),
@@ -3948,7 +3948,7 @@ func (m *MapMetaDataSlab) Encode(enc *Encoder) error {
 		// Encode slab index to scratch
 		copy(enc.Scratch[:], h.slabID.index[:])
 
-		const firstKeyOffset = slabIndexSize
+		const firstKeyOffset = SlabIndexLength
 		binary.BigEndian.PutUint64(enc.Scratch[firstKeyOffset:], uint64(h.firstKey))
 
 		const sizeOffset = firstKeyOffset + digestSize

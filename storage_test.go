@@ -38,12 +38,10 @@ func TestStorageIndexNext(t *testing.T) {
 
 func TestNewSlabID(t *testing.T) {
 	t.Run("temp address", func(t *testing.T) {
-		want := SlabID{address: Address{}, index: SlabIndex{1}}
-		require.Equal(t, want, NewSlabID(Address{}, SlabIndex{1}))
+		require.True(t, NewSlabID(Address{}, SlabIndex{1}).HasTempAddress())
 	})
 	t.Run("perm address", func(t *testing.T) {
-		want := SlabID{address: Address{1}, index: SlabIndex{1}}
-		require.Equal(t, want, NewSlabID(Address{1}, SlabIndex{1}))
+		require.False(t, NewSlabID(Address{1}, SlabIndex{1}).HasTempAddress())
 	})
 }
 
@@ -70,20 +68,20 @@ func TestNewSlabIDFromRawBytes(t *testing.T) {
 	t.Run("data length == slab id size", func(t *testing.T) {
 		id, err := NewSlabIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2})
 
-		want := SlabID{
-			address: Address{0, 0, 0, 0, 0, 0, 0, 1},
-			index:   SlabIndex{0, 0, 0, 0, 0, 0, 0, 2},
-		}
+		want := NewSlabID(
+			Address{0, 0, 0, 0, 0, 0, 0, 1},
+			SlabIndex{0, 0, 0, 0, 0, 0, 0, 2},
+		)
 		require.Equal(t, want, id)
 		require.NoError(t, err)
 	})
 	t.Run("data length > slab id size", func(t *testing.T) {
 		id, err := NewSlabIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 1, 2, 3, 4, 5, 6, 7, 8})
 
-		want := SlabID{
-			address: Address{0, 0, 0, 0, 0, 0, 0, 1},
-			index:   SlabIndex{0, 0, 0, 0, 0, 0, 0, 2},
-		}
+		want := NewSlabID(
+			Address{0, 0, 0, 0, 0, 0, 0, 1},
+			SlabIndex{0, 0, 0, 0, 0, 0, 0, 2},
+		)
 		require.Equal(t, want, id)
 		require.NoError(t, err)
 	})
@@ -206,7 +204,7 @@ func TestSlabIDValid(t *testing.T) {
 	})
 
 	t.Run("temp index", func(t *testing.T) {
-		id := SlabID{address: Address{1}, index: SlabIndexUndefined}
+		id := NewSlabID(Address{1}, SlabIndexUndefined)
 		err := id.Valid()
 
 		var fatalError *FatalError
@@ -218,12 +216,12 @@ func TestSlabIDValid(t *testing.T) {
 	})
 
 	t.Run("temp address", func(t *testing.T) {
-		id := SlabID{address: AddressUndefined, index: SlabIndex{1}}
+		id := NewSlabID(AddressUndefined, SlabIndex{1})
 		require.NoError(t, id.Valid())
 	})
 
 	t.Run("valid", func(t *testing.T) {
-		id := SlabID{address: Address{1}, index: SlabIndex{2}}
+		id := NewSlabID(Address{1}, SlabIndex{2})
 		require.NoError(t, id.Valid())
 	})
 }
@@ -310,7 +308,7 @@ func TestLedgerBaseStorageRetrieve(t *testing.T) {
 	ledger := newTestLedger()
 	baseStorage := NewLedgerBaseStorage(ledger)
 
-	id := SlabID{address: Address{1}, index: SlabIndex{1}}
+	id := NewSlabID(Address{1}, SlabIndex{1})
 	value := []byte{1, 2, 3}
 	bytesStored := 0
 	bytesRetrieved := 0
@@ -333,7 +331,7 @@ func TestLedgerBaseStorageRetrieve(t *testing.T) {
 	require.Equal(t, value, b)
 
 	// Retrieve non-existent value
-	id = SlabID{address: Address{1}, index: SlabIndex{2}}
+	id = NewSlabID(Address{1}, SlabIndex{2})
 	b, found, err = baseStorage.Retrieve(id)
 	require.NoError(t, err)
 	require.False(t, found)
@@ -347,7 +345,7 @@ func TestLedgerBaseStorageRemove(t *testing.T) {
 	ledger := newTestLedger()
 	baseStorage := NewLedgerBaseStorage(ledger)
 
-	id := SlabID{address: Address{1}, index: SlabIndex{1}}
+	id := NewSlabID(Address{1}, SlabIndex{1})
 	value := []byte{1, 2, 3}
 
 	// Remove value from empty storage
@@ -366,7 +364,7 @@ func TestLedgerBaseStorageRemove(t *testing.T) {
 	require.NoError(t, err)
 
 	// Remove non-existent value
-	err = baseStorage.Remove(SlabID{address: id.address, index: id.index.Next()})
+	err = baseStorage.Remove(NewSlabID(id.address, id.index.Next()))
 	require.NoError(t, err)
 
 	// Retrieve removed value
@@ -424,8 +422,8 @@ func TestBasicSlabStorageStore(t *testing.T) {
 	r := newRand(t)
 	address := Address{1}
 	slabs := map[SlabID]Slab{
-		{address, SlabIndex{1}}: generateRandomSlab(SlabID{address, SlabIndex{1}}, r),
-		{address, SlabIndex{2}}: generateRandomSlab(SlabID{address, SlabIndex{2}}, r),
+		NewSlabID(address, SlabIndex{1}): generateRandomSlab(NewSlabID(address, SlabIndex{1}), r),
+		NewSlabID(address, SlabIndex{2}): generateRandomSlab(NewSlabID(address, SlabIndex{2}), r),
 	}
 
 	// Store values
@@ -457,7 +455,7 @@ func TestBasicSlabStorageRetrieve(t *testing.T) {
 	storage := NewBasicSlabStorage(nil, nil, nil, nil)
 
 	r := newRand(t)
-	id := SlabID{Address{1}, SlabIndex{1}}
+	id := NewSlabID(Address{1}, SlabIndex{1})
 	slab := generateRandomSlab(id, r)
 
 	// Retrieve value from empty storage
@@ -476,7 +474,7 @@ func TestBasicSlabStorageRetrieve(t *testing.T) {
 	require.Equal(t, slab, retrievedSlab)
 
 	// Retrieve non-existent value
-	id = SlabID{address: Address{1}, index: SlabIndex{2}}
+	id = NewSlabID(Address{1}, SlabIndex{2})
 	retrievedSlab, found, err = storage.Retrieve(id)
 	require.NoError(t, err)
 	require.False(t, found)
@@ -487,7 +485,7 @@ func TestBasicSlabStorageRemove(t *testing.T) {
 	storage := NewBasicSlabStorage(nil, nil, nil, nil)
 
 	r := newRand(t)
-	id := SlabID{Address{1}, SlabIndex{1}}
+	id := NewSlabID(Address{1}, SlabIndex{1})
 	slab := generateRandomSlab(id, r)
 
 	// Remove value from empty storage
@@ -506,7 +504,7 @@ func TestBasicSlabStorageRemove(t *testing.T) {
 	require.NoError(t, err)
 
 	// Remove non-existent value
-	err = storage.Remove(SlabID{address: id.address, index: id.index.Next()})
+	err = storage.Remove(NewSlabID(id.address, id.index.Next()))
 	require.NoError(t, err)
 
 	// Retrieve removed value
@@ -576,9 +574,9 @@ func TestBasicSlabStorageSlabIterat(t *testing.T) {
 	address := Address{1}
 	index := SlabIndex{0, 0, 0, 0, 0, 0, 0, 0}
 
-	id1 := SlabID{address: address, index: index.Next()}
-	id2 := SlabID{address: address, index: index.Next()}
-	id3 := SlabID{address: address, index: index.Next()}
+	id1 := NewSlabID(address, index.Next())
+	id2 := NewSlabID(address, index.Next())
+	id3 := NewSlabID(address, index.Next())
 
 	want := map[SlabID]Slab{
 		id1: generateRandomSlab(id1, r),
@@ -929,10 +927,10 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 	t.Run("not-empty storage", func(t *testing.T) {
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		id4 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		id4 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
 		data := map[SlabID][]byte{
 			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:270 count:11} ]
@@ -1306,23 +1304,23 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 	t.Run("healthy", func(t *testing.T) {
 
 		// Create a health storage with arrays and maps
-		mapMetaDataRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		mapDataNonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		mapDataNonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		nestedArrayID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		mapMetaDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		mapDataNonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		mapDataNonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		nestedArrayID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
-		emptyMapDataRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 5}}
+		emptyMapDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 5})
 
-		mapDataRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 6}}
+		mapDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 6})
 
-		emptyArrayDataRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 7}}
+		emptyArrayDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 7})
 
-		arrayDataRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 8}}
+		arrayDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 8})
 
-		arrayMetaDataRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 9}}
-		arrayDataNonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 10}}
-		arrayDataNonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 11}}
-		nestedArrayID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 12}}
+		arrayMetaDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 9})
+		arrayDataNonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 10})
+		arrayDataNonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 11})
+		nestedArrayID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 12})
 
 		rootIDs := []SlabID{
 			mapMetaDataRootID,
@@ -1758,7 +1756,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 
 	t.Run("broken root map data slab", func(t *testing.T) {
 
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		brokenRefs := map[SlabID][]SlabID{
 			rootID: {rootID},
@@ -1912,7 +1910,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 
 	t.Run("broken nested storable in root map data slab", func(t *testing.T) {
 
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		brokenRefs := map[SlabID][]SlabID{
 			rootID: {rootID},
@@ -2065,9 +2063,9 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 	})
 
 	t.Run("broken non-root map data slab", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootDataID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootDataID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootDataID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootDataID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		brokenRefs := map[SlabID][]SlabID{
 			rootID: {nonRootDataID2},
@@ -2310,9 +2308,9 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 	})
 
 	t.Run("multiple data slabs with broken reference in the same map", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootDataID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootDataID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootDataID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootDataID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		brokenRefs := map[SlabID][]SlabID{
 			rootID: {nonRootDataID1, nonRootDataID2},
@@ -2554,10 +2552,10 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 	})
 
 	t.Run("broken reference in nested container", func(t *testing.T) {
-		parentContainerRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootDataID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootDataID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		nestedContainerRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		parentContainerRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootDataID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootDataID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		nestedContainerRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
 		brokenRefs := map[SlabID][]SlabID{
 			nestedContainerRootID: {nestedContainerRootID},
@@ -2843,11 +2841,11 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 	})
 
 	t.Run("selectively fix maps", func(t *testing.T) {
-		rootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootDataID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootDataID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}} // containing broken ref
+		rootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootDataID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootDataID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}) // containing broken ref
 
-		rootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}} // containing broken ref
+		rootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}) // containing broken ref
 
 		rootIDs := []SlabID{rootID1, rootID2}
 
@@ -3190,7 +3188,7 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		expectedRefIDs := []SlabID{}
 		expectedBrokenRefIDs := []SlabID{}
@@ -3220,7 +3218,7 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root data slab without refs", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		expectedRefIDs := []SlabID{}
 		expectedBrokenRefIDs := []SlabID{}
@@ -3252,8 +3250,8 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root data slab with ref to nested element", func(t *testing.T) {
-		parentRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		parentRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
 		expectedRefIDs := []SlabID{childRootID}
 		expectedBrokenRefIDs := []SlabID{}
@@ -3306,8 +3304,8 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root data slab with ref in nested storable", func(t *testing.T) {
-		parentRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		parentRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
 		expectedRefIDs := []SlabID{childRootID}
 		expectedBrokenRefIDs := []SlabID{}
@@ -3360,8 +3358,8 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root data slab with broken ref", func(t *testing.T) {
-		parentRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		parentRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
 		expectedRefIDs := []SlabID{}
 		expectedBrokenRefIDs := []SlabID{childRootID}
@@ -3393,9 +3391,9 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
 		expectedBrokenRefIDs := []SlabID{}
@@ -3479,9 +3477,9 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to first data slab", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		expectedRefIDs := []SlabID{nonRootID2}
 		expectedBrokenRefIDs := []SlabID{nonRootID1}
@@ -3543,11 +3541,11 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with ref", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
 		expectedRefIDs := []SlabID{nonRootID1, nonRootID2, childRootID}
 		expectedBrokenRefIDs := []SlabID{}
@@ -3652,11 +3650,11 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to nested element", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
 		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
 		expectedBrokenRefIDs := []SlabID{childRootID}
@@ -3740,9 +3738,9 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("3-level of nested containers", func(t *testing.T) {
-		parentRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		gchildRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		parentRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		gchildRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		expectedRefIDs := []SlabID{childRootID, gchildRootID}
 		expectedBrokenRefIDs := []SlabID{}
@@ -3820,7 +3818,7 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		expectedRefIDs := []SlabID{}
 		expectedBrokenRefIDs := []SlabID{}
@@ -3867,7 +3865,7 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root data slab without refs", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		expectedRefIDs := []SlabID{}
 		expectedBrokenRefIDs := []SlabID{}
@@ -3918,8 +3916,8 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root data slab with ref", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
 		expectedRefIDs := []SlabID{childRootID}
 		expectedBrokenRefIDs := []SlabID{}
@@ -3993,8 +3991,8 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root data slab with ref in nested storable", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
 		expectedRefIDs := []SlabID{childRootID}
 		expectedBrokenRefIDs := []SlabID{}
@@ -4068,8 +4066,8 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root data slab with broken ref", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
 		expectedRefIDs := []SlabID{}
 		expectedBrokenRefIDs := []SlabID{childRootID}
@@ -4122,9 +4120,9 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
 		expectedBrokenRefIDs := []SlabID{}
@@ -4266,9 +4264,9 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to first data slab", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		expectedRefIDs := []SlabID{nonRootID2}
 		expectedBrokenRefIDs := []SlabID{nonRootID1}
@@ -4361,11 +4359,11 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with ref", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
 		expectedRefIDs := []SlabID{nonRootID1, nonRootID2, childRootID}
 		expectedBrokenRefIDs := []SlabID{}
@@ -4542,11 +4540,11 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to nested element", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		nonRootID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		nonRootID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
 		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
 		expectedBrokenRefIDs := []SlabID{childRootID}
@@ -4687,9 +4685,9 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("3-level containers", func(t *testing.T) {
-		rootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		childRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		gchildRootID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		gchildRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		expectedRefIDs := []SlabID{childRootID, gchildRootID}
 		expectedBrokenRefIDs := []SlabID{}

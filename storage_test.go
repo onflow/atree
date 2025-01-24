@@ -292,9 +292,8 @@ func TestLedgerBaseStorageStore(t *testing.T) {
 		if owner == nil {
 			break
 		}
-		var id SlabID
-		copy(id.address[:], owner)
-		copy(id.index[:], key[1:])
+
+		id := NewSlabIDFromRawAddressAndIndex(owner, key[1:])
 
 		require.True(t, LedgerKeyIsSlabKey(string(key)))
 		require.Equal(t, values[id], value)
@@ -364,7 +363,7 @@ func TestLedgerBaseStorageRemove(t *testing.T) {
 	require.NoError(t, err)
 
 	// Remove non-existent value
-	err = baseStorage.Remove(NewSlabID(id.address, id.index.Next()))
+	err = baseStorage.Remove(NewSlabID(id.Address(), id.Index().Next()))
 	require.NoError(t, err)
 
 	// Retrieve removed value
@@ -381,9 +380,6 @@ func TestLedgerBaseStorageRemove(t *testing.T) {
 		if owner == nil {
 			break
 		}
-		var id SlabID
-		copy(id.address[:], owner)
-		copy(id.index[:], key[1:])
 
 		require.True(t, LedgerKeyIsSlabKey(string(key)))
 		require.Nil(t, value)
@@ -402,18 +398,18 @@ func TestLedgerBaseStorageGenerateSlabID(t *testing.T) {
 
 	id, err := baseStorage.GenerateSlabID(address1)
 	require.NoError(t, err)
-	require.Equal(t, address1, id.address)
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.index)
+	require.Equal(t, address1, id.Address())
+	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 
 	id, err = baseStorage.GenerateSlabID(address1)
 	require.NoError(t, err)
-	require.Equal(t, address1, id.address)
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.index)
+	require.Equal(t, address1, id.Address())
+	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
 
 	id, err = baseStorage.GenerateSlabID(address2)
 	require.NoError(t, err)
-	require.Equal(t, address2, id.address)
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.index)
+	require.Equal(t, address2, id.Address())
+	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 }
 
 func TestBasicSlabStorageStore(t *testing.T) {
@@ -504,7 +500,7 @@ func TestBasicSlabStorageRemove(t *testing.T) {
 	require.NoError(t, err)
 
 	// Remove non-existent value
-	err = storage.Remove(NewSlabID(id.address, id.index.Next()))
+	err = storage.Remove(NewSlabID(id.Address(), id.Index().Next()))
 	require.NoError(t, err)
 
 	// Retrieve removed value
@@ -524,18 +520,18 @@ func TestBasicSlabStorageGenerateSlabID(t *testing.T) {
 
 	id, err := storage.GenerateSlabID(address1)
 	require.NoError(t, err)
-	require.Equal(t, address1, id.address)
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.index)
+	require.Equal(t, address1, id.Address())
+	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 
 	id, err = storage.GenerateSlabID(address1)
 	require.NoError(t, err)
-	require.Equal(t, address1, id.address)
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.index)
+	require.Equal(t, address1, id.Address())
+	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
 
 	id, err = storage.GenerateSlabID(address2)
 	require.NoError(t, err)
-	require.Equal(t, address2, id.address)
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.index)
+	require.Equal(t, address2, id.Address())
+	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 }
 
 func TestBasicSlabStorageSlabIDs(t *testing.T) {
@@ -543,9 +539,9 @@ func TestBasicSlabStorageSlabIDs(t *testing.T) {
 	address := Address{1}
 	index := SlabIndex{0, 0, 0, 0, 0, 0, 0, 0}
 	wantIDs := map[SlabID]bool{
-		{address: address, index: index.Next()}: true,
-		{address: address, index: index.Next()}: true,
-		{address: address, index: index.Next()}: true,
+		NewSlabID(address, index.Next()): true,
+		NewSlabID(address, index.Next()): true,
+		NewSlabID(address, index.Next()): true,
 	}
 
 	storage := NewBasicSlabStorage(nil, nil, nil, nil)
@@ -1195,26 +1191,26 @@ func TestPersistentStorageGenerateSlabID(t *testing.T) {
 
 		id, err := storage.GenerateSlabID(address)
 		require.NoError(t, err)
-		require.Equal(t, address, id.address)
-		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.index)
+		require.Equal(t, address, id.Address())
+		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 
 		id, err = storage.GenerateSlabID(address)
 		require.NoError(t, err)
-		require.Equal(t, address, id.address)
-		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.index)
+		require.Equal(t, address, id.Address())
+		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
 	})
 	t.Run("perm address", func(t *testing.T) {
 		address := Address{1}
 
 		id, err := storage.GenerateSlabID(address)
 		require.NoError(t, err)
-		require.Equal(t, address, id.address)
-		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.index)
+		require.Equal(t, address, id.Address())
+		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 
 		id, err = storage.GenerateSlabID(address)
 		require.NoError(t, err)
-		require.Equal(t, address, id.address)
-		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.index)
+		require.Equal(t, address, id.Address())
+		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
 	})
 }
 

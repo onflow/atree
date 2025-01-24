@@ -6111,11 +6111,10 @@ func TestArrayID(t *testing.T) {
 	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	sid := array.SlabID()
-	id := array.ValueID()
+	slabID := array.SlabID()
+	valueID := array.ValueID()
 
-	require.Equal(t, sid.address[:], id[:SlabAddressLength])
-	require.Equal(t, sid.index[:], id[SlabAddressLength:])
+	testEqualValueIDAndSlabID(t, slabID, valueID)
 }
 
 func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {

@@ -16646,11 +16646,10 @@ func TestMapID(t *testing.T) {
 	m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	sid := m.SlabID()
-	id := m.ValueID()
+	slabID := m.SlabID()
+	valueID := m.ValueID()
 
-	require.Equal(t, sid.address[:], id[:SlabAddressLength])
-	require.Equal(t, sid.index[:], id[SlabAddressLength:])
+	testEqualValueIDAndSlabID(t, slabID, valueID)
 }
 
 func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {

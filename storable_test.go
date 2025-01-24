@@ -40,61 +40,57 @@ const (
 )
 
 func TestIsCBORTagNumberRangeAvailable(t *testing.T) {
+	minTagNum, maxTagNum := ReservedCBORTagNumberRange()
+
 	t.Run("error", func(t *testing.T) {
-		_, err := IsCBORTagNumberRangeAvailable(maxInternalCBORTagNumber, minInternalCBORTagNumber)
+		_, err := IsCBORTagNumberRangeAvailable(maxTagNum, minTagNum)
 		var userError *UserError
 		require.ErrorAs(t, err, &userError)
 	})
 
 	t.Run("identical", func(t *testing.T) {
-		available, err := IsCBORTagNumberRangeAvailable(minInternalCBORTagNumber, maxInternalCBORTagNumber)
+		available, err := IsCBORTagNumberRangeAvailable(minTagNum, maxTagNum)
 		require.NoError(t, err)
 		require.False(t, available)
 	})
 
 	t.Run("subrange", func(t *testing.T) {
-		available, err := IsCBORTagNumberRangeAvailable(minInternalCBORTagNumber, maxInternalCBORTagNumber-1)
+		available, err := IsCBORTagNumberRangeAvailable(minTagNum, maxTagNum-1)
 		require.NoError(t, err)
 		require.False(t, available)
 
-		available, err = IsCBORTagNumberRangeAvailable(minInternalCBORTagNumber+1, maxInternalCBORTagNumber)
+		available, err = IsCBORTagNumberRangeAvailable(minTagNum+1, maxTagNum)
 		require.NoError(t, err)
 		require.False(t, available)
 	})
 
 	t.Run("partial overlap", func(t *testing.T) {
-		available, err := IsCBORTagNumberRangeAvailable(minInternalCBORTagNumber-1, maxInternalCBORTagNumber-1)
+		available, err := IsCBORTagNumberRangeAvailable(minTagNum-1, maxTagNum-1)
 		require.NoError(t, err)
 		require.False(t, available)
 
-		available, err = IsCBORTagNumberRangeAvailable(minInternalCBORTagNumber+1, maxInternalCBORTagNumber+1)
+		available, err = IsCBORTagNumberRangeAvailable(minTagNum+1, maxTagNum+1)
 		require.NoError(t, err)
 		require.False(t, available)
 	})
 
 	t.Run("non-overlap", func(t *testing.T) {
-		available, err := IsCBORTagNumberRangeAvailable(minInternalCBORTagNumber-10, minInternalCBORTagNumber-1)
+		available, err := IsCBORTagNumberRangeAvailable(minTagNum-10, minTagNum-1)
 		require.NoError(t, err)
 		require.True(t, available)
 
-		available, err = IsCBORTagNumberRangeAvailable(minInternalCBORTagNumber-1, minInternalCBORTagNumber-1)
+		available, err = IsCBORTagNumberRangeAvailable(minTagNum-1, minTagNum-1)
 		require.NoError(t, err)
 		require.True(t, available)
 
-		available, err = IsCBORTagNumberRangeAvailable(maxInternalCBORTagNumber+1, maxInternalCBORTagNumber+10)
+		available, err = IsCBORTagNumberRangeAvailable(maxTagNum+1, maxTagNum+10)
 		require.NoError(t, err)
 		require.True(t, available)
 
-		available, err = IsCBORTagNumberRangeAvailable(maxInternalCBORTagNumber+10, maxInternalCBORTagNumber+10)
+		available, err = IsCBORTagNumberRangeAvailable(maxTagNum+10, maxTagNum+10)
 		require.NoError(t, err)
 		require.True(t, available)
 	})
-}
-
-func TestReservedCBORTagNumberRange(t *testing.T) {
-	minTagNum, maxTagNum := ReservedCBORTagNumberRange()
-	require.Equal(t, uint64(minInternalCBORTagNumber), minTagNum)
-	require.Equal(t, uint64(maxInternalCBORTagNumber), maxTagNum)
 }
 
 type HashableValue interface {

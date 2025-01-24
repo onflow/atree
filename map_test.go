@@ -408,7 +408,7 @@ func TestMapSetAndGet(t *testing.T) {
 		for len(keyValues) < mapSize {
 			slen := r.Intn(keyStringMaxSize)
 			k := NewStringValue(randStr(r, slen))
-			v := randomValue(r, int(maxInlineMapElementSize))
+			v := randomValue(r, int(MaxInlineMapElementSize()))
 			keyValues[k] = v
 		}
 
@@ -7190,8 +7190,8 @@ func testMapSetRemoveRandomValues(
 
 		case MapSetOp:
 
-			k := randomValue(r, int(maxInlineMapElementSize))
-			v := randomValue(r, int(maxInlineMapElementSize))
+			k := randomValue(r, int(MaxInlineMapElementSize()))
+			v := randomValue(r, int(MaxInlineMapElementSize()))
 
 			var digests []Digest
 			for i := 0; i < digestMaxLevels; i++ {
@@ -13900,8 +13900,8 @@ func TestMapFromBatchData(t *testing.T) {
 			require.Nil(t, storable)
 		}
 
-		k := NewStringValue(strings.Repeat("a", int(maxInlineMapElementSize-2)))
-		v := NewStringValue(strings.Repeat("b", int(maxInlineMapElementSize-2)))
+		k := NewStringValue(strings.Repeat("a", int(MaxInlineMapElementSize()-2)))
+		v := NewStringValue(strings.Repeat("b", int(MaxInlineMapElementSize()-2)))
 		storable, err := m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
 		require.Nil(t, storable)
@@ -13968,8 +13968,8 @@ func TestMapFromBatchData(t *testing.T) {
 		storable, err := m.Set(
 			compare,
 			hashInputProvider,
-			NewStringValue(strings.Repeat("b", int(maxInlineMapElementSize-2))),
-			NewStringValue(strings.Repeat("b", int(maxInlineMapElementSize-2))),
+			NewStringValue(strings.Repeat("b", int(MaxInlineMapElementSize()-2))),
+			NewStringValue(strings.Repeat("b", int(MaxInlineMapElementSize()-2))),
 		)
 		require.NoError(t, err)
 		require.Nil(t, storable)
@@ -14031,8 +14031,8 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 
 		for m.Count() < mapSize {
-			k := randomValue(r, int(maxInlineMapElementSize))
-			v := randomValue(r, int(maxInlineMapElementSize))
+			k := randomValue(r, int(MaxInlineMapElementSize()))
+			v := randomValue(r, int(MaxInlineMapElementSize()))
 
 			_, err = m.Set(compare, hashInputProvider, k, v)
 			require.NoError(t, err)
@@ -14565,7 +14565,7 @@ func TestMapSlabDump(t *testing.T) {
 		require.NoError(t, err)
 
 		k := NewStringValue(strings.Repeat("a", int(MaxInlineMapKeySize()-2)))
-		v := NewStringValue(strings.Repeat("b", int(maxInlineMapElementSize)))
+		v := NewStringValue(strings.Repeat("b", int(MaxInlineMapElementSize())))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(0)}})
 
 		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
@@ -16179,7 +16179,7 @@ func createMapWithLongStringKey(
 	expectedValues := make([][2]Value, size)
 	r := 'a'
 	for i := 0; i < size; i++ {
-		s := strings.Repeat(string(r), int(maxInlineMapElementSize))
+		s := strings.Repeat(string(r), int(MaxInlineMapElementSize()))
 
 		k := NewStringValue(s)
 		v := Uint64Value(i)
@@ -16379,8 +16379,8 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		defer SetThreshold(1024)
 
 		mapSize := 2
-		keyStringSize := 16                               // Key size is less than max map key size.
-		valueStringSize := maxInlineMapElementSize/2 + 10 // Value size is more than half of max map element size.
+		keyStringSize := 16                                 // Key size is less than max map key size.
+		valueStringSize := MaxInlineMapElementSize()/2 + 10 // Value size is more than half of max map element size.
 
 		r := newRand(t)
 
@@ -16417,8 +16417,8 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		defer SetThreshold(1024)
 
 		mapSize := 1
-		keyStringSize := MaxInlineMapKeySize() - 2       // Key size is exactly max map key size (2 bytes is string encoding overhead).
-		valueStringSize := maxInlineMapElementSize/2 + 2 // Value size is more than half of max map element size (add 2 bytes to make it more than half).
+		keyStringSize := MaxInlineMapKeySize() - 2         // Key size is exactly max map key size (2 bytes is string encoding overhead).
+		valueStringSize := MaxInlineMapElementSize()/2 + 2 // Value size is more than half of max map element size (add 2 bytes to make it more than half).
 
 		r := newRand(t)
 
@@ -16457,8 +16457,8 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		defer SetThreshold(1024)
 
 		mapSize := 1
-		keyStringSize := MaxInlineMapKeySize() + 10       // key size is more than max map key size
-		valueStringSize := maxInlineMapElementSize/2 + 10 // value size is more than half of max map element size
+		keyStringSize := MaxInlineMapKeySize() + 10         // key size is more than max map key size
+		valueStringSize := MaxInlineMapElementSize()/2 + 10 // value size is more than half of max map element size
 
 		r := newRand(t)
 
@@ -18533,7 +18533,7 @@ func createMapWithEmptyChildMap(
 
 		k := getKey()
 
-		ks, err := k.Storable(storage, address, maxInlineMapElementSize)
+		ks, err := k.Storable(storage, address, MaxInlineMapElementSize())
 		require.NoError(t, err)
 
 		// Insert child map to parent map
@@ -18587,7 +18587,7 @@ func createMapWithEmpty2LevelChildMap(
 
 		k := getKey()
 
-		ks, err := k.Storable(storage, address, maxInlineMapElementSize)
+		ks, err := k.Storable(storage, address, MaxInlineMapElementSize())
 		require.NoError(t, err)
 
 		// Insert grand child map to child map

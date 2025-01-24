@@ -201,12 +201,11 @@ func newTestPersistentStorageWithBaseStorage(t testing.TB, baseStorage BaseStora
 }
 
 func newTestPersistentStorageWithBaseStorageAndDeltas(t testing.TB, baseStorage BaseStorage, data map[SlabID][]byte) *PersistentSlabStorage {
-	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
 	for id, b := range data {
-		err := storage.baseStorage.Store(id, b)
+		err := baseStorage.Store(id, b)
 		require.NoError(t, err)
 	}
-	return storage
+	return newTestPersistentStorageWithBaseStorage(t, baseStorage)
 }
 
 func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
@@ -437,4 +436,12 @@ var _ Value = &mapValue{}
 
 func (v mapValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
 	panic("not reachable")
+}
+
+func GetDeltasCount(storage *PersistentSlabStorage) int {
+	return len(GetDeltas(storage))
+}
+
+func GetCacheCount(storage *PersistentSlabStorage) int {
+	return len(GetCache(storage))
 }

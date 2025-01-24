@@ -600,6 +600,26 @@ type PersistentSlabStorage struct {
 
 var _ SlabStorage = &PersistentSlabStorage{}
 
+func (s *PersistentSlabStorage) getBaseStorage() BaseStorage {
+	return s.baseStorage
+}
+
+func (s *PersistentSlabStorage) getCache() map[SlabID]Slab {
+	return s.cache
+}
+
+func (s *PersistentSlabStorage) getDeltas() map[SlabID]Slab {
+	return s.deltas
+}
+
+func (s *PersistentSlabStorage) getCBOREncMode() cbor.EncMode {
+	return s.cborEncMode
+}
+
+func (s *PersistentSlabStorage) getCBORDecMode() cbor.DecMode {
+	return s.cborDecMode
+}
+
 // HasUnsavedChanges returns true if there are any modified and unsaved slabs in storage with given address.
 func (s *PersistentSlabStorage) HasUnsavedChanges(address Address) bool {
 	for k := range s.deltas {

@@ -1035,7 +1035,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 				break
 			}
 
-			encodedSlab, err := EncodeSlab(slab, storage.cborEncMode)
+			encodedSlab, err := EncodeSlab(slab, GetCBOREncMode(storage))
 			require.NoError(t, err)
 
 			require.Equal(t, encodedSlab, data[id])
@@ -1734,7 +1734,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, len(skippedRootIDs))
 
 		// No data is modified because no fix happened
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken reference
 		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
@@ -1745,7 +1745,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, len(skippedRootIDs))
 
 		// No data is modified during fixing broken reference
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
 		rootIDSet, err = CheckStorageHealth(storage, -1)
@@ -1869,7 +1869,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// No data is modified because no fix happened
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken references
 		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
@@ -1883,7 +1883,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		require.Equal(t, 0, len(skippedRootIDs))
-		require.Equal(t, 1, len(storage.deltas))
+		require.Equal(t, 1, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
 		rootIDs, err := CheckStorageHealth(storage, -1)
@@ -1896,10 +1896,10 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		// Save data in storage
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := storage.baseStorage.(*InMemBaseStorage)
+		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 1, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2023,7 +2023,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// No data is modified because no fix happened
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken references
 		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
@@ -2037,7 +2037,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		require.Equal(t, 0, len(skippedRootIDs))
-		require.Equal(t, 1, len(storage.deltas))
+		require.Equal(t, 1, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
 		rootIDs, err := CheckStorageHealth(storage, -1)
@@ -2050,10 +2050,10 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		// Save data in storage
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := storage.baseStorage.(*InMemBaseStorage)
+		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 1, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2268,7 +2268,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// No data is modified because no fix happened
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken reference
 		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
@@ -2282,7 +2282,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		require.Equal(t, 0, len(skippedRootIDs))
-		require.Equal(t, 3, len(storage.deltas))
+		require.Equal(t, 3, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
 		rootIDs, err := CheckStorageHealth(storage, -1)
@@ -2295,10 +2295,10 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		// Save data in storage
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := storage.baseStorage.(*InMemBaseStorage)
+		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 1, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2512,7 +2512,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// No data is modified because no fix happened
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken reference
 		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
@@ -2526,7 +2526,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		require.Equal(t, 0, len(skippedRootIDs))
-		require.Equal(t, 3, len(storage.deltas))
+		require.Equal(t, 3, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
 		rootIDs, err := CheckStorageHealth(storage, -1)
@@ -2539,10 +2539,10 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		// Save data in storage
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := storage.baseStorage.(*InMemBaseStorage)
+		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 1, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2801,7 +2801,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// No data is modified because no fix happened
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken reference
 		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
@@ -2815,7 +2815,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		require.Equal(t, 0, len(skippedRootIDs))
-		require.Equal(t, 1, len(storage.deltas))
+		require.Equal(t, 1, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
 		rootIDs, err := CheckStorageHealth(storage, -1)
@@ -2828,10 +2828,10 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		// Save data in storage
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := storage.baseStorage.(*InMemBaseStorage)
+		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 4, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(nestedContainerRootID)
@@ -3124,7 +3124,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// No data is modified because no fix happened
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Only fix one map with broken reference
 		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(v Value) bool {
@@ -3137,12 +3137,12 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, brokenRefs[rootID1], fixedRootIDs[rootID1])
 		require.Equal(t, 1, len(skippedRootIDs))
 		require.Equal(t, brokenRefs[rootID2], skippedRootIDs[rootID2])
-		require.Equal(t, 3, len(storage.deltas))
+		require.Equal(t, 3, GetDeltasCount(storage))
 
 		// Save data in storage
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check health after only fixing one map with broken reference
 		_, err = CheckStorageHealth(storage, -1)
@@ -3156,7 +3156,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 1, len(fixedRootIDs))
 		require.Equal(t, brokenRefs[rootID2], fixedRootIDs[rootID2])
 		require.Equal(t, 0, len(skippedRootIDs))
-		require.Equal(t, 1, len(storage.deltas))
+		require.Equal(t, 1, GetDeltasCount(storage))
 
 		// Check health after fixing remaining maps with broken reference
 		returnedRootIDs, err := CheckStorageHealth(storage, -1)
@@ -3166,10 +3166,10 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		// Save data in storage
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := storage.baseStorage.(*InMemBaseStorage)
+		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 2, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(rootID1)
@@ -4996,12 +4996,12 @@ func testStorageBatchPreload(t *testing.T, numberOfAccounts int, numberOfSlabsPe
 	// Batch preload slabs from base storage
 	err = storage.BatchPreload(ids, runtime.NumCPU())
 	require.NoError(t, err)
-	require.Equal(t, len(encodedSlabs), len(storage.cache))
-	require.Equal(t, 0, len(storage.deltas))
+	require.Equal(t, len(encodedSlabs), GetCacheCount(storage))
+	require.Equal(t, 0, GetDeltasCount(storage))
 
 	// Compare encoded data
 	for id, data := range encodedSlabs {
-		cachedData, err := EncodeSlab(storage.cache[id], encMode)
+		cachedData, err := EncodeSlab(GetCache(storage)[id], encMode)
 		require.NoError(t, err)
 
 		require.Equal(t, cachedData, data)
@@ -5035,8 +5035,8 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 		err := storage.BatchPreload(ids, runtime.NumCPU())
 		require.NoError(t, err)
 
-		require.Equal(t, 0, len(storage.cache))
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, 0, GetCacheCount(storage))
+		require.Equal(t, 0, GetDeltasCount(storage))
 	})
 
 	t.Run("non-empty storage", func(t *testing.T) {
@@ -5068,12 +5068,12 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 		err := storage.BatchPreload(ids, runtime.NumCPU())
 		require.NoError(t, err)
 
-		require.Equal(t, len(encodedSlabs), len(storage.cache))
-		require.Equal(t, 0, len(storage.deltas))
+		require.Equal(t, len(encodedSlabs), GetCacheCount(storage))
+		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Compare encoded data
 		for id, data := range encodedSlabs {
-			cachedData, err := EncodeSlab(storage.cache[id], encMode)
+			cachedData, err := EncodeSlab(GetCache(storage)[id], encMode)
 			require.NoError(t, err)
 
 			require.Equal(t, cachedData, data)

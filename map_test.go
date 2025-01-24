@@ -192,8 +192,8 @@ func _testMap(
 	// Verify slab serializations
 	err = VerifyMapSerialization(
 		m,
-		storage.cborDecMode,
-		storage.cborEncMode,
+		GetCBORDecMode(storage),
+		GetCBOREncMode(storage),
 		storage.DecodeStorable,
 		storage.DecodeTypeInfo,
 		func(a, b Storable) bool {
@@ -218,9 +218,10 @@ func _testMap(
 
 	// Encode all non-nil slab
 	encodedSlabs := make(map[SlabID][]byte)
-	for id, slab := range storage.deltas {
+	deltas := GetDeltas(storage)
+	for id, slab := range deltas {
 		if slab != nil {
-			b, err := EncodeSlab(slab, storage.cborEncMode)
+			b, err := EncodeSlab(slab, GetCBOREncMode(storage))
 			require.NoError(t, err)
 			encodedSlabs[id] = b
 		}
@@ -228,7 +229,7 @@ func _testMap(
 
 	// Test decoded map from new storage to force slab decoding
 	decodedMap, err := NewMapWithRootID(
-		newTestPersistentStorageWithBaseStorageAndDeltas(t, storage.baseStorage, encodedSlabs),
+		newTestPersistentStorageWithBaseStorageAndDeltas(t, GetBaseStorage(storage), encodedSlabs),
 		m.SlabID(),
 		m.digesterBuilder)
 	require.NoError(t, err)
@@ -13378,7 +13379,7 @@ func TestMapEncodeDecodeRandomValues(t *testing.T) {
 	testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 
 	// Create a new storage with encoded data from base storage
-	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
+	storage2 := newTestPersistentStorageWithBaseStorage(t, GetBaseStorage(storage))
 
 	// Create new map from new storage
 	m2, err := NewMapWithRootID(storage2, m.SlabID(), m.digesterBuilder)
@@ -14753,7 +14754,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		require.NoError(t, err)
 
 		// parent map: 1 root data slab
-		require.Equal(t, 1, len(storage.deltas))
+		require.Equal(t, 1, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, nil)
@@ -14773,7 +14774,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		)
 
 		// parent map: 1 root data slab
-		require.Equal(t, 1, len(storage.deltas))
+		require.Equal(t, 1, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -14794,7 +14795,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// composite elements: 1 root data slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -14816,7 +14817,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// composite elements: 1 root data slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -14838,7 +14839,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab, 3 external collision group
 		// composite elements: 1 root data slab for each
-		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 1+3+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -14859,7 +14860,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// composite elements: 1 root data slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -14882,7 +14883,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// long string keys: 1 storable slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -14896,7 +14897,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Find storage id for StringValue s.
 			var keyID SlabID
-			for id, slab := range storage.deltas {
+			deltas := GetDeltas(storage)
+			for id, slab := range deltas {
 				if sslab, ok := slab.(*StorableSlab); ok {
 					if other, ok := sslab.storable.(StringValue); ok {
 						if s.str == other.str {
@@ -14933,7 +14935,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// composite elements: 1 root data slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -14964,7 +14966,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab, 3 external collision group
 		// composite elements: 1 root data slab for each
-		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 1+3+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -14995,7 +14997,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab, 3 external collision group
 		// composite elements: 1 root data slab for each
-		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 1+3+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15003,7 +15005,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		// Unload external collision group slab from front to back
 
 		var externalCollisionSlabIDs []SlabID
-		for id, slab := range storage.deltas {
+		deltas := GetDeltas(storage)
+		for id, slab := range deltas {
 			if dataSlab, ok := slab.(*MapDataSlab); ok {
 				if dataSlab.collisionGroup {
 					externalCollisionSlabIDs = append(externalCollisionSlabIDs, id)
@@ -15045,7 +15048,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// composite elements: 1 root data slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15068,7 +15071,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// long string keys: 1 storable slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15082,7 +15085,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Find storage id for StringValue s.
 			var keyID SlabID
-			for id, slab := range storage.deltas {
+			deltas := GetDeltas(storage)
+			for id, slab := range deltas {
 				if sslab, ok := slab.(*StorableSlab); ok {
 					if other, ok := sslab.storable.(StringValue); ok {
 						if s.str == other.str {
@@ -15119,7 +15123,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// composite elements: 1 root data slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15150,7 +15154,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab, 3 external collision group
 		// composite elements: 1 root data slab for each
-		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 1+3+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15181,14 +15185,15 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab, 3 external collision group
 		// composite elements: 1 root data slab for each
-		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 1+3+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
 
 		// Unload external slabs from back to front
 		var externalCollisionSlabIDs []SlabID
-		for id, slab := range storage.deltas {
+		deltas := GetDeltas(storage)
+		for id, slab := range deltas {
 			if dataSlab, ok := slab.(*MapDataSlab); ok {
 				if dataSlab.collisionGroup {
 					externalCollisionSlabIDs = append(externalCollisionSlabIDs, id)
@@ -15230,7 +15235,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15255,7 +15260,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15270,7 +15275,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// Find storage id for StringValue s.
 		var keyID SlabID
-		for id, slab := range storage.deltas {
+		deltas := GetDeltas(storage)
+		for id, slab := range deltas {
 			if sslab, ok := slab.(*StorableSlab); ok {
 				if other, ok := sslab.storable.(StringValue); ok {
 					if s.str == other.str {
@@ -15308,7 +15314,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15343,7 +15349,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab, 3 external collision group
 		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 1+3+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15381,14 +15387,15 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab, 3 external collision group
 		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+3+mapSize, len(storage.deltas))
+		require.Equal(t, 1+3+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
 
 		// Unload external slabs in the middle.
 		var externalCollisionSlabIDs []SlabID
-		for id, slab := range storage.deltas {
+		deltas := GetDeltas(storage)
+		for id, slab := range deltas {
 			if dataSlab, ok := slab.(*MapDataSlab); ok {
 				if dataSlab.collisionGroup {
 					externalCollisionSlabIDs = append(externalCollisionSlabIDs, id)
@@ -15431,7 +15438,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map: 1 root data slab
 		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+mapSize, len(storage.deltas))
+		require.Equal(t, 1+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15476,7 +15483,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// parent map: 1 root data slab
 			// composite element: 1 root data slab
-			require.Equal(t, 2, len(storage.deltas))
+			require.Equal(t, 2, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
 			testMapLoadedElements(t, m, values)
@@ -15506,7 +15513,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		)
 
 		// parent map (2 levels): 1 root metadata slab, 3 data slabs
-		require.Equal(t, 4, len(storage.deltas))
+		require.Equal(t, 4, GetDeltasCount(storage))
 		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15527,7 +15534,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map (2 levels): 1 root metadata slab, 3 data slabs
 		// composite values: 1 root data slab for each
-		require.Equal(t, 4+mapSize, len(storage.deltas))
+		require.Equal(t, 4+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15548,7 +15555,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map (2 levels): 1 root metadata slab, 3 data slabs
 		// composite values : 1 root data slab for each
-		require.Equal(t, 4+mapSize, len(storage.deltas))
+		require.Equal(t, 4+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15578,7 +15585,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map (2 levels): 1 root metadata slab, 3 data slabs
 		// composite values: 1 root data slab for each
-		require.Equal(t, 4+mapSize, len(storage.deltas))
+		require.Equal(t, 4+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15608,7 +15615,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map (2 levels): 1 root metadata slab, 3 data slabs
 		// composite values: 1 root data slab for each
-		require.Equal(t, 4+mapSize, len(storage.deltas))
+		require.Equal(t, 4+mapSize, GetDeltasCount(storage))
 		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15647,7 +15654,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// parent map (2 levels): 1 root metadata slab, 3 data slabs
 			// composite values: 1 root data slab for each
-			require.Equal(t, 5, len(storage.deltas))
+			require.Equal(t, 5, GetDeltasCount(storage))
 			require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
 			testMapLoadedElements(t, m, values)
@@ -15677,7 +15684,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		)
 
 		// parent map (2 levels): 1 root metadata slab, 3 data slabs
-		require.Equal(t, 4, len(storage.deltas))
+		require.Equal(t, 4, GetDeltasCount(storage))
 		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15692,7 +15699,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Get data slab element count before unload it from storage.
 			// Element count isn't in the header.
-			mapDataSlab, ok := storage.deltas[childHeader.slabID].(*MapDataSlab)
+			mapDataSlab, ok := GetDeltas(storage)[childHeader.slabID].(*MapDataSlab)
 			require.True(t, ok)
 
 			count := mapDataSlab.elements.Count()
@@ -15721,7 +15728,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		)
 
 		// parent map (2 levels): 1 root metadata slab, 3 data slabs
-		require.Equal(t, 4, len(storage.deltas))
+		require.Equal(t, 4, GetDeltasCount(storage))
 		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15736,7 +15743,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Get data slab element count before unload it from storage
 			// Element count isn't in the header.
-			mapDataSlab, ok := storage.deltas[childHeader.slabID].(*MapDataSlab)
+			mapDataSlab, ok := GetDeltas(storage)[childHeader.slabID].(*MapDataSlab)
 			require.True(t, ok)
 
 			count := mapDataSlab.elements.Count()
@@ -15765,7 +15772,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		)
 
 		// parent map (2 levels): 1 root metadata slab, 3 data slabs
-		require.Equal(t, 4, len(storage.deltas))
+		require.Equal(t, 4, GetDeltasCount(storage))
 		require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
 		testMapLoadedElements(t, m, values)
@@ -15779,13 +15786,13 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		childHeader := rootMetaDataSlab.childrenHeaders[index]
 
 		// Get element count from previous data slab
-		mapDataSlab, ok := storage.deltas[rootMetaDataSlab.childrenHeaders[0].slabID].(*MapDataSlab)
+		mapDataSlab, ok := GetDeltas(storage)[rootMetaDataSlab.childrenHeaders[0].slabID].(*MapDataSlab)
 		require.True(t, ok)
 
 		countAtIndex0 := mapDataSlab.elements.Count()
 
 		// Get element count from slab to be unloaded
-		mapDataSlab, ok = storage.deltas[rootMetaDataSlab.childrenHeaders[index].slabID].(*MapDataSlab)
+		mapDataSlab, ok = GetDeltas(storage)[rootMetaDataSlab.childrenHeaders[index].slabID].(*MapDataSlab)
 		require.True(t, ok)
 
 		countAtIndex1 := mapDataSlab.elements.Count()
@@ -15889,7 +15896,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
 		// nested composite elements: 1 root data slab for each
-		require.True(t, len(storage.deltas) > 1+mapSize)
+		require.True(t, GetDeltasCount(storage) > 1+mapSize)
 		require.True(t, getMapMetaDataSlabCount(storage) > 1)
 
 		testMapLoadedElements(t, m, values)
@@ -15930,7 +15937,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
 		// composite values: 1 root data slab for each
-		require.True(t, len(storage.deltas) > 1+mapSize)
+		require.True(t, GetDeltasCount(storage) > 1+mapSize)
 		require.True(t, getMapMetaDataSlabCount(storage) > 1)
 
 		testMapLoadedElements(t, m, values)
@@ -15947,7 +15954,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 		var dataSlabInfos []*slabInfo
 		for _, mheader := range rootMetaDataSlab.childrenHeaders {
 
-			nonRootMetaDataSlab, ok := storage.deltas[mheader.slabID].(*MapMetaDataSlab)
+			nonRootMetaDataSlab, ok := GetDeltas(storage)[mheader.slabID].(*MapMetaDataSlab)
 			require.True(t, ok)
 
 			for i := 0; i < len(nonRootMetaDataSlab.childrenHeaders); i++ {
@@ -16009,7 +16016,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 		// parent map (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
 		// composite values: 1 root data slab for each
-		require.True(t, len(storage.deltas) > 1+mapSize)
+		require.True(t, GetDeltasCount(storage) > 1+mapSize)
 		require.True(t, getMapMetaDataSlabCount(storage) > 1)
 
 		testMapLoadedElements(t, m, values)
@@ -16043,7 +16050,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				startIndex: int(mheader.firstKey),
 			}
 
-			nonRootMetadataSlab, ok := storage.deltas[mheader.slabID].(*MapMetaDataSlab)
+			nonRootMetadataSlab, ok := GetDeltas(storage)[mheader.slabID].(*MapMetaDataSlab)
 			require.True(t, ok)
 
 			children := make([]*slabInfo, len(nonRootMetadataSlab.childrenHeaders))
@@ -16354,7 +16361,8 @@ func testMapLoadedElements(t *testing.T, m *OrderedMap, expectedValues [][2]Valu
 
 func getMapMetaDataSlabCount(storage *PersistentSlabStorage) int {
 	var counter int
-	for _, slab := range storage.deltas {
+	deltas := GetDeltas(storage)
+	for _, slab := range deltas {
 		if _, ok := slab.(*MapMetaDataSlab); ok {
 			counter++
 		}
@@ -16397,7 +16405,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		}
 
 		// Both key and value are stored in map slab.
-		require.Equal(t, 1, len(storage.deltas))
+		require.Equal(t, 1, GetDeltasCount(storage))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -16435,7 +16443,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		}
 
 		// Key is stored in map slab, while value is stored separately in storable slab.
-		require.Equal(t, 2, len(storage.deltas))
+		require.Equal(t, 2, GetDeltasCount(storage))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -16475,7 +16483,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		}
 
 		// Key is stored in separate storable slabs, while value is stored in map slab.
-		require.Equal(t, 2, len(storage.deltas))
+		require.Equal(t, 2, GetDeltasCount(storage))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -19322,7 +19330,7 @@ func TestMapSetType(t *testing.T) {
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		testExistingMapSetType(t, m.SlabID(), storage.baseStorage, newTypeInfo, m.Count(), seed)
+		testExistingMapSetType(t, m.SlabID(), GetBaseStorage(storage), newTypeInfo, m.Count(), seed)
 	})
 
 	t.Run("data slab root", func(t *testing.T) {
@@ -19355,7 +19363,7 @@ func TestMapSetType(t *testing.T) {
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		testExistingMapSetType(t, m.SlabID(), storage.baseStorage, newTypeInfo, m.Count(), seed)
+		testExistingMapSetType(t, m.SlabID(), GetBaseStorage(storage), newTypeInfo, m.Count(), seed)
 	})
 
 	t.Run("metadata slab root", func(t *testing.T) {
@@ -19388,7 +19396,7 @@ func TestMapSetType(t *testing.T) {
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		testExistingMapSetType(t, m.SlabID(), storage.baseStorage, newTypeInfo, m.Count(), seed)
+		testExistingMapSetType(t, m.SlabID(), GetBaseStorage(storage), newTypeInfo, m.Count(), seed)
 	})
 
 	t.Run("inlined in parent container root data slab", func(t *testing.T) {
@@ -19430,7 +19438,7 @@ func TestMapSetType(t *testing.T) {
 			t,
 			parentMap.SlabID(),
 			Uint64Value(0),
-			storage.baseStorage,
+			GetBaseStorage(storage),
 			newTypeInfo,
 			childMap.Count(),
 			childMapSeed,
@@ -19484,7 +19492,7 @@ func TestMapSetType(t *testing.T) {
 			t,
 			parentMap.SlabID(),
 			Uint64Value(mapSize-1),
-			storage.baseStorage,
+			GetBaseStorage(storage),
 			newTypeInfo,
 			childMap.Count(),
 			childMapSeed,
@@ -19524,7 +19532,7 @@ func testExistingMapSetType(
 	require.NoError(t, err)
 
 	// Create storage from existing data
-	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
+	storage2 := newTestPersistentStorageWithBaseStorage(t, GetBaseStorage(storage))
 
 	// Load existing map again from storage
 	m2, err := NewMapWithRootID(storage2, id, NewDefaultDigesterBuilder())
@@ -19574,7 +19582,7 @@ func testExistingInlinedMapSetType(
 	require.NoError(t, err)
 
 	// Create storage from existing data
-	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
+	storage2 := newTestPersistentStorageWithBaseStorage(t, GetBaseStorage(storage))
 
 	// Load existing map again from storage
 	parentMap2, err := NewMapWithRootID(storage2, parentID, NewDefaultDigesterBuilder())

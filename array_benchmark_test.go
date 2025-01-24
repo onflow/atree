@@ -168,8 +168,10 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	require.NoError(b, storage.Commit())
 	totalLookupTime = time.Since(start)
 
+	baseStorage := GetBaseStorage(storage)
+
 	// random lookup
-	storage.baseStorage.ResetReporter()
+	baseStorage.ResetReporter()
 	storage.DropCache()
 	array, err = NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
@@ -177,13 +179,14 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	ind := r.Intn(int(array.Count()))
 	_, err = array.Get(uint64(ind))
 	require.NoError(b, err)
-	storageOverheadRatio := float64(storage.baseStorage.Size()) / float64(totalRawDataSize)
-	b.ReportMetric(float64(storage.baseStorage.SegmentsTouched()), "segments_touched")
-	b.ReportMetric(float64(storage.baseStorage.SegmentCounts()), "segments_total")
+
+	storageOverheadRatio := float64(baseStorage.Size()) / float64(totalRawDataSize)
+	b.ReportMetric(float64(baseStorage.SegmentsTouched()), "segments_touched")
+	b.ReportMetric(float64(baseStorage.SegmentCounts()), "segments_total")
 	b.ReportMetric(float64(totalRawDataSize), "storage_raw_data_size")
-	b.ReportMetric(float64(storage.baseStorage.Size()), "storage_stored_data_size")
+	b.ReportMetric(float64(baseStorage.Size()), "storage_stored_data_size")
 	b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
-	b.ReportMetric(float64(storage.baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
+	b.ReportMetric(float64(baseStorage.BytesRetrieved()), "storage_bytes_loaded_for_lookup")
 	// b.ReportMetric(float64(array.Count()), "number_of_elements")
 	b.ReportMetric(float64(int(totalAppendTime)), "append_100_time_(ns)")
 	b.ReportMetric(float64(int(totalRemoveTime)), "remove_100_time_(ns)")
@@ -247,10 +250,12 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 	}
 	require.NoError(b, storage.Commit())
 
-	storageOverheadRatio := float64(storage.baseStorage.Size()) / float64(totalRawDataSize)
-	b.ReportMetric(float64(storage.baseStorage.SegmentsTouched()), "segments_touched")
-	b.ReportMetric(float64(storage.baseStorage.SegmentCounts()), "segments_total")
+	baseStorage := GetBaseStorage(storage)
+
+	storageOverheadRatio := float64(baseStorage.Size()) / float64(totalRawDataSize)
+	b.ReportMetric(float64(baseStorage.SegmentsTouched()), "segments_touched")
+	b.ReportMetric(float64(baseStorage.SegmentCounts()), "segments_total")
 	b.ReportMetric(float64(totalRawDataSize), "storage_raw_data_size")
-	b.ReportMetric(float64(storage.baseStorage.Size()), "storage_stored_data_size")
+	b.ReportMetric(float64(baseStorage.Size()), "storage_stored_data_size")
 	b.ReportMetric(storageOverheadRatio, "storage_overhead_ratio")
 }

@@ -119,8 +119,8 @@ func _testArray(
 	// Verify slab serializations
 	err = VerifyArraySerialization(
 		array,
-		storage.cborDecMode,
-		storage.cborEncMode,
+		GetCBORDecMode(storage),
+		GetCBOREncMode(storage),
 		storage.DecodeStorable,
 		storage.DecodeTypeInfo,
 		func(a, b Storable) bool {
@@ -144,10 +144,11 @@ func _testArray(
 	require.Equal(t, array.SlabID(), rootIDs[0])
 
 	// Encode all non-nil slab
+	deltas := GetDeltas(storage)
 	encodedSlabs := make(map[SlabID][]byte)
-	for id, slab := range storage.deltas {
+	for id, slab := range deltas {
 		if slab != nil {
-			b, err := EncodeSlab(slab, storage.cborEncMode)
+			b, err := EncodeSlab(slab, GetCBOREncMode(storage))
 			require.NoError(t, err)
 			encodedSlabs[id] = b
 		}
@@ -155,7 +156,7 @@ func _testArray(
 
 	// Test decoded array from new storage to force slab decoding
 	decodedArray, err := NewArrayWithRootID(
-		newTestPersistentStorageWithBaseStorageAndDeltas(t, storage.baseStorage, encodedSlabs),
+		newTestPersistentStorageWithBaseStorageAndDeltas(t, GetBaseStorage(storage), encodedSlabs),
 		array.SlabID())
 	require.NoError(t, err)
 
@@ -4351,7 +4352,7 @@ func TestArrayEncodeDecodeRandomValues(t *testing.T) {
 	testArray(t, storage, typeInfo, address, array, values, false)
 
 	// Decode data to new storage
-	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
+	storage2 := newTestPersistentStorageWithBaseStorage(t, GetBaseStorage(storage))
 
 	// Test new array from storage2
 	array2, err := NewArrayWithRootID(storage2, array.SlabID())
@@ -5185,7 +5186,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		require.NoError(t, err)
 
 		// parent array: 1 root data slab
-		require.Equal(t, 1, len(storage.deltas))
+		require.Equal(t, 1, GetDeltasCount(storage))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, nil)
@@ -5198,7 +5199,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
 
 		// parent array: 1 root data slab
-		require.Equal(t, 1, len(storage.deltas))
+		require.Equal(t, 1, GetDeltasCount(storage))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5212,7 +5213,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array: 1 root data slab
 		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+arraySize, len(storage.deltas))
+		require.Equal(t, 1+arraySize, GetDeltasCount(storage))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5226,7 +5227,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array: 1 root data slab
 		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+arraySize, len(storage.deltas))
+		require.Equal(t, 1+arraySize, GetDeltasCount(storage))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5251,7 +5252,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array: 1 root data slab
 		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+arraySize, len(storage.deltas))
+		require.Equal(t, 1+arraySize, GetDeltasCount(storage))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5276,7 +5277,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array: 1 root data slab
 		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+arraySize, len(storage.deltas))
+		require.Equal(t, 1+arraySize, GetDeltasCount(storage))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5303,7 +5304,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array: 1 root data slab
 		// nested composite elements: 1 root data slab for each
-		require.Equal(t, 1+arraySize, len(storage.deltas))
+		require.Equal(t, 1+arraySize, GetDeltasCount(storage))
 		require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5339,7 +5340,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array: 1 root data slab
 			// nested composite element: 1 root data slab
-			require.Equal(t, 2, len(storage.deltas))
+			require.Equal(t, 2, GetDeltasCount(storage))
 			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, values)
@@ -5362,7 +5363,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
 
 		// parent array: 1 root metadata slab, 2 data slabs
-		require.Equal(t, 3, len(storage.deltas))
+		require.Equal(t, 3, GetDeltasCount(storage))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5376,7 +5377,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array: 1 root metadata slab, 2 data slabs
 		// nested composite value element: 1 root data slab for each
-		require.Equal(t, 3+arraySize, len(storage.deltas))
+		require.Equal(t, 3+arraySize, GetDeltasCount(storage))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5390,7 +5391,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array: 1 root metadata slab, 2 data slabs
 		// nested composite value element: 1 root data slab for each
-		require.Equal(t, 3+arraySize, len(storage.deltas))
+		require.Equal(t, 3+arraySize, GetDeltasCount(storage))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5415,7 +5416,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array: 1 root metadata slab, 2 data slabs
 		// nested composite value element: 1 root data slab for each
-		require.Equal(t, 3+arraySize, len(storage.deltas))
+		require.Equal(t, 3+arraySize, GetDeltasCount(storage))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5440,7 +5441,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array: 1 root metadata slab, 2 data slabs
 		// nested composite value element: 1 root data slab for each
-		require.Equal(t, 3+arraySize, len(storage.deltas))
+		require.Equal(t, 3+arraySize, GetDeltasCount(storage))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5471,7 +5472,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array: 1 root metadata slab, 2 data slabs
 			// nested composite value element: 1 root data slab for each
-			require.Equal(t, 3+1, len(storage.deltas))
+			require.Equal(t, 3+1, GetDeltasCount(storage))
 			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, values)
@@ -5494,7 +5495,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
 
 		// parent array (2 levels): 1 root metadata slab, 3 data slabs
-		require.Equal(t, 4, len(storage.deltas))
+		require.Equal(t, 4, GetDeltasCount(storage))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5523,7 +5524,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
 
 		// parent array (2 levels): 1 root metadata slab, 3 data slabs
-		require.Equal(t, 4, len(storage.deltas))
+		require.Equal(t, 4, GetDeltasCount(storage))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5552,7 +5553,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		array, values := createArrayWithSimpleValues(t, storage, address, typeInfo, arraySize)
 
 		// parent array (2 levels): 1 root metadata slab, 3 data slabs
-		require.Equal(t, 4, len(storage.deltas))
+		require.Equal(t, 4, GetDeltasCount(storage))
 		require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 		testArrayLoadedElements(t, array, values)
@@ -5635,7 +5636,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
 		// nested composite elements: 1 root data slab for each
-		require.True(t, len(storage.deltas) > 1+arraySize)
+		require.True(t, GetDeltasCount(storage) > 1+arraySize)
 		require.True(t, getArrayMetaDataSlabCount(storage) > 1)
 
 		testArrayLoadedElements(t, array, values)
@@ -5671,7 +5672,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
 		// nested composite elements: 1 root data slab for each
-		require.True(t, len(storage.deltas) > 1+arraySize)
+		require.True(t, GetDeltasCount(storage) > 1+arraySize)
 		require.True(t, getArrayMetaDataSlabCount(storage) > 1)
 
 		testArrayLoadedElements(t, array, values)
@@ -5688,7 +5689,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 		count := 0
 		var dataSlabInfos []*slabInfo
 		for _, mheader := range rootMetaDataSlab.childrenHeaders {
-			nonrootMetaDataSlab, ok := storage.deltas[mheader.slabID].(*ArrayMetaDataSlab)
+			nonrootMetaDataSlab, ok := GetDeltas(storage)[mheader.slabID].(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
 			for _, h := range nonrootMetaDataSlab.childrenHeaders {
@@ -5736,7 +5737,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 		// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
 		// nested composite elements: 1 root data slab for each
-		require.True(t, len(storage.deltas) > 1+arraySize)
+		require.True(t, GetDeltasCount(storage) > 1+arraySize)
 		require.True(t, getArrayMetaDataSlabCount(storage) > 1)
 
 		testArrayLoadedElements(t, array, values)
@@ -5762,7 +5763,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			}
 			metadataSlabCount += int(mheader.count)
 
-			nonrootMetadataSlab, ok := storage.deltas[mheader.slabID].(*ArrayMetaDataSlab)
+			nonrootMetadataSlab, ok := GetDeltas(storage)[mheader.slabID].(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
 			children := make([]*slabInfo, len(nonrootMetadataSlab.childrenHeaders))
@@ -6006,7 +6007,8 @@ func testArrayLoadedElements(t *testing.T, array *Array, expectedValues []Value)
 
 func getArrayMetaDataSlabCount(storage *PersistentSlabStorage) int {
 	var counter int
-	for _, slab := range storage.deltas {
+	deltas := GetDeltas(storage)
+	for _, slab := range deltas {
 		if _, ok := slab.(*ArrayMetaDataSlab); ok {
 			counter++
 		}
@@ -8034,7 +8036,8 @@ func createArrayWithEmpty2LevelChildArray(
 
 func getStoredDeltas(storage *PersistentSlabStorage) int {
 	count := 0
-	for _, slab := range storage.deltas {
+	deltas := GetDeltas(storage)
+	for _, slab := range deltas {
 		if slab != nil {
 			count++
 		}
@@ -8707,7 +8710,7 @@ func TestArraySetType(t *testing.T) {
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		testExistingArraySetType(t, array.SlabID(), storage.baseStorage, newTypeInfo, array.Count())
+		testExistingArraySetType(t, array.SlabID(), GetBaseStorage(storage), newTypeInfo, array.Count())
 	})
 
 	t.Run("data slab root", func(t *testing.T) {
@@ -8735,7 +8738,7 @@ func TestArraySetType(t *testing.T) {
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		testExistingArraySetType(t, array.SlabID(), storage.baseStorage, newTypeInfo, array.Count())
+		testExistingArraySetType(t, array.SlabID(), GetBaseStorage(storage), newTypeInfo, array.Count())
 	})
 
 	t.Run("metadata slab root", func(t *testing.T) {
@@ -8763,7 +8766,7 @@ func TestArraySetType(t *testing.T) {
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		testExistingArraySetType(t, array.SlabID(), storage.baseStorage, newTypeInfo, array.Count())
+		testExistingArraySetType(t, array.SlabID(), GetBaseStorage(storage), newTypeInfo, array.Count())
 	})
 
 	t.Run("inlined in parent container root data slab", func(t *testing.T) {
@@ -8796,7 +8799,7 @@ func TestArraySetType(t *testing.T) {
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		testExistingInlinedArraySetType(t, parentArray.SlabID(), 0, storage.baseStorage, newTypeInfo, childArray.Count())
+		testExistingInlinedArraySetType(t, parentArray.SlabID(), 0, GetBaseStorage(storage), newTypeInfo, childArray.Count())
 	})
 
 	t.Run("inlined in parent container non-root data slab", func(t *testing.T) {
@@ -8836,7 +8839,7 @@ func TestArraySetType(t *testing.T) {
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		testExistingInlinedArraySetType(t, parentArray.SlabID(), arraySize-1, storage.baseStorage, newTypeInfo, childArray.Count())
+		testExistingInlinedArraySetType(t, parentArray.SlabID(), arraySize-1, GetBaseStorage(storage), newTypeInfo, childArray.Count())
 	})
 }
 
@@ -8869,7 +8872,7 @@ func testExistingArraySetType(
 	require.NoError(t, err)
 
 	// Create storage from existing data
-	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
+	storage2 := newTestPersistentStorageWithBaseStorage(t, GetBaseStorage(storage))
 
 	// Load existing array again from storage
 	array2, err := NewArrayWithRootID(storage2, id)
@@ -8915,7 +8918,7 @@ func testExistingInlinedArraySetType(
 	require.NoError(t, err)
 
 	// Create storage from existing data
-	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
+	storage2 := newTestPersistentStorageWithBaseStorage(t, GetBaseStorage(storage))
 
 	// Load existing array again from storage
 	parentArray2, err := NewArrayWithRootID(storage2, parentID)

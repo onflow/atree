@@ -2456,7 +2456,7 @@ func TestArraySetRandomValues(t *testing.T) {
 
 	for i := uint64(0); i < arraySize; i++ {
 		oldValue := values[i]
-		newValue := randomValue(r, int(maxInlineArrayElementSize))
+		newValue := randomValue(r, int(MaxInlineArrayElementSize()))
 		values[i] = newValue
 
 		existingStorable, err := array.Set(i, newValue)
@@ -2490,7 +2490,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			v := randomValue(r, int(maxInlineArrayElementSize))
+			v := randomValue(r, int(MaxInlineArrayElementSize()))
 			values[arraySize-i-1] = v
 
 			err := array.Insert(0, v)
@@ -2515,7 +2515,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			v := randomValue(r, int(maxInlineArrayElementSize))
+			v := randomValue(r, int(MaxInlineArrayElementSize()))
 			values[i] = v
 
 			err := array.Insert(i, v)
@@ -2541,7 +2541,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
 			k := r.Intn(int(i) + 1)
-			v := randomValue(r, int(maxInlineArrayElementSize))
+			v := randomValue(r, int(MaxInlineArrayElementSize()))
 
 			copy(values[k+1:], values[k:])
 			values[k] = v
@@ -2573,7 +2573,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 	values := make([]Value, arraySize)
 	// Insert n random values into array
 	for i := uint64(0); i < arraySize; i++ {
-		v := randomValue(r, int(maxInlineArrayElementSize))
+		v := randomValue(r, int(MaxInlineArrayElementSize()))
 		values[i] = v
 
 		err := array.Insert(i, v)
@@ -2640,7 +2640,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 		switch nextOp {
 
 		case ArrayAppendOp:
-			v := randomValue(r, int(maxInlineArrayElementSize))
+			v := randomValue(r, int(MaxInlineArrayElementSize()))
 			values = append(values, v)
 
 			err := array.Append(v)
@@ -2648,7 +2648,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 
 		case ArraySetOp:
 			k := r.Intn(int(array.Count()))
-			v := randomValue(r, int(maxInlineArrayElementSize))
+			v := randomValue(r, int(MaxInlineArrayElementSize()))
 
 			oldV := values[k]
 
@@ -2668,7 +2668,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 
 		case ArrayInsertOp:
 			k := r.Intn(int(array.Count() + 1))
-			v := randomValue(r, int(maxInlineArrayElementSize))
+			v := randomValue(r, int(MaxInlineArrayElementSize()))
 
 			if k == int(array.Count()) {
 				values = append(values, v)
@@ -4457,7 +4457,7 @@ func TestArrayStringElement(t *testing.T) {
 
 		r := newRand(t)
 
-		stringSize := int(maxInlineArrayElementSize - 3)
+		stringSize := int(MaxInlineArrayElementSize() - 3)
 
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
@@ -4490,7 +4490,7 @@ func TestArrayStringElement(t *testing.T) {
 
 		r := newRand(t)
 
-		stringSize := int(maxInlineArrayElementSize + 512)
+		stringSize := int(MaxInlineArrayElementSize() + 512)
 
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
@@ -4787,7 +4787,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		var values []Value
 		var v Value
 
-		v = NewStringValue(strings.Repeat("a", int(maxInlineArrayElementSize-2)))
+		v = NewStringValue(strings.Repeat("a", int(MaxInlineArrayElementSize()-2)))
 		values = append(values, v)
 
 		err = array.Insert(0, v)
@@ -4843,7 +4843,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		v = NewStringValue(strings.Repeat("a", int(maxInlineArrayElementSize-2)))
+		v = NewStringValue(strings.Repeat("a", int(MaxInlineArrayElementSize()-2)))
 		values = append(values, nil)
 		copy(values[25+1:], values[25:])
 		values[25] = v
@@ -4890,7 +4890,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		values := make([]Value, arraySize)
 		for i := uint64(0); i < arraySize; i++ {
-			v := randomValue(r, int(maxInlineArrayElementSize))
+			v := randomValue(r, int(MaxInlineArrayElementSize()))
 			values[i] = v
 
 			err := array.Append(v)
@@ -4939,17 +4939,17 @@ func TestArrayFromBatchData(t *testing.T) {
 		var values []Value
 		var v Value
 
-		v = NewStringValue(randStr(r, int(maxInlineArrayElementSize-2)))
+		v = NewStringValue(randStr(r, int(MaxInlineArrayElementSize()-2)))
 		values = append(values, v)
 		err = array.Append(v)
 		require.NoError(t, err)
 
-		v = NewStringValue(randStr(r, int(maxInlineArrayElementSize-2)))
+		v = NewStringValue(randStr(r, int(MaxInlineArrayElementSize()-2)))
 		values = append(values, v)
 		err = array.Append(v)
 		require.NoError(t, err)
 
-		v = NewStringValue(randStr(r, int(maxInlineArrayElementSize-2)))
+		v = NewStringValue(randStr(r, int(MaxInlineArrayElementSize()-2)))
 		values = append(values, v)
 		err = array.Append(v)
 		require.NoError(t, err)
@@ -5016,7 +5016,7 @@ func TestArrayMaxInlineElement(t *testing.T) {
 	var values []Value
 	for i := 0; i < 2; i++ {
 		// String length is MaxInlineArrayElementSize - 3 to account for string encoding overhead.
-		v := NewStringValue(randStr(r, int(maxInlineArrayElementSize-3)))
+		v := NewStringValue(randStr(r, int(MaxInlineArrayElementSize()-3)))
 		values = append(values, v)
 
 		err = array.Append(v)
@@ -5139,7 +5139,7 @@ func TestArraySlabDump(t *testing.T) {
 		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		err = array.Append(NewStringValue(strings.Repeat("a", int(maxInlineArrayElementSize))))
+		err = array.Append(NewStringValue(strings.Repeat("a", int(MaxInlineArrayElementSize()))))
 		require.NoError(t, err)
 
 		want := []string{

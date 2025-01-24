@@ -5675,6 +5675,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random composite value", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+
 			storage := newTestPersistentStorage(t)
 
 			const arraySize = 500
@@ -5712,6 +5713,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random data slab", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+
 			storage := newTestPersistentStorage(t)
 
 			const arraySize = 500
@@ -5778,6 +5780,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random slab", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+
 			storage := newTestPersistentStorage(t)
 
 			const arraySize = 500

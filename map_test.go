@@ -14339,7 +14339,7 @@ func TestMapMaxInlineElement(t *testing.T) {
 	// Size of root data slab with two elements (key+value pairs) of
 	// max inlined size is target slab size minus
 	// slab id size (next slab id is omitted in root slab)
-	require.Equal(t, targetThreshold-SlabIDLength, uint64(m.root.Header().size))
+	require.Equal(t, TargetSlabSize()-SlabIDLength, uint64(m.root.Header().size))
 
 	testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 }

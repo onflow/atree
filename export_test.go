@@ -26,3 +26,8 @@ var (
 	GetCBOREncMode = (*PersistentSlabStorage).getCBOREncMode
 	GetCBORDecMode = (*PersistentSlabStorage).getCBORDecMode
 )
+
+// Exported function of slab size settings for testing.
+var (
+	TargetSlabSize = targetSlabSize
+)

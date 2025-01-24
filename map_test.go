@@ -890,8 +890,8 @@ func TestMapRemove(t *testing.T) {
 
 		collisionKeyValues := make(map[Value]Value)
 		for len(collisionKeyValues) < numOfElementsWithCollision {
-			k := NewStringValue(randStr(r, int(maxInlineMapKeySize)-2))
-			v := NewStringValue(randStr(r, int(maxInlineMapKeySize)-2))
+			k := NewStringValue(randStr(r, int(MaxInlineMapKeySize())-2))
+			v := NewStringValue(randStr(r, int(MaxInlineMapKeySize())-2))
 			collisionKeyValues[k] = v
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{nextDigest}})
@@ -971,8 +971,8 @@ func TestMapRemove(t *testing.T) {
 
 		collisionKeyValues := make(map[Value]Value)
 		for len(collisionKeyValues) < numOfElementsWithCollision {
-			k := NewStringValue(randStr(r, int(maxInlineMapKeySize)-2))
-			v := NewStringValue(randStr(r, int(maxInlineMapKeySize)-2))
+			k := NewStringValue(randStr(r, int(MaxInlineMapKeySize())-2))
+			v := NewStringValue(randStr(r, int(MaxInlineMapKeySize())-2))
 			collisionKeyValues[k] = v
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{0}})
@@ -14167,7 +14167,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		r := newRand(t)
 
-		maxStringSize := int(maxInlineMapKeySize - 2)
+		maxStringSize := int(MaxInlineMapKeySize() - 2)
 
 		typeInfo := testTypeInfo{42}
 
@@ -14315,7 +14315,7 @@ func TestMapMaxInlineElement(t *testing.T) {
 	t.Parallel()
 
 	r := newRand(t)
-	maxStringSize := int(maxInlineMapKeySize - 2)
+	maxStringSize := int(MaxInlineMapKeySize() - 2)
 	typeInfo := testTypeInfo{42}
 	storage := newTestPersistentStorage(t)
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -14537,8 +14537,8 @@ func TestMapSlabDump(t *testing.T) {
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		k := NewStringValue(strings.Repeat("a", int(maxInlineMapKeySize)))
-		v := NewStringValue(strings.Repeat("b", int(maxInlineMapKeySize)))
+		k := NewStringValue(strings.Repeat("a", int(MaxInlineMapKeySize())))
+		v := NewStringValue(strings.Repeat("b", int(MaxInlineMapKeySize())))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(0)}})
 
 		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
@@ -14564,7 +14564,7 @@ func TestMapSlabDump(t *testing.T) {
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		k := NewStringValue(strings.Repeat("a", int(maxInlineMapKeySize-2)))
+		k := NewStringValue(strings.Repeat("a", int(MaxInlineMapKeySize()-2)))
 		v := NewStringValue(strings.Repeat("b", int(maxInlineMapElementSize)))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []Digest{Digest(0)}})
 
@@ -16417,7 +16417,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		defer SetThreshold(1024)
 
 		mapSize := 1
-		keyStringSize := maxInlineMapKeySize - 2         // Key size is exactly max map key size (2 bytes is string encoding overhead).
+		keyStringSize := MaxInlineMapKeySize() - 2       // Key size is exactly max map key size (2 bytes is string encoding overhead).
 		valueStringSize := maxInlineMapElementSize/2 + 2 // Value size is more than half of max map element size (add 2 bytes to make it more than half).
 
 		r := newRand(t)
@@ -16457,7 +16457,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		defer SetThreshold(1024)
 
 		mapSize := 1
-		keyStringSize := maxInlineMapKeySize + 10         // key size is more than max map key size
+		keyStringSize := MaxInlineMapKeySize() + 10       // key size is more than max map key size
 		valueStringSize := maxInlineMapElementSize/2 + 10 // value size is more than half of max map element size
 
 		r := newRand(t)

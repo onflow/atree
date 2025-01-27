@@ -478,3 +478,20 @@ func IsMapRootDataSlab(m *OrderedMap) bool {
 func GetMapRootSlabByteSize(m *OrderedMap) uint32 {
 	return GetMapRootSlab(m).ByteSize()
 }
+
+func NewArrayRootDataSlab(id SlabID, storables []Storable) ArraySlab {
+	size := uint32(arrayRootDataSlabPrefixSize)
+
+	for _, storable := range storables {
+		size += storable.ByteSize()
+	}
+
+	return &ArrayDataSlab{
+		header: ArraySlabHeader{
+			slabID: id,
+			size:   size,
+			count:  uint32(len(storables)),
+		},
+		elements: storables,
+	}
+}

@@ -31,12 +31,13 @@ import (
 // This file contains value implementations for testing purposes
 
 const (
-	cborTagUInt8Value  = 161
-	cborTagUInt16Value = 162
-	cborTagUInt32Value = 163
-	cborTagUInt64Value = 164
-	cborTagSomeValue   = 165
-	cborTagHashableMap = 166
+	cborTagUInt8Value                = 161
+	cborTagUInt16Value               = 162
+	cborTagUInt32Value               = 163
+	cborTagUInt64Value               = 164
+	cborTagSomeValue                 = 165
+	cborTagHashableMap               = 166
+	cborTagSomeValueWithNestedLevels = 167
 )
 
 func TestIsCBORTagNumberRangeAvailable(t *testing.T) {
@@ -591,6 +592,56 @@ func decodeStorable(dec *cbor.StreamDecoder, id SlabID, inlinedExtraData []Extra
 			}
 			return SomeStorable{Storable: storable}, nil
 
+		case cborTagSomeValueWithNestedLevels:
+			count, err := dec.DecodeArrayHead()
+			if err != nil {
+				return nil, fmt.Errorf(
+					"invalid some value with nested levels encoding: %w",
+					err,
+				)
+			}
+
+			if count != someStorableWithMultipleNestedLevelsArrayCount {
+				return nil, fmt.Errorf(
+					"invalid array count for some value with nested levels encoding: got %d, expect %d",
+					count, someStorableWithMultipleNestedLevelsArrayCount,
+				)
+			}
+
+			nestedLevels, err := dec.DecodeUint64()
+			if err != nil {
+				return nil, fmt.Errorf(
+					"invalid nested levels for some value with nested levels encoding: %w",
+					err,
+				)
+			}
+
+			if nestedLevels <= 1 {
+				return nil, fmt.Errorf(
+					"invalid nested levels for some value with nested levels encoding: got %d, expect > 1",
+					nestedLevels,
+				)
+			}
+
+			nonSomeStorable, err := decodeStorable(dec, id, inlinedExtraData)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"invalid nonSomeStorable for some value with nested levels encoding: %w",
+					err,
+				)
+			}
+
+			storable := SomeStorable{
+				Storable: nonSomeStorable,
+			}
+			for i := uint64(1); i < nestedLevels; i++ {
+				storable = SomeStorable{
+					Storable: storable,
+				}
+			}
+
+			return storable, nil
+
 		default:
 			return nil, fmt.Errorf("invalid tag number %d", tagNumber)
 		}
@@ -727,18 +778,55 @@ type SomeValue struct {
 
 var _ Value = SomeValue{}
 var _ HashableValue = SomeValue{}
+var _ WrapperValue = SomeValue{}
 
-func (v SomeValue) Storable(storage SlabStorage, address Address, maxSize uint64) (Storable, error) {
+// NOTE: For testing purposes, SomeValue and SomeStorable are mostly copied
+// from github.com/onflow/cadence (interpreter.SomeValue and interpreter.SomeStorable).
+// Ideally, integration tests at github.com/onflow/cadence should test integration with atree
+// for mutations of nested data types.
 
-	valueStorable, err := v.Value.Storable(
+func (v SomeValue) Storable(
+	storage SlabStorage,
+	address Address,
+	maxInlineSize uint64,
+) (Storable, error) {
+
+	// SomeStorable returned from this function can be encoded in two ways:
+	// - if non-SomeStorable is too large, non-SomeStorable is encoded in a separate slab
+	//   while SomeStorable wrapper is encoded inline with reference to slab containing
+	//   non-SomeStorable.
+	// - otherwise, SomeStorable with non-SomeStorable is encoded inline.
+	//
+	// The above applies to both immutable non-SomeValue (such as StringValue),
+	// and mutable non-SomeValue (such as ArrayValue).
+
+	nonSomeValue, nestedLevels := v.nonSomeValue()
+
+	someStorableEncodedPrefixSize := getSomeStorableEncodedPrefixSize(nestedLevels)
+
+	// Reduce maxInlineSize for non-SomeValue to make sure
+	// that SomeStorable wrapper is always encoded inline.
+	maxInlineSize -= uint64(someStorableEncodedPrefixSize)
+
+	nonSomeValueStorable, err := nonSomeValue.Storable(
 		storage,
 		address,
-		maxSize-2,
+		maxInlineSize,
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	valueStorable := nonSomeValueStorable
+	for i := 1; i < int(nestedLevels); i++ {
+		valueStorable = SomeStorable{
+			Storable: valueStorable,
+		}
+	}
+
+	// No need to call maybeLargeImmutableStorable() here for SomeStorable because:
+	// - encoded SomeStorable size = someStorableEncodedPrefixSize + non-SomeValueStorable size
+	// - non-SomeValueStorable size < maxInlineSize - someStorableEncodedPrefixSize
 	return SomeStorable{
 		Storable: valueStorable,
 	}, nil
@@ -765,7 +853,57 @@ func (v SomeValue) HashInput(scratch []byte) ([]byte, error) {
 }
 
 func (v SomeValue) String() string {
-	return fmt.Sprintf("%s", v.Value)
+	return fmt.Sprintf("SomeValue(%s)", v.Value)
+}
+
+func (v SomeValue) UnwrapAtreeValue() (Value, uint64) {
+	nonSomeValue, nestedLevels := v.nonSomeValue()
+
+	someStorableEncodedPrefixSize := getSomeStorableEncodedPrefixSize(nestedLevels)
+
+	wv, ok := nonSomeValue.(WrapperValue)
+	if !ok {
+		return nonSomeValue, uint64(someStorableEncodedPrefixSize)
+	}
+
+	unwrappedValue, wrapperSize := wv.UnwrapAtreeValue()
+
+	return unwrappedValue, wrapperSize + uint64(someStorableEncodedPrefixSize)
+}
+
+// nonSomeValue returns a non-SomeValue and nested levels of SomeValue reached
+// by traversing nested SomeValue (SomeValue containing SomeValue, etc.)
+// until it reaches a non-SomeValue.
+// For example,
+//   - `SomeValue{true}` has non-SomeValue `true`, and nested levels 1
+//   - `SomeValue{SomeValue{1}}` has non-SomeValue `1` and nested levels 2
+//   - `SomeValue{SomeValue{[SomeValue{SomeValue{SomeValue{1}}}]}} has
+//     non-SomeValue `[SomeValue{SomeValue{SomeValue{1}}}]` and nested levels 2
+func (v SomeValue) nonSomeValue() (Value, uint64) {
+	nestedLevels := uint64(1)
+	for {
+		switch value := v.Value.(type) {
+		case SomeValue:
+			nestedLevels++
+			v = value
+
+		default:
+			return value, nestedLevels
+		}
+	}
+}
+
+const (
+	cborTagSize                                    = 2
+	someStorableWithMultipleNestedlevelsArraySize  = 1
+	someStorableWithMultipleNestedLevelsArrayCount = 2
+)
+
+func getSomeStorableEncodedPrefixSize(nestedLevels uint64) uint32 {
+	if nestedLevels == 1 {
+		return cborTagSize
+	}
+	return cborTagSize + someStorableWithMultipleNestedlevelsArraySize + getUintCBORSize(nestedLevels)
 }
 
 type SomeStorable struct {
@@ -773,36 +911,104 @@ type SomeStorable struct {
 }
 
 var _ ContainerStorable = SomeStorable{}
+var _ WrapperStorable = SomeStorable{}
 
-func (v SomeStorable) HasPointer() bool {
-	if ms, ok := v.Storable.(ContainerStorable); ok {
+func (s SomeStorable) HasPointer() bool {
+	if ms, ok := s.Storable.(ContainerStorable); ok {
 		return ms.HasPointer()
 	}
 	return false
 }
 
-func (v SomeStorable) ByteSize() uint32 {
-	// tag number (2 bytes) + encoded content
-	return 2 + v.Storable.ByteSize()
+func (s SomeStorable) ByteSize() uint32 {
+	nonSomeStorable, nestedLevels := s.nonSomeStorable()
+	return getSomeStorableEncodedPrefixSize(nestedLevels) + nonSomeStorable.ByteSize()
 }
 
-func (v SomeStorable) Encode(enc *Encoder) error {
-	err := enc.CBOR.EncodeRawBytes([]byte{
+func (s SomeStorable) Encode(e *Encoder) error {
+	nonSomeStorable, nestedLevels := s.nonSomeStorable()
+	if nestedLevels == 1 {
+		return s.encode(e)
+	}
+	return s.encodeMultipleNestedLevels(e, nestedLevels, nonSomeStorable)
+}
+
+// encode encodes SomeStorable with nested levels = 1 as
+//
+//	cbor.Tag{
+//			Number: CBORTagSomeValue,
+//			Content: Value(v.Value),
+//	}
+func (s SomeStorable) encode(e *Encoder) error {
+	// NOTE: when updating, also update SomeStorable.ByteSize
+	err := e.CBOR.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagSomeValue,
 	})
 	if err != nil {
 		return err
 	}
-	return v.Storable.Encode(enc)
+	return s.Storable.Encode(e)
 }
 
-func (v SomeStorable) ChildStorables() []Storable {
-	return []Storable{v.Storable}
+// encodeMultipleNestedLevels encodes SomeStorable with nested levels > 1 as
+//
+//	cbor.Tag{
+//			Number: CBORTagSomeValueWithNestedLevels,
+//			Content: CBORArray[nested_levels, innermsot_value],
+//	}
+func (s SomeStorable) encodeMultipleNestedLevels(
+	e *Encoder,
+	levels uint64,
+	nonSomeStorable Storable,
+) error {
+	// NOTE: when updating, also update SomeStorable.ByteSize
+	err := e.CBOR.EncodeRawBytes([]byte{
+		// tag number
+		0xd8, cborTagSomeValueWithNestedLevels,
+		// array of 2 elements
+		0x82,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = e.CBOR.EncodeUint64(levels)
+	if err != nil {
+		return err
+	}
+
+	return nonSomeStorable.Encode(e)
 }
 
-func (v SomeStorable) StoredValue(storage SlabStorage) (Value, error) {
-	wv, err := v.Storable.StoredValue(storage)
+// nonSomeStorable returns a non-SomeStorable and nested levels of SomeStorable reached
+// by traversing nested SomeStorable (SomeStorable containing SomeStorable, etc.)
+// until it reaches a non-SomeStorable.
+// For example,
+//   - `SomeStorable{true}` has non-SomeStorable `true`, and nested levels 1
+//   - `SomeStorable{SomeStorable{1}}` has non-SomeStorable `1` and nested levels 2
+//   - `SomeStorable{SomeStorable{[SomeStorable{SomeStorable{SomeStorable{1}}}]}} has
+//     non-SomeStorable `[SomeStorable{SomeStorable{SomeStorable{1}}}]` and nested levels 2
+func (s SomeStorable) nonSomeStorable() (Storable, uint64) {
+	nestedLevels := uint64(1)
+	for {
+		switch storable := s.Storable.(type) {
+		case SomeStorable:
+			nestedLevels++
+			s = storable
+
+		default:
+			return storable, nestedLevels
+		}
+	}
+}
+
+func (s SomeStorable) ChildStorables() []Storable {
+	return []Storable{s.Storable}
+}
+
+func (s SomeStorable) StoredValue(storage SlabStorage) (Value, error) {
+	wv, err := s.Storable.StoredValue(storage)
 	if err != nil {
 		return nil, err
 	}
@@ -810,8 +1016,30 @@ func (v SomeStorable) StoredValue(storage SlabStorage) (Value, error) {
 	return SomeValue{wv}, nil
 }
 
-func (v SomeStorable) String() string {
-	return fmt.Sprintf("%s", v.Storable)
+func (s SomeStorable) String() string {
+	return fmt.Sprintf("SomeStorable(%s)", s.Storable)
+}
+
+func (s SomeStorable) UnwrapAtreeStorable() Storable {
+	storable := s.Storable
+	for {
+		ws, ok := storable.(WrapperStorable)
+		if !ok {
+			break
+		}
+		storable = ws.UnwrapAtreeStorable()
+	}
+	return storable
+}
+
+func (s SomeStorable) WrapAtreeStorable(storable Storable) Storable {
+	_, nestedLevels := s.nonSomeStorable()
+
+	newStorable := SomeStorable{Storable: storable}
+	for i := 1; i < int(nestedLevels); i++ {
+		newStorable = SomeStorable{Storable: newStorable}
+	}
+	return newStorable
 }
 
 type testMutableValue struct {
@@ -901,4 +1129,20 @@ func (v *HashableMap) HashInput(scratch []byte) ([]byte, error) {
 	vid := v.m.ValueID()
 	copy(buf[3:], vid[:])
 	return buf, nil
+}
+
+func getUintCBORSize(v uint64) uint32 {
+	if v <= 23 {
+		return 1
+	}
+	if v <= math.MaxUint8 {
+		return 2
+	}
+	if v <= math.MaxUint16 {
+		return 3
+	}
+	if v <= math.MaxUint32 {
+		return 5
+	}
+	return 9
 }

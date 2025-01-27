@@ -701,41 +701,62 @@ func (v *serializationVerifier) arrayDataSlabEqual(expected, actual *ArrayDataSl
 		ee := expected.elements[i]
 		ae := actual.elements[i]
 
-		switch ee := ee.(type) {
+		err := v.compareStorable(ee, ae)
+		if err != nil {
+			return NewFatalError(fmt.Errorf("failed to compare element %d: %s", i, err))
+		}
+	}
 
-		case SlabIDStorable: // Compare not-inlined element
-			if !v.compare(ee, ae) {
-				return NewFatalError(fmt.Errorf("element %d %+v is wrong, want %+v", i, ae, ee))
-			}
+	return nil
+}
 
-			ev, err := ee.StoredValue(v.storage)
-			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
-				return err
-			}
+func (v *serializationVerifier) compareStorable(expected, actual Storable) error {
 
-			return v.verifyValue(ev)
+	switch expected := expected.(type) {
 
-		case *ArrayDataSlab: // Compare inlined array
-			ae, ok := ae.(*ArrayDataSlab)
-			if !ok {
-				return NewFatalError(fmt.Errorf("expect element as inlined *ArrayDataSlab, actual %T", ae))
-			}
+	case SlabIDStorable: // Compare not-inlined element
+		if !v.compare(expected, actual) {
+			return NewFatalError(fmt.Errorf("failed to compare SlabIDStorable: %+v is wrong, want %+v", actual, expected))
+		}
 
-			return v.arrayDataSlabEqual(ee, ae)
+		actualValue, err := actual.StoredValue(v.storage)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by SlabIDStorable.StoredValue().
+			return err
+		}
 
-		case *MapDataSlab: // Compare inlined map
-			ae, ok := ae.(*MapDataSlab)
-			if !ok {
-				return NewFatalError(fmt.Errorf("expect element as inlined *MapDataSlab, actual %T", ae))
-			}
+		return v.verifyValue(actualValue)
 
-			return v.mapDataSlabEqual(ee, ae)
+	case *ArrayDataSlab: // Compare inlined array
+		actual, ok := actual.(*ArrayDataSlab)
+		if !ok {
+			return NewFatalError(fmt.Errorf("expect storable as inlined *ArrayDataSlab, actual %T", actual))
+		}
 
-		default:
-			if !v.compare(ee, ae) {
-				return NewFatalError(fmt.Errorf("element %d %+v is wrong, want %+v", i, ae, ee))
-			}
+		return v.arrayDataSlabEqual(expected, actual)
+
+	case *MapDataSlab: // Compare inlined map
+		actual, ok := actual.(*MapDataSlab)
+		if !ok {
+			return NewFatalError(fmt.Errorf("expect storable as inlined *MapDataSlab, actual %T", actual))
+		}
+
+		return v.mapDataSlabEqual(expected, actual)
+
+	case WrapperStorable: // Compare wrapper storable
+		actual, ok := actual.(WrapperStorable)
+		if !ok {
+			return NewFatalError(fmt.Errorf("expect storable as WrapperStorable, actual %T", actual))
+		}
+
+		unwrappedExpected := expected.UnwrapAtreeStorable()
+		unwrappedActual := actual.UnwrapAtreeStorable()
+
+		return v.compareStorable(unwrappedExpected, unwrappedActual)
+
+	default:
+		if !v.compare(expected, actual) {
+			return NewFatalError(fmt.Errorf("%+v is wrong, want %+v", actual, expected))
 		}
 	}
 

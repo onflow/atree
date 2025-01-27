@@ -148,11 +148,36 @@ func randomValue(
 ) (expected atree.Value, actual atree.Value, err error) {
 	if nestedLevels <= 0 {
 		t := r.Intn(maxSimpleValueType)
-		return generateSimpleValue(t)
+
+		expected, actual, err = generateSimpleValue(t)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		t := r.Intn(maxContainerValueType)
+
+		expected, actual, err = generateContainerValue(t, storage, address, nestedLevels)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
-	t := r.Intn(maxContainerValueType)
-	return generateContainerValue(t, storage, address, nestedLevels)
+	expected, actual = randomWrapperValue(expected, actual)
+	return expected, actual, nil
+}
+
+func randomWrapperValue(expected atree.Value, actual atree.Value) (atree.Value, atree.Value) {
+	const (
+		noWrapperValue = iota
+		useWrapperValue
+		maxWrapperValueChoice
+	)
+
+	if flagAlwaysUseWrapperValue || r.Intn(maxWrapperValueChoice) == useWrapperValue {
+		return someValue{expected}, SomeValue{actual}
+	}
+
+	return expected, actual
 }
 
 func removeStorable(storage atree.SlabStorage, storable atree.Storable) error {
@@ -162,7 +187,9 @@ func removeStorable(storage atree.SlabStorage, storable atree.Storable) error {
 		return err
 	}
 
-	switch v := value.(type) {
+	unwrappedValue, _ := unwrapValue(value)
+
+	switch v := unwrappedValue.(type) {
 	case *atree.Array:
 		err := v.PopIterate(func(storable atree.Storable) {
 			_ = removeStorable(storage, storable)
@@ -181,7 +208,7 @@ func removeStorable(storage atree.SlabStorage, storable atree.Storable) error {
 		}
 	}
 
-	if sid, ok := storable.(atree.SlabIDStorable); ok {
+	if sid, ok := unwrapStorable(storable).(atree.SlabIDStorable); ok {
 		return storage.Remove(atree.SlabID(sid))
 	}
 
@@ -211,6 +238,17 @@ func valueEqual(expected atree.Value, actual atree.Value) error {
 
 	case *atree.OrderedMap:
 		return fmt.Errorf("expected value shouldn't be *OrderedMap")
+
+	case someValue:
+		actual, ok := actual.(SomeValue)
+		if !ok {
+			return fmt.Errorf("failed to convert actual value to SomeValue, got %T", actual)
+		}
+
+		return valueEqual(expected.Value, actual.Value)
+
+	case SomeValue:
+		return fmt.Errorf("expected value shouldn't be SomeValue")
 
 	default:
 		if !reflect.DeepEqual(expected, actual) {
@@ -543,6 +581,25 @@ func (v mapValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Stor
 	panic("not reachable")
 }
 
+type someValue struct {
+	Value atree.Value
+}
+
+var _ atree.Value = &someValue{}
+var _ atree.WrapperValue = &someValue{}
+
+func (v someValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
+	panic("not reachable")
+}
+
+func (v someValue) String() string {
+	return fmt.Sprintf("someValue(%s)", v.Value)
+}
+
+func (v someValue) UnwrapAtreeValue() (atree.Value, uint64) {
+	return unwrapValue(v.Value)
+}
+
 var typeInfoComparator = func(a atree.TypeInfo, b atree.TypeInfo) bool {
 	aID, _ := getEncodedTypeInfo(a)
 	bID, _ := getEncodedTypeInfo(b)
@@ -580,4 +637,22 @@ func getTypeIDBuffer() *bytes.Buffer {
 func putTypeIDBuffer(e *bytes.Buffer) {
 	e.Reset()
 	typeIDBufferPool.Put(e)
+}
+
+func unwrapValue(v atree.Value) (atree.Value, uint64) {
+	switch v := v.(type) {
+	case atree.WrapperValue:
+		return v.UnwrapAtreeValue()
+	default:
+		return v, 0
+	}
+}
+
+func unwrapStorable(s atree.Storable) atree.Storable {
+	switch s := s.(type) {
+	case atree.WrapperStorable:
+		return s.UnwrapAtreeStorable()
+	default:
+		return s
+	}
 }

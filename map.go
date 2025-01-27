@@ -4883,6 +4883,14 @@ func (m *OrderedMap) setParentUpdater(f parentUpdater) {
 	m.parentUpdater = f
 }
 
+func (m *OrderedMap) rootSlab() MapSlab {
+	return m.root
+}
+
+func (m *OrderedMap) getDigesterBuilder() DigesterBuilder {
+	return m.digesterBuilder
+}
+
 // setCallbackWithChild sets up callback function with child value (child)
 // so parent map (m) can be notified when child value is modified.
 func (m *OrderedMap) setCallbackWithChild(

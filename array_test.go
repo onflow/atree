@@ -2830,7 +2830,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, storable)
 
-			require.True(t, childMap.root.IsData())
+			require.True(t, IsMapRootDataSlab(childMap))
 
 			err = array.Append(childMap)
 			require.NoError(t, err)
@@ -2871,7 +2871,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 				expectedChildMapValues[k] = v
 			}
 
-			require.False(t, childMap.root.IsData())
+			require.False(t, IsMapRootDataSlab(childMap))
 
 			err = array.Append(childMap)
 			require.NoError(t, err)

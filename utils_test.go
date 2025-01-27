@@ -470,3 +470,11 @@ func IsArrayRootDataSlab(array *Array) bool {
 func GetArrayRootSlabByteSize(array *Array) uint32 {
 	return GetArrayRootSlab(array).ByteSize()
 }
+
+func IsMapRootDataSlab(m *OrderedMap) bool {
+	return GetMapRootSlab(m).IsData()
+}
+
+func GetMapRootSlabByteSize(m *OrderedMap) uint32 {
+	return GetMapRootSlab(m).ByteSize()
+}

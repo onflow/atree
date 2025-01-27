@@ -7411,8 +7411,6 @@ func TestMapDecodeV0(t *testing.T) {
 		SetThreshold(256)
 		defer SetThreshold(1024)
 
-		storage := newTestBasicStorage(t)
-
 		digesterBuilder := &mockDigesterBuilder{}
 
 		const mapSize = 8
@@ -7429,20 +7427,10 @@ func TestMapDecodeV0(t *testing.T) {
 			r++
 		}
 
-		// Create nested array
-		typeInfo2 := testTypeInfo{43}
-
 		mapSlabID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 		nestedSlabID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
-
-		childArray, err := NewArray(storage, address, typeInfo2)
-		childArray.root.SetSlabID(nestedSlabID)
-		require.NoError(t, err)
-
-		err = childArray.Append(Uint64Value(0))
-		require.NoError(t, err)
 
 		k := NewStringValue(strings.Repeat(string(r), 22))
 
@@ -19230,14 +19218,14 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 		expectedKeyValues[k] = Uint64Value(0)
 
 		// childArray.parentUpdater isn't nil before callback is invoked.
-		require.NotNil(t, childArray.parentUpdater)
+		require.True(t, ArrayHasParentUpdater(childArray))
 
 		// modify overwritten child array
 		err = childArray.Append(Uint64Value(0))
 		require.NoError(t, err)
 
 		// childArray.parentUpdater is nil after callback is invoked.
-		require.Nil(t, childArray.parentUpdater)
+		require.False(t, ArrayHasParentUpdater(childArray))
 
 		// No-op on parent
 		valueEqual(t, expectedKeyValues, parentMap)
@@ -19289,14 +19277,14 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 		delete(expectedKeyValues, k)
 
 		// childArray.parentUpdater isn't nil before callback is invoked.
-		require.NotNil(t, childArray.parentUpdater)
+		require.True(t, ArrayHasParentUpdater(childArray))
 
 		// modify removed child array
 		err = childArray.Append(Uint64Value(0))
 		require.NoError(t, err)
 
 		// childArray.parentUpdater is nil after callback is invoked.
-		require.Nil(t, childArray.parentUpdater)
+		require.False(t, ArrayHasParentUpdater(childArray))
 
 		// No-op on parent
 		valueEqual(t, expectedKeyValues, parentMap)

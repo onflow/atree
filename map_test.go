@@ -328,7 +328,7 @@ func TestMapSetAndGet(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
@@ -364,7 +364,7 @@ func TestMapSetAndGet(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
@@ -415,7 +415,7 @@ func TestMapSetAndGet(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
@@ -549,7 +549,7 @@ func TestMapGetKeyNotFound(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		keyValues := make(map[Value]Value, mapSize)
@@ -694,7 +694,7 @@ func TestMapHas(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for i, k := range keysToInsert {
@@ -816,7 +816,7 @@ func TestMapRemove(t *testing.T) {
 			address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 			storage := newTestPersistentStorage(t)
 
-			m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			// Insert elements
@@ -1034,7 +1034,7 @@ func TestMapRemove(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		keyValues := make(map[Value]Value, mapSize)
@@ -1116,7 +1116,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		// Iterate key value pairs
@@ -1175,7 +1175,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -1314,7 +1314,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	typeInfo := testTypeInfo{42}
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestPersistentStorage(t)
-	digesterBuilder := newBasicDigesterBuilder()
+	digesterBuilder := NewDefaultDigesterBuilder()
 
 	var mutationError *ReadOnlyIteratorElementMutationError
 
@@ -2195,7 +2195,7 @@ func TestMutableMapIterate(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		// Iterate key value pairs
@@ -2220,7 +2220,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -2280,7 +2280,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -2340,7 +2340,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -2402,7 +2402,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -2464,7 +2464,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -2653,7 +2653,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -2664,7 +2664,7 @@ func TestMutableMapIterate(t *testing.T) {
 			ck := Uint64Value(0)
 			cv := Uint64Value(i)
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
@@ -2737,7 +2737,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -2748,7 +2748,7 @@ func TestMutableMapIterate(t *testing.T) {
 			ck := Uint64Value(0)
 			cv := Uint64Value(i)
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
@@ -2823,7 +2823,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -2832,7 +2832,7 @@ func TestMutableMapIterate(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -2918,7 +2918,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -2927,7 +2927,7 @@ func TestMutableMapIterate(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -3013,7 +3013,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -3022,7 +3022,7 @@ func TestMutableMapIterate(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -3116,7 +3116,7 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			ck := Uint64Value(0)
@@ -3199,7 +3199,7 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			ck := Uint64Value(0)
@@ -3278,7 +3278,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -3290,7 +3290,7 @@ func TestMutableMapIterate(t *testing.T) {
 			ck := Uint64Value(0)
 			cv := NewStringValue(randStr(r, valueStringSize))
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
@@ -3398,7 +3398,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -3407,7 +3407,7 @@ func TestMutableMapIterate(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -3492,7 +3492,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -3501,7 +3501,7 @@ func TestMutableMapIterate(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -3586,7 +3586,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -3595,7 +3595,7 @@ func TestMutableMapIterate(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -3680,7 +3680,7 @@ func TestMutableMapIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -3689,7 +3689,7 @@ func TestMutableMapIterate(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -3773,7 +3773,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		i := 0
@@ -3797,7 +3797,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -3857,7 +3857,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -3917,7 +3917,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -3979,7 +3979,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -4041,7 +4041,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -4228,7 +4228,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -4239,7 +4239,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			ck := Uint64Value(0)
 			cv := Uint64Value(i)
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
@@ -4314,7 +4314,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -4325,7 +4325,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			ck := Uint64Value(0)
 			cv := Uint64Value(i)
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
@@ -4402,7 +4402,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -4411,7 +4411,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -4499,7 +4499,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -4508,7 +4508,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -4596,7 +4596,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -4605,7 +4605,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -4701,7 +4701,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			ck := Uint64Value(0)
@@ -4786,7 +4786,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			ck := Uint64Value(0)
@@ -4866,7 +4866,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -4878,7 +4878,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			ck := Uint64Value(0)
 			cv := NewStringValue(randStr(r, valueStringSize))
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
@@ -4990,7 +4990,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -4999,7 +4999,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -5086,7 +5086,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -5095,7 +5095,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -5182,7 +5182,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -5191,7 +5191,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -5278,7 +5278,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -5287,7 +5287,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -5373,7 +5373,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		i := 0
@@ -5397,7 +5397,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -5458,7 +5458,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -5519,7 +5519,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -5583,7 +5583,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -5646,7 +5646,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -5838,7 +5838,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -5849,7 +5849,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			ck := Uint64Value(0)
 			cv := Uint64Value(i)
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
@@ -5923,7 +5923,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -5934,7 +5934,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			ck := Uint64Value(0)
 			cv := Uint64Value(i)
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
@@ -6010,7 +6010,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -6019,7 +6019,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -6106,7 +6106,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -6115,7 +6115,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -6202,7 +6202,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -6211,7 +6211,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -6306,7 +6306,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			ck := Uint64Value(0)
@@ -6390,7 +6390,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[Value]Value, mapSize)
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			ck := Uint64Value(0)
@@ -6470,7 +6470,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -6482,7 +6482,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			ck := Uint64Value(0)
 			cv := NewStringValue(randStr(r, valueStringSize))
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
@@ -6592,7 +6592,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -6601,7 +6601,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -6687,7 +6687,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -6696,7 +6696,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -6782,7 +6782,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -6791,7 +6791,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -6877,7 +6877,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -6886,7 +6886,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		sortedKeys := make([]Value, mapSize)
 		for i := 0; i < mapSize; i++ {
 
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(mapValue)
@@ -13405,7 +13405,7 @@ func TestMapStoredValue(t *testing.T) {
 		i++
 	}
 
-	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	for k, v := range keyValues {
@@ -13454,7 +13454,7 @@ func TestMapPopIterate(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		err = storage.Commit()
@@ -13478,7 +13478,7 @@ func TestMapPopIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -13543,7 +13543,7 @@ func TestMapPopIterate(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
-		digesterBuilder := newBasicDigesterBuilder()
+		digesterBuilder := NewDefaultDigesterBuilder()
 
 		m, err := NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
@@ -14249,7 +14249,7 @@ func TestMapNestedStorables(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		keyValues := make(map[Value]Value)
@@ -14279,7 +14279,7 @@ func TestMapNestedStorables(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		keyValues := make(map[Value]Value)
@@ -14319,7 +14319,7 @@ func TestMapMaxInlineElement(t *testing.T) {
 	storage := newTestPersistentStorage(t)
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	keyValues := make(map[Value]Value)
@@ -16533,7 +16533,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
@@ -16571,7 +16571,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
@@ -16611,7 +16611,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
@@ -16632,7 +16632,7 @@ func TestMapID(t *testing.T) {
 	storage := newTestPersistentStorage(t)
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	sid := m.SlabID()
@@ -16661,7 +16661,7 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestPersistentStorage(t)
 
-	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	for k, v := range keyValues {
@@ -18500,7 +18500,7 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 	// Insert 2 child map with digest values of 1 and 3.
 	for i := 0; i < mapSize; i++ {
 		// Create child map
-		childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		k := NewStringValue(randStr(r, keyStringSize))
@@ -18660,14 +18660,14 @@ func createMapWithEmptyChildMap(
 	const expectedEmptyInlinedMapSize = uint32(inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize) // 22
 
 	// Create parent map
-	parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	expectedKeyValues := make(map[Value]Value)
 
 	for i := 0; i < mapSize; i++ {
 		// Create child map
-		childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		k := getKey()
@@ -18710,18 +18710,18 @@ func createMapWithEmpty2LevelChildMap(
 	const expectedEmptyInlinedMapSize = uint32(inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize) // 22
 
 	// Create parent map
-	parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+	parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	expectedKeyValues := make(map[Value]Value)
 
 	for i := 0; i < mapSize; i++ {
 		// Create child map
-		childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		// Create grand child map
-		gchildMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		gchildMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		k := getKey()
@@ -18820,7 +18820,7 @@ func TestMapSetReturnedValue(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		// Create parent map
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		expectedKeyValues := make(map[Value]Value)
@@ -18884,7 +18884,7 @@ func TestMapSetReturnedValue(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		// Create parent map
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		expectedKeyValues := make(map[Value]Value)
@@ -18941,14 +18941,14 @@ func TestMapSetReturnedValue(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		// Create parent map
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		expectedKeyValues := make(map[Value]Value)
 
 		for i := 0; i < mapSize; i++ {
 			// Create child map
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			k := Uint64Value(i)
@@ -19010,14 +19010,14 @@ func TestMapSetReturnedValue(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		// Create parent map
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		expectedKeyValues := make(map[Value]Value)
 
 		for i := 0; i < mapSize; i++ {
 			// Create child map
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			k := Uint64Value(i)
@@ -19075,7 +19075,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		// Create parent map
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		expectedKeyValues := make(map[Value]Value)
@@ -19139,7 +19139,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		// Create parent map
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		expectedKeyValues := make(map[Value]Value)
@@ -19196,14 +19196,14 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		// Create parent map
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		expectedKeyValues := make(map[Value]Value)
 
 		for i := 0; i < mapSize; i++ {
 			// Create child map
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			k := Uint64Value(i)
@@ -19265,14 +19265,14 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		// Create parent map
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		expectedKeyValues := make(map[Value]Value)
 
 		for i := 0; i < mapSize; i++ {
 			// Create child map
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			k := Uint64Value(i)
@@ -19329,7 +19329,7 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		// Create parent map
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		expectedKeyValues := make(mapValue)
@@ -19387,7 +19387,7 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
 		// Create parent map
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		expectedKeyValues := make(mapValue)
@@ -19450,7 +19450,7 @@ func TestMapSetType(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), m.Count())
 		require.Equal(t, typeInfo, m.Type())
@@ -19474,7 +19474,7 @@ func TestMapSetType(t *testing.T) {
 	t.Run("data slab root", func(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		mapSize := 10
@@ -19507,7 +19507,7 @@ func TestMapSetType(t *testing.T) {
 	t.Run("metadata slab root", func(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
-		m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		mapSize := 10_000
@@ -19540,10 +19540,10 @@ func TestMapSetType(t *testing.T) {
 	t.Run("inlined in parent container root data slab", func(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		childMapSeed := childMap.root.ExtraData().Seed
@@ -19586,10 +19586,10 @@ func TestMapSetType(t *testing.T) {
 	t.Run("inlined in parent container non-root data slab", func(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
-		parentMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+		childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		childMapSeed := childMap.root.ExtraData().Seed
@@ -19652,7 +19652,7 @@ func testExistingMapSetType(
 	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
 
 	// Load existing map by ID
-	m, err := NewMapWithRootID(storage, id, newBasicDigesterBuilder())
+	m, err := NewMapWithRootID(storage, id, NewDefaultDigesterBuilder())
 	require.NoError(t, err)
 	require.Equal(t, expectedCount, m.Count())
 	require.Equal(t, expectedTypeInfo, m.Type())
@@ -19673,7 +19673,7 @@ func testExistingMapSetType(
 	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
 
 	// Load existing map again from storage
-	m2, err := NewMapWithRootID(storage2, id, newBasicDigesterBuilder())
+	m2, err := NewMapWithRootID(storage2, id, NewDefaultDigesterBuilder())
 	require.NoError(t, err)
 	require.Equal(t, expectedCount, m2.Count())
 	require.Equal(t, newTypeInfo, m2.Type())
@@ -19695,7 +19695,7 @@ func testExistingInlinedMapSetType(
 	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
 
 	// Load existing map by ID
-	parentMap, err := NewMapWithRootID(storage, parentID, newBasicDigesterBuilder())
+	parentMap, err := NewMapWithRootID(storage, parentID, NewDefaultDigesterBuilder())
 	require.NoError(t, err)
 
 	element, err := parentMap.Get(compare, hashInputProvider, inlinedChildKey)
@@ -19723,7 +19723,7 @@ func testExistingInlinedMapSetType(
 	storage2 := newTestPersistentStorageWithBaseStorage(t, storage.baseStorage)
 
 	// Load existing map again from storage
-	parentMap2, err := NewMapWithRootID(storage2, parentID, newBasicDigesterBuilder())
+	parentMap2, err := NewMapWithRootID(storage2, parentID, NewDefaultDigesterBuilder())
 	require.NoError(t, err)
 
 	element2, err := parentMap2.Get(compare, hashInputProvider, inlinedChildKey)

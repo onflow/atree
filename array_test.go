@@ -8270,7 +8270,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 
 		for i := 0; i < arraySize; i++ {
 			// Create child map
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			err = parentArray.Append(childMap)
@@ -8342,7 +8342,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 
 		for i := 0; i < arraySize; i++ {
 			// Create child map
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			k := Uint64Value(i)
@@ -8533,7 +8533,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 
 		for i := 0; i < arraySize; i++ {
 			// Create child map
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			err = parentArray.Append(childMap)
@@ -8602,7 +8602,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 
 		for i := 0; i < arraySize; i++ {
 			// Create child map
-			childMap, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
+			childMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			k := Uint64Value(i)

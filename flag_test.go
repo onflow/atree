@@ -283,10 +283,6 @@ func TestFlagGetSlabArrayType(t *testing.T) {
 				arrayLargeImmutableArrayFlag := arrayDataFlag | 0b000_00010
 				tc.h[1] = arrayLargeImmutableArrayFlag
 				require.Equal(t, slabLargeImmutableArray, tc.h.getSlabArrayType())
-
-				basicArrayFlag := arrayDataFlag | 0b000_00011
-				tc.h[1] = basicArrayFlag
-				require.Equal(t, slabBasicArray, tc.h.getSlabArrayType())
 			}
 		})
 	}

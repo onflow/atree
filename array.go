@@ -32,9 +32,6 @@ import (
 // NOTE: we use encoding size (in bytes) instead of Go type size for slab operations,
 // such as merge and split, so size constants here are related to encoding size.
 const (
-	slabAddressSize = 8
-	slabIndexSize   = 8
-	slabIDSize      = slabAddressSize + slabIndexSize
 
 	// version and flag size: version (1 byte) + flag (1 byte)
 	versionAndFlagSize = 2
@@ -42,18 +39,18 @@ const (
 	// slab header size: slab index (8 bytes) + count (4 bytes) + size (2 bytes)
 	// Support up to 4,294,967,295 elements in each array.
 	// Support up to 65,535 bytes for slab size limit (default limit is 1536 max bytes).
-	arraySlabHeaderSize = slabIndexSize + 4 + 2
+	arraySlabHeaderSize = SlabIndexLength + 4 + 2
 
 	// meta data slab prefix size: version (1 byte) + flag (1 byte) + address (8 bytes) + child header count (2 bytes)
 	// Support up to 65,535 children per metadata slab.
-	arrayMetaDataSlabPrefixSize = versionAndFlagSize + slabAddressSize + 2
+	arrayMetaDataSlabPrefixSize = versionAndFlagSize + SlabAddressLength + 2
 
 	// Encoded element head in array data slab (fixed-size for easy computation).
 	arrayDataSlabElementHeadSize = 3
 
 	// non-root data slab prefix size: version (1 byte) + flag (1 byte) + next id (16 bytes) + element array head (3 bytes)
 	// Support up to 65,535 elements in the array per data slab.
-	arrayDataSlabPrefixSize = versionAndFlagSize + slabIDSize + arrayDataSlabElementHeadSize
+	arrayDataSlabPrefixSize = versionAndFlagSize + SlabIDLength + arrayDataSlabElementHeadSize
 
 	// root data slab prefix size: version (1 byte) + flag (1 byte) + element array head (3 bytes)
 	// Support up to 65,535 elements in the array per data slab.
@@ -420,7 +417,7 @@ func newArrayDataSlabFromDataV0(
 	var next SlabID
 	if !h.isRoot() {
 		// Check data length for next slab ID
-		if len(data) < slabIDSize {
+		if len(data) < SlabIDLength {
 			return nil, NewDecodingErrorf("data is too short for array data slab")
 		}
 
@@ -431,7 +428,7 @@ func newArrayDataSlabFromDataV0(
 			return nil, err
 		}
 
-		data = data[slabIDSize:]
+		data = data[SlabIDLength:]
 	}
 
 	// Check data length for array element head
@@ -539,7 +536,7 @@ func newArrayDataSlabFromDataV1(
 			return nil, err
 		}
 
-		data = data[slabIDSize:]
+		data = data[SlabIDLength:]
 	}
 
 	// Check minimum data length after header
@@ -651,11 +648,11 @@ func DecodeInlinedArrayStorable(
 	if err != nil {
 		return nil, NewDecodingError(err)
 	}
-	if len(b) != slabIndexSize {
+	if len(b) != SlabIndexLength {
 		return nil, NewDecodingError(
 			fmt.Errorf(
 				"failed to decode inlined array data slab: expect %d bytes for slab index, got %d bytes",
-				slabIndexSize,
+				SlabIndexLength,
 				len(b)))
 	}
 
@@ -1494,7 +1491,7 @@ func newArrayMetaDataSlabFromDataV0(
 		arrayMetaDataArrayHeadSizeV0 = 2
 
 		// slab header size: slab id (16 bytes) + count (4 bytes) + size (4 bytes)
-		arraySlabHeaderSizeV0 = slabIDSize + 4 + 4
+		arraySlabHeaderSizeV0 = SlabIDLength + 4 + 4
 	)
 
 	var err error
@@ -1547,7 +1544,7 @@ func newArrayMetaDataSlabFromDataV0(
 			return nil, err
 		}
 
-		countOffset := offset + slabIDSize
+		countOffset := offset + SlabIDLength
 		count := binary.BigEndian.Uint32(data[countOffset:])
 
 		sizeOffset := countOffset + 4
@@ -1633,7 +1630,7 @@ func newArrayMetaDataSlabFromDataV1(
 	// Decode shared address of headers
 	var address Address
 	copy(address[:], data[offset:])
-	offset += slabAddressSize
+	offset += SlabAddressLength
 
 	// Decode number of child headers
 	const arrayHeaderSize = 2
@@ -1660,7 +1657,7 @@ func newArrayMetaDataSlabFromDataV1(
 		copy(index[:], data[offset:])
 
 		slabID := SlabID{address, index}
-		offset += slabIndexSize
+		offset += SlabIndexLength
 
 		// Decode count
 		count := binary.BigEndian.Uint32(data[offset:])
@@ -1748,7 +1745,7 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 	copy(enc.Scratch[:], a.header.slabID.address[:])
 
 	// Encode child header count to scratch
-	const childHeaderCountOffset = slabAddressSize
+	const childHeaderCountOffset = SlabAddressLength
 	binary.BigEndian.PutUint16(
 		enc.Scratch[childHeaderCountOffset:],
 		uint16(len(a.childrenHeaders)),
@@ -1767,7 +1764,7 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 		copy(enc.Scratch[:], h.slabID.index[:])
 
 		// Encode count
-		const countOffset = slabIndexSize
+		const countOffset = SlabIndexLength
 		binary.BigEndian.PutUint32(enc.Scratch[countOffset:], h.count)
 
 		// Encode size

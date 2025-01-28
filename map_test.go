@@ -8610,7 +8610,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
 
 		const inlinedExtraDataSize = 8
-		require.Equal(t, uint32(len(stored[id3])-inlinedExtraDataSize+slabIDSize), meta.childrenHeaders[1].size)
+		require.Equal(t, uint32(len(stored[id3])-inlinedExtraDataSize+SlabIDLength), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, stored)
@@ -11798,7 +11798,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, 2, len(meta.childrenHeaders))
 		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
-		require.Equal(t, uint32(len(stored[id3])+slabIDSize), meta.childrenHeaders[1].size)
+		require.Equal(t, uint32(len(stored[id3])+SlabIDLength), meta.childrenHeaders[1].size)
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, stored)
@@ -14338,7 +14338,7 @@ func TestMapMaxInlineElement(t *testing.T) {
 	// Size of root data slab with two elements (key+value pairs) of
 	// max inlined size is target slab size minus
 	// slab id size (next slab id is omitted in root slab)
-	require.Equal(t, targetThreshold-slabIDSize, uint64(m.root.Header().size))
+	require.Equal(t, targetThreshold-SlabIDLength, uint64(m.root.Header().size))
 
 	testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 }
@@ -16638,8 +16638,8 @@ func TestMapID(t *testing.T) {
 	sid := m.SlabID()
 	id := m.ValueID()
 
-	require.Equal(t, sid.address[:], id[:8])
-	require.Equal(t, sid.index[:], id[8:])
+	require.Equal(t, sid.address[:], id[:SlabAddressLength])
+	require.Equal(t, sid.index[:], id[SlabAddressLength:])
 }
 
 func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {

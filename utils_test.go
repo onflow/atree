@@ -404,8 +404,8 @@ func mapEqual(t *testing.T, expected mapValue, actual *OrderedMap) {
 
 func valueIDToSlabID(vid ValueID) SlabID {
 	var id SlabID
-	copy(id.address[:], vid[:slabAddressSize])
-	copy(id.index[:], vid[slabAddressSize:])
+	copy(id.address[:], vid[:SlabAddressLength])
+	copy(id.index[:], vid[SlabAddressLength:])
 	return id
 }
 
@@ -420,16 +420,16 @@ func testNotInlinedMapIDs(t *testing.T, address Address, m *OrderedMap) {
 func testInlinedSlabIDAndValueID(t *testing.T, expectedAddress Address, slabID SlabID, valueID ValueID) {
 	require.Equal(t, SlabIDUndefined, slabID)
 
-	require.Equal(t, expectedAddress[:], valueID[:slabAddressSize])
-	require.NotEqual(t, SlabIndexUndefined[:], valueID[slabAddressSize:])
+	require.Equal(t, expectedAddress[:], valueID[:SlabAddressLength])
+	require.NotEqual(t, SlabIndexUndefined[:], valueID[SlabAddressLength:])
 }
 
 func testNotInlinedSlabIDAndValueID(t *testing.T, expectedAddress Address, slabID SlabID, valueID ValueID) {
 	require.Equal(t, expectedAddress, slabID.address)
 	require.NotEqual(t, SlabIndexUndefined, slabID.index)
 
-	require.Equal(t, slabID.address[:], valueID[:slabAddressSize])
-	require.Equal(t, slabID.index[:], valueID[slabAddressSize:])
+	require.Equal(t, slabID.address[:], valueID[:SlabAddressLength])
+	require.Equal(t, slabID.index[:], valueID[SlabAddressLength:])
 }
 
 type arrayValue []Value

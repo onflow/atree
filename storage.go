@@ -26,12 +26,18 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"unsafe"
 
 	"github.com/fxamacker/cbor/v2"
 )
 
 const LedgerBaseStorageSlabPrefix = "$"
+
+const (
+	SlabAddressLength = 8
+	SlabIndexLength   = 8
+	SlabIDLength      = SlabAddressLength + SlabIndexLength
+	ValueIDLength     = SlabIDLength
+)
 
 // ValueID identifies an Array or OrderedMap. ValueID is consistent
 // independent of inlining status, while ValueID and SlabID are used
@@ -39,7 +45,7 @@ const LedgerBaseStorageSlabPrefix = "$"
 // By contrast, SlabID is affected by inlining because it identifies
 // a slab in storage.  Given this, ValueID should be used for
 // resource tracking, etc.
-type ValueID [unsafe.Sizeof(Address{}) + unsafe.Sizeof(SlabIndex{})]byte
+type ValueID [ValueIDLength]byte
 
 var emptyValueID = ValueID{}
 
@@ -58,16 +64,16 @@ func (vid ValueID) equal(sid SlabID) bool {
 func (vid ValueID) String() string {
 	return fmt.Sprintf(
 		"0x%x.%d",
-		binary.BigEndian.Uint64(vid[:8]),
-		binary.BigEndian.Uint64(vid[8:]),
+		binary.BigEndian.Uint64(vid[:SlabAddressLength]),
+		binary.BigEndian.Uint64(vid[SlabAddressLength:]),
 	)
 }
 
 // WARNING: Any changes to SlabID or its components (Address and SlabIndex)
 // require updates to ValueID definition and functions.
 type (
-	Address   [8]byte
-	SlabIndex [8]byte
+	Address   [SlabAddressLength]byte
+	SlabIndex [SlabIndexLength]byte
 
 	// SlabID identifies slab in storage.
 	// SlabID should only be used to retrieve,
@@ -102,7 +108,7 @@ func NewSlabID(address Address, index SlabIndex) SlabID {
 }
 
 func NewSlabIDFromRawBytes(b []byte) (SlabID, error) {
-	if len(b) < slabIDSize {
+	if len(b) < SlabIDLength {
 		return SlabID{}, NewSlabIDErrorf("incorrect slab ID buffer length %d", len(b))
 	}
 
@@ -110,18 +116,18 @@ func NewSlabIDFromRawBytes(b []byte) (SlabID, error) {
 	copy(address[:], b)
 
 	var index SlabIndex
-	copy(index[:], b[8:])
+	copy(index[:], b[SlabAddressLength:])
 
 	return SlabID{address, index}, nil
 }
 
 func (id SlabID) ToRawBytes(b []byte) (int, error) {
-	if len(b) < slabIDSize {
+	if len(b) < SlabIDLength {
 		return 0, NewSlabIDErrorf("incorrect slab ID buffer length %d", len(b))
 	}
 	copy(b, id.address[:])
-	copy(b[8:], id.index[:])
-	return slabIDSize, nil
+	copy(b[SlabAddressLength:], id.index[:])
+	return SlabIDLength, nil
 }
 
 func (id SlabID) String() string {

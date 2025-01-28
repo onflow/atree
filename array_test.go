@@ -5675,6 +5675,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random composite value", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+
 			storage := newTestPersistentStorage(t)
 
 			const arraySize = 500
@@ -5712,6 +5713,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random data slab", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+
 			storage := newTestPersistentStorage(t)
 
 			const arraySize = 500
@@ -5778,6 +5780,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random slab", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+
 			storage := newTestPersistentStorage(t)
 
 			const arraySize = 500
@@ -6108,11 +6111,10 @@ func TestArrayID(t *testing.T) {
 	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	sid := array.SlabID()
-	id := array.ValueID()
+	slabID := array.SlabID()
+	valueID := array.ValueID()
 
-	require.Equal(t, sid.address[:], id[:SlabAddressLength])
-	require.Equal(t, sid.index[:], id[SlabAddressLength:])
+	testEqualValueIDAndSlabID(t, slabID, valueID)
 }
 
 func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {

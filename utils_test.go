@@ -402,10 +402,10 @@ func mapEqual(t *testing.T, expected mapValue, actual *OrderedMap) {
 }
 
 func valueIDToSlabID(vid ValueID) SlabID {
-	var id SlabID
-	copy(id.address[:], vid[:SlabAddressLength])
-	copy(id.index[:], vid[SlabAddressLength:])
-	return id
+	return NewSlabIDFromRawAddressAndIndex(
+		vid[:SlabAddressLength],
+		vid[SlabAddressLength:],
+	)
 }
 
 func testInlinedMapIDs(t *testing.T, address Address, m *OrderedMap) {
@@ -424,11 +424,10 @@ func testInlinedSlabIDAndValueID(t *testing.T, expectedAddress Address, slabID S
 }
 
 func testNotInlinedSlabIDAndValueID(t *testing.T, expectedAddress Address, slabID SlabID, valueID ValueID) {
-	require.Equal(t, expectedAddress, slabID.address)
-	require.NotEqual(t, SlabIndexUndefined, slabID.index)
+	require.Equal(t, expectedAddress, slabID.Address())
+	require.NotEqual(t, SlabIndexUndefined, slabID.Index())
 
-	require.Equal(t, slabID.address[:], valueID[:SlabAddressLength])
-	require.Equal(t, slabID.index[:], valueID[SlabAddressLength:])
+	testEqualValueIDAndSlabID(t, slabID, valueID)
 }
 
 type arrayValue []Value
@@ -463,4 +462,22 @@ func GetDeltasCount(storage *PersistentSlabStorage) int {
 
 func GetCacheCount(storage *PersistentSlabStorage) int {
 	return len(GetCache(storage))
+}
+
+func NewSlabIDFromRawAddressAndIndex(rawAddress, rawIndex []byte) SlabID {
+	var address Address
+	copy(address[:], rawAddress)
+
+	var index SlabIndex
+	copy(index[:], rawIndex)
+
+	return NewSlabID(address, index)
+}
+
+func testEqualValueIDAndSlabID(t *testing.T, slabID SlabID, valueID ValueID) {
+	sidAddress := slabID.Address()
+	sidIndex := slabID.Index()
+
+	require.Equal(t, sidAddress[:], valueID[:SlabAddressLength])
+	require.Equal(t, sidIndex[:], valueID[SlabAddressLength:])
 }

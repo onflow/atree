@@ -15053,7 +15053,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			sort.Slice(externalCollisionSlabIDs, func(i, j int) bool {
 				a := externalCollisionSlabIDs[i]
 				b := externalCollisionSlabIDs[j]
-				if a.address == b.address {
+				if a.Address() == b.Address() {
 					return a.IndexAsUint64() < b.IndexAsUint64()
 				}
 				return a.AddressAsUint64() < b.AddressAsUint64()
@@ -15254,7 +15254,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			sort.Slice(externalCollisionSlabIDs, func(i, j int) bool {
 				a := externalCollisionSlabIDs[i]
 				b := externalCollisionSlabIDs[j]
-				if a.address == b.address {
+				if a.Address() == b.Address() {
 					return a.IndexAsUint64() < b.IndexAsUint64()
 				}
 				return a.AddressAsUint64() < b.AddressAsUint64()
@@ -15470,7 +15470,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			sort.Slice(externalCollisionSlabIDs, func(i, j int) bool {
 				a := externalCollisionSlabIDs[i]
 				b := externalCollisionSlabIDs[j]
-				if a.address == b.address {
+				if a.Address() == b.Address() {
 					return a.IndexAsUint64() < b.IndexAsUint64()
 				}
 				return a.AddressAsUint64() < b.AddressAsUint64()
@@ -15985,6 +15985,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload composite value at random index", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+
 			storage := newTestPersistentStorage(t)
 
 			const mapSize = 500
@@ -16028,6 +16029,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random data slab", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+
 			storage := newTestPersistentStorage(t)
 
 			const mapSize = 500
@@ -16109,6 +16111,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random slab", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+
 			storage := newTestPersistentStorage(t)
 
 			const mapSize = 500
@@ -16643,11 +16646,10 @@ func TestMapID(t *testing.T) {
 	m, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	sid := m.SlabID()
-	id := m.ValueID()
+	slabID := m.SlabID()
+	valueID := m.ValueID()
 
-	require.Equal(t, sid.address[:], id[:SlabAddressLength])
-	require.Equal(t, sid.index[:], id[SlabAddressLength:])
+	testEqualValueIDAndSlabID(t, slabID, valueID)
 }
 
 func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {

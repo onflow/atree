@@ -2891,10 +2891,10 @@ func TestArrayDecodeV0(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		arraySlabID := SlabID{
-			address: address,
-			index:   SlabIndex{0, 0, 0, 0, 0, 0, 0, 1},
-		}
+		arraySlabID := NewSlabID(
+			address,
+			SlabIndex{0, 0, 0, 0, 0, 0, 0, 1},
+		)
 
 		slabData := map[SlabID][]byte{
 			arraySlabID: {
@@ -2931,10 +2931,10 @@ func TestArrayDecodeV0(t *testing.T) {
 		typeInfo := testTypeInfo{42}
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		arraySlabID := SlabID{
-			address: address,
-			index:   SlabIndex{0, 0, 0, 0, 0, 0, 0, 1},
-		}
+		arraySlabID := NewSlabID(
+			address,
+			SlabIndex{0, 0, 0, 0, 0, 0, 0, 1},
+		)
 
 		values := []Value{
 			Uint64Value(0),
@@ -2980,10 +2980,10 @@ func TestArrayDecodeV0(t *testing.T) {
 
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		arraySlabID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		arrayDataSlabID1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		arrayDataSlabID2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		childArraySlabID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		arraySlabID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		arrayDataSlabID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		arrayDataSlabID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		childArraySlabID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
 		const arraySize = 20
 		values := make([]Value, arraySize)
@@ -3218,9 +3218,9 @@ func TestArrayEncodeDecode(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -3339,7 +3339,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			expectedValues[i] = arrayValue{v}
 		}
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -3425,7 +3425,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			expectedValues[i] = arrayValue{v}
 		}
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -3518,7 +3518,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			}
 		}
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -3622,7 +3622,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			}
 		}
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -3722,9 +3722,9 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(arraySize), array.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -3874,9 +3874,9 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(arraySize), array.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -4024,10 +4024,10 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.Equal(t, uint64(arraySize), array.Count())
 		require.Equal(t, uint64(5), childArray.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		id4 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		id4 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -4198,10 +4198,10 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.Equal(t, uint64(1), childArray.Count())
 		require.Equal(t, uint64(5), gchildArray.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		id4 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 5}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		id4 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 5})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{

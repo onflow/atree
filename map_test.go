@@ -7282,7 +7282,7 @@ func TestMapDecodeV0(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 
-		mapSlabID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		mapSlabID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		slabData := map[SlabID][]byte{
 			mapSlabID: {
@@ -7349,7 +7349,7 @@ func TestMapDecodeV0(t *testing.T) {
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 		}
 
-		mapSlabID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		mapSlabID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		slabData := map[SlabID][]byte{
@@ -7431,10 +7431,10 @@ func TestMapDecodeV0(t *testing.T) {
 		// Create nested array
 		typeInfo2 := testTypeInfo{43}
 
-		mapSlabID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		nestedSlabID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		mapSlabID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		nestedSlabID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
 		childArray, err := NewArray(storage, address, typeInfo2)
 		childArray.root.SetSlabID(nestedSlabID)
@@ -7637,7 +7637,7 @@ func TestMapDecodeV0(t *testing.T) {
 			keyValues[k] = v
 		}
 
-		mapSlabID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		mapSlabID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		slabData := map[SlabID][]byte{
 
@@ -7811,7 +7811,7 @@ func TestMapDecodeV0(t *testing.T) {
 			keyValues[k] = v
 		}
 
-		mapSlabID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		mapSlabID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		slabData := map[SlabID][]byte{
 
@@ -8035,9 +8035,9 @@ func TestMapDecodeV0(t *testing.T) {
 			keyValues[k] = v
 		}
 
-		mapSlabID := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		mapSlabID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		slabData := map[SlabID][]byte{
 
@@ -8250,7 +8250,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), m.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		expected := map[SlabID][]byte{
 			id1: {
@@ -8332,7 +8332,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -8447,9 +8447,9 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -8669,7 +8669,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -8864,7 +8864,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -9057,7 +9057,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -9336,7 +9336,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -9581,9 +9581,9 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 10}} // inlined maps index 2-9
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 11}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 10}) // inlined maps index 2-9
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 11})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -10080,9 +10080,9 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 10}} // inlined maps index 2-9
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 11}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 10}) // inlined maps index 2-9
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 11})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -10531,7 +10531,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -10718,7 +10718,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -10955,9 +10955,9 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -11217,9 +11217,9 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint64(mapSize), m.Count())
 
 		// root slab (data slab) ID
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 		// child map slab ID
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -11407,9 +11407,9 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint64(mapSize), m.Count())
 
 		// root slab (data slab) ID
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 		// grand child map slab ID
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -11625,10 +11625,10 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), m.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
-		id3 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
-		id4 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		id4 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -11885,9 +11885,9 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, uint64(mapSize), m.Count())
 
 		// parent map root slab ID
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 		// grand child array root slab ID
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}}
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -12027,8 +12027,8 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(1), m.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
 		expectedNoPointer := []byte{
 
@@ -12187,7 +12187,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -12359,7 +12359,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -12538,7 +12538,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -12732,7 +12732,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -12976,7 +12976,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{
@@ -13181,7 +13181,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		require.Equal(t, uint64(mapSize), parentMap.Count())
 
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
+		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
 		// Expected serialized slab data with slab id
 		expected := map[SlabID][]byte{

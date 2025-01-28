@@ -45,7 +45,7 @@ func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
 		var index SlabIndex
 		binary.BigEndian.PutUint64(index[:], uint64(i))
 
-		id := SlabID{addr, index}
+		id := NewSlabID(addr, index)
 
 		slabs[i] = generateLargeSlab(id)
 	}
@@ -86,7 +86,7 @@ func benchmarkNondeterministicFastCommit(b *testing.B, seed int64, numberOfSlabs
 		var index SlabIndex
 		binary.BigEndian.PutUint64(index[:], uint64(i))
 
-		id := SlabID{addr, index}
+		id := NewSlabID(addr, index)
 
 		slabs[i] = generateLargeSlab(id)
 	}
@@ -151,7 +151,7 @@ func benchmarkRetrieve(b *testing.B, seed int64, numberOfSlabs int) {
 		var index SlabIndex
 		binary.BigEndian.PutUint64(index[:], uint64(i))
 
-		id := SlabID{addr, index}
+		id := NewSlabID(addr, index)
 
 		slab := generateLargeSlab(id)
 
@@ -198,7 +198,7 @@ func benchmarkBatchPreload(b *testing.B, seed int64, numberOfSlabs int) {
 		var index SlabIndex
 		binary.BigEndian.PutUint64(index[:], uint64(i))
 
-		id := SlabID{addr, index}
+		id := NewSlabID(addr, index)
 
 		slab := generateLargeSlab(id)
 

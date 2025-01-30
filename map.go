@@ -3239,6 +3239,14 @@ func (m *MapDataSlab) getPrefixSize() uint32 {
 	return mapDataSlabPrefixSize
 }
 
+func (m *MapDataSlab) isCollisionGroup() bool {
+	return m.collisionGroup
+}
+
+func (m *MapDataSlab) elementCount() uint32 {
+	return m.elements.Count()
+}
+
 func (m *MapDataSlab) Inlined() bool {
 	return m.inlined
 }

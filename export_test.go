@@ -31,3 +31,16 @@ var (
 var (
 	TargetSlabSize = targetSlabSize
 )
+
+// Exported function of Array for testing.
+var (
+	GetArrayRootSlab                 = (*Array).rootSlab
+	ArrayHasParentUpdater            = (*Array).hasParentUpdater
+	GetArrayMutableElementIndexCount = (*Array).getMutableElementIndexCount
+)
+
+// Exported function of OrderedMap for testing.
+var (
+	GetMapRootSlab        = (*OrderedMap).rootSlab
+	GetMapDigesterBuilder = (*OrderedMap).getDigesterBuilder
+)

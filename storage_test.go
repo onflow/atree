@@ -864,22 +864,13 @@ func TestPersistentStorage(t *testing.T) {
 		baseStorage := NewInMemBaseStorage()
 		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
-		// Encoding slabWithNonStorable returns error.
-		slabWithNonStorable := &ArrayDataSlab{
-			header:   ArraySlabHeader{size: uint32(1), count: uint32(1)},
-			elements: []Storable{nonStorable{}},
-		}
-		// Encoding slabWithSlowStorable takes some time which delays
-		// sending encoding result to results channel.
-		slabWithSlowStorable := &ArrayDataSlab{
-			header:   ArraySlabHeader{size: uint32(3), count: uint32(1)},
-			elements: []Storable{newSlowStorable(1)},
-		}
-
 		address := Address{1}
 
 		id, err := storage.GenerateSlabID(address)
 		require.NoError(t, err)
+
+		// Encoding slabWithNonStorable returns error.
+		slabWithNonStorable := NewArrayRootDataSlab(id, []Storable{nonStorable{}})
 
 		err = storage.Store(id, slabWithNonStorable)
 		require.NoError(t, err)
@@ -887,6 +878,10 @@ func TestPersistentStorage(t *testing.T) {
 		for i := 0; i < 500; i++ {
 			id, err := storage.GenerateSlabID(address)
 			require.NoError(t, err)
+
+			// Encoding slabWithSlowStorable takes some time which delays
+			// sending encoding result to results channel.
+			slabWithSlowStorable := NewArrayRootDataSlab(id, []Storable{newSlowStorable(1)})
 
 			err = storage.Store(id, slabWithSlowStorable)
 			require.NoError(t, err)
@@ -1075,15 +1070,7 @@ func TestPersistentStorageGenerateSlabID(t *testing.T) {
 
 func generateRandomSlab(id SlabID, r *rand.Rand) Slab {
 	storable := Uint64Value(r.Uint64())
-
-	return &ArrayDataSlab{
-		header: ArraySlabHeader{
-			slabID: id,
-			size:   arrayRootDataSlabPrefixSize + storable.ByteSize(),
-			count:  1,
-		},
-		elements: []Storable{storable},
-	}
+	return NewArrayRootDataSlab(id, []Storable{storable})
 }
 
 func generateLargeSlab(id SlabID) Slab {
@@ -1091,21 +1078,12 @@ func generateLargeSlab(id SlabID) Slab {
 	const elementCount = 100
 
 	storables := make([]Storable, elementCount)
-	size := uint32(0)
 	for i := 0; i < elementCount; i++ {
 		storable := Uint64Value(uint64(i))
-		size += storable.ByteSize()
 		storables[i] = storable
 	}
 
-	return &ArrayDataSlab{
-		header: ArraySlabHeader{
-			slabID: id,
-			size:   arrayRootDataSlabPrefixSize + size,
-			count:  elementCount,
-		},
-		elements: storables,
-	}
+	return NewArrayRootDataSlab(id, storables)
 }
 
 func generateRandomAddress(r *rand.Rand) Address {

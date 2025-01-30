@@ -38,3 +38,9 @@ var (
 	ArrayHasParentUpdater            = (*Array).hasParentUpdater
 	GetArrayMutableElementIndexCount = (*Array).getMutableElementIndexCount
 )
+
+// Exported function of OrderedMap for testing.
+var (
+	GetMapRootSlab        = (*OrderedMap).rootSlab
+	GetMapDigesterBuilder = (*OrderedMap).getDigesterBuilder
+)

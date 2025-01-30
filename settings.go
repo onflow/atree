@@ -75,10 +75,18 @@ func MaxInlineArrayElementSize() uint64 {
 	return maxInlineArrayElementSize
 }
 
+func MaxInlineMapElementSize() uint64 {
+	return maxInlineMapElementSize
+}
+
 func MaxInlineMapKeySize() uint64 {
 	return maxInlineMapKeySize
 }
 
 func maxInlineMapValueSize(keySize uint64) uint64 {
 	return maxInlineMapElementSize - keySize - singleElementPrefixSize
+}
+
+func targetSlabSize() uint64 {
+	return targetThreshold
 }

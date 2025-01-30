@@ -3288,6 +3288,18 @@ func (a *Array) Inlinable(maxInlineSize uint64) bool {
 	return a.root.Inlinable(maxInlineSize)
 }
 
+func (a *Array) rootSlab() ArraySlab {
+	return a.root
+}
+
+func (a *Array) hasParentUpdater() bool {
+	return a.parentUpdater != nil
+}
+
+func (a *Array) getMutableElementIndexCount() int {
+	return len(a.mutableElementIndex)
+}
+
 // Storable returns array a as either:
 // - SlabIDStorable, or
 // - inlined data slab storable

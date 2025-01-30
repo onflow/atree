@@ -481,3 +481,36 @@ func testEqualValueIDAndSlabID(t *testing.T, slabID SlabID, valueID ValueID) {
 	require.Equal(t, sidAddress[:], valueID[:SlabAddressLength])
 	require.Equal(t, sidIndex[:], valueID[SlabAddressLength:])
 }
+
+func IsArrayRootDataSlab(array *Array) bool {
+	return GetArrayRootSlab(array).IsData()
+}
+
+func GetArrayRootSlabByteSize(array *Array) uint32 {
+	return GetArrayRootSlab(array).ByteSize()
+}
+
+func IsMapRootDataSlab(m *OrderedMap) bool {
+	return GetMapRootSlab(m).IsData()
+}
+
+func GetMapRootSlabByteSize(m *OrderedMap) uint32 {
+	return GetMapRootSlab(m).ByteSize()
+}
+
+func NewArrayRootDataSlab(id SlabID, storables []Storable) ArraySlab {
+	size := uint32(arrayRootDataSlabPrefixSize)
+
+	for _, storable := range storables {
+		size += storable.ByteSize()
+	}
+
+	return &ArrayDataSlab{
+		header: ArraySlabHeader{
+			slabID: id,
+			size:   size,
+			count:  uint32(len(storables)),
+		},
+		elements: storables,
+	}
+}

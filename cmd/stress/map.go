@@ -41,6 +41,8 @@ const (
 	maxMapOp
 )
 
+const mapNoOp mapOpType = -1
+
 type mapStatus struct {
 	lock sync.RWMutex
 
@@ -127,6 +129,8 @@ func testMap(
 
 	var ms runtime.MemStats
 
+	count := uint64(0)
+
 	for {
 		runtime.ReadMemStats(&ms)
 		allocMiB := ms.Alloc / 1024 / 1024
@@ -196,6 +200,8 @@ func testMap(
 
 		opCountForStorageHealthCheck++
 
+		count++
+
 		// Update status
 		status.incOp(prevOp, m.Count())
 
@@ -223,6 +229,10 @@ func testMap(
 			// Drop cache after commit to force slab decoding at next op.
 			storage.DropCache()
 		}
+
+		if flagIterationCount > 0 && flagIterationCount == count {
+			break
+		}
 	}
 }
 
@@ -233,7 +243,14 @@ func nextMapOp(
 	forceRemove bool,
 ) (mapOpType, error) {
 
-	if forceRemove {
+	isComposite := m.Type().IsComposite()
+
+	if isComposite && m.Count() == 0 {
+		// No op for empty composite values.
+		return mapNoOp, nil
+	}
+
+	if forceRemove && !isComposite {
 		if m.Count() == 0 {
 			return 0, fmt.Errorf("failed to force remove map elements because map has no elements")
 		}
@@ -248,6 +265,14 @@ func nextMapOp(
 		nextOp := mapOpType(r.Intn(int(maxMapOp)))
 
 		switch nextOp {
+		case mapRemoveOp:
+			if !isComposite {
+				return nextOp, nil
+			}
+
+			// Can't remove fields in map of composite type.
+			// Try another map operations.
+
 		case mapMutateChildContainerAfterSet:
 			if nestedLevels-1 > 0 {
 				return nextOp, nil
@@ -269,6 +294,18 @@ func nextMapOp(
 	}
 }
 
+func getMapKeys(m *atree.OrderedMap) ([]atree.Value, error) {
+	keys := make([]atree.Value, 0, m.Count())
+	err := m.IterateKeys(compare, hashInputProvider, func(key atree.Value) (resume bool, err error) {
+		keys = append(keys, key)
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
 func modifyMap(
 	expectedValues mapValue,
 	m *atree.OrderedMap,
@@ -282,6 +319,10 @@ func modifyMap(
 	nextOp, err := nextMapOp(expectedValues, m, nestedLevels, forceRemove)
 	if err != nil {
 		return nil, 0, err
+	}
+
+	if nextOp == mapNoOp {
+		return expectedValues, nextOp, nil
 	}
 
 	switch nextOp {
@@ -298,9 +339,28 @@ func modifyMap(
 			panic("not reachable")
 		}
 
-		expectedKey, key, err := randomKey()
-		if err != nil {
-			return nil, 0, fmt.Errorf("failed to generate random key %s: %s", key, err)
+		var expectedKey, key atree.Value
+		var err error
+
+		if m.Type().IsComposite() {
+			// Update existing field, instead of creating new field.
+			keys, err := getMapKeys(m)
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to iterate composite keys: %s", err)
+			}
+			if len(keys) == 0 {
+				// No op for empty composite values.
+				return expectedValues, mapNoOp, nil
+			}
+
+			key = keys[r.Intn(len(keys))]
+			expectedKey = key
+
+		} else {
+			expectedKey, key, err = randomKey()
+			if err != nil {
+				return nil, 0, fmt.Errorf("failed to generate random key %s: %s", key, err)
+			}
 		}
 
 		expectedChildValue, child, err := randomValue(storage, address, nextNestedLevels)
@@ -351,6 +411,10 @@ func modifyMap(
 		}
 
 	case mapRemoveOp:
+		if m.Type().IsComposite() {
+			panic("not reachable")
+		}
+
 		// Use for-range on Go map to get random key
 		var key atree.Value
 		for k := range expectedValues {
@@ -426,6 +490,7 @@ func modifyMap(
 
 func hasChildContainerInMap(expectedValues mapValue) bool {
 	for _, v := range expectedValues {
+		v, _ = unwrapValue(v)
 		switch v.(type) {
 		case arrayValue, mapValue:
 			return true
@@ -437,6 +502,7 @@ func hasChildContainerInMap(expectedValues mapValue) bool {
 func getRandomChildContainerKeyInMap(expectedValues mapValue) (key atree.Value, found bool) {
 	keys := make([]atree.Value, 0, len(expectedValues))
 	for k, v := range expectedValues {
+		v, _ = unwrapValue(v)
 		switch v.(type) {
 		case arrayValue, mapValue:
 			keys = append(keys, k)

@@ -342,6 +342,15 @@ func valueEqual(t *testing.T, expected Value, actual Value) {
 	case *OrderedMap:
 		require.FailNow(t, "expected value shouldn't be *OrderedMap")
 
+	case someValue:
+		actual, ok := actual.(SomeValue)
+		require.True(t, ok)
+
+		valueEqual(t, expected.Value, actual.Value)
+
+	case SomeValue:
+		require.FailNow(t, "expected value shouldn't be SomeValue")
+
 	default:
 		require.Equal(t, expected, actual)
 	}
@@ -434,6 +443,16 @@ type mapValue map[Value]Value
 var _ Value = &mapValue{}
 
 func (v mapValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+	panic("not reachable")
+}
+
+type someValue struct {
+	Value Value
+}
+
+var _ Value = &someValue{}
+
+func (v someValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
 	panic("not reachable")
 }
 

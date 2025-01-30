@@ -668,7 +668,8 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 				}
 
 				var err error
-				slab, ok, err = s.RetrieveIgnoringDeltas(id)
+				// Don't cache retrieved child slabs during slab iteration to prevent changes to storage cache.
+				slab, ok, err = s.RetrieveIgnoringDeltas(id, false)
 				if !ok {
 					return NewSlabNotFoundErrorf(id, "slab not found during slab iteration")
 				}
@@ -1220,7 +1221,7 @@ func (s *PersistentSlabStorage) DropCache() {
 	s.cache = make(map[SlabID]Slab)
 }
 
-func (s *PersistentSlabStorage) RetrieveIgnoringDeltas(id SlabID) (Slab, bool, error) {
+func (s *PersistentSlabStorage) RetrieveIgnoringDeltas(id SlabID, cache bool) (Slab, bool, error) {
 
 	// check the read cache next
 	if slab, ok := s.cache[id]; ok {
@@ -1244,7 +1245,9 @@ func (s *PersistentSlabStorage) RetrieveIgnoringDeltas(id SlabID) (Slab, bool, e
 	}
 
 	// save decoded slab to cache
-	s.cache[id] = slab
+	if cache {
+		s.cache[id] = slab
+	}
 
 	return slab, ok, nil
 }
@@ -1271,7 +1274,7 @@ func (s *PersistentSlabStorage) Retrieve(id SlabID) (Slab, bool, error) {
 	}
 
 	// Don't need to wrap error as external error because err is already categorized by PersistentSlabStorage.RetrieveIgnoringDeltas().
-	return s.RetrieveIgnoringDeltas(id)
+	return s.RetrieveIgnoringDeltas(id, true)
 }
 
 func (s *PersistentSlabStorage) Store(id SlabID, slab Slab) error {

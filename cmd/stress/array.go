@@ -151,6 +151,8 @@ func testArray(
 
 	var m runtime.MemStats
 
+	count := uint64(0)
+
 	for {
 		runtime.ReadMemStats(&m)
 		allocMiB := m.Alloc / 1024 / 1024
@@ -218,6 +220,8 @@ func testArray(
 
 		opCountForStorageHealthCheck++
 
+		count++
+
 		// Update status
 		status.incOp(prevOp, array.Count())
 
@@ -244,6 +248,10 @@ func testArray(
 
 			// Drop cache after commit to force slab decoding at next op.
 			storage.DropCache()
+		}
+
+		if flagIterationCount > 0 && flagIterationCount == count {
+			break
 		}
 	}
 }
@@ -526,6 +534,19 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 			return nil, err
 		}
 
+	case SomeValue:
+		expectedSomeValue, ok := expectedValue.(someValue)
+		if !ok {
+			return nil, fmt.Errorf("failed to get expected value of type someValue: got %T", expectedValue)
+		}
+
+		expected, err := modifyContainer(expectedSomeValue.Value, value.Value, nestedLevels)
+		if err != nil {
+			return nil, err
+		}
+
+		return someValue{expected}, nil
+
 	default:
 		return nil, fmt.Errorf("failed to get container: got %T", value)
 	}
@@ -535,6 +556,7 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 
 func hasChildContainerInArray(expectedValues arrayValue) bool {
 	for _, v := range expectedValues {
+		v, _ = unwrapValue(v)
 		switch v.(type) {
 		case arrayValue, mapValue:
 			return true
@@ -546,6 +568,7 @@ func hasChildContainerInArray(expectedValues arrayValue) bool {
 func getRandomChildContainerIndexInArray(expectedValues arrayValue) (index int, found bool) {
 	indexes := make([]int, 0, len(expectedValues))
 	for i, v := range expectedValues {
+		v, _ = unwrapValue(v)
 		switch v.(type) {
 		case arrayValue, mapValue:
 			indexes = append(indexes, i)

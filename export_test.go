@@ -44,3 +44,9 @@ var (
 	GetMapRootSlab        = (*OrderedMap).rootSlab
 	GetMapDigesterBuilder = (*OrderedMap).getDigesterBuilder
 )
+
+// Exported function of MapDataSlab for testing.
+var (
+	IsMapDataSlabCollisionGroup = (*MapDataSlab).isCollisionGroup
+	GetMapDataSlabElementCount  = (*MapDataSlab).elementCount
+)

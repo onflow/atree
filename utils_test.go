@@ -514,3 +514,15 @@ func NewArrayRootDataSlab(id SlabID, storables []Storable) ArraySlab {
 		elements: storables,
 	}
 }
+
+func GetArrayMetaDataSlabChildInfo(metaDataSlab *ArrayMetaDataSlab) (childSlabIDs []SlabID, childCounts []uint32) {
+	childSlabIDs = make([]SlabID, len(metaDataSlab.childrenHeaders))
+	childCounts = make([]uint32, len(metaDataSlab.childrenHeaders))
+
+	for i, childHeader := range metaDataSlab.childrenHeaders {
+		childSlabIDs[i] = childHeader.slabID
+		childCounts[i] = childHeader.count
+	}
+
+	return childSlabIDs, childCounts
+}

@@ -5530,15 +5530,18 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			metaDataSlab, ok := GetArrayRootSlab(array).(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
+			childSlabIDs, childCounts := GetArrayMetaDataSlabChildInfo(metaDataSlab)
+
 			// Unload data slabs from front to back
-			for i := 0; i < len(metaDataSlab.childrenHeaders); i++ {
+			for i := 0; i < len(childSlabIDs); i++ {
 
-				childHeader := metaDataSlab.childrenHeaders[i]
+				slabID := childSlabIDs[i]
+				count := childCounts[i]
 
-				err := storage.Remove(childHeader.slabID)
+				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
-				values = values[childHeader.count:]
+				values = values[count:]
 
 				testArrayLoadedElements(t, array, values)
 			}
@@ -5561,15 +5564,18 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			metaDataSlab, ok := GetArrayRootSlab(array).(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
+			childSlabIDs, childCounts := GetArrayMetaDataSlabChildInfo(metaDataSlab)
+
 			// Unload data slabs from back to front
-			for i := len(metaDataSlab.childrenHeaders) - 1; i >= 0; i-- {
+			for i := len(childSlabIDs) - 1; i >= 0; i-- {
 
-				childHeader := metaDataSlab.childrenHeaders[i]
+				slabID := childSlabIDs[i]
+				count := childCounts[i]
 
-				err := storage.Remove(childHeader.slabID)
+				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
-				values = values[:len(values)-int(childHeader.count)]
+				values = values[:len(values)-int(count)]
 
 				testArrayLoadedElements(t, array, values)
 			}
@@ -5592,16 +5598,24 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			metaDataSlab, ok := GetArrayRootSlab(array).(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
-			require.True(t, len(metaDataSlab.childrenHeaders) > 2)
+			childSlabIDs, childCounts := GetArrayMetaDataSlabChildInfo(metaDataSlab)
 
-			index := 1
-			childHeader := metaDataSlab.childrenHeaders[index]
+			require.True(t, len(childSlabIDs) > 2)
 
-			err := storage.Remove(childHeader.slabID)
+			const index = 1
+
+			slabID := childSlabIDs[index]
+			count := childCounts[index]
+
+			err := storage.Remove(slabID)
 			require.NoError(t, err)
 
-			copy(values[metaDataSlab.childrenCountSum[index-1]:], values[metaDataSlab.childrenCountSum[index]:])
-			values = values[:array.Count()-uint64(childHeader.count)]
+			var accumulativeCount uint32
+			for i := 0; i < index; i++ {
+				accumulativeCount += childCounts[i]
+			}
+			copy(values[accumulativeCount:], values[accumulativeCount+count:])
+			values = values[:array.Count()-uint64(count)]
 
 			testArrayLoadedElements(t, array, values)
 		}
@@ -5620,15 +5634,18 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			rootMetaDataSlab, ok := GetArrayRootSlab(array).(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
+			childSlabIDs, childCounts := GetArrayMetaDataSlabChildInfo(rootMetaDataSlab)
+
 			// Unload non-root metadata slabs from front to back
-			for i := 0; i < len(rootMetaDataSlab.childrenHeaders); i++ {
+			for i := 0; i < len(childSlabIDs); i++ {
 
-				childHeader := rootMetaDataSlab.childrenHeaders[i]
+				slabID := childSlabIDs[i]
+				count := childCounts[i]
 
-				err := storage.Remove(childHeader.slabID)
+				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
-				values = values[childHeader.count:]
+				values = values[count:]
 
 				testArrayLoadedElements(t, array, values)
 			}
@@ -5648,15 +5665,18 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			rootMetaDataSlab, ok := GetArrayRootSlab(array).(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
+			childSlabIDs, childCounts := GetArrayMetaDataSlabChildInfo(rootMetaDataSlab)
+
 			// Unload non-root metadata slabs from back to front
-			for i := len(rootMetaDataSlab.childrenHeaders) - 1; i >= 0; i-- {
+			for i := len(childSlabIDs) - 1; i >= 0; i-- {
 
-				childHeader := rootMetaDataSlab.childrenHeaders[i]
+				slabID := childSlabIDs[i]
+				count := childCounts[i]
 
-				err := storage.Remove(childHeader.slabID)
+				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
-				values = values[childHeader.count:]
+				values = values[count:]
 
 				testArrayLoadedElements(t, array, values)
 			}
@@ -5719,6 +5739,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			rootMetaDataSlab, ok := GetArrayRootSlab(array).(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
+			childSlabIDs, _ := GetArrayMetaDataSlabChildInfo(rootMetaDataSlab)
+
 			type slabInfo struct {
 				id         SlabID
 				startIndex int
@@ -5727,14 +5749,20 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			count := 0
 			var dataSlabInfos []*slabInfo
-			for _, mheader := range rootMetaDataSlab.childrenHeaders {
-				nonrootMetaDataSlab, ok := GetDeltas(storage)[mheader.slabID].(*ArrayMetaDataSlab)
+			for _, slabID := range childSlabIDs {
+				nonrootMetaDataSlab, ok := GetDeltas(storage)[slabID].(*ArrayMetaDataSlab)
 				require.True(t, ok)
 
-				for _, h := range nonrootMetaDataSlab.childrenHeaders {
-					dataSlabInfo := &slabInfo{id: h.slabID, startIndex: count, count: int(h.count)}
+				nonrootChildSlabIDs, nonrootChildCounts := GetArrayMetaDataSlabChildInfo(nonrootMetaDataSlab)
+
+				for i := 0; i < len(nonrootChildSlabIDs); i++ {
+					nonrootSlabID := nonrootChildSlabIDs[i]
+					nonrootCount := nonrootChildCounts[i]
+
+					dataSlabInfo := &slabInfo{id: nonrootSlabID, startIndex: count, count: int(
+						nonrootCount)}
 					dataSlabInfos = append(dataSlabInfos, dataSlabInfo)
-					count += int(h.count)
+					count += int(nonrootCount)
 				}
 			}
 
@@ -5793,28 +5821,39 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			rootMetaDataSlab, ok := GetArrayRootSlab(array).(*ArrayMetaDataSlab)
 			require.True(t, ok)
 
+			childSlabIDs, childCounts := GetArrayMetaDataSlabChildInfo(rootMetaDataSlab)
+
 			var dataSlabCount, metadataSlabCount int
-			nonrootMetadataSlabInfos := make([]*slabInfo, len(rootMetaDataSlab.childrenHeaders))
-			for i, mheader := range rootMetaDataSlab.childrenHeaders {
+			nonrootMetadataSlabInfos := make([]*slabInfo, len(childSlabIDs))
+			for i := 0; i < len(childSlabIDs); i++ {
+
+				slabID := childSlabIDs[i]
+				count := childCounts[i]
 
 				nonrootMetadataSlabInfo := &slabInfo{
-					id:         mheader.slabID,
+					id:         slabID,
 					startIndex: metadataSlabCount,
-					count:      int(mheader.count),
+					count:      int(count),
 				}
-				metadataSlabCount += int(mheader.count)
+				metadataSlabCount += int(count)
 
-				nonrootMetadataSlab, ok := GetDeltas(storage)[mheader.slabID].(*ArrayMetaDataSlab)
+				nonrootMetadataSlab, ok := GetDeltas(storage)[slabID].(*ArrayMetaDataSlab)
 				require.True(t, ok)
 
-				children := make([]*slabInfo, len(nonrootMetadataSlab.childrenHeaders))
-				for i, h := range nonrootMetadataSlab.childrenHeaders {
-					children[i] = &slabInfo{
-						id:         h.slabID,
+				nonrootChildSlabIDs, nonrootChildCounts := GetArrayMetaDataSlabChildInfo(nonrootMetadataSlab)
+
+				children := make([]*slabInfo, len(nonrootChildSlabIDs))
+				for j := 0; j < len(nonrootChildSlabIDs); j++ {
+
+					nonrootSlabID := nonrootChildSlabIDs[j]
+					nonrootCount := nonrootChildCounts[j]
+
+					children[j] = &slabInfo{
+						id:         nonrootSlabID,
 						startIndex: dataSlabCount,
-						count:      int(h.count),
+						count:      int(nonrootCount),
 					}
-					dataSlabCount += int(h.count)
+					dataSlabCount += int(nonrootCount)
 				}
 
 				nonrootMetadataSlabInfo.children = children

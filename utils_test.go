@@ -526,3 +526,17 @@ func GetArrayMetaDataSlabChildInfo(metaDataSlab *ArrayMetaDataSlab) (childSlabID
 
 	return childSlabIDs, childCounts
 }
+
+func GetMapMetaDataSlabChildInfo(metaDataSlab *MapMetaDataSlab) (childSlabIDs []SlabID, childSizes []uint32, childFirstKeys []Digest) {
+	childSlabIDs = make([]SlabID, len(metaDataSlab.childrenHeaders))
+	childSizes = make([]uint32, len(metaDataSlab.childrenHeaders))
+	childFirstKeys = make([]Digest, len(metaDataSlab.childrenHeaders))
+
+	for i, childHeader := range metaDataSlab.childrenHeaders {
+		childSlabIDs[i] = childHeader.slabID
+		childSizes[i] = childHeader.size
+		childFirstKeys[i] = childHeader.firstKey
+	}
+
+	return childSlabIDs, childSizes, childFirstKeys
+}

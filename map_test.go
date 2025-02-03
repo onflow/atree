@@ -8595,11 +8595,14 @@ func TestMapEncodeDecode(t *testing.T) {
 		// Verify slab size in header is correct.
 		meta, ok := GetMapRootSlab(m).(*MapMetaDataSlab)
 		require.True(t, ok)
-		require.Equal(t, 2, len(meta.childrenHeaders))
-		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
+
+		childSlabIDs, childSizes, _ := GetMapMetaDataSlabChildInfo(meta)
+
+		require.Equal(t, 2, len(childSlabIDs))
+		require.Equal(t, uint32(len(stored[id2])), childSizes[0])
 
 		const inlinedExtraDataSize = 8
-		require.Equal(t, uint32(len(stored[id3])-inlinedExtraDataSize+SlabIDLength), meta.childrenHeaders[1].size)
+		require.Equal(t, uint32(len(stored[id3])-inlinedExtraDataSize+SlabIDLength), childSizes[1])
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, stored)
@@ -11785,9 +11788,12 @@ func TestMapEncodeDecode(t *testing.T) {
 		// Verify slab size in header is correct.
 		meta, ok := GetMapRootSlab(m).(*MapMetaDataSlab)
 		require.True(t, ok)
-		require.Equal(t, 2, len(meta.childrenHeaders))
-		require.Equal(t, uint32(len(stored[id2])), meta.childrenHeaders[0].size)
-		require.Equal(t, uint32(len(stored[id3])+SlabIDLength), meta.childrenHeaders[1].size)
+
+		childSlabIDs, childSizes, _ := GetMapMetaDataSlabChildInfo(meta)
+
+		require.Equal(t, 2, len(childSlabIDs))
+		require.Equal(t, uint32(len(stored[id2])), childSizes[0])
+		require.Equal(t, uint32(len(stored[id3])+SlabIDLength), childSizes[1])
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, stored)
@@ -15031,7 +15037,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			deltas := GetDeltas(storage)
 			for id, slab := range deltas {
 				if dataSlab, ok := slab.(*MapDataSlab); ok {
-					if dataSlab.collisionGroup {
+					if IsMapDataSlabCollisionGroup(dataSlab) {
 						externalCollisionSlabIDs = append(externalCollisionSlabIDs, id)
 					}
 				}
@@ -15232,7 +15238,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			deltas := GetDeltas(storage)
 			for id, slab := range deltas {
 				if dataSlab, ok := slab.(*MapDataSlab); ok {
-					if dataSlab.collisionGroup {
+					if IsMapDataSlabCollisionGroup(dataSlab) {
 						externalCollisionSlabIDs = append(externalCollisionSlabIDs, id)
 					}
 				}
@@ -15448,7 +15454,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			deltas := GetDeltas(storage)
 			for id, slab := range deltas {
 				if dataSlab, ok := slab.(*MapDataSlab); ok {
-					if dataSlab.collisionGroup {
+					if IsMapDataSlabCollisionGroup(dataSlab) {
 						externalCollisionSlabIDs = append(externalCollisionSlabIDs, id)
 					}
 				}
@@ -15770,19 +15776,19 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			rootMetaDataSlab, ok := GetMapRootSlab(m).(*MapMetaDataSlab)
 			require.True(t, ok)
 
-			// Unload data slabs from front to back
-			for i := 0; i < len(rootMetaDataSlab.childrenHeaders); i++ {
+			childSlabIDs, _, _ := GetMapMetaDataSlabChildInfo(rootMetaDataSlab)
 
-				childHeader := rootMetaDataSlab.childrenHeaders[i]
+			// Unload data slabs from front to back
+			for _, slabID := range childSlabIDs {
 
 				// Get data slab element count before unload it from storage.
 				// Element count isn't in the header.
-				mapDataSlab, ok := GetDeltas(storage)[childHeader.slabID].(*MapDataSlab)
+				mapDataSlab, ok := GetDeltas(storage)[slabID].(*MapDataSlab)
 				require.True(t, ok)
 
-				count := mapDataSlab.elements.Count()
+				count := GetMapDataSlabElementCount(mapDataSlab)
 
-				err := storage.Remove(childHeader.slabID)
+				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
 				values = values[count:]
@@ -15817,19 +15823,21 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			rootMetaDataSlab, ok := GetMapRootSlab(m).(*MapMetaDataSlab)
 			require.True(t, ok)
 
-			// Unload data slabs from back to front
-			for i := len(rootMetaDataSlab.childrenHeaders) - 1; i >= 0; i-- {
+			childSlabIDs, _, _ := GetMapMetaDataSlabChildInfo(rootMetaDataSlab)
 
-				childHeader := rootMetaDataSlab.childrenHeaders[i]
+			// Unload data slabs from back to front
+			for i := len(childSlabIDs) - 1; i >= 0; i-- {
+
+				slabID := childSlabIDs[i]
 
 				// Get data slab element count before unload it from storage
 				// Element count isn't in the header.
-				mapDataSlab, ok := GetDeltas(storage)[childHeader.slabID].(*MapDataSlab)
+				mapDataSlab, ok := GetDeltas(storage)[slabID].(*MapDataSlab)
 				require.True(t, ok)
 
-				count := mapDataSlab.elements.Count()
+				count := GetMapDataSlabElementCount(mapDataSlab)
 
-				err := storage.Remove(childHeader.slabID)
+				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
 				values = values[:len(values)-int(count)]
@@ -15864,24 +15872,29 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			rootMetaDataSlab, ok := GetMapRootSlab(m).(*MapMetaDataSlab)
 			require.True(t, ok)
 
-			require.True(t, len(rootMetaDataSlab.childrenHeaders) > 2)
+			childSlabIDs, _, _ := GetMapMetaDataSlabChildInfo(rootMetaDataSlab)
 
-			index := 1
-			childHeader := rootMetaDataSlab.childrenHeaders[index]
+			require.True(t, len(childSlabIDs) > 2)
+
+			const prevIndex = 0
+			const index = prevIndex + 1
+
+			prevSlabID := childSlabIDs[prevIndex]
+			slabID := childSlabIDs[index]
 
 			// Get element count from previous data slab
-			mapDataSlab, ok := GetDeltas(storage)[rootMetaDataSlab.childrenHeaders[0].slabID].(*MapDataSlab)
+			mapDataSlab, ok := GetDeltas(storage)[prevSlabID].(*MapDataSlab)
 			require.True(t, ok)
 
-			countAtIndex0 := mapDataSlab.elements.Count()
+			countAtIndex0 := GetMapDataSlabElementCount(mapDataSlab)
 
 			// Get element count from slab to be unloaded
-			mapDataSlab, ok = GetDeltas(storage)[rootMetaDataSlab.childrenHeaders[index].slabID].(*MapDataSlab)
+			mapDataSlab, ok = GetDeltas(storage)[slabID].(*MapDataSlab)
 			require.True(t, ok)
 
-			countAtIndex1 := mapDataSlab.elements.Count()
+			countAtIndex1 := GetMapDataSlabElementCount(mapDataSlab)
 
-			err := storage.Remove(childHeader.slabID)
+			err := storage.Remove(slabID)
 			require.NoError(t, err)
 
 			copy(values[countAtIndex0:], values[countAtIndex0+countAtIndex1:])
@@ -15913,19 +15926,21 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			rootMetaDataSlab, ok := GetMapRootSlab(m).(*MapMetaDataSlab)
 			require.True(t, ok)
 
+			childSlabIDs, _, childFirstKeys := GetMapMetaDataSlabChildInfo(rootMetaDataSlab)
+
 			// Unload non-root metadata slabs from front to back.
-			for i := 0; i < len(rootMetaDataSlab.childrenHeaders); i++ {
+			for i := 0; i < len(childSlabIDs); i++ {
 
-				childHeader := rootMetaDataSlab.childrenHeaders[i]
+				slabID := childSlabIDs[i]
 
-				err := storage.Remove(childHeader.slabID)
+				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
 				// Use firstKey to deduce number of elements in slab.
 				var expectedValues [][2]Value
-				if i < len(rootMetaDataSlab.childrenHeaders)-1 {
-					nextChildHeader := rootMetaDataSlab.childrenHeaders[i+1]
-					expectedValues = values[int(nextChildHeader.firstKey):]
+				if i < len(childSlabIDs)-1 {
+					nextFirstKey := childFirstKeys[i+1]
+					expectedValues = values[int(nextFirstKey):]
 				}
 
 				testMapLoadedElements(t, m, expectedValues)
@@ -15955,16 +15970,18 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			rootMetaDataSlab, ok := GetMapRootSlab(m).(*MapMetaDataSlab)
 			require.True(t, ok)
 
+			childSlabIDs, _, childFirstKeys := GetMapMetaDataSlabChildInfo(rootMetaDataSlab)
+
 			// Unload non-root metadata slabs from back to front.
-			for i := len(rootMetaDataSlab.childrenHeaders) - 1; i >= 0; i-- {
+			for i := len(childSlabIDs) - 1; i >= 0; i-- {
+				slabID := childSlabIDs[i]
+				firstKey := childFirstKeys[i]
 
-				childHeader := rootMetaDataSlab.childrenHeaders[i]
-
-				err := storage.Remove(childHeader.slabID)
+				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
 				// Use firstKey to deduce number of elements in slabs.
-				values = values[:childHeader.firstKey]
+				values = values[:firstKey]
 
 				testMapLoadedElements(t, m, values)
 			}
@@ -16041,6 +16058,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			rootMetaDataSlab, ok := GetMapRootSlab(m).(*MapMetaDataSlab)
 			require.True(t, ok)
 
+			childSlabIDs, _, _ := GetMapMetaDataSlabChildInfo(rootMetaDataSlab)
+
 			type slabInfo struct {
 				id         SlabID
 				startIndex int
@@ -16048,20 +16067,24 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			}
 
 			var dataSlabInfos []*slabInfo
-			for _, mheader := range rootMetaDataSlab.childrenHeaders {
+			for _, slabID := range childSlabIDs {
 
-				nonRootMetaDataSlab, ok := GetDeltas(storage)[mheader.slabID].(*MapMetaDataSlab)
+				nonRootMetaDataSlab, ok := GetDeltas(storage)[slabID].(*MapMetaDataSlab)
 				require.True(t, ok)
 
-				for i := 0; i < len(nonRootMetaDataSlab.childrenHeaders); i++ {
-					h := nonRootMetaDataSlab.childrenHeaders[i]
+				nonrootSlabIDs, _, nonrootFirstKeys := GetMapMetaDataSlabChildInfo(nonRootMetaDataSlab)
+
+				for i := 0; i < len(nonrootSlabIDs); i++ {
+
+					slabID := nonrootSlabIDs[i]
+					firstKey := nonrootFirstKeys[i]
 
 					if len(dataSlabInfos) > 0 {
 						// Update previous slabInfo.count
-						dataSlabInfos[len(dataSlabInfos)-1].count = int(h.firstKey) - dataSlabInfos[len(dataSlabInfos)-1].startIndex
+						dataSlabInfos[len(dataSlabInfos)-1].count = int(firstKey) - dataSlabInfos[len(dataSlabInfos)-1].startIndex
 					}
 
-					dataSlabInfos = append(dataSlabInfos, &slabInfo{id: h.slabID, startIndex: int(h.firstKey)})
+					dataSlabInfos = append(dataSlabInfos, &slabInfo{id: slabID, startIndex: int(firstKey)})
 				}
 			}
 
@@ -16130,36 +16153,44 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			rootMetaDataSlab, ok := GetMapRootSlab(m).(*MapMetaDataSlab)
 			require.True(t, ok)
 
-			metadataSlabInfos := make([]*slabInfo, len(rootMetaDataSlab.childrenHeaders))
-			for i, mheader := range rootMetaDataSlab.childrenHeaders {
+			childSlabIDs, _, childFirstKeys := GetMapMetaDataSlabChildInfo(rootMetaDataSlab)
+
+			metadataSlabInfos := make([]*slabInfo, len(childSlabIDs))
+			for i, slabID := range childSlabIDs {
+
+				firstKey := childFirstKeys[i]
 
 				if i > 0 {
 					prevMetaDataSlabInfo := metadataSlabInfos[i-1]
 					prevDataSlabInfo := prevMetaDataSlabInfo.children[len(prevMetaDataSlabInfo.children)-1]
 
 					// Update previous metadata slab count
-					prevMetaDataSlabInfo.count = int(mheader.firstKey) - prevMetaDataSlabInfo.startIndex
+					prevMetaDataSlabInfo.count = int(firstKey) - prevMetaDataSlabInfo.startIndex
 
 					// Update previous data slab count
-					prevDataSlabInfo.count = int(mheader.firstKey) - prevDataSlabInfo.startIndex
+					prevDataSlabInfo.count = int(firstKey) - prevDataSlabInfo.startIndex
 				}
 
 				metadataSlabInfo := &slabInfo{
-					id:         mheader.slabID,
-					startIndex: int(mheader.firstKey),
+					id:         slabID,
+					startIndex: int(firstKey),
 				}
 
-				nonRootMetadataSlab, ok := GetDeltas(storage)[mheader.slabID].(*MapMetaDataSlab)
+				nonRootMetadataSlab, ok := GetDeltas(storage)[slabID].(*MapMetaDataSlab)
 				require.True(t, ok)
 
-				children := make([]*slabInfo, len(nonRootMetadataSlab.childrenHeaders))
-				for i, h := range nonRootMetadataSlab.childrenHeaders {
+				nonrootSlabIDs, _, nonrootFirstKeys := GetMapMetaDataSlabChildInfo(nonRootMetadataSlab)
+
+				children := make([]*slabInfo, len(nonrootSlabIDs))
+				for i, slabID := range nonrootSlabIDs {
+					firstKey := nonrootFirstKeys[i]
+
 					children[i] = &slabInfo{
-						id:         h.slabID,
-						startIndex: int(h.firstKey),
+						id:         slabID,
+						startIndex: int(firstKey),
 					}
 					if i > 0 {
-						children[i-1].count = int(h.firstKey) - children[i-1].startIndex
+						children[i-1].count = int(firstKey) - children[i-1].startIndex
 					}
 				}
 

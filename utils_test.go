@@ -540,3 +540,11 @@ func GetMapMetaDataSlabChildInfo(metaDataSlab *MapMetaDataSlab) (childSlabIDs []
 
 	return childSlabIDs, childSizes, childFirstKeys
 }
+
+func GetMutableValueNotifierValueID(v Value) (ValueID, error) {
+	m, ok := v.(mutableValueNotifier)
+	if !ok {
+		return ValueID{}, fmt.Errorf("v (%T) isn't mutableValueNotifier", v)
+	}
+	return m.ValueID(), nil
+}

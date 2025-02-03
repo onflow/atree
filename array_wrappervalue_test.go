@@ -94,16 +94,16 @@ var newArrayValueFunc = func(
 	t *testing.T,
 	address Address,
 	typeInfo TypeInfo,
-	arraySize int,
+	arrayCount int,
 	newValue newValueFunc,
 ) newValueFunc {
 	return func(storage SlabStorage) (value Value, expected Value) {
 		array, err := NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]Value, arraySize)
+		expectedValues := make([]Value, arrayCount)
 
-		for i := 0; i < arraySize; i++ {
+		for i := 0; i < arrayCount; i++ {
 			v, expectedV := newValue(storage)
 
 			err := array.Append(v)
@@ -478,27 +478,27 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
-		smallArraySize = 10
-		largeArraySize = 512
+		smallArrayCount = 10
+		largeArrayCount = 512
 	)
 
-	arraySizeTestCases := []struct {
-		name      string
-		arraySize int
+	arrayCountTestCases := []struct {
+		name       string
+		arrayCount int
 	}{
-		{name: "small array", arraySize: smallArraySize},
-		{name: "large array", arraySize: largeArraySize},
+		{name: "small array", arrayCount: smallArrayCount},
+		{name: "large array", arrayCount: largeArrayCount},
 	}
 
 	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
 
 	for _, tc := range testCases {
 
-		for _, arraySizeTestCase := range arraySizeTestCases {
+		for _, arrayCountTestCase := range arrayCountTestCases {
 
-			arraySize := arraySizeTestCase.arraySize
+			arrayCount := arrayCountTestCase.arrayCount
 
-			name := arraySizeTestCase.name + " " + tc.name
+			name := arrayCountTestCase.name + " " + tc.name
 			if tc.modifyName != "" {
 				name += ", " + tc.modifyName
 			}
@@ -513,8 +513,8 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 				arraySlabID := array.SlabID()
 
 				// Append WrapperValue to array
-				expectedValues := make([]Value, arraySize)
-				for i := 0; i < arraySize; i++ {
+				expectedValues := make([]Value, arrayCount)
+				for i := 0; i < arrayCount; i++ {
 					v, expectedV := tc.newElement(storage)
 
 					err := array.Append(v)
@@ -523,7 +523,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 					expectedValues[i] = expectedV
 				}
 
-				require.Equal(t, uint64(arraySize), array.Count())
+				require.Equal(t, uint64(arrayCount), array.Count())
 
 				testArrayMutableElementIndex(t, array)
 
@@ -551,7 +551,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 					expectedValues[i] = newExpectedV
 				}
 
-				require.Equal(t, uint64(arraySize), array.Count())
+				require.Equal(t, uint64(arrayCount), array.Count())
 
 				testArrayMutableElementIndex(t, array)
 
@@ -566,7 +566,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 
 				array2, err := NewArrayWithRootID(storage2, arraySlabID)
 				require.NoError(t, err)
-				require.Equal(t, uint64(arraySize), array2.Count())
+				require.Equal(t, uint64(arrayCount), array2.Count())
 
 				// Test loaded array
 				testArray(t, storage2, typeInfo, address, array2, expectedValues, true)
@@ -590,27 +590,27 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
-		smallArraySize = 10
-		largeArraySize = 512
+		smallArrayCount = 10
+		largeArrayCount = 512
 	)
 
-	arraySizeTestCases := []struct {
-		name      string
-		arraySize int
+	arrayCountTestCases := []struct {
+		name       string
+		arrayCount int
 	}{
-		{name: "small array", arraySize: smallArraySize},
-		{name: "large array", arraySize: largeArraySize},
+		{name: "small array", arrayCount: smallArrayCount},
+		{name: "large array", arrayCount: largeArrayCount},
 	}
 
 	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
 
 	for _, tc := range testCases {
 
-		for _, arraySizeTestCase := range arraySizeTestCases {
+		for _, arrayCountTestCase := range arrayCountTestCases {
 
-			arraySize := arraySizeTestCase.arraySize
+			arrayCount := arrayCountTestCase.arrayCount
 
-			name := arraySizeTestCase.name + " " + tc.name
+			name := arrayCountTestCase.name + " " + tc.name
 			if tc.modifyName != "" {
 				name += "," + tc.modifyName
 			}
@@ -625,8 +625,8 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 				arraySlabID := array.SlabID()
 
 				// Insert WrapperValue in reverse order to array
-				expectedValues := make([]Value, arraySize)
-				for i := arraySize - 1; i >= 0; i-- {
+				expectedValues := make([]Value, arrayCount)
+				for i := arrayCount - 1; i >= 0; i-- {
 					v, expectedV := tc.newElement(storage)
 
 					err := array.Insert(0, v)
@@ -635,7 +635,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 					expectedValues[i] = expectedV
 				}
 
-				require.Equal(t, uint64(arraySize), array.Count())
+				require.Equal(t, uint64(arrayCount), array.Count())
 
 				testArrayMutableElementIndex(t, array)
 
@@ -663,7 +663,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 					expectedValues[i] = newExpectedV
 				}
 
-				require.Equal(t, uint64(arraySize), array.Count())
+				require.Equal(t, uint64(arrayCount), array.Count())
 
 				testArrayMutableElementIndex(t, array)
 
@@ -678,7 +678,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 
 				array2, err := NewArrayWithRootID(storage2, arraySlabID)
 				require.NoError(t, err)
-				require.Equal(t, uint64(arraySize), array2.Count())
+				require.Equal(t, uint64(arrayCount), array2.Count())
 
 				// Test loaded array
 				testArray(t, storage2, typeInfo, address, array2, expectedValues, true)
@@ -702,27 +702,27 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
-		smallArraySize = 10
-		largeArraySize = 512
+		smallArrayCount = 10
+		largeArrayCount = 512
 	)
 
-	arraySizeTestCases := []struct {
-		name      string
-		arraySize int
+	arrayCountTestCases := []struct {
+		name       string
+		arrayCount int
 	}{
-		{name: "small array", arraySize: smallArraySize},
-		{name: "large array", arraySize: largeArraySize},
+		{name: "small array", arrayCount: smallArrayCount},
+		{name: "large array", arrayCount: largeArrayCount},
 	}
 
 	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
 
 	for _, tc := range testCases {
 
-		for _, arraySizeTestCase := range arraySizeTestCases {
+		for _, arrayCountTestCase := range arrayCountTestCases {
 
-			arraySize := arraySizeTestCase.arraySize
+			arrayCount := arrayCountTestCase.arrayCount
 
-			name := arraySizeTestCase.name + " " + tc.name
+			name := arrayCountTestCase.name + " " + tc.name
 			if tc.modifyName != "" {
 				name += "," + tc.modifyName
 			}
@@ -737,8 +737,8 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 				arraySlabID := array.SlabID()
 
 				// Insert WrapperValue to array
-				expectedValues := make([]Value, arraySize)
-				for i := 0; i < arraySize; i++ {
+				expectedValues := make([]Value, arrayCount)
+				for i := 0; i < arrayCount; i++ {
 					v, expectedV := tc.newElement(storage)
 
 					err := array.Insert(array.Count(), v)
@@ -747,14 +747,14 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 					expectedValues[i] = expectedV
 				}
 
-				require.Equal(t, uint64(arraySize), array.Count())
+				require.Equal(t, uint64(arrayCount), array.Count())
 
 				testArrayMutableElementIndex(t, array)
 
 				testArray(t, storage, typeInfo, address, array, expectedValues, true)
 
 				// Set new WrapperValue in array
-				for i := 0; i < arraySize; i++ {
+				for i := 0; i < arrayCount; i++ {
 					v, expected := tc.newElement(storage)
 
 					testSetElementInArray(t, storage, array, uint64(i), v, expectedValues[i])
@@ -762,7 +762,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 					expectedValues[i] = expected
 				}
 
-				require.Equal(t, uint64(arraySize), array.Count())
+				require.Equal(t, uint64(arrayCount), array.Count())
 
 				testArrayMutableElementIndex(t, array)
 
@@ -790,7 +790,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 					expectedValues[i] = newExpectedV
 				}
 
-				require.Equal(t, uint64(arraySize), array.Count())
+				require.Equal(t, uint64(arrayCount), array.Count())
 
 				testArrayMutableElementIndex(t, array)
 
@@ -805,7 +805,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 
 				array2, err := NewArrayWithRootID(storage2, arraySlabID)
 				require.NoError(t, err)
-				require.Equal(t, uint64(arraySize), array2.Count())
+				require.Equal(t, uint64(arrayCount), array2.Count())
 
 				// Test loaded array
 				testArray(t, storage2, typeInfo, address, array2, expectedValues, true)
@@ -828,16 +828,16 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
-		smallArraySize = 10
-		largeArraySize = 512
+		smallArrayCount = 10
+		largeArrayCount = 512
 	)
 
-	arraySizeTestCases := []struct {
-		name      string
-		arraySize int
+	arrayCountTestCases := []struct {
+		name       string
+		arrayCount int
 	}{
-		{name: "small array", arraySize: smallArraySize},
-		{name: "large array", arraySize: largeArraySize},
+		{name: "small array", arrayCount: smallArrayCount},
+		{name: "large array", arrayCount: largeArrayCount},
 	}
 
 	modifyTestCases := []struct {
@@ -848,41 +848,41 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 		{name: "", needToModifyElement: false},
 	}
 
-	removeSizeTestCases := []struct {
+	removeTestCases := []struct {
 		name               string
 		removeAllElements  bool
 		removeElementCount int
 	}{
 		{name: "remove all elements", removeAllElements: true},
 		{name: "remove 1 element", removeElementCount: 1},
-		{name: fmt.Sprintf("remove %d element", smallArraySize/2), removeElementCount: smallArraySize / 2},
+		{name: fmt.Sprintf("remove %d element", smallArrayCount/2), removeElementCount: smallArrayCount / 2},
 	}
 
 	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
 
 	for _, tc := range testCases {
 
-		for _, arraySizeTestCase := range arraySizeTestCases {
+		for _, arrayCountTestCase := range arrayCountTestCases {
 
 			for _, modifyTestCase := range modifyTestCases {
 
-				for _, removeSizeTestCase := range removeSizeTestCases {
+				for _, removeTestCase := range removeTestCases {
 
-					arraySize := arraySizeTestCase.arraySize
+					arrayCount := arrayCountTestCase.arrayCount
 
 					needToModifyElement := modifyTestCase.needToModifyElement
 
-					removeSize := removeSizeTestCase.removeElementCount
-					if removeSizeTestCase.removeAllElements {
-						removeSize = arraySize
+					removeCount := removeTestCase.removeElementCount
+					if removeTestCase.removeAllElements {
+						removeCount = arrayCount
 					}
 
-					name := arraySizeTestCase.name + " " + tc.name
+					name := arrayCountTestCase.name + " " + tc.name
 					if modifyTestCase.needToModifyElement {
 						name += ", " + tc.modifyName
 					}
-					if removeSizeTestCase.name != "" {
-						name += ", " + removeSizeTestCase.name
+					if removeTestCase.name != "" {
+						name += ", " + removeTestCase.name
 					}
 
 					t.Run(name, func(t *testing.T) {
@@ -895,8 +895,8 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 						arraySlabID := array.SlabID()
 
 						// Insert WrapperValue to array
-						expectedValues := make([]Value, arraySize)
-						for i := 0; i < arraySize; i++ {
+						expectedValues := make([]Value, arrayCount)
+						for i := 0; i < arrayCount; i++ {
 							v, expectedV := tc.newElement(storage)
 
 							err := array.Insert(array.Count(), v)
@@ -905,7 +905,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 							expectedValues[i] = expectedV
 						}
 
-						require.Equal(t, uint64(arraySize), array.Count())
+						require.Equal(t, uint64(arrayCount), array.Count())
 
 						testArrayMutableElementIndex(t, array)
 
@@ -934,7 +934,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 								expectedValues[i] = newExpectedV
 							}
 
-							require.Equal(t, uint64(arraySize), array.Count())
+							require.Equal(t, uint64(arrayCount), array.Count())
 
 							testArrayMutableElementIndex(t, array)
 
@@ -942,7 +942,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 						}
 
 						// Remove random elements
-						for i := 0; i < removeSize; i++ {
+						for i := 0; i < removeCount; i++ {
 
 							removeIndex := r.Intn(int(array.Count()))
 
@@ -951,8 +951,8 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 							expectedValues = append(expectedValues[:removeIndex], expectedValues[removeIndex+1:]...)
 						}
 
-						require.Equal(t, uint64(arraySize-removeSize), array.Count())
-						require.Equal(t, arraySize-removeSize, len(expectedValues))
+						require.Equal(t, uint64(arrayCount-removeCount), array.Count())
+						require.Equal(t, arrayCount-removeCount, len(expectedValues))
 
 						testArrayMutableElementIndex(t, array)
 
@@ -967,7 +967,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 
 						array2, err := NewArrayWithRootID(storage2, arraySlabID)
 						require.NoError(t, err)
-						require.Equal(t, uint64(arraySize-removeSize), array2.Count())
+						require.Equal(t, uint64(arrayCount-removeCount), array2.Count())
 
 						// Test loaded array
 						testArray(t, storage2, typeInfo, address, array2, expectedValues, true)
@@ -992,16 +992,16 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
-		smallArraySize = 10
-		largeArraySize = 512
+		smallArrayCount = 10
+		largeArrayCount = 512
 	)
 
-	arraySizeTestCases := []struct {
-		name      string
-		arraySize int
+	arrayCountTestCases := []struct {
+		name       string
+		arrayCount int
 	}{
-		{name: "small array", arraySize: smallArraySize},
-		{name: "large array", arraySize: largeArraySize},
+		{name: "small array", arrayCount: smallArrayCount},
+		{name: "large array", arrayCount: largeArrayCount},
 	}
 
 	modifyTestCases := []struct {
@@ -1012,41 +1012,41 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 		{name: "", needToModifyElement: false},
 	}
 
-	removeSizeTestCases := []struct {
+	removeTestCases := []struct {
 		name               string
 		removeAllElements  bool
 		removeElementCount int
 	}{
 		{name: "remove all elements", removeAllElements: true},
 		{name: "remove 1 element", removeElementCount: 1},
-		{name: fmt.Sprintf("remove %d element", smallArraySize/2), removeElementCount: smallArraySize / 2},
+		{name: fmt.Sprintf("remove %d element", smallArrayCount/2), removeElementCount: smallArrayCount / 2},
 	}
 
 	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
 
 	for _, tc := range testCases {
 
-		for _, arraySizeTestCase := range arraySizeTestCases {
+		for _, arrayCountTestCase := range arrayCountTestCases {
 
 			for _, modifyTestCase := range modifyTestCases {
 
-				for _, removeSizeTestCase := range removeSizeTestCases {
+				for _, removeTestCase := range removeTestCases {
 
-					arraySize := arraySizeTestCase.arraySize
+					arrayCount := arrayCountTestCase.arrayCount
 
 					needToModifyElement := modifyTestCase.needToModifyElement
 
-					removeSize := removeSizeTestCase.removeElementCount
-					if removeSizeTestCase.removeAllElements {
-						removeSize = arraySize
+					removeCount := removeTestCase.removeElementCount
+					if removeTestCase.removeAllElements {
+						removeCount = arrayCount
 					}
 
-					name := arraySizeTestCase.name + " " + tc.name
+					name := arrayCountTestCase.name + " " + tc.name
 					if modifyTestCase.needToModifyElement {
 						name += ", " + tc.modifyName
 					}
-					if removeSizeTestCase.name != "" {
-						name += ", " + removeSizeTestCase.name
+					if removeTestCase.name != "" {
+						name += ", " + removeTestCase.name
 					}
 
 					t.Run(name, func(t *testing.T) {
@@ -1058,10 +1058,10 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 						arraySlabID := array.SlabID()
 
-						expectedValues := make([]Value, arraySize)
+						expectedValues := make([]Value, arrayCount)
 
 						// Insert WrapperValue to array
-						for i := 0; i < arraySize; i++ {
+						for i := 0; i < arrayCount; i++ {
 							v, expectedV := tc.newElement(storage)
 
 							err := array.Insert(array.Count(), v)
@@ -1070,14 +1070,14 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 							expectedValues[i] = expectedV
 						}
 
-						require.Equal(t, uint64(arraySize), array.Count())
+						require.Equal(t, uint64(arrayCount), array.Count())
 
 						testArrayMutableElementIndex(t, array)
 
 						testArray(t, storage, typeInfo, address, array, expectedValues, true)
 
 						// Set WrapperValue in array
-						for i := 0; i < arraySize; i++ {
+						for i := 0; i < arrayCount; i++ {
 							v, expectedV := tc.newElement(storage)
 
 							testSetElementInArray(t, storage, array, uint64(i), v, expectedValues[i])
@@ -1085,7 +1085,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 							expectedValues[i] = expectedV
 						}
 
-						require.Equal(t, uint64(arraySize), array.Count())
+						require.Equal(t, uint64(arrayCount), array.Count())
 
 						testArrayMutableElementIndex(t, array)
 
@@ -1114,7 +1114,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 								expectedValues[i] = newExpectedV
 							}
 
-							require.Equal(t, uint64(arraySize), array.Count())
+							require.Equal(t, uint64(arrayCount), array.Count())
 
 							testArrayMutableElementIndex(t, array)
 
@@ -1122,7 +1122,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 						}
 
 						// Remove random elements
-						for i := 0; i < removeSize; i++ {
+						for i := 0; i < removeCount; i++ {
 
 							removeIndex := r.Intn(int(array.Count()))
 
@@ -1131,8 +1131,8 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 							expectedValues = append(expectedValues[:removeIndex], expectedValues[removeIndex+1:]...)
 						}
 
-						require.Equal(t, uint64(arraySize-removeSize), array.Count())
-						require.Equal(t, arraySize-removeSize, len(expectedValues))
+						require.Equal(t, uint64(arrayCount-removeCount), array.Count())
+						require.Equal(t, arrayCount-removeCount, len(expectedValues))
 
 						testArrayMutableElementIndex(t, array)
 
@@ -1147,7 +1147,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 						array2, err := NewArrayWithRootID(storage2, arraySlabID)
 						require.NoError(t, err)
-						require.Equal(t, uint64(arraySize-removeSize), array2.Count())
+						require.Equal(t, uint64(arrayCount-removeCount), array2.Count())
 
 						// Test loaded array
 						testArray(t, storage2, typeInfo, address, array2, expectedValues, true)
@@ -1168,16 +1168,16 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
-		smallArraySize = 10
-		largeArraySize = 512
+		smallArrayCount = 10
+		largeArrayCount = 512
 	)
 
-	arraySizeTestCases := []struct {
-		name      string
-		arraySize int
+	arrayCountTestCases := []struct {
+		name       string
+		arrayCount int
 	}{
-		{name: "small array", arraySize: smallArraySize},
-		{name: "large array", arraySize: largeArraySize},
+		{name: "small array", arrayCount: smallArrayCount},
+		{name: "large array", arrayCount: largeArrayCount},
 	}
 
 	modifyTestCases := []struct {
@@ -1192,7 +1192,7 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 
 	for _, tc := range testCases {
 
-		for _, arraySizeTestCase := range arraySizeTestCases[:1] {
+		for _, arrayCountTestCase := range arrayCountTestCases[:1] {
 
 			for _, modifyTestCase := range modifyTestCases {
 
@@ -1201,11 +1201,11 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 					continue
 				}
 
-				arraySize := arraySizeTestCase.arraySize
+				arrayCount := arrayCountTestCase.arrayCount
 
 				testModifyElement := modifyTestCase.testModifyElement
 
-				name := arraySizeTestCase.name + " " + tc.name
+				name := arrayCountTestCase.name + " " + tc.name
 				if modifyTestCase.testModifyElement {
 					name += ", " + tc.modifyName
 				}
@@ -1217,10 +1217,10 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 					array, err := NewArray(storage, address, typeInfo)
 					require.NoError(t, err)
 
-					expectedValues := make([]Value, arraySize)
+					expectedValues := make([]Value, arrayCount)
 
 					// Insert WrapperValue to array
-					for i := 0; i < arraySize; i++ {
+					for i := 0; i < arrayCount; i++ {
 						v, expectedV := tc.newElement(storage)
 
 						err := array.Insert(array.Count(), v)
@@ -1229,7 +1229,7 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 						expectedValues[i] = expectedV
 					}
 
-					require.Equal(t, uint64(arraySize), array.Count())
+					require.Equal(t, uint64(arrayCount), array.Count())
 
 					testArrayMutableElementIndex(t, array)
 
@@ -1280,16 +1280,16 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
-		smallArraySize = 10
-		largeArraySize = 512
+		smallArrayCount = 10
+		largeArrayCount = 512
 	)
 
-	arraySizeTestCases := []struct {
-		name      string
-		arraySize int
+	arrayCountTestCases := []struct {
+		name       string
+		arrayCount int
 	}{
-		{name: "small array", arraySize: smallArraySize},
-		{name: "large array", arraySize: largeArraySize},
+		{name: "small array", arrayCount: smallArrayCount},
+		{name: "large array", arrayCount: largeArrayCount},
 	}
 
 	modifyTestCases := []struct {
@@ -1304,7 +1304,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 
 	for _, tc := range testCases {
 
-		for _, arraySizeTestCase := range arraySizeTestCases[:1] {
+		for _, arrayCountTestCase := range arrayCountTestCases[:1] {
 
 			for _, modifyTestCase := range modifyTestCases {
 
@@ -1315,11 +1315,11 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 					continue
 				}
 
-				arraySize := arraySizeTestCase.arraySize
+				arrayCount := arrayCountTestCase.arrayCount
 
 				testModifyElement := modifyTestCase.testModifyElement
 
-				name := arraySizeTestCase.name + " " + tc.name
+				name := arrayCountTestCase.name + " " + tc.name
 				if modifyTestCase.testModifyElement {
 					name += ", " + tc.modifyName
 				}
@@ -1331,10 +1331,10 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 					array, err := NewArray(storage, address, typeInfo)
 					require.NoError(t, err)
 
-					expectedValues := make([]Value, arraySize)
+					expectedValues := make([]Value, arrayCount)
 
 					// Insert WrapperValue to array
-					for i := 0; i < arraySize; i++ {
+					for i := 0; i < arrayCount; i++ {
 						v, expectedV := tc.newElement(storage)
 
 						err := array.Insert(array.Count(), v)
@@ -1343,7 +1343,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 						expectedValues[i] = expectedV
 					}
 
-					require.Equal(t, uint64(arraySize), array.Count())
+					require.Equal(t, uint64(arrayCount), array.Count())
 
 					testArrayMutableElementIndex(t, array)
 
@@ -1378,7 +1378,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 						count++
 					}
 
-					require.Equal(t, uint64(arraySize), array.Count())
+					require.Equal(t, uint64(arrayCount), array.Count())
 
 					testArrayMutableElementIndex(t, array)
 
@@ -1461,8 +1461,8 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 	// Retrieve wrapped child array, and then append new elements to child array.
 	// Wrapped child array is expected to be unlined at the end of loop.
 
-	const childArraySize = 32
-	for i := 0; i < childArraySize; i++ {
+	const childArrayCount = 32
+	for i := 0; i < childArrayCount; i++ {
 		// Get element
 		element, err := array.Get(0)
 		require.NoError(t, err)
@@ -1504,8 +1504,8 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 	// Retrieve wrapped child array, and then remove elements to child array.
 	// Wrapped child array is expected to be inlined at the end of loop.
 
-	childArraySizeAfterRemoval := 2
-	removeCount := childArraySize - childArraySizeAfterRemoval
+	childArrayCountAfterRemoval := 2
+	removeCount := childArrayCount - childArrayCountAfterRemoval
 
 	for i := 0; i < removeCount; i++ {
 		// Get element
@@ -1653,8 +1653,8 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 	// Retrieve wrapped gchild array, and then append new elements to gchild array.
 	// Wrapped gchild array is expected to be unlined at the end of loop.
 
-	const gchildArraySize = 32
-	for i := 0; i < gchildArraySize; i++ {
+	const gchildArrayCount = 32
+	for i := 0; i < gchildArrayCount; i++ {
 		// Get element at level 1
 
 		elementAtLevel1, err := array.Get(0)
@@ -1715,8 +1715,8 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 	// Retrieve wrapped gchild array, and then remove elements from gchild array.
 	// Wrapped gchild array is expected to be inlined at the end of loop.
 
-	gchildArraySizeAfterRemoval := 2
-	removeCount := gchildArraySize - gchildArraySizeAfterRemoval
+	gchildArrayCountAfterRemoval := 2
+	removeCount := gchildArrayCount - gchildArrayCountAfterRemoval
 
 	for i := 0; i < removeCount; i++ {
 		// Get elementAtLevel1
@@ -1785,8 +1785,8 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 	const (
-		minWriteOperationSize = 124
-		maxWriteOperationSize = 256
+		minWriteOperationCount = 124
+		maxWriteOperationCount = 256
 	)
 
 	r := newRand(t)
@@ -1840,18 +1840,18 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	actualArraySize := 0
+	actualArrayCount := 0
 
 	t.Run("append and remove", func(t *testing.T) {
 
 		// Append elements
 
 		var appendCount int
-		for appendCount < minWriteOperationSize {
-			appendCount = r.Intn(maxWriteOperationSize + 1)
+		for appendCount < minWriteOperationCount {
+			appendCount = r.Intn(maxWriteOperationCount + 1)
 		}
 
-		actualArraySize += appendCount
+		actualArrayCount += appendCount
 
 		for i := 0; i < appendCount; i++ {
 			newValue := newElementFuncs[r.Intn(len(newElementFuncs))]
@@ -1863,7 +1863,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			expectedValues = append(expectedValues, expected)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -1878,7 +1878,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			removeCount = r.Intn(int(array.Count()) + 1)
 		}
 
-		actualArraySize -= removeCount
+		actualArrayCount -= removeCount
 
 		removeIndex := getRandomUniquePositiveNumbers(r, int(array.Count()), removeCount)
 
@@ -1890,7 +1890,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			expectedValues = append(expectedValues[:index], expectedValues[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -1901,11 +1901,11 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 		// Insert elements
 
 		var insertCount int
-		for insertCount < minWriteOperationSize {
-			insertCount = r.Intn(maxWriteOperationSize + 1)
+		for insertCount < minWriteOperationCount {
+			insertCount = r.Intn(maxWriteOperationCount + 1)
 		}
 
-		actualArraySize += insertCount
+		actualArrayCount += insertCount
 
 		lowestInsertIndex := math.MaxInt
 
@@ -1931,7 +1931,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			expectedValues = newExpectedValue
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -1946,7 +1946,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			removeCount = r.Intn(int(array.Count()) + 1)
 		}
 
-		actualArraySize -= removeCount
+		actualArrayCount -= removeCount
 
 		// Remove previously inserted element first
 
@@ -1968,7 +1968,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			expectedValues = append(expectedValues[:index], expectedValues[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2002,7 +2002,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			setIndex = append(setIndex, index)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2017,7 +2017,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			removeCount = r.Intn(int(array.Count()))
 		}
 
-		actualArraySize -= removeCount
+		actualArrayCount -= removeCount
 
 		// Remove some previously set elements first
 
@@ -2055,7 +2055,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			expectedValues = append(expectedValues[:index], expectedValues[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2085,8 +2085,8 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 
 	const (
-		minWriteOperationSize = 124
-		maxWriteOperationSize = 256
+		minWriteOperationCount = 124
+		maxWriteOperationCount = 256
 	)
 
 	r := newRand(t)
@@ -2130,18 +2130,18 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	actualArraySize := 0
+	actualArrayCount := 0
 
 	t.Run("append and remove", func(t *testing.T) {
 
 		// Append elements
 
 		var appendCount int
-		for appendCount < minWriteOperationSize {
-			appendCount = r.Intn(maxWriteOperationSize + 1)
+		for appendCount < minWriteOperationCount {
+			appendCount = r.Intn(maxWriteOperationCount + 1)
 		}
 
-		actualArraySize += appendCount
+		actualArrayCount += appendCount
 
 		for i := 0; i < appendCount; i++ {
 			v, expected := newValue(storage)
@@ -2152,7 +2152,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			expectedValues = append(expectedValues, expected)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2167,7 +2167,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			removeCount = r.Intn(int(array.Count()) + 1)
 		}
 
-		actualArraySize -= removeCount
+		actualArrayCount -= removeCount
 
 		removeIndex := getRandomUniquePositiveNumbers(r, int(array.Count()), removeCount)
 
@@ -2179,7 +2179,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			expectedValues = append(expectedValues[:index], expectedValues[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2190,11 +2190,11 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 		// Insert elements
 
 		var insertCount int
-		for insertCount < minWriteOperationSize {
-			insertCount = r.Intn(maxWriteOperationSize + 1)
+		for insertCount < minWriteOperationCount {
+			insertCount = r.Intn(maxWriteOperationCount + 1)
 		}
 
-		actualArraySize += insertCount
+		actualArrayCount += insertCount
 
 		lowestInsertIndex := math.MaxInt
 
@@ -2219,7 +2219,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			expectedValues = newExpectedValue
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2234,7 +2234,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			removeCount = r.Intn(int(array.Count()) + 1)
 		}
 
-		actualArraySize -= removeCount
+		actualArrayCount -= removeCount
 
 		// Remove previously inserted element first
 
@@ -2256,7 +2256,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			expectedValues = append(expectedValues[:index], expectedValues[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2298,7 +2298,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			setIndex = append(setIndex, index)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2313,7 +2313,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			removeCount = r.Intn(int(array.Count()))
 		}
 
-		actualArraySize -= removeCount
+		actualArrayCount -= removeCount
 
 		// Remove some previously set elements first
 
@@ -2351,7 +2351,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			expectedValues = append(expectedValues[:index], expectedValues[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2381,8 +2381,8 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 	const (
-		minWriteOperationSize = 124
-		maxWriteOperationSize = 256
+		minWriteOperationCount = 124
+		maxWriteOperationCount = 256
 	)
 
 	r := newRand(t)
@@ -2439,18 +2439,18 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 	array, err := NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	actualArraySize := 0
+	actualArrayCount := 0
 
 	t.Run("append and remove", func(t *testing.T) {
 
 		// Append elements
 
 		var appendCount int
-		for appendCount < minWriteOperationSize {
-			appendCount = r.Intn(maxWriteOperationSize + 1)
+		for appendCount < minWriteOperationCount {
+			appendCount = r.Intn(maxWriteOperationCount + 1)
 		}
 
-		actualArraySize += appendCount
+		actualArrayCount += appendCount
 
 		for i := 0; i < appendCount; i++ {
 			v, expected := newValue(storage)
@@ -2461,7 +2461,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			expectedValues = append(expectedValues, expected)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2474,7 +2474,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			removeCount = r.Intn(int(array.Count()) + 1)
 		}
 
-		actualArraySize -= removeCount
+		actualArrayCount -= removeCount
 
 		removeIndex := getRandomUniquePositiveNumbers(r, int(array.Count()), removeCount)
 
@@ -2486,7 +2486,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			expectedValues = append(expectedValues[:index], expectedValues[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2497,11 +2497,11 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 		// Insert elements
 
 		var insertCount int
-		for insertCount < minWriteOperationSize {
-			insertCount = r.Intn(maxWriteOperationSize + 1)
+		for insertCount < minWriteOperationCount {
+			insertCount = r.Intn(maxWriteOperationCount + 1)
 		}
 
-		actualArraySize += insertCount
+		actualArrayCount += insertCount
 
 		lowestInsertIndex := math.MaxInt
 
@@ -2526,7 +2526,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			expectedValues = newExpectedValue
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2539,7 +2539,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			removeCount = r.Intn(int(array.Count()) + 1)
 		}
 
-		actualArraySize -= removeCount
+		actualArrayCount -= removeCount
 
 		// Remove previously inserted element first
 
@@ -2561,7 +2561,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			expectedValues = append(expectedValues[:index], expectedValues[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2603,7 +2603,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			setIndex = append(setIndex, index)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2616,7 +2616,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			removeCount = r.Intn(int(array.Count()))
 		}
 
-		actualArraySize -= removeCount
+		actualArrayCount -= removeCount
 
 		// Remove some previously set elements first
 
@@ -2654,7 +2654,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			expectedValues = append(expectedValues[:index], expectedValues[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualArraySize), array.Count())
+		require.Equal(t, uint64(actualArrayCount), array.Count())
 
 		testArrayMutableElementIndex(t, array)
 
@@ -2687,15 +2687,15 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 
 	t.Run("modify level-1 wrapper array in [SomeValue([SomeValue(uint64)])]", func(t *testing.T) {
 		const (
-			arraySize      = 3
-			childArraySize = 2
+			arrayCount      = 3
+			childArrayCount = 2
 		)
 
 		typeInfo := testTypeInfo{42}
 
 		r := newRand(t)
 
-		createStorage := func(arraySize int) (
+		createStorage := func(arrayCount int) (
 			_ BaseStorage,
 			rootSlabID SlabID,
 			expectedValues []Value,
@@ -2707,14 +2707,14 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 					t,
 					address,
 					typeInfo,
-					arraySize,
+					arrayCount,
 					newWrapperValueFunc(
 						1,
 						newArrayValueFunc(
 							t,
 							address,
 							typeInfo,
-							childArraySize,
+							childArrayCount,
 							newWrapperValueFunc(
 								1,
 								newRandomUint64ValueFunc(r)))))
@@ -2734,8 +2734,8 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 
 		// Create a base storage with array in the format of
 		// [SomeValue([SomeValue(uint64)])]
-		baseStorage, rootSlabID, expectedValues := createStorage(arraySize)
-		require.Equal(t, arraySize, len(expectedValues))
+		baseStorage, rootSlabID, expectedValues := createStorage(arrayCount)
+		require.Equal(t, arrayCount, len(expectedValues))
 
 		// Create a new storage with encoded array
 		storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
@@ -2795,14 +2795,14 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 
 	t.Run("modify 2-level wrapper array in [SomeValue([SomeValue([SomeValue(uint64)])])]", func(t *testing.T) {
 		const (
-			arraySize       = 4
-			childArraySize  = 3
-			gchildArraySize = 2
+			arrayCount       = 4
+			childArrayCount  = 3
+			gchildArrayCount = 2
 		)
 
 		typeInfo := testTypeInfo{42}
 
-		createStorage := func(arraySize int) (
+		createStorage := func(arrayCount int) (
 			_ BaseStorage,
 			rootSlabID SlabID,
 			expectedValues []Value,
@@ -2816,21 +2816,21 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 					t,
 					address,
 					typeInfo,
-					arraySize,
+					arrayCount,
 					newWrapperValueFunc(
 						1,
 						newArrayValueFunc(
 							t,
 							address,
 							typeInfo,
-							childArraySize,
+							childArrayCount,
 							newWrapperValueFunc(
 								1,
 								newArrayValueFunc(
 									t,
 									address,
 									typeInfo,
-									gchildArraySize,
+									gchildArrayCount,
 									newWrapperValueFunc(
 										1,
 										newRandomUint64ValueFunc(r)))))))
@@ -2850,8 +2850,8 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 
 		// Create a base storage with array in the format of
 		// [SomeValue([SomeValue([SomeValue(uint64)])])]
-		baseStorage, rootSlabID, expectedValues := createStorage(arraySize)
-		require.Equal(t, arraySize, len(expectedValues))
+		baseStorage, rootSlabID, expectedValues := createStorage(arrayCount)
+		require.Equal(t, arrayCount, len(expectedValues))
 
 		// Create a new storage with encoded array
 		storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)

@@ -18,6 +18,8 @@
 
 package atree
 
+import "fmt"
+
 // Exported functions of PersistentSlabStorage for testing.
 var (
 	GetBaseStorage = (*PersistentSlabStorage).getBaseStorage
@@ -50,3 +52,54 @@ var (
 	IsMapDataSlabCollisionGroup = (*MapDataSlab).isCollisionGroup
 	GetMapDataSlabElementCount  = (*MapDataSlab).elementCount
 )
+
+func NewArrayRootDataSlab(id SlabID, storables []Storable) ArraySlab {
+	size := uint32(arrayRootDataSlabPrefixSize)
+
+	for _, storable := range storables {
+		size += storable.ByteSize()
+	}
+
+	return &ArrayDataSlab{
+		header: ArraySlabHeader{
+			slabID: id,
+			size:   size,
+			count:  uint32(len(storables)),
+		},
+		elements: storables,
+	}
+}
+
+func GetArrayMetaDataSlabChildInfo(metaDataSlab *ArrayMetaDataSlab) (childSlabIDs []SlabID, childCounts []uint32) {
+	childSlabIDs = make([]SlabID, len(metaDataSlab.childrenHeaders))
+	childCounts = make([]uint32, len(metaDataSlab.childrenHeaders))
+
+	for i, childHeader := range metaDataSlab.childrenHeaders {
+		childSlabIDs[i] = childHeader.slabID
+		childCounts[i] = childHeader.count
+	}
+
+	return childSlabIDs, childCounts
+}
+
+func GetMapMetaDataSlabChildInfo(metaDataSlab *MapMetaDataSlab) (childSlabIDs []SlabID, childSizes []uint32, childFirstKeys []Digest) {
+	childSlabIDs = make([]SlabID, len(metaDataSlab.childrenHeaders))
+	childSizes = make([]uint32, len(metaDataSlab.childrenHeaders))
+	childFirstKeys = make([]Digest, len(metaDataSlab.childrenHeaders))
+
+	for i, childHeader := range metaDataSlab.childrenHeaders {
+		childSlabIDs[i] = childHeader.slabID
+		childSizes[i] = childHeader.size
+		childFirstKeys[i] = childHeader.firstKey
+	}
+
+	return childSlabIDs, childSizes, childFirstKeys
+}
+
+func GetMutableValueNotifierValueID(v Value) (ValueID, error) {
+	m, ok := v.(mutableValueNotifier)
+	if !ok {
+		return ValueID{}, fmt.Errorf("v (%T) isn't mutableValueNotifier", v)
+	}
+	return m.ValueID(), nil
+}

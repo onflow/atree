@@ -64,7 +64,7 @@ func RandomValue(r *rand.Rand) Value {
 }
 
 // BenchmarkArray benchmarks the performance of the atree array
-func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
+func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 
 	r := newRand(b)
 
@@ -86,7 +86,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 	var totalLookupTime time.Duration
 
 	// setup
-	for i := 0; i < initialArraySize; i++ {
+	for i := 0; i < initialArrayCount; i++ {
 		v := RandomValue(r)
 		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize())
 		require.NoError(b, err)
@@ -197,7 +197,7 @@ func benchmarkArray(b *testing.B, initialArraySize, numberOfElements int) {
 func BenchmarkLArrayMemoryImpact(b *testing.B) { benchmarkLongTermImpactOnMemory(b, 10_000, 1000_000) }
 
 // BenchmarkArray benchmarks the performance of the atree array
-func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps int) {
+func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOps int) {
 
 	r := newRand(b)
 
@@ -214,7 +214,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArraySize, numberOfOps
 	var totalRawDataSize uint32
 
 	// setup
-	for i := 0; i < initialArraySize; i++ {
+	for i := 0; i < initialArrayCount; i++ {
 		v := RandomValue(r)
 
 		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize())

@@ -49,7 +49,7 @@ var newMapValueFunc = func(
 	t *testing.T,
 	address Address,
 	typeInfo TypeInfo,
-	mapSize int,
+	mapCount int,
 	newKey newKeyFunc,
 	newValue newValueFunc,
 ) newValueFunc {
@@ -59,7 +59,7 @@ var newMapValueFunc = func(
 
 		keyValues := make(map[Value]Value)
 
-		for i := 0; i < mapSize; i++ {
+		for i := 0; i < mapCount; i++ {
 			k, expectedK := newKey(storage)
 			v, expectedV := newValue(storage)
 
@@ -488,27 +488,27 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
-		smallMapSize = 10
-		largeMapSize = 512
+		smallMapCount = 10
+		largeMapCount = 512
 	)
 
-	mapSizeTestCases := []struct {
-		name    string
-		mapSize int
+	mapCountTestCases := []struct {
+		name     string
+		mapCount int
 	}{
-		{name: "small map", mapSize: smallMapSize},
-		{name: "large map", mapSize: largeMapSize},
+		{name: "small map", mapCount: smallMapCount},
+		{name: "large map", mapCount: largeMapCount},
 	}
 
 	testCases := newMapWrapperValueTestCases(t, r, address, typeInfo)
 
 	for _, tc := range testCases {
 
-		for _, mapSizeTestCase := range mapSizeTestCases {
+		for _, mapCountTestCase := range mapCountTestCases {
 
-			mapSize := mapSizeTestCase.mapSize
+			mapCount := mapCountTestCase.mapCount
 
-			name := mapSizeTestCase.name + " " + tc.name
+			name := mapCountTestCase.name + " " + tc.name
 			if tc.modifyName != "" {
 				name += "," + tc.modifyName
 			}
@@ -524,7 +524,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 
 				// Set WrapperValue
 				expectedValues := make(map[Value]Value)
-				for len(expectedValues) < mapSize {
+				for len(expectedValues) < mapCount {
 					k, expectedK := tc.newKey(storage)
 
 					if _, exists := expectedValues[expectedK]; exists {
@@ -540,7 +540,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 					expectedValues[expectedK] = expectedV
 				}
 
-				require.Equal(t, uint64(mapSize), m.Count())
+				require.Equal(t, uint64(mapCount), m.Count())
 
 				testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -565,7 +565,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 					expectedValues[key] = newExpectedV
 				}
 
-				require.Equal(t, uint64(mapSize), m.Count())
+				require.Equal(t, uint64(mapCount), m.Count())
 
 				testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -578,7 +578,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 
 				m2, err := NewMapWithRootID(storage2, rootSlabID, newBasicDigesterBuilder())
 				require.NoError(t, err)
-				require.Equal(t, uint64(mapSize), m2.Count())
+				require.Equal(t, uint64(mapCount), m2.Count())
 
 				// Test loaded map
 				testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
@@ -600,16 +600,16 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
-		smallMapSize = 10
-		largeMapSize = 512
+		smallMapCount = 10
+		largeMapCount = 512
 	)
 
-	mapSizeTestCases := []struct {
-		name    string
-		mapSize int
+	mapCountTestCases := []struct {
+		name     string
+		mapCount int
 	}{
-		{name: "small map", mapSize: smallMapSize},
-		{name: "large map", mapSize: largeMapSize},
+		{name: "small map", mapCount: smallMapCount},
+		{name: "large map", mapCount: largeMapCount},
 	}
 
 	modifyTestCases := []struct {
@@ -620,41 +620,41 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 		{name: "", needToModifyElement: false},
 	}
 
-	removeSizeTestCases := []struct {
+	removeTestCases := []struct {
 		name               string
 		removeAllElements  bool
 		removeElementCount int
 	}{
 		{name: "remove all elements", removeAllElements: true},
 		{name: "remove 1 element", removeElementCount: 1},
-		{name: fmt.Sprintf("remove %d element", smallMapSize/2), removeElementCount: smallMapSize / 2},
+		{name: fmt.Sprintf("remove %d element", smallMapCount/2), removeElementCount: smallMapCount / 2},
 	}
 
 	testCases := newMapWrapperValueTestCases(t, r, address, typeInfo)
 
 	for _, tc := range testCases {
 
-		for _, mapSizeTestCase := range mapSizeTestCases {
+		for _, mapCountTestCase := range mapCountTestCases {
 
 			for _, modifyTestCase := range modifyTestCases {
 
-				for _, removeSizeTestCase := range removeSizeTestCases {
+				for _, removeTestCase := range removeTestCases {
 
-					mapSize := mapSizeTestCase.mapSize
+					mapCount := mapCountTestCase.mapCount
 
 					needToModifyElement := modifyTestCase.needToModifyElement
 
-					removeSize := removeSizeTestCase.removeElementCount
-					if removeSizeTestCase.removeAllElements {
-						removeSize = mapSize
+					removeCount := removeTestCase.removeElementCount
+					if removeTestCase.removeAllElements {
+						removeCount = mapCount
 					}
 
-					name := mapSizeTestCase.name + " " + tc.name
+					name := mapCountTestCase.name + " " + tc.name
 					if modifyTestCase.needToModifyElement {
 						name += ", " + tc.modifyName
 					}
-					if removeSizeTestCase.name != "" {
-						name += ", " + removeSizeTestCase.name
+					if removeTestCase.name != "" {
+						name += ", " + removeTestCase.name
 					}
 
 					t.Run(name, func(t *testing.T) {
@@ -669,7 +669,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 						expectedValues := make(map[Value]Value)
 
 						// Set WrapperValue in map
-						for len(expectedValues) < mapSize {
+						for len(expectedValues) < mapCount {
 							k, expectedK := tc.newKey(storage)
 
 							if _, exists := expectedValues[expectedK]; exists {
@@ -685,7 +685,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 							expectedValues[expectedK] = expectedV
 						}
 
-						require.Equal(t, uint64(mapSize), m.Count())
+						require.Equal(t, uint64(mapCount), m.Count())
 
 						testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -711,7 +711,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 								expectedValues[key] = newExpectedV
 							}
 
-							require.Equal(t, uint64(mapSize), m.Count())
+							require.Equal(t, uint64(mapCount), m.Count())
 
 							testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 						}
@@ -722,7 +722,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 						}
 
 						// Remove random elements
-						for i := 0; i < removeSize; i++ {
+						for i := 0; i < removeCount; i++ {
 
 							removeKeyIndex := r.Intn(len(keys))
 							removeKey := keys[removeKeyIndex]
@@ -734,8 +734,8 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 							keys = append(keys[:removeKeyIndex], keys[removeKeyIndex+1:]...)
 						}
 
-						require.Equal(t, uint64(mapSize-removeSize), m.Count())
-						require.Equal(t, mapSize-removeSize, len(expectedValues))
+						require.Equal(t, uint64(mapCount-removeCount), m.Count())
+						require.Equal(t, mapCount-removeCount, len(expectedValues))
 
 						testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -748,7 +748,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 
 						m2, err := NewMapWithRootID(storage2, rootSlabID, newBasicDigesterBuilder())
 						require.NoError(t, err)
-						require.Equal(t, uint64(mapSize-removeSize), m2.Count())
+						require.Equal(t, uint64(mapCount-removeCount), m2.Count())
 
 						// Test loaded map
 						testMap(t, storage2, typeInfo, address, m2, expectedValues, nil, true)
@@ -769,16 +769,16 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
-		smallMapSize = 10
-		largeMapSize = 512
+		smallMapCount = 10
+		largeMapCount = 512
 	)
 
-	mapSizeTestCases := []struct {
-		name    string
-		mapSize int
+	mapCountTestCases := []struct {
+		name     string
+		mapCount int
 	}{
-		{name: "small map", mapSize: smallMapSize},
-		{name: "large map", mapSize: largeMapSize},
+		{name: "small map", mapCount: smallMapCount},
+		{name: "large map", mapCount: largeMapCount},
 	}
 
 	modifyTestCases := []struct {
@@ -793,7 +793,7 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 
 	for _, tc := range testCases {
 
-		for _, mapSizeTestCase := range mapSizeTestCases[:1] {
+		for _, mapCountTestCase := range mapCountTestCases[:1] {
 
 			for _, modifyTestCase := range modifyTestCases {
 
@@ -802,11 +802,11 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 					continue
 				}
 
-				mapSize := mapSizeTestCase.mapSize
+				mapCount := mapCountTestCase.mapCount
 
 				testModifyElement := modifyTestCase.testModifyElement
 
-				name := mapSizeTestCase.name + " " + tc.name
+				name := mapCountTestCase.name + " " + tc.name
 				if modifyTestCase.testModifyElement {
 					name += ", " + tc.modifyName
 				}
@@ -821,7 +821,7 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 					expectedValues := make(map[Value]Value)
 
 					// Set WrapperValue to map
-					for len(expectedValues) < mapSize {
+					for len(expectedValues) < mapCount {
 						k, expectedK := tc.newKey(storage)
 
 						if _, exists := expectedValues[expectedK]; exists {
@@ -837,7 +837,7 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 						expectedValues[expectedK] = expectedV
 					}
 
-					require.Equal(t, uint64(mapSize), m.Count())
+					require.Equal(t, uint64(mapCount), m.Count())
 
 					testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -884,16 +884,16 @@ func TestMapWrapperValueIterate(t *testing.T) {
 	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
-		smallMapSize = 10
-		largeMapSize = 512
+		smallMapCount = 10
+		largeMapCount = 512
 	)
 
-	mapSizeTestCases := []struct {
-		name    string
-		mapSize int
+	mapCountTestCases := []struct {
+		name     string
+		mapCount int
 	}{
-		{name: "small map", mapSize: smallMapSize},
-		{name: "large map", mapSize: largeMapSize},
+		{name: "small map", mapCount: smallMapCount},
+		{name: "large map", mapCount: largeMapCount},
 	}
 
 	modifyTestCases := []struct {
@@ -908,7 +908,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 
 	for _, tc := range testCases {
 
-		for _, mapSizeTestCase := range mapSizeTestCases[:1] {
+		for _, mapCountTestCase := range mapCountTestCases[:1] {
 
 			for _, modifyTestCase := range modifyTestCases {
 
@@ -919,11 +919,11 @@ func TestMapWrapperValueIterate(t *testing.T) {
 					continue
 				}
 
-				mapSize := mapSizeTestCase.mapSize
+				mapCount := mapCountTestCase.mapCount
 
 				testModifyElement := modifyTestCase.testModifyElement
 
-				name := mapSizeTestCase.name + " " + tc.name
+				name := mapCountTestCase.name + " " + tc.name
 				if modifyTestCase.testModifyElement {
 					name += ", " + tc.modifyName
 				}
@@ -938,7 +938,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 					expectedValues := make(map[Value]Value)
 
 					// Set WrapperValue in map
-					for len(expectedValues) < mapSize {
+					for len(expectedValues) < mapCount {
 						k, expectedK := tc.newKey(storage)
 
 						if _, exists := expectedValues[expectedK]; exists {
@@ -954,7 +954,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 						expectedValues[expectedK] = expectedV
 					}
 
-					require.Equal(t, uint64(mapSize), m.Count())
+					require.Equal(t, uint64(mapCount), m.Count())
 
 					testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -987,7 +987,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 						count++
 					}
 
-					require.Equal(t, uint64(mapSize), m.Count())
+					require.Equal(t, uint64(mapCount), m.Count())
 
 					testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 				})
@@ -1079,8 +1079,8 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 	// Retrieve wrapped child map, and then insert new elements to child map.
 	// Wrapped child map is expected to be unlined at the end of loop.
 
-	const childMapSize = 8
-	for i := 0; i <= childMapSize; i++ {
+	const childMapCount = 8
+	for i := 0; i <= childMapCount; i++ {
 		// Get element
 		element, err := m.Get(compare, hashInputProvider, Uint64Value(0))
 		require.NoError(t, err)
@@ -1123,8 +1123,8 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 	// Retrieve wrapped child map, and then remove elements from child map.
 	// Wrapped child map is expected to be inlined at the end of loop.
 
-	childMapSizeAfterRemoval := 2
-	removeCount := childMapSize - childMapSizeAfterRemoval
+	childMapCountAfterRemoval := 2
+	removeCount := childMapCount - childMapCountAfterRemoval
 
 	for i := 0; i < removeCount; i++ {
 		// Get element
@@ -1284,8 +1284,8 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 	// Retrieve wrapped gchild map, and then insert new elements to gchild map.
 	// Wrapped gchild map is expected to be unlined at the end of loop.
 
-	const gchildMapSize = 8
-	for i := 0; i < gchildMapSize; i++ {
+	const gchildMapCount = 8
+	for i := 0; i < gchildMapCount; i++ {
 		// Get element at level 1
 
 		elementAtLevel1, err := m.Get(compare, hashInputProvider, Uint64Value(0))
@@ -1347,8 +1347,8 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 	// Retrieve wrapped gchild map, and then remove elements from gchild map.
 	// Wrapped gchild map is expected to be inlined at the end of loop.
 
-	gchildMapSizeAfterRemoval := 2
-	removeCount := gchildMapSize - gchildMapSizeAfterRemoval
+	gchildMapCountAfterRemoval := 2
+	removeCount := gchildMapCount - gchildMapCountAfterRemoval
 
 	for i := 0; i < removeCount; i++ {
 		// Get elementAtLevel1
@@ -1414,8 +1414,8 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 
 	const (
-		minWriteOperationSize = 124
-		maxWriteOperationSize = 256
+		minWriteOperationCount = 124
+		maxWriteOperationCount = 256
 	)
 
 	r := newRand(t)
@@ -1472,17 +1472,17 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	actualMapSize := 0
+	actualMapCount := 0
 
 	t.Run("set and remove", func(t *testing.T) {
 		// Insert elements
 
 		var setCount int
-		for setCount < minWriteOperationSize {
-			setCount = r.Intn(maxWriteOperationSize + 1)
+		for setCount < minWriteOperationCount {
+			setCount = r.Intn(maxWriteOperationCount + 1)
 		}
 
-		actualMapSize += setCount
+		actualMapCount += setCount
 
 		for i := 0; i < setCount; i++ {
 			k := Uint64Value(i)
@@ -1497,7 +1497,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 			expectedValues[k] = expected
 		}
 
-		require.Equal(t, uint64(actualMapSize), m.Count())
+		require.Equal(t, uint64(actualMapCount), m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -1510,7 +1510,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 			removeCount = r.Intn(int(m.Count()) + 1)
 		}
 
-		actualMapSize -= removeCount
+		actualMapCount -= removeCount
 
 		// Remove elements
 
@@ -1529,7 +1529,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 			keys = append(keys[:index], keys[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualMapSize), m.Count())
+		require.Equal(t, uint64(actualMapCount), m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	})
@@ -1561,8 +1561,8 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 
 	const (
-		minWriteOperationSize = 124
-		maxWriteOperationSize = 256
+		minWriteOperationCount = 124
+		maxWriteOperationCount = 256
 	)
 
 	r := newRand(t)
@@ -1607,17 +1607,17 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	actualMapSize := 0
+	actualMapCount := 0
 
 	t.Run("set and remove", func(t *testing.T) {
 		// Set elements
 
 		var setCount int
-		for setCount < minWriteOperationSize {
-			setCount = r.Intn(maxWriteOperationSize + 1)
+		for setCount < minWriteOperationCount {
+			setCount = r.Intn(maxWriteOperationCount + 1)
 		}
 
-		actualMapSize += setCount
+		actualMapCount += setCount
 
 		for i := 0; i < setCount; i++ {
 			k := Uint64Value(i)
@@ -1630,7 +1630,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			expectedValues[k] = expected
 		}
 
-		require.Equal(t, uint64(actualMapSize), m.Count())
+		require.Equal(t, uint64(actualMapCount), m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -1643,7 +1643,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			removeCount = r.Intn(int(m.Count()) + 1)
 		}
 
-		actualMapSize -= removeCount
+		actualMapCount -= removeCount
 
 		// Remove elements
 
@@ -1662,7 +1662,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			keys = append(keys[:index], keys[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualMapSize), m.Count())
+		require.Equal(t, uint64(actualMapCount), m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	})
@@ -1703,7 +1703,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			expectedValues[setKey] = modifiedExpectedValue
 		}
 
-		require.Equal(t, uint64(actualMapSize), m.Count())
+		require.Equal(t, uint64(actualMapCount), m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -1716,7 +1716,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			removeCount = r.Intn(int(m.Count()))
 		}
 
-		actualMapSize -= removeCount
+		actualMapCount -= removeCount
 
 		// Remove more elements
 
@@ -1730,7 +1730,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			keys = append(keys[:index], keys[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualMapSize), m.Count())
+		require.Equal(t, uint64(actualMapCount), m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	})
@@ -1762,8 +1762,8 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 
 	const (
-		minWriteOperationSize = 124
-		maxWriteOperationSize = 256
+		minWriteOperationCount = 124
+		maxWriteOperationCount = 256
 	)
 
 	r := newRand(t)
@@ -1822,17 +1822,17 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 	m, err := NewMap(storage, address, newBasicDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	actualMapSize := 0
+	actualMapCount := 0
 
 	t.Run("set and remove", func(t *testing.T) {
 		// Insert elements
 
 		var setCount int
-		for setCount < minWriteOperationSize {
-			setCount = r.Intn(maxWriteOperationSize + 1)
+		for setCount < minWriteOperationCount {
+			setCount = r.Intn(maxWriteOperationCount + 1)
 		}
 
-		actualMapSize += setCount
+		actualMapCount += setCount
 
 		for i := 0; i < setCount; i++ {
 			k := Uint64Value(i)
@@ -1845,7 +1845,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			expectedValues[k] = expected
 		}
 
-		require.Equal(t, uint64(actualMapSize), m.Count())
+		require.Equal(t, uint64(actualMapCount), m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -1856,7 +1856,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			removeCount = r.Intn(int(m.Count()) + 1)
 		}
 
-		actualMapSize -= removeCount
+		actualMapCount -= removeCount
 
 		keys := make([]Value, 0, m.Count())
 		err := m.IterateReadOnlyKeys(func(key Value) (resume bool, err error) {
@@ -1875,7 +1875,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			keys = append(keys[:index], keys[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualMapSize), m.Count())
+		require.Equal(t, uint64(actualMapCount), m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	})
@@ -1918,7 +1918,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			expectedValues[key] = modifiedExpectedValue
 		}
 
-		require.Equal(t, uint64(actualMapSize), m.Count())
+		require.Equal(t, uint64(actualMapCount), m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -1929,7 +1929,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			removeCount = r.Intn(int(m.Count()))
 		}
 
-		actualMapSize -= removeCount
+		actualMapCount -= removeCount
 
 		for i := 0; i < removeCount; i++ {
 			index := r.Intn(len(keys))
@@ -1941,7 +1941,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			keys = append(keys[:index], keys[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualMapSize), m.Count())
+		require.Equal(t, uint64(actualMapCount), m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	})
@@ -1978,15 +1978,15 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 
 	t.Run("modify level-1 wrapper map in {uint64: SomeValue({uint64: SomeValue(uint64)})}", func(t *testing.T) {
 		const (
-			mapSize      = 3
-			childMapSize = 2
+			mapCount      = 3
+			childMapCount = 2
 		)
 
 		typeInfo := testTypeInfo{42}
 
 		r := newRand(t)
 
-		createStorage := func(mapSize int) (
+		createStorage := func(mapCount int) (
 			_ BaseStorage,
 			rootSlabID SlabID,
 			expectedKeyValues map[Value]Value,
@@ -1998,7 +1998,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 					t,
 					address,
 					typeInfo,
-					mapSize,
+					mapCount,
 					newUint64KeyFunc(),
 					newWrapperValueFunc(
 						1,
@@ -2006,7 +2006,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 							t,
 							address,
 							typeInfo,
-							childMapSize,
+							childMapCount,
 							newUint64KeyFunc(),
 							newWrapperValueFunc(
 								1,
@@ -2027,8 +2027,8 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 
 		// Create a base storage with map in the format of
 		// {uint64: SomeValue({uint64: SomeValue(uint64)})}
-		baseStorage, rootSlabID, expectedKeyValues := createStorage(mapSize)
-		require.Equal(t, mapSize, len(expectedKeyValues))
+		baseStorage, rootSlabID, expectedKeyValues := createStorage(mapCount)
+		require.Equal(t, mapCount, len(expectedKeyValues))
 
 		keys := make([]Value, 0, len(expectedKeyValues))
 		for k := range expectedKeyValues {
@@ -2094,16 +2094,16 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 
 	t.Run("get and modify 2-level wrapper map in {uint64: SomeValue({uint64: SomeValue({uint64: SomeValue(uint64)})})}", func(t *testing.T) {
 		const (
-			mapSize       = 4
-			childMapSize  = 3
-			gchildMapSize = 2
+			mapCount       = 4
+			childMapCount  = 3
+			gchildMapCount = 2
 		)
 
 		typeInfo := testTypeInfo{42}
 
 		r := newRand(t)
 
-		createStorage := func(mapSize int) (
+		createStorage := func(mapCount int) (
 			_ BaseStorage,
 			rootSlabID SlabID,
 			expectedKeyValues map[Value]Value,
@@ -2115,7 +2115,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 					t,
 					address,
 					typeInfo,
-					mapSize,
+					mapCount,
 					newUint64KeyFunc(),
 					newWrapperValueFunc(
 						1,
@@ -2123,7 +2123,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 							t,
 							address,
 							typeInfo,
-							mapSize,
+							mapCount,
 							newUint64KeyFunc(),
 							newWrapperValueFunc(
 								1,
@@ -2131,7 +2131,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 									t,
 									address,
 									typeInfo,
-									childMapSize,
+									childMapCount,
 									newUint64KeyFunc(),
 									newWrapperValueFunc(
 										1,
@@ -2152,8 +2152,8 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 
 		// Create a base storage with map in the format of
 		// {uint64: SomeValue({uint64: SomeValue({uint64: SomeValue(string)})})}
-		baseStorage, rootSlabID, expectedKeyValues := createStorage(mapSize)
-		require.Equal(t, mapSize, len(expectedKeyValues))
+		baseStorage, rootSlabID, expectedKeyValues := createStorage(mapCount)
+		require.Equal(t, mapCount, len(expectedKeyValues))
 
 		keys := make([]Value, 0, len(expectedKeyValues))
 		for k := range expectedKeyValues {

@@ -1350,7 +1350,9 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(k Value) {
 				keyMutationCallbackCalled = true
-				require.Equal(t, childMapKey.ValueID(), k.(mutableValueNotifier).ValueID())
+				valueID, err := GetMutableValueNotifierValueID(k)
+				require.NoError(t, err)
+				require.Equal(t, childMapKey.ValueID(), valueID)
 			},
 			func(v Value) {
 				valueMutationCallbackCalled = true
@@ -1395,7 +1397,9 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				valueMutationCallbackCalled = true
-				require.Equal(t, childMap.ValueID(), v.(mutableValueNotifier).ValueID())
+				valueID, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
+				require.Equal(t, childMap.ValueID(), valueID)
 			})
 
 		require.ErrorAs(t, err, &mutationError)
@@ -1434,7 +1438,9 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				keyMutationCallbackCalled = true
-				require.Equal(t, childMapKey.ValueID(), v.(mutableValueNotifier).ValueID())
+				valueID, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
+				require.Equal(t, childMapKey.ValueID(), valueID)
 			})
 
 		require.ErrorAs(t, err, &mutationError)
@@ -1472,7 +1478,9 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				valueMutationCallbackCalled = true
-				require.Equal(t, childMap.ValueID(), v.(mutableValueNotifier).ValueID())
+				valueID, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
+				require.Equal(t, childMap.ValueID(), valueID)
 			})
 
 		require.ErrorAs(t, err, &mutationError)
@@ -1521,7 +1529,9 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(k Value) {
 				keyMutationCallbackCalled = true
-				require.Equal(t, childMapKey.ValueID(), k.(mutableValueNotifier).ValueID())
+				valueID, err := GetMutableValueNotifierValueID(k)
+				require.NoError(t, err)
+				require.Equal(t, childMapKey.ValueID(), valueID)
 			},
 			func(v Value) {
 				valueMutationCallbackCalled = true
@@ -1576,7 +1586,9 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				valueMutationCallbackCalled = true
-				require.Equal(t, childMap.ValueID(), v.(mutableValueNotifier).ValueID())
+				valueID, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
+				require.Equal(t, childMap.ValueID(), valueID)
 			})
 
 		require.ErrorAs(t, err, &mutationError)
@@ -1626,7 +1638,9 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				keyMutationCallbackCalled = true
-				require.Equal(t, childMapKey.ValueID(), v.(mutableValueNotifier).ValueID())
+				valueID, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
+				require.Equal(t, childMapKey.ValueID(), valueID)
 			})
 
 		require.ErrorAs(t, err, &mutationError)
@@ -1674,7 +1688,9 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				valueMutationCallbackCalled = true
-				require.Equal(t, childMap.ValueID(), v.(mutableValueNotifier).ValueID())
+				valueID, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
+				require.Equal(t, childMap.ValueID(), valueID)
 			})
 
 		require.ErrorAs(t, err, &mutationError)
@@ -1726,7 +1742,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(k Value) {
 				keyMutationCallbackCalled = true
-				vid := k.(mutableValueNotifier).ValueID()
+				vid, err := GetMutableValueNotifierValueID(k)
+				require.NoError(t, err)
 				require.True(t, childMapKey1.ValueID() == vid || childMapKey2.ValueID() == vid)
 			},
 			func(v Value) {
@@ -1783,7 +1800,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				valueMutationCallbackCalled = true
-				vid := v.(mutableValueNotifier).ValueID()
+				vid, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
 				require.True(t, childMap1.ValueID() == vid || childMap2.ValueID() == vid)
 			})
 
@@ -1837,7 +1855,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				keyMutationCallbackCalled = true
-				vid := v.(mutableValueNotifier).ValueID()
+				vid, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
 				require.True(t, childMapKey1.ValueID() == vid || childMapKey2.ValueID() == vid)
 			})
 
@@ -1887,7 +1906,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				valueMutationCallbackCalled = true
-				vid := v.(mutableValueNotifier).ValueID()
+				vid, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
 				require.True(t, childMap1.ValueID() == vid || childMap2.ValueID() == vid)
 			})
 
@@ -1960,7 +1980,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(k Value) {
 				keyMutationCallbackCalled = true
-				vid := k.(mutableValueNotifier).ValueID()
+				vid, err := GetMutableValueNotifierValueID(k)
+				require.NoError(t, err)
 				require.True(t, childMapKey1.ValueID() == vid || childMapKey2.ValueID() == vid)
 			},
 			func(v Value) {
@@ -2036,7 +2057,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				valueMutationCallbackCalled = true
-				vid := v.(mutableValueNotifier).ValueID()
+				vid, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
 				require.True(t, childMap1.ValueID() == vid || childMap2.ValueID() == vid)
 			})
 
@@ -2110,7 +2132,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				keyMutationCallbackCalled = true
-				vid := v.(mutableValueNotifier).ValueID()
+				vid, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
 				require.True(t, childMapKey1.ValueID() == vid || childMapKey2.ValueID() == vid)
 			})
 
@@ -2179,7 +2202,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 			},
 			func(v Value) {
 				valueMutationCallbackCalled = true
-				vid := v.(mutableValueNotifier).ValueID()
+				vid, err := GetMutableValueNotifierValueID(v)
+				require.NoError(t, err)
 				require.True(t, childMap1.ValueID() == vid || childMap2.ValueID() == vid)
 			})
 

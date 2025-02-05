@@ -103,3 +103,19 @@ func GetMutableValueNotifierValueID(v Value) (ValueID, error) {
 	}
 	return m.ValueID(), nil
 }
+
+func ComputeArrayRootDataSlabByteSize(storableByteSizes []uint32) uint32 {
+	slabSize := uint32(arrayRootDataSlabPrefixSize)
+	for _, storableByteSize := range storableByteSizes {
+		slabSize += storableByteSize
+	}
+	return slabSize
+}
+
+func ComputeInlinedArraySlabByteSize(storableByteSizes []uint32) uint32 {
+	slabSize := uint32(inlinedArrayDataSlabPrefixSize)
+	for _, storableByteSize := range storableByteSizes {
+		slabSize += storableByteSize
+	}
+	return slabSize
+}

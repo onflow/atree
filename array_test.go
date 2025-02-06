@@ -6171,11 +6171,7 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 
 	require.True(t, IsArrayRootDataSlab(array))
 
-	storableByteSizes := make([]uint32, arrayCount)
-	for i := 0; i < arrayCount; i++ {
-		storableByteSizes[i] = initialStorableSize
-	}
-	expectedArrayRootDataSlabSize := ComputeArrayRootDataSlabByteSize(storableByteSizes)
+	expectedArrayRootDataSlabSize := ComputeArrayRootDataSlabByteSizeWithFixSizedElement(initialStorableSize, arrayCount)
 	require.Equal(t, expectedArrayRootDataSlabSize, GetArrayRootSlabByteSize(array))
 
 	err = VerifyArray(array, address, typeInfo, typeInfoComparator, hashInputProvider, true)
@@ -6192,10 +6188,7 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 
 	require.True(t, IsArrayRootDataSlab(array))
 
-	for i := 0; i < arrayCount; i++ {
-		storableByteSizes[i] = mutatedStorableSize
-	}
-	expectedArrayRootDataSlabSize = ComputeArrayRootDataSlabByteSize(storableByteSizes)
+	expectedArrayRootDataSlabSize = ComputeArrayRootDataSlabByteSizeWithFixSizedElement(mutatedStorableSize, arrayCount)
 	require.Equal(t, expectedArrayRootDataSlabSize, GetArrayRootSlabByteSize(array))
 
 	err = VerifyArray(array, address, typeInfo, typeInfoComparator, hashInputProvider, true)
@@ -6223,12 +6216,8 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 		// Test parent slab size with 1 empty inlined child arrays
-		childArraySize := ComputeInlinedArraySlabByteSize(nil)
-		storableByteSizes := make([]uint32, arrayCount)
-		for i := 0; i < arrayCount; i++ {
-			storableByteSizes[i] = childArraySize
-		}
-		expectedParentSize := ComputeArrayRootDataSlabByteSize(storableByteSizes)
+		childArraySize := emptyInlinedArrayByteSize
+		expectedParentSize := ComputeArrayRootDataSlabByteSizeWithFixSizedElement(childArraySize, arrayCount)
 		require.Equal(t, expectedParentSize, GetArrayRootSlabByteSize(parentArray))
 
 		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
@@ -6268,11 +6257,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, valueID, childArray.ValueID())        // Value ID is unchanged
 
 			// Test inlined child slab size
-			childStorableByteSizes := make([]uint32, int(childArray.Count()))
-			for i := 0; i < int(childArray.Count()); i++ {
-				childStorableByteSizes[i] = vSize
-			}
-			expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+			expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 			// Test parent slab size
@@ -6299,14 +6284,10 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, expectedSlabID, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
 		require.Equal(t, valueID, childArray.ValueID())       // Value ID is unchanged
 
-		storableByteSizes = make([]uint32, childArray.Count())
-		for i := 0; i < int(childArray.Count()); i++ {
-			storableByteSizes[i] = vSize
-		}
-		expectedStandaloneSlabSize := ComputeArrayRootDataSlabByteSize(storableByteSizes)
+		expectedStandaloneSlabSize := ComputeArrayRootDataSlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 		require.Equal(t, expectedStandaloneSlabSize, GetArrayRootSlabByteSize(childArray))
 
-		expectedParentSize = ComputeArrayRootDataSlabByteSize([]uint32{SlabIDStorable{}.ByteSize()})
+		expectedParentSize = ComputeArrayRootDataSlabByteSize([]uint32{slabIDStorableByteSize})
 		require.Equal(t, expectedParentSize, GetArrayRootSlabByteSize(parentArray))
 
 		// Test parent array's mutableElementIndex
@@ -6328,11 +6309,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, SlabIDUndefined, childArray.SlabID())
 			require.Equal(t, valueID, childArray.ValueID()) // value ID is unchanged
 
-			childStorableByteSizes := make([]uint32, childArray.Count())
-			for i := 0; i < int(childArray.Count()); i++ {
-				childStorableByteSizes[i] = vSize
-			}
-			expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+			expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 			expectedParentSize := ComputeArrayRootDataSlabByteSize([]uint32{expectedInlinedSize})
@@ -6362,7 +6339,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 		// Test parent slab size with 2 empty inlined child arrays
-		childArrayByteSize := ComputeInlinedArraySlabByteSize(nil)
+		childArrayByteSize := emptyInlinedArrayByteSize
 		storableByteSizes := make([]uint32, arrayCount)
 		for i := 0; i < arrayCount; i++ {
 			storableByteSizes[i] = childArrayByteSize
@@ -6423,11 +6400,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
 
 				// Test inlined child slab size
-				childStorableByteSizes := make([]uint32, int(childArray.Count()))
-				for i := 0; i < int(childArray.Count()); i++ {
-					childStorableByteSizes[i] = vSize
-				}
-				expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+				expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 				require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 				// Test parent slab size
@@ -6465,14 +6438,10 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, expectedSlabID, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
 			require.Equal(t, childValueID, childArray.ValueID())  // Value ID is unchanged
 
-			childStorableByteSizes := make([]uint32, childArray.Count())
-			for i := 0; i < int(childArray.Count()); i++ {
-				childStorableByteSizes[i] = vSize
-			}
-			expectedStandaloneSlabSize := ComputeArrayRootDataSlabByteSize(childStorableByteSizes)
+			expectedStandaloneSlabSize := ComputeArrayRootDataSlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedStandaloneSlabSize, GetArrayRootSlabByteSize(childArray))
 
-			storableByteSizes[i] = SlabIDStorable{}.ByteSize()
+			storableByteSizes[i] = slabIDStorableByteSize
 			require.Equal(t, ComputeArrayRootDataSlabByteSize(storableByteSizes), GetArrayRootSlabByteSize(parentArray))
 
 			// Test parent array's mutableElementIndex
@@ -6504,11 +6473,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, SlabIDUndefined, childArray.SlabID())
 			require.Equal(t, childValueID, childArray.ValueID()) // value ID is unchanged
 
-			childStorableByteSizes := make([]uint32, childArray.Count())
-			for i := 0; i < int(childArray.Count()); i++ {
-				childStorableByteSizes[i] = vSize
-			}
-			expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+			expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 			storableByteSizes[i] = expectedInlinedSize
@@ -6542,11 +6507,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.Equal(t, SlabIDUndefined, childArray.SlabID())
 				require.Equal(t, childValueID, childArray.ValueID()) // value ID is unchanged
 
-				childStorableByteSizes := make([]uint32, childArray.Count())
-				for i := 0; i < int(childArray.Count()); i++ {
-					childStorableByteSizes[i] = vSize
-				}
-				expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+				expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 				require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 				storableByteSizes[j] = expectedInlinedSize
@@ -6580,12 +6541,8 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 		// Test parent slab size with 4 empty inlined child arrays
-		childArrayByteSize := ComputeInlinedArraySlabByteSize(nil)
-		storableByteSizes := make([]uint32, arrayCount)
-		for i := 0; i < arrayCount; i++ {
-			storableByteSizes[i] = childArrayByteSize
-		}
-		expectedParentSize := ComputeArrayRootDataSlabByteSize(storableByteSizes)
+		childArrayByteSize := emptyInlinedArrayByteSize
+		expectedParentSize := ComputeArrayRootDataSlabByteSizeWithFixSizedElement(childArrayByteSize, arrayCount)
 		require.Equal(t, expectedParentSize, GetArrayRootSlabByteSize(parentArray))
 
 		// Test parent array's mutableElementIndex
@@ -6640,11 +6597,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
 
 				// Test inlined child slab size
-				childStorableByteSizes := make([]uint32, int(childArray.Count()))
-				for i := 0; i < int(childArray.Count()); i++ {
-					childStorableByteSizes[i] = vSize
-				}
-				expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+				expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 				require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 				// Test parent array's mutableElementIndex
@@ -6678,11 +6631,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, expectedSlabID, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
 			require.Equal(t, childValueID, childArray.ValueID())  // Value ID is unchanged
 
-			storableByteSizes := make([]uint32, childArray.Count())
-			for i := 0; i < int(childArray.Count()); i++ {
-				storableByteSizes[i] = vSize
-			}
-			expectedStandaloneSlabSize := ComputeArrayRootDataSlabByteSize(storableByteSizes)
+			expectedStandaloneSlabSize := ComputeArrayRootDataSlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedStandaloneSlabSize, GetArrayRootSlabByteSize(childArray))
 
 			// Test parent array's mutableElementIndex
@@ -6714,11 +6663,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, SlabIDUndefined, childArray.SlabID())
 			require.Equal(t, childValueID, childArray.ValueID()) // value ID is unchanged
 
-			childStorableByteSizes := make([]uint32, int(childArray.Count()))
-			for i := 0; i < int(childArray.Count()); i++ {
-				childStorableByteSizes[i] = vSize
-			}
-			expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+			expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 			// Test parent array's mutableElementIndex
@@ -6753,11 +6698,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.Equal(t, SlabIDUndefined, childArray.SlabID())
 				require.Equal(t, childValueID, childArray.ValueID()) // value ID is unchanged
 
-				childStorableByteSizes := make([]uint32, int(childArray.Count()))
-				for i := 0; i < int(childArray.Count()); i++ {
-					childStorableByteSizes[i] = vSize
-				}
-				expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+				expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 				require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 				// Test parent array's mutableElementIndex
@@ -6799,13 +6740,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 		// Test parent slab size with 1 inlined child array
-		gchildArrayByteSize := ComputeInlinedArraySlabByteSize(nil)
+		gchildArrayByteSize := emptyInlinedArrayByteSize
 		childArrayByteSize := ComputeInlinedArraySlabByteSize([]uint32{gchildArrayByteSize})
-		storableByteSizes := make([]uint32, arrayCount)
-		for i := 0; i < arrayCount; i++ {
-			storableByteSizes[i] = childArrayByteSize
-		}
-		expectedParentSize := ComputeArrayRootDataSlabByteSize(storableByteSizes)
+		expectedParentSize := ComputeArrayRootDataSlabByteSizeWithFixSizedElement(childArrayByteSize, arrayCount)
 		require.Equal(t, expectedParentSize, GetArrayRootSlabByteSize(parentArray))
 
 		// Test parent array's mutableElementIndex
@@ -6874,11 +6811,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 			// Test inlined grand child slab size
 
-			gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-			for i := 0; i < int(gchildArray.Count()); i++ {
-				gchildStorableByteSizes[i] = vSize
-			}
-			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 			require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 			// Test inlined child slab size
@@ -6923,17 +6856,13 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
 
 		// Test inlined grand child slab size
-		gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-		for i := 0; i < int(gchildArray.Count()); i++ {
-			gchildStorableByteSizes[i] = vSize
-		}
-		expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+		expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 		require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 		expectedStandaloneSlabSize := ComputeArrayRootDataSlabByteSize([]uint32{expectedInlinedGrandChildSize})
 		require.Equal(t, expectedStandaloneSlabSize, GetArrayRootSlabByteSize(childArray))
 
-		expectedParentSize = ComputeArrayRootDataSlabByteSize([]uint32{SlabIDStorable{}.ByteSize()})
+		expectedParentSize = ComputeArrayRootDataSlabByteSize([]uint32{slabIDStorableByteSize})
 		require.Equal(t, expectedParentSize, GetArrayRootSlabByteSize(parentArray))
 
 		// Test array's mutableElementIndex
@@ -6970,11 +6899,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, gValueID, gchildArray.ValueID()) // value ID is unchanged
 
 			// Test inlined grand child slab size
-			gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-			for i := 0; i < int(gchildArray.Count()); i++ {
-				gchildStorableByteSizes[i] = vSize
-			}
-			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 			require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 			// Test inlined child slab size
@@ -7013,13 +6938,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 		// Test parent slab size with 1 inlined child array
-		gchildArrayByteSize := ComputeInlinedArraySlabByteSize(nil)
+		gchildArrayByteSize := emptyInlinedArrayByteSize
 		childArrayByteSize := ComputeInlinedArraySlabByteSize([]uint32{gchildArrayByteSize})
-		storableByteSizes := make([]uint32, arrayCount)
-		for i := 0; i < arrayCount; i++ {
-			storableByteSizes[i] = childArrayByteSize
-		}
-		expectedParentSize := ComputeArrayRootDataSlabByteSize(storableByteSizes)
+		expectedParentSize := ComputeArrayRootDataSlabByteSizeWithFixSizedElement(childArrayByteSize, arrayCount)
 		require.Equal(t, expectedParentSize, GetArrayRootSlabByteSize(parentArray))
 
 		// Test parent array's mutableElementIndex
@@ -7087,11 +7008,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
 
 			// Test inlined grand child slab size
-			gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-			for i := 0; i < int(gchildArray.Count()); i++ {
-				gchildStorableByteSizes[i] = vSize
-			}
-			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 			require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 			// Test inlined child slab size
@@ -7138,7 +7055,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, gValueID, gchildArray.ValueID())      // Value ID is unchanged
 
 		// Test inlined grand child slab size
-		storableByteSizes = make([]uint32, int(gchildArray.Count()))
+		storableByteSizes := make([]uint32, int(gchildArray.Count()))
 		storableByteSizes[0] = largeValueSize
 		for i := 1; i < int(gchildArray.Count()); i++ {
 			storableByteSizes[i] = vSize
@@ -7146,7 +7063,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		expectedInlinedGrandChildSize := ComputeArrayRootDataSlabByteSize(storableByteSizes)
 		require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
-		expectedStandaloneSlabSize := ComputeInlinedArraySlabByteSize([]uint32{SlabIDStorable{}.ByteSize()})
+		expectedStandaloneSlabSize := ComputeInlinedArraySlabByteSize([]uint32{slabIDStorableByteSize})
 		require.Equal(t, expectedStandaloneSlabSize, GetArrayRootSlabByteSize(childArray))
 
 		expectedParentSize = ComputeArrayRootDataSlabByteSize([]uint32{expectedStandaloneSlabSize})
@@ -7185,11 +7102,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, gValueID, gchildArray.ValueID()) // value ID is unchanged
 
 			// Test inlined grand child slab size
-			gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-			for i := 0; i < int(gchildArray.Count()); i++ {
-				gchildStorableByteSizes[i] = vSize
-			}
-			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 			require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 			// Test inlined child slab size
@@ -7259,11 +7172,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Test parent slab size with 1 inlined child array
 		gchildArraySize := ComputeInlinedArraySlabByteSize([]uint32{vSize})
 		childArraySize := ComputeInlinedArraySlabByteSize([]uint32{gchildArraySize})
-		storableByteSizes := make([]uint32, arrayCount)
-		for i := 0; i < arrayCount; i++ {
-			storableByteSizes[i] = childArraySize
-		}
-		expectedParentSize := ComputeArrayRootDataSlabByteSize(storableByteSizes)
+		expectedParentSize := ComputeArrayRootDataSlabByteSizeWithFixSizedElement(childArraySize, arrayCount)
 		require.Equal(t, expectedParentSize, GetArrayRootSlabByteSize(parentArray))
 
 		// Test parent array's mutableElementIndex
@@ -7399,11 +7308,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
 
 			// Test inlined grand child slab size
-			gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-			for i := 0; i < int(gchildArray.Count()); i++ {
-				gchildStorableByteSizes[i] = vSize
-			}
-			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 			require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 			childStorableByteSizes := make([]uint32, int(childArray.Count()))
@@ -7424,12 +7329,12 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 		require.Equal(t, 3, getStoredDeltas(storage)) // There are 3 stored slab because child array is no longer inlined.
 
-		expectedParentSize = ComputeArrayRootDataSlabByteSize([]uint32{SlabIDStorable{}.ByteSize(), SlabIDStorable{}.ByteSize()})
+		expectedParentSize = ComputeArrayRootDataSlabByteSizeWithFixSizedElement(slabIDStorableByteSize, 2)
 		require.Equal(t, expectedParentSize, GetArrayRootSlabByteSize(parentArray))
 
 		// Remove one elements from each child array to trigger child arrays being inlined again.
 
-		storableByteSizes = make([]uint32, arrayCount)
+		storableByteSizes := make([]uint32, arrayCount)
 
 		for i, child := range children {
 			childArray := child.array
@@ -7458,11 +7363,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
 
 			// Test inlined grand child slab size
-			gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-			for i := 0; i < int(gchildArray.Count()); i++ {
-				gchildStorableByteSizes[i] = vSize
-			}
-			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 			require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 			// Test inlined child slab size
@@ -7519,11 +7420,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.Equal(t, gValueID, gchildArray.ValueID()) // value ID is unchanged
 
 				// Test inlined grand child slab size
-				gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-				for i := 0; i < int(gchildArray.Count()); i++ {
-					gchildStorableByteSizes[i] = vSize
-				}
-				expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+				expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 				require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 				// Test inlined child slab size
@@ -7594,13 +7491,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.True(t, IsArrayRootDataSlab(parentArray))
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
-		gchildArraySize := ComputeInlinedArraySlabByteSize(nil)
+		gchildArraySize := emptyInlinedArrayByteSize
 		childArraySize := ComputeInlinedArraySlabByteSize([]uint32{gchildArraySize})
-		storableByteSizes := make([]uint32, arrayCount)
-		for i := 0; i < arrayCount; i++ {
-			storableByteSizes[i] = childArraySize
-		}
-		expectedParentSize := ComputeArrayRootDataSlabByteSize(storableByteSizes)
+		expectedParentSize := ComputeArrayRootDataSlabByteSizeWithFixSizedElement(childArraySize, arrayCount)
 		require.Equal(t, expectedParentSize, GetArrayRootSlabByteSize(parentArray))
 
 		// Test parent array's mutableElementIndex
@@ -7685,11 +7578,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
 
 				// Test inlined grand child slab size
-				gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-				for i := 0; i < int(gchildArray.Count()); i++ {
-					gchildStorableByteSizes[i] = vSize
-				}
-				expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+				expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 				require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 				// Test inlined child slab size
@@ -7737,11 +7626,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
 
 			// Test inlined grand child slab size
-			gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-			for i := 0; i < int(gchildArray.Count()); i++ {
-				gchildStorableByteSizes[i] = vSize
-			}
-			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 			require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 			expectedInlinedChildSlabSize := ComputeInlinedArraySlabByteSize([]uint32{expectedInlinedGrandChildSize})
@@ -7794,11 +7679,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
 
 			// Test standalone grand child slab size
-			gchildArrayStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-			for i := 0; i < int(gchildArray.Count()); i++ {
-				gchildArrayStorableByteSizes[i] = vSize
-			}
-			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildArrayStorableByteSizes)
+			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 			require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 			expectedStandaloneChildSlabSize := ComputeArrayRootDataSlabByteSize([]uint32{expectedInlinedGrandChildSize})
@@ -7849,11 +7730,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, gValueID, gchildArray.ValueID())       // Value ID is unchanged
 
 			// Test inlined grand child slab size
-			gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-			for i := 0; i < int(gchildArray.Count()); i++ {
-				gchildStorableByteSizes[i] = vSize
-			}
-			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+			expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 			require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 			// Test inlined child slab size
@@ -7907,11 +7784,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.Equal(t, gValueID, gchildArray.ValueID()) // value ID is unchanged
 
 				// Test inlined grand child slab size
-				gchildStorableByteSizes := make([]uint32, int(gchildArray.Count()))
-				for i := 0; i < int(gchildArray.Count()); i++ {
-					gchildStorableByteSizes[i] = vSize
-				}
-				expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSize(gchildStorableByteSizes)
+				expectedInlinedGrandChildSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(gchildArray.Count()))
 				require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 				// Test inlined child slab size
@@ -7934,13 +7807,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, uint64(arrayCount), parentArray.Count())
 		require.Equal(t, 1, getStoredDeltas(storage))
 
-		gchildArraySize = ComputeInlinedArraySlabByteSize(nil)
+		gchildArraySize = emptyInlinedArrayByteSize
 		childArraySize = ComputeInlinedArraySlabByteSize([]uint32{gchildArraySize})
-		storableByteSizes = make([]uint32, arrayCount)
-		for i := 0; i < arrayCount; i++ {
-			storableByteSizes[i] = childArraySize
-		}
-		expectedParentSize = ComputeArrayRootDataSlabByteSize(storableByteSizes)
+		expectedParentSize = ComputeArrayRootDataSlabByteSizeWithFixSizedElement(childArraySize, arrayCount)
 		require.Equal(t, expectedParentSize, GetArrayRootSlabByteSize(parentArray))
 	})
 }
@@ -7961,12 +7830,8 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 	require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 	// Test parent slab size with empty inlined child arrays
-	childArraySize := ComputeInlinedArraySlabByteSize(nil)
-	storableByteSizes := make([]uint32, arrayCount)
-	for i := 0; i < arrayCount; i++ {
-		storableByteSizes[i] = childArraySize
-	}
-	expectedParentSize := ComputeArrayRootDataSlabByteSize(storableByteSizes)
+	childArraySize := emptyInlinedArrayByteSize
+	expectedParentSize := ComputeArrayRootDataSlabByteSizeWithFixSizedElement(childArraySize, arrayCount)
 	require.Equal(t, expectedParentSize, GetArrayRootSlabByteSize(parentArray))
 
 	// Test array's mutableElementIndex
@@ -8037,11 +7902,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
 
 			// Test inlined child slab size
-			childStorableByteSizes := make([]uint32, int(childArray.Count()))
-			for i := 0; i < int(childArray.Count()); i++ {
-				childStorableByteSizes[i] = vSize
-			}
-			expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+			expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 			// Test array's mutableElementIndex
@@ -8086,11 +7947,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
 
 			// Test inlined child slab size
-			childStorableByteSizes := make([]uint32, int(childArray.Count()))
-			for i := 0; i < int(childArray.Count()); i++ {
-				childStorableByteSizes[i] = vSize
-			}
-			expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+			expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 			// Test array's mutableElementIndex
@@ -8130,11 +7987,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
 
 			// Test inlined child slab size
-			childStorableByteSizes := make([]uint32, int(childArray.Count()))
-			for i := 0; i < int(childArray.Count()); i++ {
-				childStorableByteSizes[i] = vSize
-			}
-			expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+			expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 			// Test array's mutableElementIndex
@@ -8179,11 +8032,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
 
 			// Test inlined child slab size
-			childStorableByteSizes := make([]uint32, int(childArray.Count()))
-			for i := 0; i < int(childArray.Count()); i++ {
-				childStorableByteSizes[i] = vSize
-			}
-			expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+			expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 			// Test array's mutableElementIndex
@@ -8228,11 +8077,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
 
 			// Test inlined child slab size
-			childStorableByteSizes := make([]uint32, int(childArray.Count()))
-			for i := 0; i < int(childArray.Count()); i++ {
-				childStorableByteSizes[i] = vSize
-			}
-			expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+			expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 			// Test array's mutableElementIndex
@@ -8272,11 +8117,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			require.Equal(t, childValueID, childArray.ValueID())   // Value ID is unchanged
 
 			// Test inlined child slab size
-			childStorableByteSizes := make([]uint32, int(childArray.Count()))
-			for i := 0; i < int(childArray.Count()); i++ {
-				childStorableByteSizes[i] = vSize
-			}
-			expectedInlinedSize := ComputeInlinedArraySlabByteSize(childStorableByteSizes)
+			expectedInlinedSize := ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, int(childArray.Count()))
 			require.Equal(t, expectedInlinedSize, GetArrayRootSlabByteSize(childArray))
 
 			// Test array's mutableElementIndex

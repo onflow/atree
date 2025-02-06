@@ -31,7 +31,8 @@ var (
 
 // Exported function of slab size settings for testing.
 var (
-	TargetSlabSize = targetSlabSize
+	TargetSlabSize        = targetSlabSize
+	MaxInlineMapValueSize = maxInlineMapValueSize
 )
 
 // Exported function of Array for testing.
@@ -104,6 +105,14 @@ func GetMutableValueNotifierValueID(v Value) (ValueID, error) {
 	return m.ValueID(), nil
 }
 
+func ComputeArrayRootDataSlabByteSizeWithFixSizedElement(storableByteSize uint32, count int) uint32 {
+	storableByteSizes := make([]uint32, count)
+	for i := 0; i < count; i++ {
+		storableByteSizes[i] = storableByteSize
+	}
+	return ComputeArrayRootDataSlabByteSize(storableByteSizes)
+}
+
 func ComputeArrayRootDataSlabByteSize(storableByteSizes []uint32) uint32 {
 	slabSize := uint32(arrayRootDataSlabPrefixSize)
 	for _, storableByteSize := range storableByteSizes {
@@ -112,10 +121,68 @@ func ComputeArrayRootDataSlabByteSize(storableByteSizes []uint32) uint32 {
 	return slabSize
 }
 
+func ComputeInlinedArraySlabByteSizeWithFixSizedElement(storableByteSize uint32, count int) uint32 {
+	storableByteSizes := make([]uint32, count)
+	for i := 0; i < count; i++ {
+		storableByteSizes[i] = storableByteSize
+	}
+	return ComputeInlinedArraySlabByteSize(storableByteSizes)
+}
+
 func ComputeInlinedArraySlabByteSize(storableByteSizes []uint32) uint32 {
 	slabSize := uint32(inlinedArrayDataSlabPrefixSize)
 	for _, storableByteSize := range storableByteSizes {
 		slabSize += storableByteSize
 	}
+	return slabSize
+}
+
+func ComputeMapRootDataSlabByteSizeWithFixSizedElement(keyStorableByteSize, valueStorableByteSize uint32, count int) uint32 {
+	elementStorableByteSizes := make([][2]uint32, count)
+	for i := 0; i < count; i++ {
+		elementStorableByteSizes[i] = [2]uint32{keyStorableByteSize, valueStorableByteSize}
+	}
+	return ComputeMapRootDataSlabByteSize(elementStorableByteSizes)
+}
+
+func ComputeMapRootDataSlabByteSize(elementStorableByteSizes [][2]uint32) uint32 {
+	slabSize := uint32(mapRootDataSlabPrefixSize + hkeyElementsPrefixSize)
+	for _, elementStorableByteSize := range elementStorableByteSizes {
+		keyStorableByteSize := elementStorableByteSize[0]
+		valueStorableByteSize := elementStorableByteSize[1]
+
+		elementSize := singleElementPrefixSize +
+			digestSize +
+			keyStorableByteSize +
+			valueStorableByteSize
+
+		slabSize += elementSize
+	}
+
+	return slabSize
+}
+
+func ComputeInlinedMapSlabByteSizeWithFixSizedElement(keyStorableByteSize, valueStorableByteSize uint32, count int) uint32 {
+	elementStorableByteSizes := make([][2]uint32, count)
+	for i := 0; i < count; i++ {
+		elementStorableByteSizes[i] = [2]uint32{keyStorableByteSize, valueStorableByteSize}
+	}
+	return ComputeInlinedMapSlabByteSize(elementStorableByteSizes)
+}
+
+func ComputeInlinedMapSlabByteSize(elementStorableByteSizes [][2]uint32) uint32 {
+	slabSize := uint32(inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize)
+	for _, elementStorableByteSize := range elementStorableByteSizes {
+		keyStorableByteSize := elementStorableByteSize[0]
+		valueStorableByteSize := elementStorableByteSize[1]
+
+		elementSize := singleElementPrefixSize +
+			digestSize +
+			keyStorableByteSize +
+			valueStorableByteSize
+
+		slabSize += elementSize
+	}
+
 	return slabSize
 }

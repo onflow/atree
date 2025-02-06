@@ -2572,11 +2572,13 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 		// Set elements
 
 		var setCount int
-		if array.Count() <= 10 {
-			setCount = int(array.Count())
-		} else {
-			for setCount < int(array.Count())/2 {
-				setCount = r.Intn(int(array.Count()) + 1)
+		for setCount == 0 {
+			if array.Count() <= 10 {
+				setCount = int(array.Count())
+			} else {
+				for setCount < int(array.Count())/2 {
+					setCount = r.Intn(int(array.Count()) + 1)
+				}
 			}
 		}
 

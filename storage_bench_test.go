@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package atree
+package atree_test
 
 import (
 	"encoding/binary"
@@ -27,6 +27,8 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
+
+	"github.com/onflow/atree"
 )
 
 func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
@@ -38,14 +40,14 @@ func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(b, err)
 
-	slabs := make([]Slab, numberOfSlabs)
+	slabs := make([]atree.Slab, numberOfSlabs)
 	for i := 0; i < numberOfSlabs; i++ {
 		addr := generateRandomAddress(r)
 
-		var index SlabIndex
+		var index atree.SlabIndex
 		binary.BigEndian.PutUint64(index[:], uint64(i))
 
-		id := NewSlabID(addr, index)
+		id := atree.NewSlabID(addr, index)
 
 		slabs[i] = generateLargeSlab(id)
 	}
@@ -55,7 +57,7 @@ func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
 			b.StopTimer()
 
 			baseStorage := NewInMemBaseStorage()
-			storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
+			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 			for _, slab := range slabs {
 				err = storage.Store(slab.SlabID(), slab)
@@ -79,14 +81,14 @@ func benchmarkNondeterministicFastCommit(b *testing.B, seed int64, numberOfSlabs
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(b, err)
 
-	slabs := make([]Slab, numberOfSlabs)
+	slabs := make([]atree.Slab, numberOfSlabs)
 	for i := 0; i < numberOfSlabs; i++ {
 		addr := generateRandomAddress(r)
 
-		var index SlabIndex
+		var index atree.SlabIndex
 		binary.BigEndian.PutUint64(index[:], uint64(i))
 
-		id := NewSlabID(addr, index)
+		id := atree.NewSlabID(addr, index)
 
 		slabs[i] = generateLargeSlab(id)
 	}
@@ -96,7 +98,7 @@ func benchmarkNondeterministicFastCommit(b *testing.B, seed int64, numberOfSlabs
 			b.StopTimer()
 
 			baseStorage := NewInMemBaseStorage()
-			storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
+			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 			for _, slab := range slabs {
 				err = storage.Store(slab.SlabID(), slab)
@@ -143,19 +145,19 @@ func benchmarkRetrieve(b *testing.B, seed int64, numberOfSlabs int) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(b, err)
 
-	encodedSlabs := make(map[SlabID][]byte)
-	ids := make([]SlabID, 0, numberOfSlabs)
+	encodedSlabs := make(map[atree.SlabID][]byte)
+	ids := make([]atree.SlabID, 0, numberOfSlabs)
 	for i := 0; i < numberOfSlabs; i++ {
 		addr := generateRandomAddress(r)
 
-		var index SlabIndex
+		var index atree.SlabIndex
 		binary.BigEndian.PutUint64(index[:], uint64(i))
 
-		id := NewSlabID(addr, index)
+		id := atree.NewSlabID(addr, index)
 
 		slab := generateLargeSlab(id)
 
-		data, err := EncodeSlab(slab, encMode)
+		data, err := atree.EncodeSlab(slab, encMode)
 		require.NoError(b, err)
 
 		encodedSlabs[id] = data
@@ -167,7 +169,7 @@ func benchmarkRetrieve(b *testing.B, seed int64, numberOfSlabs int) {
 			b.StopTimer()
 
 			baseStorage := NewInMemBaseStorageFromMap(encodedSlabs)
-			storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
 
 			b.StartTimer()
 
@@ -190,19 +192,19 @@ func benchmarkBatchPreload(b *testing.B, seed int64, numberOfSlabs int) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(b, err)
 
-	encodedSlabs := make(map[SlabID][]byte)
-	ids := make([]SlabID, 0, numberOfSlabs)
+	encodedSlabs := make(map[atree.SlabID][]byte)
+	ids := make([]atree.SlabID, 0, numberOfSlabs)
 	for i := 0; i < numberOfSlabs; i++ {
 		addr := generateRandomAddress(r)
 
-		var index SlabIndex
+		var index atree.SlabIndex
 		binary.BigEndian.PutUint64(index[:], uint64(i))
 
-		id := NewSlabID(addr, index)
+		id := atree.NewSlabID(addr, index)
 
 		slab := generateLargeSlab(id)
 
-		data, err := EncodeSlab(slab, encMode)
+		data, err := atree.EncodeSlab(slab, encMode)
 		require.NoError(b, err)
 
 		encodedSlabs[id] = data
@@ -214,7 +216,7 @@ func benchmarkBatchPreload(b *testing.B, seed int64, numberOfSlabs int) {
 			b.StopTimer()
 
 			baseStorage := NewInMemBaseStorageFromMap(encodedSlabs)
-			storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
 
 			b.StartTimer()
 

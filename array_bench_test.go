@@ -16,17 +16,19 @@
  * limitations under the License.
  */
 
-package atree
+package atree_test
 
 import (
 	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/onflow/atree"
 )
 
-var noopValue Value
-var noopStorable Storable
+var noopValue atree.Value
+var noopStorable atree.Storable
 
 func BenchmarkArrayGet100x(b *testing.B) {
 	benchmarks := []struct {
@@ -186,13 +188,13 @@ func BenchmarkNewArrayFromBatchData(b *testing.B) {
 	}
 }
 
-func setupArray(b *testing.B, r *rand.Rand, storage *PersistentSlabStorage, initialArrayCount int) *Array {
+func setupArray(b *testing.B, r *rand.Rand, storage *atree.PersistentSlabStorage, initialArrayCount int) *atree.Array {
 
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	typeInfo := testTypeInfo{42}
 
-	array, err := NewArray(storage, address, typeInfo)
+	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(b, err)
 
 	for i := 0; i < initialArrayCount; i++ {
@@ -208,7 +210,7 @@ func setupArray(b *testing.B, r *rand.Rand, storage *PersistentSlabStorage, init
 
 	storage.DropCache()
 
-	newArray, err := NewArrayWithRootID(storage, arrayID)
+	newArray, err := atree.NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
 	return newArray
@@ -224,7 +226,7 @@ func benchmarkArrayGet(b *testing.B, initialArrayCount, numberOfOps int) {
 
 	array := setupArray(b, r, storage, initialArrayCount)
 
-	var value Value
+	var value atree.Value
 
 	b.StartTimer()
 
@@ -293,7 +295,7 @@ func benchmarkArrayRemoveAll(b *testing.B, initialArrayCount int) {
 
 	storage := newTestPersistentStorage(b)
 
-	var storable Storable
+	var storable atree.Storable
 
 	for i := 0; i < b.N; i++ {
 
@@ -319,7 +321,7 @@ func benchmarkArrayPopIterate(b *testing.B, initialArrayCount int) {
 
 	storage := newTestPersistentStorage(b)
 
-	var storable Storable
+	var storable atree.Storable
 
 	for i := 0; i < b.N; i++ {
 
@@ -329,7 +331,7 @@ func benchmarkArrayPopIterate(b *testing.B, initialArrayCount int) {
 
 		b.StartTimer()
 
-		err := array.PopIterate(func(s Storable) {
+		err := array.PopIterate(func(s atree.Storable) {
 			storable = s
 		})
 		if err != nil {
@@ -353,9 +355,9 @@ func benchmarkNewArrayFromAppend(b *testing.B, initialArrayCount int) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		copied, _ := NewArray(storage, array.Address(), array.Type())
+		copied, _ := atree.NewArray(storage, array.Address(), array.Type())
 
-		_ = array.IterateReadOnly(func(value Value) (bool, error) {
+		_ = array.IterateReadOnly(func(value atree.Value) (bool, error) {
 			_ = copied.Append(value)
 			return true, nil
 		})
@@ -382,7 +384,7 @@ func benchmarkNewArrayFromBatchData(b *testing.B, initialArrayCount int) {
 		iter, err := array.ReadOnlyIterator()
 		require.NoError(b, err)
 
-		copied, _ := NewArrayFromBatchData(storage, array.Address(), array.Type(), func() (Value, error) {
+		copied, _ := atree.NewArrayFromBatchData(storage, array.Address(), array.Type(), func() (atree.Value, error) {
 			return iter.Next()
 		})
 

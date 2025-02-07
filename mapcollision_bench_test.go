@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package atree
+package atree_test
 
 import (
 	"encoding/binary"
@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/zeebo/blake3"
+
+	"github.com/onflow/atree"
 )
 
 type collisionDigesterBuilder struct {
@@ -33,15 +35,15 @@ type collisionDigesterBuilder struct {
 	maxCollisionCount uint32
 }
 
-var _ DigesterBuilder = &collisionDigesterBuilder{}
+var _ atree.DigesterBuilder = &collisionDigesterBuilder{}
 
-func NewCollisionDigesterBuilder(maxCollisionLimitPerDigest uint32) DigesterBuilder {
+func NewCollisionDigesterBuilder(maxCollisionLimitPerDigest uint32) atree.DigesterBuilder {
 	return &collisionDigesterBuilder{
 		maxCollisionCount: maxCollisionLimitPerDigest + 1,
 	}
 }
 
-func (db *collisionDigesterBuilder) Digest(hip HashInputProvider, value Value) (Digester, error) {
+func (db *collisionDigesterBuilder) Digest(hip atree.HashInputProvider, value atree.Value) (atree.Digester, error) {
 
 	if db.collisionCount < db.maxCollisionCount {
 		db.collisionCount++
@@ -72,16 +74,16 @@ type collisionDigester struct {
 	msg            []byte
 }
 
-var _ Digester = &collisionDigester{}
+var _ atree.Digester = &collisionDigester{}
 
-func (d *collisionDigester) Digest(level uint) (Digest, error) {
+func (d *collisionDigester) Digest(level uint) (atree.Digest, error) {
 	if level >= d.Levels() {
-		return Digest(0), fmt.Errorf("invalid digest level %d", level)
+		return atree.Digest(0), fmt.Errorf("invalid digest level %d", level)
 	}
 
 	switch level {
 	case 0:
-		return Digest(d.firstLevelHash), nil
+		return atree.Digest(d.firstLevelHash), nil
 	default:
 		if d.blake3Hash == emptyBlake3Hash {
 			sum := blake3.Sum256(d.msg)
@@ -90,11 +92,11 @@ func (d *collisionDigester) Digest(level uint) (Digest, error) {
 			d.blake3Hash[2] = binary.BigEndian.Uint64(sum[16:])
 			d.blake3Hash[3] = binary.BigEndian.Uint64(sum[24:])
 		}
-		return Digest(d.blake3Hash[level-1]), nil
+		return atree.Digest(d.blake3Hash[level-1]), nil
 	}
 }
 
-func (d *collisionDigester) DigestPrefix(level uint) ([]Digest, error) {
+func (d *collisionDigester) DigestPrefix(uint) ([]atree.Digest, error) {
 	return nil, nil
 }
 
@@ -105,11 +107,15 @@ func (d *collisionDigester) Levels() uint {
 func (d *collisionDigester) Reset() {
 }
 
+var (
+	emptyBlake3Hash [4]uint64
+)
+
 func BenchmarkCollisionPerDigest(b *testing.B) {
 
-	savedMaxCollisionLimitPerDigest := MaxCollisionLimitPerDigest
+	savedMaxCollisionLimitPerDigest := atree.MaxCollisionLimitPerDigest
 	defer func() {
-		MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
+		atree.MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
 	}()
 
 	const mapCount = 1_000_000
@@ -122,10 +128,10 @@ func BenchmarkCollisionPerDigest(b *testing.B) {
 
 		b.Run(name, func(b *testing.B) {
 
-			MaxCollisionLimitPerDigest = collisionPerDigest
+			atree.MaxCollisionLimitPerDigest = collisionPerDigest
 
 			digesterBuilder := NewCollisionDigesterBuilder(collisionPerDigest)
-			keyValues := make(map[Value]Value, mapCount)
+			keyValues := make(map[atree.Value]atree.Value, mapCount)
 			for i := uint64(0); i < mapCount; i++ {
 				k := Uint64Value(i)
 				v := Uint64Value(i)
@@ -133,10 +139,10 @@ func BenchmarkCollisionPerDigest(b *testing.B) {
 			}
 
 			typeInfo := testTypeInfo{42}
-			address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+			address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 			storage := newTestPersistentStorage(b)
 
-			m, err := NewMap(storage, address, digesterBuilder, typeInfo)
+			m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 			require.NoError(b, err)
 
 			b.StartTimer()

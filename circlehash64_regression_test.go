@@ -26,7 +26,7 @@
  * CircleHash64 compatibility tests verify nearly 600,000 digests.
  */
 
-package atree
+package atree_test
 
 import (
 	"bytes"

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package atree
+package atree_test
 
 import (
 	"encoding/binary"
@@ -28,37 +28,39 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
+
+	"github.com/onflow/atree"
 )
 
 func TestStorageIndexNext(t *testing.T) {
-	index := SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}
-	want := SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}
+	index := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}
+	want := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}
 	require.Equal(t, want, index.Next())
 }
 
 func TestNewSlabID(t *testing.T) {
 	t.Run("temp address", func(t *testing.T) {
-		require.True(t, NewSlabID(Address{}, SlabIndex{1}).HasTempAddress())
+		require.True(t, atree.NewSlabID(atree.Address{}, atree.SlabIndex{1}).HasTempAddress())
 	})
 	t.Run("perm address", func(t *testing.T) {
-		require.False(t, NewSlabID(Address{1}, SlabIndex{1}).HasTempAddress())
+		require.False(t, atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1}).HasTempAddress())
 	})
 }
 
 func TestNewSlabIDFromRawBytes(t *testing.T) {
 	t.Run("data length < slab id size", func(t *testing.T) {
-		var fatalError *FatalError
-		var slabIDError *SlabIDError
+		var fatalError *atree.FatalError
+		var slabIDError *atree.SlabIDError
 
-		id, err := NewSlabIDFromRawBytes(nil)
-		require.Equal(t, SlabIDUndefined, id)
+		id, err := atree.NewSlabIDFromRawBytes(nil)
+		require.Equal(t, atree.SlabIDUndefined, id)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &slabIDError)
 		require.ErrorAs(t, fatalError, &slabIDError)
 
-		id, err = NewSlabIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 2})
-		require.Equal(t, SlabIDUndefined, id)
+		id, err = atree.NewSlabIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 2})
+		require.Equal(t, atree.SlabIDUndefined, id)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &slabIDError)
@@ -66,21 +68,21 @@ func TestNewSlabIDFromRawBytes(t *testing.T) {
 	})
 
 	t.Run("data length == slab id size", func(t *testing.T) {
-		id, err := NewSlabIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2})
+		id, err := atree.NewSlabIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2})
 
-		want := NewSlabID(
-			Address{0, 0, 0, 0, 0, 0, 0, 1},
-			SlabIndex{0, 0, 0, 0, 0, 0, 0, 2},
+		want := atree.NewSlabID(
+			atree.Address{0, 0, 0, 0, 0, 0, 0, 1},
+			atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2},
 		)
 		require.Equal(t, want, id)
 		require.NoError(t, err)
 	})
 	t.Run("data length > slab id size", func(t *testing.T) {
-		id, err := NewSlabIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 1, 2, 3, 4, 5, 6, 7, 8})
+		id, err := atree.NewSlabIDFromRawBytes([]byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 1, 2, 3, 4, 5, 6, 7, 8})
 
-		want := NewSlabID(
-			Address{0, 0, 0, 0, 0, 0, 0, 1},
-			SlabIndex{0, 0, 0, 0, 0, 0, 0, 2},
+		want := atree.NewSlabID(
+			atree.Address{0, 0, 0, 0, 0, 0, 0, 1},
+			atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2},
 		)
 		require.Equal(t, want, id)
 		require.NoError(t, err)
@@ -89,10 +91,10 @@ func TestNewSlabIDFromRawBytes(t *testing.T) {
 
 func TestSlabIDToRawBytes(t *testing.T) {
 	t.Run("buffer nil", func(t *testing.T) {
-		var fatalError *FatalError
-		var slabIDError *SlabIDError
+		var fatalError *atree.FatalError
+		var slabIDError *atree.SlabIDError
 
-		size, err := SlabIDUndefined.ToRawBytes(nil)
+		size, err := atree.SlabIDUndefined.ToRawBytes(nil)
 		require.Equal(t, 0, size)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
@@ -101,11 +103,11 @@ func TestSlabIDToRawBytes(t *testing.T) {
 	})
 
 	t.Run("buffer too short", func(t *testing.T) {
-		var fatalError *FatalError
-		var slabIDError *SlabIDError
+		var fatalError *atree.FatalError
+		var slabIDError *atree.SlabIDError
 
 		b := make([]byte, 8)
-		size, err := SlabIDUndefined.ToRawBytes(b)
+		size, err := atree.SlabIDUndefined.ToRawBytes(b)
 		require.Equal(t, 0, size)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
@@ -114,89 +116,89 @@ func TestSlabIDToRawBytes(t *testing.T) {
 	})
 
 	t.Run("undefined", func(t *testing.T) {
-		b := make([]byte, SlabIDLength)
-		size, err := SlabIDUndefined.ToRawBytes(b)
+		b := make([]byte, atree.SlabIDLength)
+		size, err := atree.SlabIDUndefined.ToRawBytes(b)
 		require.NoError(t, err)
 
 		want := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 		require.Equal(t, want, b)
-		require.Equal(t, SlabIDLength, size)
+		require.Equal(t, atree.SlabIDLength, size)
 	})
 
 	t.Run("temp address", func(t *testing.T) {
-		id := NewSlabID(Address{0, 0, 0, 0, 0, 0, 0, 0}, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		b := make([]byte, SlabIDLength)
+		id := atree.NewSlabID(atree.Address{0, 0, 0, 0, 0, 0, 0, 0}, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		b := make([]byte, atree.SlabIDLength)
 		size, err := id.ToRawBytes(b)
 		require.NoError(t, err)
 
 		want := []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
 		require.Equal(t, want, b)
-		require.Equal(t, SlabIDLength, size)
+		require.Equal(t, atree.SlabIDLength, size)
 	})
 
 	t.Run("temp index", func(t *testing.T) {
-		id := NewSlabID(Address{0, 0, 0, 0, 0, 0, 0, 1}, SlabIndex{0, 0, 0, 0, 0, 0, 0, 0})
-		b := make([]byte, SlabIDLength)
+		id := atree.NewSlabID(atree.Address{0, 0, 0, 0, 0, 0, 0, 1}, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 0})
+		b := make([]byte, atree.SlabIDLength)
 		size, err := id.ToRawBytes(b)
 		require.NoError(t, err)
 
 		want := []byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0}
 		require.Equal(t, want, b)
-		require.Equal(t, SlabIDLength, size)
+		require.Equal(t, atree.SlabIDLength, size)
 	})
 
 	t.Run("perm", func(t *testing.T) {
-		id := NewSlabID(Address{0, 0, 0, 0, 0, 0, 0, 1}, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		b := make([]byte, SlabIDLength)
+		id := atree.NewSlabID(atree.Address{0, 0, 0, 0, 0, 0, 0, 1}, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		b := make([]byte, atree.SlabIDLength)
 		size, err := id.ToRawBytes(b)
 		require.NoError(t, err)
 
 		want := []byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2}
 		require.Equal(t, want, b)
-		require.Equal(t, SlabIDLength, size)
+		require.Equal(t, atree.SlabIDLength, size)
 	})
 }
 
 func TestSlabIDAddressAsUint64(t *testing.T) {
 	t.Run("temp", func(t *testing.T) {
-		id := NewSlabID(Address{}, SlabIndex{1})
+		id := atree.NewSlabID(atree.Address{}, atree.SlabIndex{1})
 		require.Equal(t, uint64(0), id.AddressAsUint64())
 	})
 	t.Run("perm", func(t *testing.T) {
-		id := NewSlabID(Address{0, 0, 0, 0, 0, 0, 0, 1}, SlabIndex{1})
+		id := atree.NewSlabID(atree.Address{0, 0, 0, 0, 0, 0, 0, 1}, atree.SlabIndex{1})
 		require.Equal(t, uint64(1), id.AddressAsUint64())
 	})
 }
 
 func TestSlabIDAddress(t *testing.T) {
 	t.Run("temp", func(t *testing.T) {
-		id := NewSlabID(Address{}, SlabIndex{1})
-		require.Equal(t, Address{}, id.Address())
+		id := atree.NewSlabID(atree.Address{}, atree.SlabIndex{1})
+		require.Equal(t, atree.Address{}, id.Address())
 	})
 	t.Run("perm", func(t *testing.T) {
-		id := NewSlabID(Address{0, 0, 0, 0, 0, 0, 0, 1}, SlabIndex{1})
-		require.Equal(t, Address{0, 0, 0, 0, 0, 0, 0, 1}, id.Address())
+		id := atree.NewSlabID(atree.Address{0, 0, 0, 0, 0, 0, 0, 1}, atree.SlabIndex{1})
+		require.Equal(t, atree.Address{0, 0, 0, 0, 0, 0, 0, 1}, id.Address())
 	})
 }
 
 func TestSlabIDIndexAsUint64(t *testing.T) {
 	t.Run("temp", func(t *testing.T) {
-		id := NewSlabID(Address{}, SlabIndex{})
+		id := atree.NewSlabID(atree.Address{}, atree.SlabIndex{})
 		require.Equal(t, uint64(0), id.IndexAsUint64())
 	})
 	t.Run("perm", func(t *testing.T) {
-		id := NewSlabID(Address{}, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id := atree.NewSlabID(atree.Address{}, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 		require.Equal(t, uint64(1), id.IndexAsUint64())
 	})
 }
 
 func TestSlabIDValid(t *testing.T) {
 	t.Run("undefined", func(t *testing.T) {
-		id := SlabIDUndefined
+		id := atree.SlabIDUndefined
 		err := id.Valid()
 
-		var fatalError *FatalError
-		var slabIDError *SlabIDError
+		var fatalError *atree.FatalError
+		var slabIDError *atree.SlabIDError
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &slabIDError)
@@ -204,11 +206,11 @@ func TestSlabIDValid(t *testing.T) {
 	})
 
 	t.Run("temp index", func(t *testing.T) {
-		id := NewSlabID(Address{1}, SlabIndexUndefined)
+		id := atree.NewSlabID(atree.Address{1}, atree.SlabIndexUndefined)
 		err := id.Valid()
 
-		var fatalError *FatalError
-		var slabIDError *SlabIDError
+		var fatalError *atree.FatalError
+		var slabIDError *atree.SlabIDError
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &slabIDError)
@@ -216,41 +218,41 @@ func TestSlabIDValid(t *testing.T) {
 	})
 
 	t.Run("temp address", func(t *testing.T) {
-		id := NewSlabID(AddressUndefined, SlabIndex{1})
+		id := atree.NewSlabID(atree.AddressUndefined, atree.SlabIndex{1})
 		require.NoError(t, id.Valid())
 	})
 
 	t.Run("valid", func(t *testing.T) {
-		id := NewSlabID(Address{1}, SlabIndex{2})
+		id := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{2})
 		require.NoError(t, id.Valid())
 	})
 }
 
 func TestSlabIDCompare(t *testing.T) {
 	t.Run("same", func(t *testing.T) {
-		id1 := NewSlabID(Address{1}, SlabIndex{1})
-		id2 := NewSlabID(Address{1}, SlabIndex{1})
+		id1 := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1})
+		id2 := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1})
 		require.Equal(t, 0, id1.Compare(id2))
 		require.Equal(t, 0, id2.Compare(id1))
 	})
 
 	t.Run("different address", func(t *testing.T) {
-		id1 := NewSlabID(Address{1}, SlabIndex{1})
-		id2 := NewSlabID(Address{2}, SlabIndex{1})
+		id1 := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1})
+		id2 := atree.NewSlabID(atree.Address{2}, atree.SlabIndex{1})
 		require.Equal(t, -1, id1.Compare(id2))
 		require.Equal(t, 1, id2.Compare(id1))
 	})
 
 	t.Run("different index", func(t *testing.T) {
-		id1 := NewSlabID(Address{1}, SlabIndex{1})
-		id2 := NewSlabID(Address{1}, SlabIndex{2})
+		id1 := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1})
+		id2 := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{2})
 		require.Equal(t, -1, id1.Compare(id2))
 		require.Equal(t, 1, id2.Compare(id1))
 	})
 
 	t.Run("different address and index", func(t *testing.T) {
-		id1 := NewSlabID(Address{1}, SlabIndex{1})
-		id2 := NewSlabID(Address{2}, SlabIndex{2})
+		id1 := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1})
+		id2 := atree.NewSlabID(atree.Address{2}, atree.SlabIndex{2})
 		require.Equal(t, -1, id1.Compare(id2))
 		require.Equal(t, 1, id2.Compare(id1))
 	})
@@ -258,12 +260,12 @@ func TestSlabIDCompare(t *testing.T) {
 
 func TestLedgerBaseStorageStore(t *testing.T) {
 	ledger := newTestLedger()
-	baseStorage := NewLedgerBaseStorage(ledger)
+	baseStorage := atree.NewLedgerBaseStorage(ledger)
 
 	bytesStored := 0
-	values := map[SlabID][]byte{
-		{Address{1}, SlabIndex{1}}: {1, 2, 3},
-		{Address{1}, SlabIndex{2}}: {4, 5, 6},
+	values := map[atree.SlabID][]byte{
+		atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1}): {1, 2, 3},
+		atree.NewSlabID(atree.Address{1}, atree.SlabIndex{2}): {4, 5, 6},
 	}
 
 	// Store values
@@ -295,7 +297,7 @@ func TestLedgerBaseStorageStore(t *testing.T) {
 
 		id := NewSlabIDFromRawAddressAndIndex(owner, key[1:])
 
-		require.True(t, LedgerKeyIsSlabKey(string(key)))
+		require.True(t, atree.LedgerKeyIsSlabKey(string(key)))
 		require.Equal(t, values[id], value)
 
 		count++
@@ -305,9 +307,9 @@ func TestLedgerBaseStorageStore(t *testing.T) {
 
 func TestLedgerBaseStorageRetrieve(t *testing.T) {
 	ledger := newTestLedger()
-	baseStorage := NewLedgerBaseStorage(ledger)
+	baseStorage := atree.NewLedgerBaseStorage(ledger)
 
-	id := NewSlabID(Address{1}, SlabIndex{1})
+	id := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1})
 	value := []byte{1, 2, 3}
 	bytesStored := 0
 	bytesRetrieved := 0
@@ -330,7 +332,7 @@ func TestLedgerBaseStorageRetrieve(t *testing.T) {
 	require.Equal(t, value, b)
 
 	// Retrieve non-existent value
-	id = NewSlabID(Address{1}, SlabIndex{2})
+	id = atree.NewSlabID(atree.Address{1}, atree.SlabIndex{2})
 	b, found, err = baseStorage.Retrieve(id)
 	require.NoError(t, err)
 	require.False(t, found)
@@ -342,9 +344,9 @@ func TestLedgerBaseStorageRetrieve(t *testing.T) {
 
 func TestLedgerBaseStorageRemove(t *testing.T) {
 	ledger := newTestLedger()
-	baseStorage := NewLedgerBaseStorage(ledger)
+	baseStorage := atree.NewLedgerBaseStorage(ledger)
 
-	id := NewSlabID(Address{1}, SlabIndex{1})
+	id := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1})
 	value := []byte{1, 2, 3}
 
 	// Remove value from empty storage
@@ -363,7 +365,7 @@ func TestLedgerBaseStorageRemove(t *testing.T) {
 	require.NoError(t, err)
 
 	// Remove non-existent value
-	err = baseStorage.Remove(NewSlabID(id.Address(), id.Index().Next()))
+	err = baseStorage.Remove(atree.NewSlabID(id.Address(), id.Index().Next()))
 	require.NoError(t, err)
 
 	// Retrieve removed value
@@ -381,7 +383,7 @@ func TestLedgerBaseStorageRemove(t *testing.T) {
 			break
 		}
 
-		require.True(t, LedgerKeyIsSlabKey(string(key)))
+		require.True(t, atree.LedgerKeyIsSlabKey(string(key)))
 		require.Nil(t, value)
 
 		count++
@@ -391,35 +393,35 @@ func TestLedgerBaseStorageRemove(t *testing.T) {
 
 func TestLedgerBaseStorageGenerateSlabID(t *testing.T) {
 	ledger := newTestLedger()
-	baseStorage := NewLedgerBaseStorage(ledger)
+	baseStorage := atree.NewLedgerBaseStorage(ledger)
 
-	address1 := Address{1}
-	address2 := Address{2}
+	address1 := atree.Address{1}
+	address2 := atree.Address{2}
 
 	id, err := baseStorage.GenerateSlabID(address1)
 	require.NoError(t, err)
 	require.Equal(t, address1, id.Address())
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
+	require.Equal(t, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 
 	id, err = baseStorage.GenerateSlabID(address1)
 	require.NoError(t, err)
 	require.Equal(t, address1, id.Address())
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
+	require.Equal(t, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
 
 	id, err = baseStorage.GenerateSlabID(address2)
 	require.NoError(t, err)
 	require.Equal(t, address2, id.Address())
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
+	require.Equal(t, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 }
 
 func TestBasicSlabStorageStore(t *testing.T) {
-	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+	storage := atree.NewBasicSlabStorage(nil, nil, nil, nil)
 
 	r := newRand(t)
-	address := Address{1}
-	slabs := map[SlabID]Slab{
-		NewSlabID(address, SlabIndex{1}): generateRandomSlab(NewSlabID(address, SlabIndex{1}), r),
-		NewSlabID(address, SlabIndex{2}): generateRandomSlab(NewSlabID(address, SlabIndex{2}), r),
+	address := atree.Address{1}
+	slabs := map[atree.SlabID]atree.Slab{
+		atree.NewSlabID(address, atree.SlabIndex{1}): generateRandomSlab(atree.NewSlabID(address, atree.SlabIndex{1}), r),
+		atree.NewSlabID(address, atree.SlabIndex{2}): generateRandomSlab(atree.NewSlabID(address, atree.SlabIndex{2}), r),
 	}
 
 	// Store values
@@ -448,10 +450,10 @@ func TestBasicSlabStorageStore(t *testing.T) {
 }
 
 func TestBasicSlabStorageRetrieve(t *testing.T) {
-	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+	storage := atree.NewBasicSlabStorage(nil, nil, nil, nil)
 
 	r := newRand(t)
-	id := NewSlabID(Address{1}, SlabIndex{1})
+	id := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1})
 	slab := generateRandomSlab(id, r)
 
 	// Retrieve value from empty storage
@@ -470,7 +472,7 @@ func TestBasicSlabStorageRetrieve(t *testing.T) {
 	require.Equal(t, slab, retrievedSlab)
 
 	// Retrieve non-existent value
-	id = NewSlabID(Address{1}, SlabIndex{2})
+	id = atree.NewSlabID(atree.Address{1}, atree.SlabIndex{2})
 	retrievedSlab, found, err = storage.Retrieve(id)
 	require.NoError(t, err)
 	require.False(t, found)
@@ -478,10 +480,10 @@ func TestBasicSlabStorageRetrieve(t *testing.T) {
 }
 
 func TestBasicSlabStorageRemove(t *testing.T) {
-	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+	storage := atree.NewBasicSlabStorage(nil, nil, nil, nil)
 
 	r := newRand(t)
-	id := NewSlabID(Address{1}, SlabIndex{1})
+	id := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1})
 	slab := generateRandomSlab(id, r)
 
 	// Remove value from empty storage
@@ -500,7 +502,7 @@ func TestBasicSlabStorageRemove(t *testing.T) {
 	require.NoError(t, err)
 
 	// Remove non-existent value
-	err = storage.Remove(NewSlabID(id.Address(), id.Index().Next()))
+	err = storage.Remove(atree.NewSlabID(id.Address(), id.Index().Next()))
 	require.NoError(t, err)
 
 	// Retrieve removed value
@@ -513,38 +515,38 @@ func TestBasicSlabStorageRemove(t *testing.T) {
 }
 
 func TestBasicSlabStorageGenerateSlabID(t *testing.T) {
-	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+	storage := atree.NewBasicSlabStorage(nil, nil, nil, nil)
 
-	address1 := Address{1}
-	address2 := Address{2}
+	address1 := atree.Address{1}
+	address2 := atree.Address{2}
 
 	id, err := storage.GenerateSlabID(address1)
 	require.NoError(t, err)
 	require.Equal(t, address1, id.Address())
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
+	require.Equal(t, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 
 	id, err = storage.GenerateSlabID(address1)
 	require.NoError(t, err)
 	require.Equal(t, address1, id.Address())
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
+	require.Equal(t, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
 
 	id, err = storage.GenerateSlabID(address2)
 	require.NoError(t, err)
 	require.Equal(t, address2, id.Address())
-	require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
+	require.Equal(t, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 }
 
 func TestBasicSlabStorageSlabIDs(t *testing.T) {
 	r := newRand(t)
-	address := Address{1}
-	index := SlabIndex{0, 0, 0, 0, 0, 0, 0, 0}
-	wantIDs := map[SlabID]bool{
-		NewSlabID(address, index.Next()): true,
-		NewSlabID(address, index.Next()): true,
-		NewSlabID(address, index.Next()): true,
+	address := atree.Address{1}
+	index := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 0}
+	wantIDs := map[atree.SlabID]bool{
+		atree.NewSlabID(address, index.Next()): true,
+		atree.NewSlabID(address, index.Next()): true,
+		atree.NewSlabID(address, index.Next()): true,
 	}
 
-	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+	storage := atree.NewBasicSlabStorage(nil, nil, nil, nil)
 
 	// Get slab ids from empty storgae
 	ids := storage.SlabIDs()
@@ -567,20 +569,20 @@ func TestBasicSlabStorageSlabIDs(t *testing.T) {
 
 func TestBasicSlabStorageSlabIterat(t *testing.T) {
 	r := newRand(t)
-	address := Address{1}
-	index := SlabIndex{0, 0, 0, 0, 0, 0, 0, 0}
+	address := atree.Address{1}
+	index := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 0}
 
-	id1 := NewSlabID(address, index.Next())
-	id2 := NewSlabID(address, index.Next())
-	id3 := NewSlabID(address, index.Next())
+	id1 := atree.NewSlabID(address, index.Next())
+	id2 := atree.NewSlabID(address, index.Next())
+	id3 := atree.NewSlabID(address, index.Next())
 
-	want := map[SlabID]Slab{
+	want := map[atree.SlabID]atree.Slab{
 		id1: generateRandomSlab(id1, r),
 		id2: generateRandomSlab(id2, r),
 		id3: generateRandomSlab(id3, r),
 	}
 
-	storage := NewBasicSlabStorage(nil, nil, nil, nil)
+	storage := atree.NewBasicSlabStorage(nil, nil, nil, nil)
 
 	// Store values
 	for id, slab := range want {
@@ -594,7 +596,7 @@ func TestBasicSlabStorageSlabIterat(t *testing.T) {
 	count := 0
 	for {
 		id, slab := iterator()
-		if id == SlabIDUndefined {
+		if id == atree.SlabIDUndefined {
 			break
 		}
 		require.NotNil(t, want[id])
@@ -612,18 +614,18 @@ func TestPersistentStorage(t *testing.T) {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	tempAddress := Address{}
-	permAddress := Address{1, 0, 0, 0, 0, 0, 0, 0}
+	tempAddress := atree.Address{}
+	permAddress := atree.Address{1, 0, 0, 0, 0, 0, 0, 0}
 
 	t.Run("empty storage", func(t *testing.T) {
 		baseStorage := NewInMemBaseStorage()
-		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
+		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
-		slabIndex := SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}
+		slabIndex := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}
 
-		tempSlabID := NewSlabID(tempAddress, slabIndex)
+		tempSlabID := atree.NewSlabID(tempAddress, slabIndex)
 
-		permSlabID := NewSlabID(permAddress, slabIndex)
+		permSlabID := atree.NewSlabID(permAddress, slabIndex)
 
 		_, found, err := storage.Retrieve(tempSlabID)
 		require.NoError(t, err)
@@ -645,13 +647,13 @@ func TestPersistentStorage(t *testing.T) {
 		r := newRand(t)
 
 		baseStorage := NewInMemBaseStorage()
-		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
+		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
-		slabIndex := SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}
+		slabIndex := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}
 
-		tempSlabID := NewSlabID(tempAddress, slabIndex)
+		tempSlabID := atree.NewSlabID(tempAddress, slabIndex)
 
-		permSlabID := NewSlabID(permAddress, slabIndex)
+		permSlabID := atree.NewSlabID(permAddress, slabIndex)
 
 		slab1 := generateRandomSlab(tempSlabID, r)
 		slab2 := generateRandomSlab(permSlabID, r)
@@ -752,12 +754,12 @@ func TestPersistentStorage(t *testing.T) {
 		r := newRand(t)
 
 		baseStorage := newAccessOrderTrackerBaseStorage()
-		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
+		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 		baseStorage2 := newAccessOrderTrackerBaseStorage()
-		storageWithFastCommit := NewPersistentSlabStorage(baseStorage2, encMode, decMode, nil, nil)
+		storageWithFastCommit := atree.NewPersistentSlabStorage(baseStorage2, encMode, decMode, nil, nil)
 
-		simpleMap := make(map[SlabID][]byte)
+		simpleMap := make(map[atree.SlabID][]byte)
 		slabSize := uint64(0)
 		// test random updates apply commit and check the order of committed values
 		for i := 0; i < numberOfAccounts; i++ {
@@ -780,7 +782,7 @@ func TestPersistentStorage(t *testing.T) {
 				require.NoError(t, err)
 
 				// capture data for accuracy testing
-				simpleMap[slabID], err = EncodeSlab(slab, encMode)
+				simpleMap[slabID], err = atree.EncodeSlab(slab, encMode)
 				require.NoError(t, err)
 			}
 		}
@@ -862,15 +864,15 @@ func TestPersistentStorage(t *testing.T) {
 	t.Run("commit with error", func(t *testing.T) {
 
 		baseStorage := NewInMemBaseStorage()
-		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
+		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
-		address := Address{1}
+		address := atree.Address{1}
 
 		id, err := storage.GenerateSlabID(address)
 		require.NoError(t, err)
 
 		// Encoding slabWithNonStorable returns error.
-		slabWithNonStorable := NewArrayRootDataSlab(id, []Storable{nonStorable{}})
+		slabWithNonStorable := atree.NewArrayRootDataSlab(id, []atree.Storable{nonStorable{}})
 
 		err = storage.Store(id, slabWithNonStorable)
 		require.NoError(t, err)
@@ -881,7 +883,7 @@ func TestPersistentStorage(t *testing.T) {
 
 			// Encoding slabWithSlowStorable takes some time which delays
 			// sending encoding result to results channel.
-			slabWithSlowStorable := NewArrayRootDataSlab(id, []Storable{newSlowStorable(1)})
+			slabWithSlowStorable := atree.NewArrayRootDataSlab(id, []atree.Storable{newSlowStorable(1)})
 
 			err = storage.Store(id, slabWithSlowStorable)
 			require.NoError(t, err)
@@ -890,7 +892,7 @@ func TestPersistentStorage(t *testing.T) {
 		err = storage.FastCommit(2)
 		require.Equal(t, 1, errorCategorizationCount(err))
 
-		var externalError *ExternalError
+		var externalError *atree.ExternalError
 		require.ErrorAs(t, err, &externalError)
 		require.ErrorIs(t, err, errEncodeNonStorable)
 		require.ErrorIs(t, externalError.Unwrap(), errEncodeNonStorable)
@@ -907,7 +909,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 		count := 0
 		for {
 			id, _ := iterator()
-			if id == SlabIDUndefined {
+			if id == atree.SlabIDUndefined {
 				break
 			}
 			count++
@@ -917,13 +919,13 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 
 	t.Run("not-empty storage", func(t *testing.T) {
 
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		id1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		id2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		id3 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
-		id4 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		id1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		id3 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		id4 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:270 count:11} ]
 			id1: {
 				// version
@@ -971,7 +973,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
 			},
 
-			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... atree.SlabID(...)]
 			id3: {
 				// version
 				0x10,
@@ -1013,7 +1015,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 
 		storage := newTestPersistentStorageWithData(t, data)
 
-		_, err := NewArrayWithRootID(storage, id1)
+		_, err := atree.NewArrayWithRootID(storage, id1)
 		require.NoError(t, err)
 
 		iterator, err := storage.SlabIterator()
@@ -1022,11 +1024,11 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 		count := 0
 		for {
 			id, slab := iterator()
-			if id == SlabIDUndefined {
+			if id == atree.SlabIDUndefined {
 				break
 			}
 
-			encodedSlab, err := EncodeSlab(slab, GetCBOREncMode(storage))
+			encodedSlab, err := atree.EncodeSlab(slab, atree.GetCBOREncMode(storage))
 			require.NoError(t, err)
 
 			require.Equal(t, encodedSlab, data[id])
@@ -1037,11 +1039,11 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 
 	t.Run("not-empty storage with some slabs in deltas", func(t *testing.T) {
 
-		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
-		id1 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}}
-		id2 := SlabID{address: address, index: SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}}
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		id1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		id2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
-		originalData := map[SlabID][]byte{
+		originalData := map[atree.SlabID][]byte{
 			// (data slab) data: [aaaaaaaaaaaaaaaaaaaaaa ... aaaaaaaaaaaaaaaaaaaaaa]
 			id1: {
 				// version
@@ -1095,7 +1097,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 			},
 		}
 
-		modifiedData := map[SlabID][]byte{
+		modifiedData := map[atree.SlabID][]byte{
 			// (data slab) data: [aaaaaaaaaaaaaaaaaaaaaa ... aaaaaaaaaaaaaaaaaaaaaa]
 			id1: {
 				// version
@@ -1150,7 +1152,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 		}
 		storage := newTestPersistentStorageWithData(t, originalData)
 
-		array, err := NewArrayWithRootID(storage, id1)
+		array, err := atree.NewArrayWithRootID(storage, id1)
 		require.NoError(t, err)
 
 		storable, err := array.Set(uint64(0), NewStringValue("bbbbbbbbbbbbbbbbbbbbbb"))
@@ -1163,11 +1165,11 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 		count := 0
 		for {
 			id, slab := iterator()
-			if id == SlabIDUndefined {
+			if id == atree.SlabIDUndefined {
 				break
 			}
 
-			encodedSlab, err := EncodeSlab(slab, storage.cborEncMode)
+			encodedSlab, err := atree.EncodeSlab(slab, atree.GetCBOREncMode(storage))
 			require.NoError(t, err)
 
 			require.Equal(t, modifiedData[id], encodedSlab)
@@ -1179,106 +1181,106 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 
 func TestPersistentStorageGenerateSlabID(t *testing.T) {
 	baseStorage := NewInMemBaseStorage()
-	storage := NewPersistentSlabStorage(baseStorage, nil, nil, nil, nil)
+	storage := atree.NewPersistentSlabStorage(baseStorage, nil, nil, nil, nil)
 
 	t.Run("temp address", func(t *testing.T) {
-		address := Address{}
+		address := atree.Address{}
 
 		id, err := storage.GenerateSlabID(address)
 		require.NoError(t, err)
 		require.Equal(t, address, id.Address())
-		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
+		require.Equal(t, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 
 		id, err = storage.GenerateSlabID(address)
 		require.NoError(t, err)
 		require.Equal(t, address, id.Address())
-		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
+		require.Equal(t, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
 	})
 	t.Run("perm address", func(t *testing.T) {
-		address := Address{1}
+		address := atree.Address{1}
 
 		id, err := storage.GenerateSlabID(address)
 		require.NoError(t, err)
 		require.Equal(t, address, id.Address())
-		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
+		require.Equal(t, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}, id.Index())
 
 		id, err = storage.GenerateSlabID(address)
 		require.NoError(t, err)
 		require.Equal(t, address, id.Address())
-		require.Equal(t, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
+		require.Equal(t, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}, id.Index())
 	})
 }
 
-func generateRandomSlab(id SlabID, r *rand.Rand) Slab {
+func generateRandomSlab(id atree.SlabID, r *rand.Rand) atree.Slab {
 	storable := Uint64Value(r.Uint64())
-	return NewArrayRootDataSlab(id, []Storable{storable})
+	return atree.NewArrayRootDataSlab(id, []atree.Storable{storable})
 }
 
-func generateLargeSlab(id SlabID) Slab {
+func generateLargeSlab(id atree.SlabID) atree.Slab {
 
 	const elementCount = 100
 
-	storables := make([]Storable, elementCount)
+	storables := make([]atree.Storable, elementCount)
 	for i := 0; i < elementCount; i++ {
 		storable := Uint64Value(uint64(i))
 		storables[i] = storable
 	}
 
-	return NewArrayRootDataSlab(id, storables)
+	return atree.NewArrayRootDataSlab(id, storables)
 }
 
-func generateRandomAddress(r *rand.Rand) Address {
-	address := Address{}
+func generateRandomAddress(r *rand.Rand) atree.Address {
+	address := atree.Address{}
 	r.Read(address[:])
 	return address
 }
 
 type accessOrderTrackerBaseStorage struct {
-	segTouchOrder []SlabID
-	indexReqOrder []Address
-	segments      map[SlabID][]byte
-	storageIndex  map[Address]SlabIndex
+	segTouchOrder []atree.SlabID
+	indexReqOrder []atree.Address
+	segments      map[atree.SlabID][]byte
+	storageIndex  map[atree.Address]atree.SlabIndex
 }
 
 func newAccessOrderTrackerBaseStorage() *accessOrderTrackerBaseStorage {
 	return &accessOrderTrackerBaseStorage{
-		segTouchOrder: make([]SlabID, 0),
-		indexReqOrder: make([]Address, 0),
-		segments:      make(map[SlabID][]byte),
-		storageIndex:  make(map[Address]SlabIndex),
+		segTouchOrder: make([]atree.SlabID, 0),
+		indexReqOrder: make([]atree.Address, 0),
+		segments:      make(map[atree.SlabID][]byte),
+		storageIndex:  make(map[atree.Address]atree.SlabIndex),
 	}
 }
 
-func (s *accessOrderTrackerBaseStorage) SegTouchOrder() []SlabID {
+func (s *accessOrderTrackerBaseStorage) SegTouchOrder() []atree.SlabID {
 	return s.segTouchOrder
 }
 
-func (s *accessOrderTrackerBaseStorage) Retrieve(id SlabID) ([]byte, bool, error) {
+func (s *accessOrderTrackerBaseStorage) Retrieve(id atree.SlabID) ([]byte, bool, error) {
 	s.segTouchOrder = append(s.segTouchOrder, id)
 	seg, ok := s.segments[id]
 	return seg, ok, nil
 }
 
-func (s *accessOrderTrackerBaseStorage) Store(id SlabID, data []byte) error {
+func (s *accessOrderTrackerBaseStorage) Store(id atree.SlabID, data []byte) error {
 	s.segTouchOrder = append(s.segTouchOrder, id)
 	s.segments[id] = data
 	return nil
 }
 
-func (s *accessOrderTrackerBaseStorage) Remove(id SlabID) error {
+func (s *accessOrderTrackerBaseStorage) Remove(id atree.SlabID) error {
 	s.segTouchOrder = append(s.segTouchOrder, id)
 	delete(s.segments, id)
 	return nil
 }
 
-func (s *accessOrderTrackerBaseStorage) GenerateSlabID(address Address) (SlabID, error) {
+func (s *accessOrderTrackerBaseStorage) GenerateSlabID(address atree.Address) (atree.SlabID, error) {
 	s.indexReqOrder = append(s.indexReqOrder, address)
 
 	index := s.storageIndex[address]
 	nextIndex := index.Next()
 
 	s.storageIndex[address] = nextIndex
-	return NewSlabID(address, nextIndex), nil
+	return atree.NewSlabID(address, nextIndex), nil
 }
 
 func (s *accessOrderTrackerBaseStorage) SegmentCounts() int { return len(s.segments) }
@@ -1299,15 +1301,15 @@ func (s *accessOrderTrackerBaseStorage) ResetReporter() {}
 
 type testLedger struct {
 	values map[string][]byte
-	index  map[string]SlabIndex
+	index  map[string]atree.SlabIndex
 }
 
-var _ Ledger = &testLedger{}
+var _ atree.Ledger = &testLedger{}
 
 func newTestLedger() *testLedger {
 	return &testLedger{
 		values: make(map[string][]byte),
-		index:  make(map[string]SlabIndex),
+		index:  make(map[string]atree.SlabIndex),
 	}
 }
 
@@ -1326,7 +1328,7 @@ func (l *testLedger) ValueExists(owner, key []byte) (exists bool, err error) {
 	return len(value) > 0, nil
 }
 
-func (l *testLedger) AllocateSlabIndex(owner []byte) (SlabIndex, error) {
+func (l *testLedger) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 	index := l.index[string(owner)]
 	next := index.Next()
 	l.index[string(owner)] = next
@@ -1368,7 +1370,7 @@ var errEncodeNonStorable = errors.New("failed to encode non-storable")
 // nonStorable can't be encoded successfully.
 type nonStorable struct{}
 
-func (nonStorable) Encode(_ *Encoder) error {
+func (nonStorable) Encode(_ *atree.Encoder) error {
 	return errEncodeNonStorable
 }
 
@@ -1376,15 +1378,15 @@ func (nonStorable) ByteSize() uint32 {
 	return 1
 }
 
-func (v nonStorable) StoredValue(_ SlabStorage) (Value, error) {
+func (v nonStorable) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (nonStorable) ChildStorables() []Storable {
+func (nonStorable) ChildStorables() []atree.Storable {
 	return nil
 }
 
-func (v nonStorable) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
+func (v nonStorable) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (atree.Storable, error) {
 	return v, nil
 }
 
@@ -1403,7 +1405,7 @@ func newSlowStorable(i uint8) slowStorable {
 // when called by FastCommit() compared to
 // to a non-slow Encode function returning an error.
 // See Atree issue #240.
-func (s slowStorable) Encode(encoder *Encoder) error {
+func (s slowStorable) Encode(encoder *atree.Encoder) error {
 	// Use division in a loop to slow down this function
 	n := 1.0
 	for i := 0; i < 2000; i++ {
@@ -1414,30 +1416,30 @@ func (s slowStorable) Encode(encoder *Encoder) error {
 }
 
 func TestFixLoadedBrokenReferences(t *testing.T) {
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("healthy", func(t *testing.T) {
 
 		// Create a health storage with arrays and maps
-		mapMetaDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		mapDataNonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		mapDataNonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
-		nestedArrayID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
+		mapMetaDataRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		mapDataNonRootID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		mapDataNonRootID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		nestedArrayID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
-		emptyMapDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 5})
+		emptyMapDataRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 5})
 
-		mapDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 6})
+		mapDataRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 6})
 
-		emptyArrayDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 7})
+		emptyArrayDataRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 7})
 
-		arrayDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 8})
+		arrayDataRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 8})
 
-		arrayMetaDataRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 9})
-		arrayDataNonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 10})
-		arrayDataNonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 11})
-		nestedArrayID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 12})
+		arrayMetaDataRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 9})
+		arrayDataNonRootID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 10})
+		arrayDataNonRootID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 11})
+		nestedArrayID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 12})
 
-		rootIDs := []SlabID{
+		rootIDs := []atree.SlabID{
 			mapMetaDataRootID,
 			emptyMapDataRootID,
 			mapDataRootID,
@@ -1446,7 +1448,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 			arrayMetaDataRootID,
 		}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			// root map metadata slab
 			// metadata slab
 			mapMetaDataRootID: {
@@ -1572,7 +1574,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				0x82,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
-				// element: [hhhhhhhhhhhhhhhhhhhhhh:SlabID(1,2,3,4,5,6,7,8,0,0,0,0,0,0,0,4)]
+				// element: [hhhhhhhhhhhhhhhhhhhhhh:atree.SlabID(1,2,3,4,5,6,7,8,0,0,0,0,0,0,0,4)]
 				0x82,
 				0x76, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68,
 				0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
@@ -1771,7 +1773,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
 			},
 
-			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... atree.SlabID(...)]
 			arrayDataNonRootID2: {
 				// version
 				0x00,
@@ -1828,7 +1830,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// Check health before fixing broken reference
-		rootIDSet, err := CheckStorageHealth(storage, -1)
+		rootIDSet, err := atree.CheckStorageHealth(storage, -1)
 		require.NoError(t, err)
 		require.Equal(t, len(rootIDs), len(rootIDSet))
 
@@ -1837,11 +1839,11 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 			require.True(t, found)
 		}
 
-		var fixedRootIDs map[SlabID][]SlabID
-		var skippedRootIDs map[SlabID][]SlabID
+		var fixedRootIDs map[atree.SlabID][]atree.SlabID
+		var skippedRootIDs map[atree.SlabID][]atree.SlabID
 
 		// Don't fix any broken references
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return false
 		})
 		require.NoError(t, err)
@@ -1852,7 +1854,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken reference
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return true
 		})
 		require.NoError(t, err)
@@ -1863,7 +1865,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
-		rootIDSet, err = CheckStorageHealth(storage, -1)
+		rootIDSet, err = atree.CheckStorageHealth(storage, -1)
 		require.NoError(t, err)
 		require.Equal(t, len(rootIDs), len(rootIDSet))
 
@@ -1871,13 +1873,13 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 
 	t.Run("broken root map data slab", func(t *testing.T) {
 
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
-		brokenRefs := map[SlabID][]SlabID{
+		brokenRefs := map[atree.SlabID][]atree.SlabID{
 			rootID: {rootID},
 		}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -1914,14 +1916,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				// elements (array of 1 elements)
 				// each element is encoded as CBOR array of 2 elements (key, value)
 				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-				// element: [SlabID(0x0.1):uint64(0)]
+				// element: [atree.SlabID(0x0.1):uint64(0)]
 				0x82,
 				0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
 				0xd8, 0xa4, 0x00,
 			},
 		}
 
-		fixedData := map[SlabID][]byte{
+		fixedData := map[atree.SlabID][]byte{
 			rootID: {
 				// version
 				0x10,
@@ -1965,14 +1967,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// Check health before fixing broken reference
-		_, err := CheckStorageHealth(storage, -1)
+		_, err := atree.CheckStorageHealth(storage, -1)
 		require.ErrorContains(t, err, "slab (0x0.1) not found: slab not found during slab iteration")
 
-		var fixedRootIDs map[SlabID][]SlabID
-		var skippedRootIDs map[SlabID][]SlabID
+		var fixedRootIDs map[atree.SlabID][]atree.SlabID
+		var skippedRootIDs map[atree.SlabID][]atree.SlabID
 
 		// Don't fix any broken references
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return false
 		})
 		require.NoError(t, err)
@@ -1987,7 +1989,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken references
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return true
 		})
 		require.NoError(t, err)
@@ -2001,7 +2003,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 1, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
-		rootIDs, err := CheckStorageHealth(storage, -1)
+		rootIDs, err := atree.CheckStorageHealth(storage, -1)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(rootIDs))
 
@@ -2014,7 +2016,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 1, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2025,13 +2027,13 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 
 	t.Run("broken nested storable in root map data slab", func(t *testing.T) {
 
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
-		brokenRefs := map[SlabID][]SlabID{
+		brokenRefs := map[atree.SlabID][]atree.SlabID{
 			rootID: {rootID},
 		}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -2068,14 +2070,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				// elements (array of 1 elements)
 				// each element is encoded as CBOR array of 2 elements (key, value)
 				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-				// element: [uint64(0):SomeValue(SlabID(0x0.1))]
+				// element: [uint64(0):SomeValue(atree.SlabID(0x0.1))]
 				0x82,
 				0xd8, 0xa4, 0x00,
 				0xd8, cborTagSomeValue, 0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
 			},
 		}
 
-		fixedData := map[SlabID][]byte{
+		fixedData := map[atree.SlabID][]byte{
 			rootID: {
 				// version
 				0x10,
@@ -2119,14 +2121,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// Check health before fixing broken reference
-		_, err := CheckStorageHealth(storage, -1)
+		_, err := atree.CheckStorageHealth(storage, -1)
 		require.ErrorContains(t, err, "slab (0x0.1) not found: slab not found during slab iteration")
 
-		var fixedRootIDs map[SlabID][]SlabID
-		var skippedRootIDs map[SlabID][]SlabID
+		var fixedRootIDs map[atree.SlabID][]atree.SlabID
+		var skippedRootIDs map[atree.SlabID][]atree.SlabID
 
 		// Don't fix any broken references
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return false
 		})
 		require.NoError(t, err)
@@ -2141,7 +2143,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken references
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return true
 		})
 		require.NoError(t, err)
@@ -2155,7 +2157,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 1, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
-		rootIDs, err := CheckStorageHealth(storage, -1)
+		rootIDs, err := atree.CheckStorageHealth(storage, -1)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(rootIDs))
 
@@ -2168,7 +2170,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 1, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2178,16 +2180,16 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 	})
 
 	t.Run("broken non-root map data slab", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootDataID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootDataID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootDataID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootDataID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		brokenRefs := map[SlabID][]SlabID{
+		brokenRefs := map[atree.SlabID][]atree.SlabID{
 			rootID: {nonRootDataID2},
 		}
 
 		// Expected serialized slab data with storage id
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 
 			// metadata slab
 			rootID: {
@@ -2313,14 +2315,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				0x82,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
-				// element: [hhhhhhhhhhhhhhhhhhhhhh:SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
+				// element: [hhhhhhhhhhhhhhhhhhhhhh:atree.SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
 				0x82,
 				0x76, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68,
 				0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
 			},
 		}
 
-		fixedData := map[SlabID][]byte{
+		fixedData := map[atree.SlabID][]byte{
 			rootID: {
 				// version
 				0x10,
@@ -2364,14 +2366,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// Check health before fixing broken reference
-		_, err := CheckStorageHealth(storage, -1)
+		_, err := atree.CheckStorageHealth(storage, -1)
 		require.ErrorContains(t, err, "slab (0x0.1) not found: slab not found during slab iteration")
 
-		var fixedRootIDs map[SlabID][]SlabID
-		var skippedRootIDs map[SlabID][]SlabID
+		var fixedRootIDs map[atree.SlabID][]atree.SlabID
+		var skippedRootIDs map[atree.SlabID][]atree.SlabID
 
 		// Don't fix any broken references
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return false
 		})
 		require.NoError(t, err)
@@ -2386,7 +2388,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken reference
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return true
 		})
 		require.NoError(t, err)
@@ -2400,7 +2402,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 3, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
-		rootIDs, err := CheckStorageHealth(storage, -1)
+		rootIDs, err := atree.CheckStorageHealth(storage, -1)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(rootIDs))
 
@@ -2413,7 +2415,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 1, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2423,15 +2425,15 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 	})
 
 	t.Run("multiple data slabs with broken reference in the same map", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootDataID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootDataID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootDataID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootDataID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		brokenRefs := map[SlabID][]SlabID{
+		brokenRefs := map[atree.SlabID][]atree.SlabID{
 			rootID: {nonRootDataID1, nonRootDataID2},
 		}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 
 			// metadata slab
 			rootID: {
@@ -2508,7 +2510,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				0x82,
 				0x76, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63,
 				0x76, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63, 0x63,
-				// element: [dddddddddddddddddddddd:SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
+				// element: [dddddddddddddddddddddd:atree.SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
 				0x82,
 				0x76, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64, 0x64,
 				0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
@@ -2557,14 +2559,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				0x82,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
-				// element: [hhhhhhhhhhhhhhhhhhhhhh:SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2)]
+				// element: [hhhhhhhhhhhhhhhhhhhhhh:atree.SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2)]
 				0x82,
 				0x76, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68,
 				0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 			},
 		}
 
-		fixedData := map[SlabID][]byte{
+		fixedData := map[atree.SlabID][]byte{
 			rootID: {
 				// version
 				0x10,
@@ -2608,14 +2610,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// Check health before fixing broken reference
-		_, err := CheckStorageHealth(storage, -1)
+		_, err := atree.CheckStorageHealth(storage, -1)
 		require.ErrorContains(t, err, "slab not found during slab iteration")
 
-		var fixedRootIDs map[SlabID][]SlabID
-		var skippedRootIDs map[SlabID][]SlabID
+		var fixedRootIDs map[atree.SlabID][]atree.SlabID
+		var skippedRootIDs map[atree.SlabID][]atree.SlabID
 
 		// Don't fix any broken references
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return false
 		})
 		require.NoError(t, err)
@@ -2630,7 +2632,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken reference
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return true
 		})
 		require.NoError(t, err)
@@ -2644,7 +2646,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 3, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
-		rootIDs, err := CheckStorageHealth(storage, -1)
+		rootIDs, err := atree.CheckStorageHealth(storage, -1)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(rootIDs))
 
@@ -2657,7 +2659,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 1, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2667,16 +2669,16 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 	})
 
 	t.Run("broken reference in nested container", func(t *testing.T) {
-		parentContainerRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootDataID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootDataID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
-		nestedContainerRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
+		parentContainerRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootDataID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootDataID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		nestedContainerRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
-		brokenRefs := map[SlabID][]SlabID{
+		brokenRefs := map[atree.SlabID][]atree.SlabID{
 			nestedContainerRootID: {nestedContainerRootID},
 		}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 
 			// metadata slab
 			parentContainerRootID: {
@@ -2802,7 +2804,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				0x82,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
-				// element: [hhhhhhhhhhhhhhhhhhhhhh:SlabID(1,2,3,4,5,6,7,8,0,0,0,0,0,0,0,4)]
+				// element: [hhhhhhhhhhhhhhhhhhhhhh:atree.SlabID(1,2,3,4,5,6,7,8,0,0,0,0,0,0,0,4)]
 				0x82,
 				0x76, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68,
 				0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
@@ -2845,14 +2847,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				// elements (array of 1 elements)
 				// each element is encoded as CBOR array of 2 elements (key, value)
 				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-				// element: [uint64(0):SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
+				// element: [uint64(0):atree.SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
 				0x82,
 				0xd8, 0xa4, 0x00,
 				0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
 			},
 		}
 
-		fixedData := map[SlabID][]byte{
+		fixedData := map[atree.SlabID][]byte{
 			// map data slab
 			nestedContainerRootID: {
 				// version
@@ -2897,14 +2899,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// Check health before fixing broken reference
-		_, err := CheckStorageHealth(storage, -1)
+		_, err := atree.CheckStorageHealth(storage, -1)
 		require.ErrorContains(t, err, "slab (0x0.1) not found: slab not found during slab iteration")
 
-		var fixedRootIDs map[SlabID][]SlabID
-		var skippedRootIDs map[SlabID][]SlabID
+		var fixedRootIDs map[atree.SlabID][]atree.SlabID
+		var skippedRootIDs map[atree.SlabID][]atree.SlabID
 
 		// Don't fix any broken references
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return false
 		})
 		require.NoError(t, err)
@@ -2919,7 +2921,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Fix broken reference
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return true
 		})
 		require.NoError(t, err)
@@ -2933,7 +2935,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 1, GetDeltasCount(storage))
 
 		// Check health after fixing broken reference
-		rootIDs, err := CheckStorageHealth(storage, -1)
+		rootIDs, err := atree.CheckStorageHealth(storage, -1)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(rootIDs))
 
@@ -2946,7 +2948,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 4, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(nestedContainerRootID)
@@ -2956,20 +2958,20 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 	})
 
 	t.Run("selectively fix maps", func(t *testing.T) {
-		rootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootDataID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootDataID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}) // containing broken ref
+		rootID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootDataID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootDataID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3}) // containing broken ref
 
-		rootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}) // containing broken ref
+		rootID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 4}) // containing broken ref
 
-		rootIDs := []SlabID{rootID1, rootID2}
+		rootIDs := []atree.SlabID{rootID1, rootID2}
 
-		brokenRefs := map[SlabID][]SlabID{
+		brokenRefs := map[atree.SlabID][]atree.SlabID{
 			rootID1: {nonRootDataID2},
 			rootID2: {rootID2},
 		}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			// metadata slab
 			rootID1: {
 				// extra data
@@ -3094,7 +3096,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				0x82,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
 				0x76, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67, 0x67,
-				// element: [hhhhhhhhhhhhhhhhhhhhhh:SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
+				// element: [hhhhhhhhhhhhhhhhhhhhhh:atree.SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
 				0x82,
 				0x76, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68, 0x68,
 				0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
@@ -3137,14 +3139,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				// elements (array of 1 elements)
 				// each element is encoded as CBOR array of 2 elements (key, value)
 				0x9b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-				// element: [uint64(0):SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
+				// element: [uint64(0):atree.SlabID(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1)]
 				0x82,
 				0xd8, 0xa4, 0x00,
 				0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
 			},
 		}
 
-		fixedData := map[SlabID][]byte{
+		fixedData := map[atree.SlabID][]byte{
 			rootID1: {
 				// version
 				0x10,
@@ -3220,14 +3222,14 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		}
 
 		// Check health before fixing broken reference
-		_, err := CheckStorageHealth(storage, -1)
+		_, err := atree.CheckStorageHealth(storage, -1)
 		require.ErrorContains(t, err, "slab not found during slab iteration")
 
-		var fixedRootIDs map[SlabID][]SlabID
-		var skippedRootIDs map[SlabID][]SlabID
+		var fixedRootIDs map[atree.SlabID][]atree.SlabID
+		var skippedRootIDs map[atree.SlabID][]atree.SlabID
 
 		// Don't fix any broken references
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(_ atree.Value) bool {
 			return false
 		})
 		require.NoError(t, err)
@@ -3242,8 +3244,8 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Only fix one map with broken reference
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(v Value) bool {
-			m, ok := v.(*OrderedMap)
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(v atree.Value) bool {
+			m, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			return rootID1 == m.SlabID()
 		})
@@ -3260,11 +3262,11 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check health after only fixing one map with broken reference
-		_, err = CheckStorageHealth(storage, -1)
+		_, err = atree.CheckStorageHealth(storage, -1)
 		require.ErrorContains(t, err, "slab not found during slab iteration")
 
 		// Fix remaining map with broken reference
-		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(v Value) bool {
+		fixedRootIDs, skippedRootIDs, err = storage.FixLoadedBrokenReferences(func(atree.Value) bool {
 			return true
 		})
 		require.NoError(t, err)
@@ -3274,7 +3276,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 1, GetDeltasCount(storage))
 
 		// Check health after fixing remaining maps with broken reference
-		returnedRootIDs, err := CheckStorageHealth(storage, -1)
+		returnedRootIDs, err := atree.CheckStorageHealth(storage, -1)
 		require.NoError(t, err)
 		require.Equal(t, len(rootIDs), len(returnedRootIDs))
 
@@ -3284,7 +3286,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := GetBaseStorage(storage).(*InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*InMemBaseStorage)
 		require.Equal(t, 2, len(baseStorage.segments))
 
 		savedData, found, err := baseStorage.Retrieve(rootID1)
@@ -3300,15 +3302,15 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 }
 
 func TestGetAllChildReferencesFromArray(t *testing.T) {
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
-		expectedRefIDs := []SlabID{}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3333,12 +3335,12 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root data slab without refs", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
-		expectedRefIDs := []SlabID{}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3365,13 +3367,13 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root data slab with ref to nested element", func(t *testing.T) {
-		parentRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		parentRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
-		expectedRefIDs := []SlabID{childRootID}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{childRootID}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			parentRootID: {
 				// extra data
 				// version
@@ -3419,13 +3421,13 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root data slab with ref in nested storable", func(t *testing.T) {
-		parentRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		parentRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
-		expectedRefIDs := []SlabID{childRootID}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{childRootID}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			parentRootID: {
 				// extra data
 				// version
@@ -3473,13 +3475,13 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root data slab with broken ref", func(t *testing.T) {
-		parentRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		parentRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
-		expectedRefIDs := []SlabID{}
-		expectedBrokenRefIDs := []SlabID{childRootID}
+		expectedRefIDs := []atree.SlabID{}
+		expectedBrokenRefIDs := []atree.SlabID{childRootID}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			parentRootID: {
 				// extra data
 				// version
@@ -3506,14 +3508,14 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{nonRootID1, nonRootID2}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3563,7 +3565,7 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
 			},
 
-			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... atree.SlabID(...)]
 			nonRootID2: {
 				// version
 				0x00,
@@ -3592,14 +3594,14 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to first data slab", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		expectedRefIDs := []SlabID{nonRootID2}
-		expectedBrokenRefIDs := []SlabID{nonRootID1}
+		expectedRefIDs := []atree.SlabID{nonRootID2}
+		expectedBrokenRefIDs := []atree.SlabID{nonRootID1}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3627,7 +3629,7 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 				0x00, 0x00, 0x01, 0x0e,
 			},
 
-			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... atree.SlabID(...)]
 			nonRootID2: {
 				// version
 				0x00,
@@ -3656,16 +3658,16 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with ref", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
-		expectedRefIDs := []SlabID{nonRootID1, nonRootID2, childRootID}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{nonRootID1, nonRootID2, childRootID}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3715,7 +3717,7 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
 			},
 
-			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... atree.SlabID(...)]
 			nonRootID2: {
 				// version
 				0x00,
@@ -3765,16 +3767,16 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to nested element", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
-		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
-		expectedBrokenRefIDs := []SlabID{childRootID}
+		expectedRefIDs := []atree.SlabID{nonRootID1, nonRootID2}
+		expectedBrokenRefIDs := []atree.SlabID{childRootID}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3824,7 +3826,7 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 				0x76, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61,
 			},
 
-			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... SlabID(...)]
+			// (data slab) next: 0, data: [aaaaaaaaaaaaaaaaaaaaaa ... atree.SlabID(...)]
 			nonRootID2: {
 				// version
 				0x00,
@@ -3853,14 +3855,14 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 	})
 
 	t.Run("3-level of nested containers", func(t *testing.T) {
-		parentRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		gchildRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		parentRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		gchildRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		expectedRefIDs := []SlabID{childRootID, gchildRootID}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{childRootID, gchildRootID}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			parentRootID: {
 				// extra data
 				// version
@@ -3930,15 +3932,15 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 }
 
 func TestGetAllChildReferencesFromMap(t *testing.T) {
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
-		expectedRefIDs := []SlabID{}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -3980,12 +3982,12 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root data slab without refs", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
-		expectedRefIDs := []SlabID{}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -4031,13 +4033,13 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root data slab with ref", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
-		expectedRefIDs := []SlabID{childRootID}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{childRootID}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -4106,13 +4108,13 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root data slab with ref in nested storable", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
-		expectedRefIDs := []SlabID{childRootID}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{childRootID}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -4181,13 +4183,13 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root data slab with broken ref", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
 
-		expectedRefIDs := []SlabID{}
-		expectedBrokenRefIDs := []SlabID{childRootID}
+		expectedRefIDs := []atree.SlabID{}
+		expectedBrokenRefIDs := []atree.SlabID{childRootID}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -4235,14 +4237,14 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{nonRootID1, nonRootID2}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			// metadata slab
 			rootID: {
 				// extra data
@@ -4379,14 +4381,14 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to first data slab", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		expectedRefIDs := []SlabID{nonRootID2}
-		expectedBrokenRefIDs := []SlabID{nonRootID1}
+		expectedRefIDs := []atree.SlabID{nonRootID2}
+		expectedBrokenRefIDs := []atree.SlabID{nonRootID1}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			// metadata slab
 			rootID: {
 				// extra data
@@ -4474,16 +4476,16 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with ref", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
-		expectedRefIDs := []SlabID{nonRootID1, nonRootID2, childRootID}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{nonRootID1, nonRootID2, childRootID}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			// metadata slab
 			rootID: {
 				// extra data
@@ -4655,16 +4657,16 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("root metadata slab with broken ref to nested element", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		nonRootID1 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		nonRootID2 := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		nonRootID1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		nonRootID2 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
-		expectedRefIDs := []SlabID{nonRootID1, nonRootID2}
-		expectedBrokenRefIDs := []SlabID{childRootID}
+		expectedRefIDs := []atree.SlabID{nonRootID1, nonRootID2}
+		expectedBrokenRefIDs := []atree.SlabID{childRootID}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			// metadata slab
 			rootID: {
 				// extra data
@@ -4800,14 +4802,14 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 	})
 
 	t.Run("3-level containers", func(t *testing.T) {
-		rootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
-		childRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
-		gchildRootID := NewSlabID(address, SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
+		rootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
+		childRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2})
+		gchildRootID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 
-		expectedRefIDs := []SlabID{childRootID, gchildRootID}
-		expectedBrokenRefIDs := []SlabID{}
+		expectedRefIDs := []atree.SlabID{childRootID, gchildRootID}
+		expectedBrokenRefIDs := []atree.SlabID{}
 
-		data := map[SlabID][]byte{
+		data := map[atree.SlabID][]byte{
 			rootID: {
 				// extra data
 				// version
@@ -4899,10 +4901,10 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 
 func testGetAllChildReferences(
 	t *testing.T,
-	data map[SlabID][]byte,
-	rootID SlabID,
-	expectedRefIDs []SlabID,
-	expectedBrokenRefIDs []SlabID,
+	data map[atree.SlabID][]byte,
+	rootID atree.SlabID,
+	expectedRefIDs []atree.SlabID,
+	expectedBrokenRefIDs []atree.SlabID,
 ) {
 	storage := newTestPersistentStorageWithData(t, data)
 
@@ -4958,9 +4960,9 @@ func testStorageNondeterministicFastCommit(t *testing.T, numberOfAccounts int, n
 	r := newRand(t)
 
 	baseStorage := NewInMemBaseStorage()
-	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
+	storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
-	encodedSlabs := make(map[SlabID][]byte)
+	encodedSlabs := make(map[atree.SlabID][]byte)
 	slabSize := uint64(0)
 
 	// Storage slabs
@@ -4980,7 +4982,7 @@ func testStorageNondeterministicFastCommit(t *testing.T, numberOfAccounts int, n
 			require.NoError(t, err)
 
 			// capture data for accuracy testing
-			encodedSlabs[slabID], err = EncodeSlab(slab, encMode)
+			encodedSlabs[slabID], err = atree.EncodeSlab(slab, encMode)
 			require.NoError(t, err)
 		}
 	}
@@ -5061,17 +5063,17 @@ func TestStorageBatchPreload(t *testing.T) {
 
 func testStorageBatchPreload(t *testing.T, numberOfAccounts int, numberOfSlabsPerAccount int) {
 
-	indexesByAddress := make(map[Address]uint64)
+	indexesByAddress := make(map[atree.Address]uint64)
 
-	generateSlabID := func(address Address) SlabID {
+	generateSlabID := func(address atree.Address) atree.SlabID {
 		nextIndex := indexesByAddress[address] + 1
 
-		var idx SlabIndex
+		var idx atree.SlabIndex
 		binary.BigEndian.PutUint64(idx[:], nextIndex)
 
 		indexesByAddress[address] = nextIndex
 
-		return NewSlabID(address, idx)
+		return atree.NewSlabID(address, idx)
 	}
 
 	encMode, err := cbor.EncOptions{}.EncMode()
@@ -5082,7 +5084,7 @@ func testStorageBatchPreload(t *testing.T, numberOfAccounts int, numberOfSlabsPe
 
 	r := newRand(t)
 
-	encodedSlabs := make(map[SlabID][]byte)
+	encodedSlabs := make(map[atree.SlabID][]byte)
 
 	// Generate and encode slabs
 	for i := 0; i < numberOfAccounts; i++ {
@@ -5095,15 +5097,15 @@ func testStorageBatchPreload(t *testing.T, numberOfAccounts int, numberOfSlabsPe
 
 			slab := generateRandomSlab(slabID, r)
 
-			encodedSlabs[slabID], err = EncodeSlab(slab, encMode)
+			encodedSlabs[slabID], err = atree.EncodeSlab(slab, encMode)
 			require.NoError(t, err)
 		}
 	}
 
 	baseStorage := NewInMemBaseStorageFromMap(encodedSlabs)
-	storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+	storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
 
-	ids := make([]SlabID, 0, len(encodedSlabs))
+	ids := make([]atree.SlabID, 0, len(encodedSlabs))
 	for id := range encodedSlabs {
 		ids = append(ids, id)
 	}
@@ -5116,7 +5118,7 @@ func testStorageBatchPreload(t *testing.T, numberOfAccounts int, numberOfSlabsPe
 
 	// Compare encoded data
 	for id, data := range encodedSlabs {
-		cachedData, err := EncodeSlab(GetCache(storage)[id], encMode)
+		cachedData, err := atree.EncodeSlab(atree.GetCache(storage)[id], encMode)
 		require.NoError(t, err)
 
 		require.Equal(t, cachedData, data)
@@ -5136,16 +5138,16 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 	t.Run("empty storage", func(t *testing.T) {
 		const numberOfSlabs = 10
 
-		ids := make([]SlabID, numberOfSlabs)
+		ids := make([]atree.SlabID, numberOfSlabs)
 		for i := 0; i < numberOfSlabs; i++ {
-			var index SlabIndex
+			var index atree.SlabIndex
 			binary.BigEndian.PutUint64(index[:], uint64(i))
 
-			ids[i] = NewSlabID(generateRandomAddress(r), index)
+			ids[i] = atree.NewSlabID(generateRandomAddress(r), index)
 		}
 
 		baseStorage := NewInMemBaseStorage()
-		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		err := storage.BatchPreload(ids, runtime.NumCPU())
 		require.NoError(t, err)
@@ -5157,28 +5159,28 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 	t.Run("non-empty storage", func(t *testing.T) {
 		const numberOfSlabs = 10
 
-		ids := make([]SlabID, numberOfSlabs)
-		encodedSlabs := make(map[SlabID][]byte)
+		ids := make([]atree.SlabID, numberOfSlabs)
+		encodedSlabs := make(map[atree.SlabID][]byte)
 
 		for i := 0; i < numberOfSlabs; i++ {
-			var index SlabIndex
+			var index atree.SlabIndex
 			binary.BigEndian.PutUint64(index[:], uint64(i))
 
-			id := NewSlabID(generateRandomAddress(r), index)
+			id := atree.NewSlabID(generateRandomAddress(r), index)
 
 			slab := generateRandomSlab(id, r)
 
-			encodedSlabs[id], err = EncodeSlab(slab, encMode)
+			encodedSlabs[id], err = atree.EncodeSlab(slab, encMode)
 			require.NoError(t, err)
 
 			ids[i] = id
 		}
 
 		// Append a slab ID that doesn't exist in storage.
-		ids = append(ids, NewSlabID(generateRandomAddress(r), SlabIndex{numberOfSlabs}))
+		ids = append(ids, atree.NewSlabID(generateRandomAddress(r), atree.SlabIndex{numberOfSlabs}))
 
 		baseStorage := NewInMemBaseStorageFromMap(encodedSlabs)
-		storage := NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
 
 		err := storage.BatchPreload(ids, runtime.NumCPU())
 		require.NoError(t, err)
@@ -5188,7 +5190,7 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 
 		// Compare encoded data
 		for id, data := range encodedSlabs {
-			cachedData, err := EncodeSlab(GetCache(storage)[id], encMode)
+			cachedData, err := atree.EncodeSlab(atree.GetCache(storage)[id], encMode)
 			require.NoError(t, err)
 
 			require.Equal(t, cachedData, data)

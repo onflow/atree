@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package atree
+package atree_test
 
 import (
 	"math/rand"
@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/onflow/atree"
 )
 
 // GENERAL COMMENT:
@@ -48,7 +50,7 @@ func BenchmarkXXLArray(b *testing.B) { benchmarkArray(b, 10_000_000, opCount) }
 func BenchmarkXXXLArray(b *testing.B) { benchmarkArray(b, 100_000_000, opCount) }
 
 // TODO add nested arrays as class 5
-func RandomValue(r *rand.Rand) Value {
+func RandomValue(r *rand.Rand) atree.Value {
 	switch r.Intn(4) {
 	case 0:
 		return Uint8Value(r.Intn(255))
@@ -70,11 +72,11 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 
 	storage := newTestPersistentStorage(b)
 
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	typeInfo := testTypeInfo{42}
 
-	array, err := NewArray(storage, address, typeInfo)
+	array, err := atree.NewArray(storage, address, typeInfo)
 
 	require.NoError(b, err)
 
@@ -88,7 +90,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	// setup
 	for i := 0; i < initialArrayCount; i++ {
 		v := RandomValue(r)
-		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize())
+		storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
 		require.NoError(b, err)
 		totalRawDataSize += storable.ByteSize()
 		err = array.Append(v)
@@ -102,12 +104,12 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	// append
 	storage.DropCache()
 	start = time.Now()
-	array, err = NewArrayWithRootID(storage, arrayID)
+	array, err = atree.NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 	for i := 0; i < numberOfElements; i++ {
 		v := RandomValue(r)
 
-		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize())
+		storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
 		require.NoError(b, err)
 
 		totalRawDataSize += storable.ByteSize()
@@ -121,7 +123,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	// remove
 	storage.DropCache()
 	start = time.Now()
-	array, err = NewArrayWithRootID(storage, arrayID)
+	array, err = atree.NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
 	for i := 0; i < numberOfElements; i++ {
@@ -136,14 +138,14 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	// insert
 	storage.DropCache()
 	start = time.Now()
-	array, err = NewArrayWithRootID(storage, arrayID)
+	array, err = atree.NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
 	for i := 0; i < numberOfElements; i++ {
 		ind := r.Intn(int(array.Count()))
 		v := RandomValue(r)
 
-		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize())
+		storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
 		require.NoError(b, err)
 
 		totalRawDataSize += storable.ByteSize()
@@ -157,7 +159,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	// lookup
 	storage.DropCache()
 	start = time.Now()
-	array, err = NewArrayWithRootID(storage, arrayID)
+	array, err = atree.NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
 	for i := 0; i < numberOfElements; i++ {
@@ -168,12 +170,12 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	require.NoError(b, storage.Commit())
 	totalLookupTime = time.Since(start)
 
-	baseStorage := GetBaseStorage(storage)
+	baseStorage := atree.GetBaseStorage(storage)
 
 	// random lookup
 	baseStorage.ResetReporter()
 	storage.DropCache()
-	array, err = NewArrayWithRootID(storage, arrayID)
+	array, err = atree.NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
 	ind := r.Intn(int(array.Count()))
@@ -203,11 +205,11 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 
 	storage := newTestPersistentStorage(b)
 
-	address := Address{1, 2, 3, 4, 5, 6, 7, 8}
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	typeInfo := testTypeInfo{42}
 
-	array, err := NewArray(storage, address, typeInfo)
+	array, err := atree.NewArray(storage, address, typeInfo)
 
 	require.NoError(b, err)
 
@@ -217,7 +219,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 	for i := 0; i < initialArrayCount; i++ {
 		v := RandomValue(r)
 
-		storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize())
+		storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
 		require.NoError(b, err)
 
 		totalRawDataSize += storable.ByteSize()
@@ -239,7 +241,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 		case 1: // insert
 			v := RandomValue(r)
 
-			storable, err := v.Storable(storage, array.Address(), MaxInlineArrayElementSize())
+			storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
 			require.NoError(b, err)
 
 			totalRawDataSize += storable.ByteSize()
@@ -250,7 +252,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 	}
 	require.NoError(b, storage.Commit())
 
-	baseStorage := GetBaseStorage(storage)
+	baseStorage := atree.GetBaseStorage(storage)
 
 	storageOverheadRatio := float64(baseStorage.Size()) / float64(totalRawDataSize)
 	b.ReportMetric(float64(baseStorage.SegmentsTouched()), "segments_touched")

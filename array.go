@@ -3300,6 +3300,10 @@ func (a *Array) getMutableElementIndexCount() int {
 	return len(a.mutableElementIndex)
 }
 
+func (a *Array) getMutableElementIndex() map[ValueID]uint64 {
+	return a.mutableElementIndex
+}
+
 // Storable returns array a as either:
 // - SlabIDStorable, or
 // - inlined data slab storable

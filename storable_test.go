@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package atree
+package atree_test
 
 import (
 	"encoding/binary"
@@ -26,6 +26,8 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
+
+	"github.com/onflow/atree"
 )
 
 // This file contains value implementations for testing purposes
@@ -41,77 +43,77 @@ const (
 )
 
 func TestIsCBORTagNumberRangeAvailable(t *testing.T) {
-	minTagNum, maxTagNum := ReservedCBORTagNumberRange()
+	minTagNum, maxTagNum := atree.ReservedCBORTagNumberRange()
 
 	t.Run("error", func(t *testing.T) {
-		_, err := IsCBORTagNumberRangeAvailable(maxTagNum, minTagNum)
-		var userError *UserError
+		_, err := atree.IsCBORTagNumberRangeAvailable(maxTagNum, minTagNum)
+		var userError *atree.UserError
 		require.ErrorAs(t, err, &userError)
 	})
 
 	t.Run("identical", func(t *testing.T) {
-		available, err := IsCBORTagNumberRangeAvailable(minTagNum, maxTagNum)
+		available, err := atree.IsCBORTagNumberRangeAvailable(minTagNum, maxTagNum)
 		require.NoError(t, err)
 		require.False(t, available)
 	})
 
 	t.Run("subrange", func(t *testing.T) {
-		available, err := IsCBORTagNumberRangeAvailable(minTagNum, maxTagNum-1)
+		available, err := atree.IsCBORTagNumberRangeAvailable(minTagNum, maxTagNum-1)
 		require.NoError(t, err)
 		require.False(t, available)
 
-		available, err = IsCBORTagNumberRangeAvailable(minTagNum+1, maxTagNum)
+		available, err = atree.IsCBORTagNumberRangeAvailable(minTagNum+1, maxTagNum)
 		require.NoError(t, err)
 		require.False(t, available)
 	})
 
 	t.Run("partial overlap", func(t *testing.T) {
-		available, err := IsCBORTagNumberRangeAvailable(minTagNum-1, maxTagNum-1)
+		available, err := atree.IsCBORTagNumberRangeAvailable(minTagNum-1, maxTagNum-1)
 		require.NoError(t, err)
 		require.False(t, available)
 
-		available, err = IsCBORTagNumberRangeAvailable(minTagNum+1, maxTagNum+1)
+		available, err = atree.IsCBORTagNumberRangeAvailable(minTagNum+1, maxTagNum+1)
 		require.NoError(t, err)
 		require.False(t, available)
 	})
 
 	t.Run("non-overlap", func(t *testing.T) {
-		available, err := IsCBORTagNumberRangeAvailable(minTagNum-10, minTagNum-1)
+		available, err := atree.IsCBORTagNumberRangeAvailable(minTagNum-10, minTagNum-1)
 		require.NoError(t, err)
 		require.True(t, available)
 
-		available, err = IsCBORTagNumberRangeAvailable(minTagNum-1, minTagNum-1)
+		available, err = atree.IsCBORTagNumberRangeAvailable(minTagNum-1, minTagNum-1)
 		require.NoError(t, err)
 		require.True(t, available)
 
-		available, err = IsCBORTagNumberRangeAvailable(maxTagNum+1, maxTagNum+10)
+		available, err = atree.IsCBORTagNumberRangeAvailable(maxTagNum+1, maxTagNum+10)
 		require.NoError(t, err)
 		require.True(t, available)
 
-		available, err = IsCBORTagNumberRangeAvailable(maxTagNum+10, maxTagNum+10)
+		available, err = atree.IsCBORTagNumberRangeAvailable(maxTagNum+10, maxTagNum+10)
 		require.NoError(t, err)
 		require.True(t, available)
 	})
 }
 
 type HashableValue interface {
-	Value
+	atree.Value
 	HashInput(scratch []byte) ([]byte, error)
 }
 
 type Uint8Value uint8
 
-var _ Value = Uint8Value(0)
-var _ Storable = Uint8Value(0)
+var _ atree.Value = Uint8Value(0)
+var _ atree.Storable = Uint8Value(0)
 var _ HashableValue = Uint8Value(0)
 
-func (v Uint8Value) ChildStorables() []Storable { return nil }
+func (v Uint8Value) ChildStorables() []atree.Storable { return nil }
 
-func (v Uint8Value) StoredValue(_ SlabStorage) (Value, error) {
+func (v Uint8Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v Uint8Value) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
+func (v Uint8Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (atree.Storable, error) {
 	return v, nil
 }
 
@@ -121,7 +123,7 @@ func (v Uint8Value) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, erro
 //			Number:  cborTagUInt8Value,
 //			Content: uint8(v),
 //	}
-func (v Uint8Value) Encode(enc *Encoder) error {
+func (v Uint8Value) Encode(enc *atree.Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagUInt8Value,
@@ -156,7 +158,7 @@ func (v Uint8Value) HashInput(scratch []byte) ([]byte, error) {
 // TODO: cache size
 func (v Uint8Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
-	return 2 + GetUintCBORSize(uint64(v))
+	return 2 + atree.GetUintCBORSize(uint64(v))
 }
 
 func (v Uint8Value) String() string {
@@ -165,21 +167,21 @@ func (v Uint8Value) String() string {
 
 type Uint16Value uint16
 
-var _ Value = Uint16Value(0)
-var _ Storable = Uint16Value(0)
+var _ atree.Value = Uint16Value(0)
+var _ atree.Storable = Uint16Value(0)
 var _ HashableValue = Uint16Value(0)
 
-func (v Uint16Value) ChildStorables() []Storable { return nil }
+func (v Uint16Value) ChildStorables() []atree.Storable { return nil }
 
-func (v Uint16Value) StoredValue(_ SlabStorage) (Value, error) {
+func (v Uint16Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v Uint16Value) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
+func (v Uint16Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (atree.Storable, error) {
 	return v, nil
 }
 
-func (v Uint16Value) Encode(enc *Encoder) error {
+func (v Uint16Value) Encode(enc *atree.Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagUInt16Value,
@@ -219,7 +221,7 @@ func (v Uint16Value) HashInput(scratch []byte) ([]byte, error) {
 // TODO: cache size
 func (v Uint16Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
-	return 2 + GetUintCBORSize(uint64(v))
+	return 2 + atree.GetUintCBORSize(uint64(v))
 }
 
 func (v Uint16Value) String() string {
@@ -228,17 +230,17 @@ func (v Uint16Value) String() string {
 
 type Uint32Value uint32
 
-var _ Value = Uint32Value(0)
-var _ Storable = Uint32Value(0)
+var _ atree.Value = Uint32Value(0)
+var _ atree.Storable = Uint32Value(0)
 var _ HashableValue = Uint32Value(0)
 
-func (v Uint32Value) ChildStorables() []Storable { return nil }
+func (v Uint32Value) ChildStorables() []atree.Storable { return nil }
 
-func (v Uint32Value) StoredValue(_ SlabStorage) (Value, error) {
+func (v Uint32Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v Uint32Value) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
+func (v Uint32Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (atree.Storable, error) {
 	return v, nil
 }
 
@@ -248,7 +250,7 @@ func (v Uint32Value) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, err
 //			Number:  cborTagUInt32Value,
 //			Content: uint32(v),
 //	}
-func (v Uint32Value) Encode(enc *Encoder) error {
+func (v Uint32Value) Encode(enc *atree.Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagUInt32Value,
@@ -295,7 +297,7 @@ func (v Uint32Value) HashInput(scratch []byte) ([]byte, error) {
 // TODO: cache size
 func (v Uint32Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
-	return 2 + GetUintCBORSize(uint64(v))
+	return 2 + atree.GetUintCBORSize(uint64(v))
 }
 
 func (v Uint32Value) String() string {
@@ -304,17 +306,17 @@ func (v Uint32Value) String() string {
 
 type Uint64Value uint64
 
-var _ Value = Uint64Value(0)
-var _ Storable = Uint64Value(0)
+var _ atree.Value = Uint64Value(0)
+var _ atree.Storable = Uint64Value(0)
 var _ HashableValue = Uint64Value(0)
 
-func (v Uint64Value) ChildStorables() []Storable { return nil }
+func (v Uint64Value) ChildStorables() []atree.Storable { return nil }
 
-func (v Uint64Value) StoredValue(_ SlabStorage) (Value, error) {
+func (v Uint64Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v Uint64Value) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, error) {
+func (v Uint64Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (atree.Storable, error) {
 	return v, nil
 }
 
@@ -324,7 +326,7 @@ func (v Uint64Value) Storable(_ SlabStorage, _ Address, _ uint64) (Storable, err
 //			Number:  cborTagUInt64Value,
 //			Content: uint64(v),
 //	}
-func (v Uint64Value) Encode(enc *Encoder) error {
+func (v Uint64Value) Encode(enc *atree.Encoder) error {
 	err := enc.CBOR.EncodeRawBytes([]byte{
 		// tag number
 		0xd8, cborTagUInt64Value,
@@ -376,7 +378,7 @@ func (v Uint64Value) HashInput(scratch []byte) ([]byte, error) {
 // TODO: cache size
 func (v Uint64Value) ByteSize() uint32 {
 	// tag number (2 bytes) + encoded content
-	return 2 + GetUintCBORSize(uint64(v))
+	return 2 + atree.GetUintCBORSize(uint64(v))
 }
 
 func (v Uint64Value) String() string {
@@ -388,30 +390,30 @@ type StringValue struct {
 	size uint32
 }
 
-var _ Value = StringValue{}
-var _ Storable = StringValue{}
+var _ atree.Value = StringValue{}
+var _ atree.Storable = StringValue{}
 var _ HashableValue = StringValue{}
-var _ ComparableStorable = StringValue{}
+var _ atree.ComparableStorable = StringValue{}
 
 func NewStringValue(s string) StringValue {
-	size := GetUintCBORSize(uint64(len(s))) + uint32(len(s))
+	size := atree.GetUintCBORSize(uint64(len(s))) + uint32(len(s))
 	return StringValue{str: s, size: size}
 }
 
-func (v StringValue) ChildStorables() []Storable { return nil }
+func (v StringValue) ChildStorables() []atree.Storable { return nil }
 
-func (v StringValue) StoredValue(_ SlabStorage) (Value, error) {
+func (v StringValue) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v StringValue) Equal(other Storable) bool {
+func (v StringValue) Equal(other atree.Storable) bool {
 	if _, ok := other.(StringValue); !ok {
 		return false
 	}
 	return v.str == other.(StringValue).str
 }
 
-func (v StringValue) Less(other Storable) bool {
+func (v StringValue) Less(other atree.Storable) bool {
 	if _, ok := other.(StringValue); !ok {
 		return false
 	}
@@ -422,38 +424,19 @@ func (v StringValue) ID() string {
 	return v.str
 }
 
-func (v StringValue) Copy() Storable {
+func (v StringValue) Copy() atree.Storable {
 	return v
 }
 
-func (v StringValue) Storable(storage SlabStorage, address Address, maxInlineSize uint64) (Storable, error) {
+func (v StringValue) Storable(storage atree.SlabStorage, address atree.Address, maxInlineSize uint64) (atree.Storable, error) {
 	if uint64(v.ByteSize()) > maxInlineSize {
-
-		// Create StorableSlab
-		id, err := storage.GenerateSlabID(address)
-		if err != nil {
-			return nil, err
-		}
-
-		slab := &StorableSlab{
-			slabID:   id,
-			storable: v,
-		}
-
-		// Store StorableSlab in storage
-		err = storage.Store(id, slab)
-		if err != nil {
-			return nil, err
-		}
-
-		// Return slab id as storable
-		return SlabIDStorable(id), nil
+		return atree.NewStorableSlab(storage, address, v)
 	}
 
 	return v, nil
 }
 
-func (v StringValue) Encode(enc *Encoder) error {
+func (v StringValue) Encode(enc *atree.Encoder) error {
 	return enc.CBOR.EncodeString(v.str)
 }
 
@@ -511,7 +494,7 @@ func (v StringValue) String() string {
 	return v.str
 }
 
-func decodeStorable(dec *cbor.StreamDecoder, id SlabID, inlinedExtraData []ExtraData) (Storable, error) {
+func decodeStorable(dec *cbor.StreamDecoder, id atree.SlabID, inlinedExtraData []atree.ExtraData) (atree.Storable, error) {
 	t, err := dec.NextType()
 	if err != nil {
 		return nil, err
@@ -532,17 +515,17 @@ func decodeStorable(dec *cbor.StreamDecoder, id SlabID, inlinedExtraData []Extra
 		}
 
 		switch tagNumber {
-		case CBORTagInlinedArray:
-			return DecodeInlinedArrayStorable(dec, decodeStorable, id, inlinedExtraData)
+		case atree.CBORTagInlinedArray:
+			return atree.DecodeInlinedArrayStorable(dec, decodeStorable, id, inlinedExtraData)
 
-		case CBORTagInlinedMap:
-			return DecodeInlinedMapStorable(dec, decodeStorable, id, inlinedExtraData)
+		case atree.CBORTagInlinedMap:
+			return atree.DecodeInlinedMapStorable(dec, decodeStorable, id, inlinedExtraData)
 
-		case CBORTagInlinedCompactMap:
-			return DecodeInlinedCompactMapStorable(dec, decodeStorable, id, inlinedExtraData)
+		case atree.CBORTagInlinedCompactMap:
+			return atree.DecodeInlinedCompactMapStorable(dec, decodeStorable, id, inlinedExtraData)
 
-		case CBORTagSlabID:
-			return DecodeSlabIDStorable(dec)
+		case atree.CBORTagSlabID:
+			return atree.DecodeSlabIDStorable(dec)
 
 		case cborTagUInt8Value:
 			n, err := dec.DecodeUint64()
@@ -646,7 +629,7 @@ func decodeStorable(dec *cbor.StreamDecoder, id SlabID, inlinedExtraData []Extra
 	}
 }
 
-func decodeTypeInfo(dec *cbor.StreamDecoder) (TypeInfo, error) {
+func decodeTypeInfo(dec *cbor.StreamDecoder) (atree.TypeInfo, error) {
 	t, err := dec.NextType()
 	if err != nil {
 		return nil, err
@@ -686,7 +669,7 @@ func decodeTypeInfo(dec *cbor.StreamDecoder) (TypeInfo, error) {
 
 }
 
-func compare(storage SlabStorage, value Value, storable Storable) (bool, error) {
+func compare(storage atree.SlabStorage, value atree.Value, storable atree.Storable) (bool, error) {
 	switch v := value.(type) {
 
 	case Uint8Value:
@@ -749,7 +732,7 @@ func compare(storage SlabStorage, value Value, storable Storable) (bool, error) 
 			return false, err
 		}
 
-		otherMap, ok := other.(*OrderedMap)
+		otherMap, ok := other.(*atree.OrderedMap)
 		if !ok {
 			return false, nil
 		}
@@ -760,7 +743,7 @@ func compare(storage SlabStorage, value Value, storable Storable) (bool, error) 
 	return false, fmt.Errorf("value %T not supported for comparison", value)
 }
 
-func hashInputProvider(value Value, buffer []byte) ([]byte, error) {
+func hashInputProvider(value atree.Value, buffer []byte) ([]byte, error) {
 	if hashable, ok := value.(HashableValue); ok {
 		return hashable.HashInput(buffer)
 	}
@@ -769,12 +752,12 @@ func hashInputProvider(value Value, buffer []byte) ([]byte, error) {
 }
 
 type SomeValue struct {
-	Value Value
+	Value atree.Value
 }
 
-var _ Value = SomeValue{}
+var _ atree.Value = SomeValue{}
 var _ HashableValue = SomeValue{}
-var _ WrapperValue = SomeValue{}
+var _ atree.WrapperValue = SomeValue{}
 
 // NOTE: For testing purposes, SomeValue and SomeStorable are mostly copied
 // from github.com/onflow/cadence (interpreter.SomeValue and interpreter.SomeStorable).
@@ -782,10 +765,10 @@ var _ WrapperValue = SomeValue{}
 // for mutations of nested data types.
 
 func (v SomeValue) Storable(
-	storage SlabStorage,
-	address Address,
+	storage atree.SlabStorage,
+	address atree.Address,
 	maxInlineSize uint64,
-) (Storable, error) {
+) (atree.Storable, error) {
 
 	// SomeStorable returned from this function can be encoded in two ways:
 	// - if non-SomeStorable is too large, non-SomeStorable is encoded in a separate slab
@@ -852,12 +835,12 @@ func (v SomeValue) String() string {
 	return fmt.Sprintf("SomeValue(%s)", v.Value)
 }
 
-func (v SomeValue) UnwrapAtreeValue() (Value, uint64) {
+func (v SomeValue) UnwrapAtreeValue() (atree.Value, uint64) {
 	nonSomeValue, nestedLevels := v.nonSomeValue()
 
 	someStorableEncodedPrefixSize := getSomeStorableEncodedPrefixSize(nestedLevels)
 
-	wv, ok := nonSomeValue.(WrapperValue)
+	wv, ok := nonSomeValue.(atree.WrapperValue)
 	if !ok {
 		return nonSomeValue, uint64(someStorableEncodedPrefixSize)
 	}
@@ -875,7 +858,7 @@ func (v SomeValue) UnwrapAtreeValue() (Value, uint64) {
 //   - `SomeValue{SomeValue{1}}` has non-SomeValue `1` and nested levels 2
 //   - `SomeValue{SomeValue{[SomeValue{SomeValue{SomeValue{1}}}]}} has
 //     non-SomeValue `[SomeValue{SomeValue{SomeValue{1}}}]` and nested levels 2
-func (v SomeValue) nonSomeValue() (Value, uint64) {
+func (v SomeValue) nonSomeValue() (atree.Value, uint64) {
 	nestedLevels := uint64(1)
 	for {
 		switch value := v.Value.(type) {
@@ -903,14 +886,14 @@ func getSomeStorableEncodedPrefixSize(nestedLevels uint64) uint32 {
 }
 
 type SomeStorable struct {
-	Storable Storable
+	Storable atree.Storable
 }
 
-var _ ContainerStorable = SomeStorable{}
-var _ WrapperStorable = SomeStorable{}
+var _ atree.ContainerStorable = SomeStorable{}
+var _ atree.WrapperStorable = SomeStorable{}
 
 func (s SomeStorable) HasPointer() bool {
-	if ms, ok := s.Storable.(ContainerStorable); ok {
+	if ms, ok := s.Storable.(atree.ContainerStorable); ok {
 		return ms.HasPointer()
 	}
 	return false
@@ -921,7 +904,7 @@ func (s SomeStorable) ByteSize() uint32 {
 	return getSomeStorableEncodedPrefixSize(nestedLevels) + nonSomeStorable.ByteSize()
 }
 
-func (s SomeStorable) Encode(e *Encoder) error {
+func (s SomeStorable) Encode(e *atree.Encoder) error {
 	nonSomeStorable, nestedLevels := s.nonSomeStorable()
 	if nestedLevels == 1 {
 		return s.encode(e)
@@ -933,9 +916,9 @@ func (s SomeStorable) Encode(e *Encoder) error {
 //
 //	cbor.Tag{
 //			Number: CBORTagSomeValue,
-//			Content: Value(v.Value),
+//			Content: atree.Value(v.atree.Value),
 //	}
-func (s SomeStorable) encode(e *Encoder) error {
+func (s SomeStorable) encode(e *atree.Encoder) error {
 	// NOTE: when updating, also update SomeStorable.ByteSize
 	err := e.CBOR.EncodeRawBytes([]byte{
 		// tag number
@@ -954,9 +937,9 @@ func (s SomeStorable) encode(e *Encoder) error {
 //			Content: CBORArray[nested_levels, innermsot_value],
 //	}
 func (s SomeStorable) encodeMultipleNestedLevels(
-	e *Encoder,
+	e *atree.Encoder,
 	levels uint64,
-	nonSomeStorable Storable,
+	nonSomeStorable atree.Storable,
 ) error {
 	// NOTE: when updating, also update SomeStorable.ByteSize
 	err := e.CBOR.EncodeRawBytes([]byte{
@@ -985,7 +968,7 @@ func (s SomeStorable) encodeMultipleNestedLevels(
 //   - `SomeStorable{SomeStorable{1}}` has non-SomeStorable `1` and nested levels 2
 //   - `SomeStorable{SomeStorable{[SomeStorable{SomeStorable{SomeStorable{1}}}]}} has
 //     non-SomeStorable `[SomeStorable{SomeStorable{SomeStorable{1}}}]` and nested levels 2
-func (s SomeStorable) nonSomeStorable() (Storable, uint64) {
+func (s SomeStorable) nonSomeStorable() (atree.Storable, uint64) {
 	nestedLevels := uint64(1)
 	for {
 		switch storable := s.Storable.(type) {
@@ -999,11 +982,11 @@ func (s SomeStorable) nonSomeStorable() (Storable, uint64) {
 	}
 }
 
-func (s SomeStorable) ChildStorables() []Storable {
-	return []Storable{s.Storable}
+func (s SomeStorable) ChildStorables() []atree.Storable {
+	return []atree.Storable{s.Storable}
 }
 
-func (s SomeStorable) StoredValue(storage SlabStorage) (Value, error) {
+func (s SomeStorable) StoredValue(storage atree.SlabStorage) (atree.Value, error) {
 	wv, err := s.Storable.StoredValue(storage)
 	if err != nil {
 		return nil, err
@@ -1016,10 +999,10 @@ func (s SomeStorable) String() string {
 	return fmt.Sprintf("SomeStorable(%s)", s.Storable)
 }
 
-func (s SomeStorable) UnwrapAtreeStorable() Storable {
+func (s SomeStorable) UnwrapAtreeStorable() atree.Storable {
 	storable := s.Storable
 	for {
-		ws, ok := storable.(WrapperStorable)
+		ws, ok := storable.(atree.WrapperStorable)
 		if !ok {
 			break
 		}
@@ -1028,7 +1011,7 @@ func (s SomeStorable) UnwrapAtreeStorable() Storable {
 	return storable
 }
 
-func (s SomeStorable) WrapAtreeStorable(storable Storable) Storable {
+func (s SomeStorable) WrapAtreeStorable(storable atree.Storable) atree.Storable {
 	_, nestedLevels := s.nonSomeStorable()
 
 	newStorable := SomeStorable{Storable: storable}
@@ -1042,7 +1025,7 @@ type testMutableValue struct {
 	storable *mutableStorable
 }
 
-var _ Value = &testMutableValue{}
+var _ atree.Value = &testMutableValue{}
 
 func newTestMutableValue(storableSize uint32) *testMutableValue {
 	return &testMutableValue{
@@ -1052,7 +1035,7 @@ func newTestMutableValue(storableSize uint32) *testMutableValue {
 	}
 }
 
-func (v *testMutableValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+func (v *testMutableValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
 	return v.storable, nil
 }
 
@@ -1064,37 +1047,37 @@ type mutableStorable struct {
 	size uint32
 }
 
-var _ Storable = &mutableStorable{}
+var _ atree.Storable = &mutableStorable{}
 
 func (s *mutableStorable) ByteSize() uint32 {
 	return s.size
 }
 
-func (s *mutableStorable) StoredValue(SlabStorage) (Value, error) {
+func (s *mutableStorable) StoredValue(atree.SlabStorage) (atree.Value, error) {
 	return &testMutableValue{s}, nil
 }
 
-func (*mutableStorable) ChildStorables() []Storable {
+func (*mutableStorable) ChildStorables() []atree.Storable {
 	return nil
 }
 
-func (*mutableStorable) Encode(*Encoder) error {
+func (*mutableStorable) Encode(*atree.Encoder) error {
 	// no-op for testing
 	return nil
 }
 
 type HashableMap struct {
-	m *OrderedMap
+	m *atree.OrderedMap
 }
 
-var _ Value = &HashableMap{}
+var _ atree.Value = &HashableMap{}
 var _ HashableValue = &HashableMap{}
 
-func NewHashableMap(m *OrderedMap) *HashableMap {
+func NewHashableMap(m *atree.OrderedMap) *HashableMap {
 	return &HashableMap{m}
 }
 
-func (v *HashableMap) Storable(storage SlabStorage, address Address, maxInlineSize uint64) (Storable, error) {
+func (v *HashableMap) Storable(storage atree.SlabStorage, address atree.Address, maxInlineSize uint64) (atree.Storable, error) {
 	return v.m.Storable(storage, address, maxInlineSize)
 }
 
@@ -1102,7 +1085,7 @@ func (v *HashableMap) HashInput(scratch []byte) ([]byte, error) {
 	const (
 		cborTypeByteString = 0x40
 
-		valueIDLength          = len(ValueID{})
+		valueIDLength          = len(atree.ValueID{})
 		cborTagNumSize         = 2
 		cborByteStringHeadSize = 1
 		cborByteStringSize     = valueIDLength

@@ -29,7 +29,7 @@
  * input sizes.
  */
 
-package atree
+package atree_test
 
 import (
 	"bytes"

@@ -16,12 +16,14 @@
  * limitations under the License.
  */
 
-package atree
+package atree_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/onflow/atree"
 )
 
 func TestIsRootOfAnObject(t *testing.T) {
@@ -43,33 +45,33 @@ func TestIsRootOfAnObject(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			isRoot, err := IsRootOfAnObject(tc.data)
+			isRoot, err := atree.IsRootOfAnObject(tc.data)
 			require.NoError(t, err)
 			require.Equal(t, tc.isRoot, isRoot)
 		})
 	}
 
 	t.Run("data too short", func(t *testing.T) {
-		var fatalError *FatalError
-		var decodingError *DecodingError
+		var fatalError *atree.FatalError
+		var decodingError *atree.DecodingError
 		var isRoot bool
 		var err error
 
-		isRoot, err = IsRootOfAnObject(nil)
+		isRoot, err = atree.IsRootOfAnObject(nil)
 		require.False(t, isRoot)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
 		require.ErrorAs(t, fatalError, &decodingError)
 
-		isRoot, err = IsRootOfAnObject([]byte{})
+		isRoot, err = atree.IsRootOfAnObject([]byte{})
 		require.False(t, isRoot)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
 		require.ErrorAs(t, fatalError, &decodingError)
 
-		isRoot, err = IsRootOfAnObject([]byte{0x00})
+		isRoot, err = atree.IsRootOfAnObject([]byte{0x00})
 		require.False(t, isRoot)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
@@ -97,33 +99,33 @@ func TestHasPointers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			hasPointers, err := HasPointers(tc.data)
+			hasPointers, err := atree.HasPointers(tc.data)
 			require.NoError(t, err)
 			require.Equal(t, tc.hasPointers, hasPointers)
 		})
 	}
 
 	t.Run("data too short", func(t *testing.T) {
-		var fatalError *FatalError
-		var decodingError *DecodingError
+		var fatalError *atree.FatalError
+		var decodingError *atree.DecodingError
 		var hasPointers bool
 		var err error
 
-		hasPointers, err = HasPointers(nil)
+		hasPointers, err = atree.HasPointers(nil)
 		require.False(t, hasPointers)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
 		require.ErrorAs(t, fatalError, &decodingError)
 
-		hasPointers, err = HasPointers([]byte{})
+		hasPointers, err = atree.HasPointers([]byte{})
 		require.False(t, hasPointers)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
 		require.ErrorAs(t, fatalError, &decodingError)
 
-		hasPointers, err = HasPointers([]byte{0x00})
+		hasPointers, err = atree.HasPointers([]byte{0x00})
 		require.False(t, hasPointers)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
@@ -151,33 +153,33 @@ func TestHasSizeLimit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			hasSizeLimit, err := HasSizeLimit(tc.data)
+			hasSizeLimit, err := atree.HasSizeLimit(tc.data)
 			require.NoError(t, err)
 			require.Equal(t, tc.hasSizeLimit, hasSizeLimit)
 		})
 	}
 
 	t.Run("data too short", func(t *testing.T) {
-		var fatalError *FatalError
-		var decodingError *DecodingError
+		var fatalError *atree.FatalError
+		var decodingError *atree.DecodingError
 		var hasSizeLimit bool
 		var err error
 
-		hasSizeLimit, err = HasSizeLimit(nil)
+		hasSizeLimit, err = atree.HasSizeLimit(nil)
 		require.False(t, hasSizeLimit)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
 		require.ErrorAs(t, fatalError, &decodingError)
 
-		hasSizeLimit, err = HasSizeLimit([]byte{})
+		hasSizeLimit, err = atree.HasSizeLimit([]byte{})
 		require.False(t, hasSizeLimit)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)
 		require.ErrorAs(t, err, &decodingError)
 		require.ErrorAs(t, fatalError, &decodingError)
 
-		hasSizeLimit, err = HasSizeLimit([]byte{0x00})
+		hasSizeLimit, err = atree.HasSizeLimit([]byte{0x00})
 		require.False(t, hasSizeLimit)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		require.ErrorAs(t, err, &fatalError)

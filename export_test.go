@@ -40,6 +40,7 @@ var (
 	GetArrayRootSlab                 = (*Array).rootSlab
 	ArrayHasParentUpdater            = (*Array).hasParentUpdater
 	GetArrayMutableElementIndexCount = (*Array).getMutableElementIndexCount
+	GetArrayMutableElementIndex      = (*Array).getMutableElementIndex
 )
 
 // Exported function of OrderedMap for testing.
@@ -52,6 +53,12 @@ var (
 var (
 	IsMapDataSlabCollisionGroup = (*MapDataSlab).isCollisionGroup
 	GetMapDataSlabElementCount  = (*MapDataSlab).elementCount
+)
+
+// Exported function for testing
+var (
+	UnwrapValue    = unwrapValue
+	UnwrapStorable = unwrapStorable
 )
 
 func NewArrayRootDataSlab(id SlabID, storables []Storable) ArraySlab {
@@ -69,6 +76,18 @@ func NewArrayRootDataSlab(id SlabID, storables []Storable) ArraySlab {
 		},
 		elements: storables,
 	}
+}
+
+func GetArrayRootSlabStorables(array *Array) []Storable {
+	return array.rootSlab().ChildStorables()
+}
+
+func GetMapRootSlabStorables(m *OrderedMap) []Storable {
+	return m.rootSlab().ChildStorables()
+}
+
+func GetMapSlabStorables(m MapSlab) []Storable {
+	return m.ChildStorables()
 }
 
 func GetArrayMetaDataSlabChildInfo(metaDataSlab *ArrayMetaDataSlab) (childSlabIDs []SlabID, childCounts []uint32) {

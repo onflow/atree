@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package atree
+package atree_test
 
 import (
 	"flag"
@@ -27,6 +27,8 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/require"
+
+	"github.com/onflow/atree"
 )
 
 var (
@@ -58,7 +60,7 @@ func randStr(r *rand.Rand, length int) string {
 	return string(b)
 }
 
-func randomValue(r *rand.Rand, maxInlineSize int) Value {
+func randomValue(r *rand.Rand, maxInlineSize int) atree.Value {
 	switch r.Intn(6) {
 
 	case 0:
@@ -82,7 +84,7 @@ func randomValue(r *rand.Rand, maxInlineSize int) Value {
 		return NewStringValue(randStr(r, slen))
 
 	default:
-		panic(NewUnreachableError())
+		panic(atree.NewUnreachableError())
 	}
 }
 
@@ -90,9 +92,9 @@ type testTypeInfo struct {
 	value uint64
 }
 
-var _ TypeInfo = testTypeInfo{}
+var _ atree.TypeInfo = testTypeInfo{}
 
-func (i testTypeInfo) Copy() TypeInfo {
+func (i testTypeInfo) Copy() atree.TypeInfo {
 	return i
 }
 
@@ -108,7 +110,7 @@ func (i testTypeInfo) Encode(enc *cbor.StreamEncoder) error {
 	return enc.EncodeUint64(i.value)
 }
 
-func (i testTypeInfo) Equal(other TypeInfo) bool {
+func (i testTypeInfo) Equal(other atree.TypeInfo) bool {
 	otherTestTypeInfo, ok := other.(testTypeInfo)
 	return ok && i.value == otherTestTypeInfo.value
 }
@@ -119,9 +121,9 @@ type testCompositeTypeInfo struct {
 	value uint64
 }
 
-var _ TypeInfo = testCompositeTypeInfo{}
+var _ atree.TypeInfo = testCompositeTypeInfo{}
 
-func (i testCompositeTypeInfo) Copy() TypeInfo {
+func (i testCompositeTypeInfo) Copy() atree.TypeInfo {
 	return i
 }
 
@@ -141,12 +143,12 @@ func (i testCompositeTypeInfo) Encode(enc *cbor.StreamEncoder) error {
 	return enc.EncodeUint64(i.value)
 }
 
-func (i testCompositeTypeInfo) Equal(other TypeInfo) bool {
+func (i testCompositeTypeInfo) Equal(other atree.TypeInfo) bool {
 	otherTestTypeInfo, ok := other.(testCompositeTypeInfo)
 	return ok && i.value == otherTestTypeInfo.value
 }
 
-func typeInfoComparator(a, b TypeInfo) bool {
+func typeInfoComparator(a, b atree.TypeInfo) bool {
 	switch a := a.(type) {
 	case testTypeInfo:
 		return a.Equal(b)
@@ -159,7 +161,7 @@ func typeInfoComparator(a, b TypeInfo) bool {
 	}
 }
 
-func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
+func newTestPersistentStorage(t testing.TB) *atree.PersistentSlabStorage {
 	baseStorage := NewInMemBaseStorage()
 
 	encMode, err := cbor.EncOptions{}.EncMode()
@@ -168,7 +170,7 @@ func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	return NewPersistentSlabStorage(
+	return atree.NewPersistentSlabStorage(
 		baseStorage,
 		encMode,
 		decMode,
@@ -177,13 +179,13 @@ func newTestPersistentStorage(t testing.TB) *PersistentSlabStorage {
 	)
 }
 
-func newTestPersistentStorageWithData(t testing.TB, data map[SlabID][]byte) *PersistentSlabStorage {
+func newTestPersistentStorageWithData(t testing.TB, data map[atree.SlabID][]byte) *atree.PersistentSlabStorage {
 	baseStorage := NewInMemBaseStorage()
 	baseStorage.segments = data
 	return newTestPersistentStorageWithBaseStorage(t, baseStorage)
 }
 
-func newTestPersistentStorageWithBaseStorage(t testing.TB, baseStorage BaseStorage) *PersistentSlabStorage {
+func newTestPersistentStorageWithBaseStorage(t testing.TB, baseStorage atree.BaseStorage) *atree.PersistentSlabStorage {
 
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
@@ -191,7 +193,7 @@ func newTestPersistentStorageWithBaseStorage(t testing.TB, baseStorage BaseStora
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	return NewPersistentSlabStorage(
+	return atree.NewPersistentSlabStorage(
 		baseStorage,
 		encMode,
 		decMode,
@@ -200,7 +202,7 @@ func newTestPersistentStorageWithBaseStorage(t testing.TB, baseStorage BaseStora
 	)
 }
 
-func newTestPersistentStorageWithBaseStorageAndDeltas(t testing.TB, baseStorage BaseStorage, data map[SlabID][]byte) *PersistentSlabStorage {
+func newTestPersistentStorageWithBaseStorageAndDeltas(t testing.TB, baseStorage atree.BaseStorage, data map[atree.SlabID][]byte) *atree.PersistentSlabStorage {
 	for id, b := range data {
 		err := baseStorage.Store(id, b)
 		require.NoError(t, err)
@@ -208,14 +210,14 @@ func newTestPersistentStorageWithBaseStorageAndDeltas(t testing.TB, baseStorage 
 	return newTestPersistentStorageWithBaseStorage(t, baseStorage)
 }
 
-func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
+func newTestBasicStorage(t testing.TB) *atree.BasicSlabStorage {
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
 
 	decMode, err := cbor.DecOptions{}.DecMode()
 	require.NoError(t, err)
 
-	return NewBasicSlabStorage(
+	return atree.NewBasicSlabStorage(
 		encMode,
 		decMode,
 		decodeStorable,
@@ -224,34 +226,34 @@ func newTestBasicStorage(t testing.TB) *BasicSlabStorage {
 }
 
 type InMemBaseStorage struct {
-	segments         map[SlabID][]byte
-	slabIndex        map[Address]SlabIndex
+	segments         map[atree.SlabID][]byte
+	slabIndex        map[atree.Address]atree.SlabIndex
 	bytesRetrieved   int
 	bytesStored      int
-	segmentsReturned map[SlabID]struct{}
-	segmentsUpdated  map[SlabID]struct{}
-	segmentsTouched  map[SlabID]struct{}
+	segmentsReturned map[atree.SlabID]struct{}
+	segmentsUpdated  map[atree.SlabID]struct{}
+	segmentsTouched  map[atree.SlabID]struct{}
 }
 
-var _ BaseStorage = &InMemBaseStorage{}
+var _ atree.BaseStorage = &InMemBaseStorage{}
 
 func NewInMemBaseStorage() *InMemBaseStorage {
 	return NewInMemBaseStorageFromMap(
-		make(map[SlabID][]byte),
+		make(map[atree.SlabID][]byte),
 	)
 }
 
-func NewInMemBaseStorageFromMap(segments map[SlabID][]byte) *InMemBaseStorage {
+func NewInMemBaseStorageFromMap(segments map[atree.SlabID][]byte) *InMemBaseStorage {
 	return &InMemBaseStorage{
 		segments:         segments,
-		slabIndex:        make(map[Address]SlabIndex),
-		segmentsReturned: make(map[SlabID]struct{}),
-		segmentsUpdated:  make(map[SlabID]struct{}),
-		segmentsTouched:  make(map[SlabID]struct{}),
+		slabIndex:        make(map[atree.Address]atree.SlabIndex),
+		segmentsReturned: make(map[atree.SlabID]struct{}),
+		segmentsUpdated:  make(map[atree.SlabID]struct{}),
+		segmentsTouched:  make(map[atree.SlabID]struct{}),
 	}
 }
 
-func (s *InMemBaseStorage) Retrieve(id SlabID) ([]byte, bool, error) {
+func (s *InMemBaseStorage) Retrieve(id atree.SlabID) ([]byte, bool, error) {
 	seg, ok := s.segments[id]
 	s.bytesRetrieved += len(seg)
 	s.segmentsReturned[id] = struct{}{}
@@ -259,7 +261,7 @@ func (s *InMemBaseStorage) Retrieve(id SlabID) ([]byte, bool, error) {
 	return seg, ok, nil
 }
 
-func (s *InMemBaseStorage) Store(id SlabID, data []byte) error {
+func (s *InMemBaseStorage) Store(id atree.SlabID, data []byte) error {
 	s.segments[id] = data
 	s.bytesStored += len(data)
 	s.segmentsUpdated[id] = struct{}{}
@@ -267,19 +269,19 @@ func (s *InMemBaseStorage) Store(id SlabID, data []byte) error {
 	return nil
 }
 
-func (s *InMemBaseStorage) Remove(id SlabID) error {
+func (s *InMemBaseStorage) Remove(id atree.SlabID) error {
 	s.segmentsUpdated[id] = struct{}{}
 	s.segmentsTouched[id] = struct{}{}
 	delete(s.segments, id)
 	return nil
 }
 
-func (s *InMemBaseStorage) GenerateSlabID(address Address) (SlabID, error) {
+func (s *InMemBaseStorage) GenerateSlabID(address atree.Address) (atree.SlabID, error) {
 	index := s.slabIndex[address]
 	nextIndex := index.Next()
 
 	s.slabIndex[address] = nextIndex
-	return NewSlabID(address, nextIndex), nil
+	return atree.NewSlabID(address, nextIndex), nil
 }
 
 func (s *InMemBaseStorage) SegmentCounts() int {
@@ -317,30 +319,30 @@ func (s *InMemBaseStorage) SegmentsTouched() int {
 func (s *InMemBaseStorage) ResetReporter() {
 	s.bytesStored = 0
 	s.bytesRetrieved = 0
-	s.segmentsReturned = make(map[SlabID]struct{})
-	s.segmentsUpdated = make(map[SlabID]struct{})
-	s.segmentsTouched = make(map[SlabID]struct{})
+	s.segmentsReturned = make(map[atree.SlabID]struct{})
+	s.segmentsUpdated = make(map[atree.SlabID]struct{})
+	s.segmentsTouched = make(map[atree.SlabID]struct{})
 }
 
-func valueEqual(t *testing.T, expected Value, actual Value) {
+func valueEqual(t *testing.T, expected atree.Value, actual atree.Value) {
 	switch expected := expected.(type) {
 	case arrayValue:
-		actual, ok := actual.(*Array)
+		actual, ok := actual.(*atree.Array)
 		require.True(t, ok)
 
 		arrayEqual(t, expected, actual)
 
-	case *Array:
-		require.FailNow(t, "expected value shouldn't be *Array")
+	case *atree.Array:
+		require.FailNow(t, "expected value shouldn't be *atree.Array")
 
 	case mapValue:
-		actual, ok := actual.(*OrderedMap)
+		actual, ok := actual.(*atree.OrderedMap)
 		require.True(t, ok)
 
 		mapEqual(t, expected, actual)
 
-	case *OrderedMap:
-		require.FailNow(t, "expected value shouldn't be *OrderedMap")
+	case *atree.OrderedMap:
+		require.FailNow(t, "expected value shouldn't be *atree.OrderedMap")
 
 	case someValue:
 		actual, ok := actual.(SomeValue)
@@ -356,7 +358,7 @@ func valueEqual(t *testing.T, expected Value, actual Value) {
 	}
 }
 
-func arrayEqual(t *testing.T, expected arrayValue, actual *Array) {
+func arrayEqual(t *testing.T, expected arrayValue, actual *atree.Array) {
 	require.Equal(t, uint64(len(expected)), actual.Count())
 
 	iterator, err := actual.ReadOnlyIterator()
@@ -377,7 +379,7 @@ func arrayEqual(t *testing.T, expected arrayValue, actual *Array) {
 	require.Equal(t, len(expected), i)
 }
 
-func mapEqual(t *testing.T, expected mapValue, actual *OrderedMap) {
+func mapEqual(t *testing.T, expected mapValue, actual *atree.OrderedMap) {
 	require.Equal(t, uint64(len(expected)), actual.Count())
 
 	iterator, err := actual.ReadOnlyIterator()
@@ -401,105 +403,105 @@ func mapEqual(t *testing.T, expected mapValue, actual *OrderedMap) {
 	require.Equal(t, len(expected), i)
 }
 
-func valueIDToSlabID(vid ValueID) SlabID {
+func valueIDToSlabID(vid atree.ValueID) atree.SlabID {
 	return NewSlabIDFromRawAddressAndIndex(
-		vid[:SlabAddressLength],
-		vid[SlabAddressLength:],
+		vid[:atree.SlabAddressLength],
+		vid[atree.SlabAddressLength:],
 	)
 }
 
-func testInlinedMapIDs(t *testing.T, address Address, m *OrderedMap) {
+func testInlinedMapIDs(t *testing.T, address atree.Address, m *atree.OrderedMap) {
 	testInlinedSlabIDAndValueID(t, address, m.SlabID(), m.ValueID())
 }
 
-func testNotInlinedMapIDs(t *testing.T, address Address, m *OrderedMap) {
+func testNotInlinedMapIDs(t *testing.T, address atree.Address, m *atree.OrderedMap) {
 	testNotInlinedSlabIDAndValueID(t, address, m.SlabID(), m.ValueID())
 }
 
-func testInlinedSlabIDAndValueID(t *testing.T, expectedAddress Address, slabID SlabID, valueID ValueID) {
-	require.Equal(t, SlabIDUndefined, slabID)
+func testInlinedSlabIDAndValueID(t *testing.T, expectedAddress atree.Address, slabID atree.SlabID, valueID atree.ValueID) {
+	require.Equal(t, atree.SlabIDUndefined, slabID)
 
-	require.Equal(t, expectedAddress[:], valueID[:SlabAddressLength])
-	require.NotEqual(t, SlabIndexUndefined[:], valueID[SlabAddressLength:])
+	require.Equal(t, expectedAddress[:], valueID[:atree.SlabAddressLength])
+	require.NotEqual(t, atree.SlabIndexUndefined[:], valueID[atree.SlabAddressLength:])
 }
 
-func testNotInlinedSlabIDAndValueID(t *testing.T, expectedAddress Address, slabID SlabID, valueID ValueID) {
+func testNotInlinedSlabIDAndValueID(t *testing.T, expectedAddress atree.Address, slabID atree.SlabID, valueID atree.ValueID) {
 	require.Equal(t, expectedAddress, slabID.Address())
-	require.NotEqual(t, SlabIndexUndefined, slabID.Index())
+	require.NotEqual(t, atree.SlabIndexUndefined, slabID.Index())
 
 	testEqualValueIDAndSlabID(t, slabID, valueID)
 }
 
-type arrayValue []Value
+type arrayValue []atree.Value
 
-var _ Value = &arrayValue{}
+var _ atree.Value = &arrayValue{}
 
-func (v arrayValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+func (v arrayValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
 	panic("not reachable")
 }
 
-type mapValue map[Value]Value
+type mapValue map[atree.Value]atree.Value
 
-var _ Value = &mapValue{}
+var _ atree.Value = &mapValue{}
 
-func (v mapValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+func (v mapValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
 	panic("not reachable")
 }
 
 type someValue struct {
-	Value Value
+	Value atree.Value
 }
 
-var _ Value = &someValue{}
+var _ atree.Value = &someValue{}
 
-func (v someValue) Storable(SlabStorage, Address, uint64) (Storable, error) {
+func (v someValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
 	panic("not reachable")
 }
 
-func GetDeltasCount(storage *PersistentSlabStorage) int {
-	return len(GetDeltas(storage))
+func GetDeltasCount(storage *atree.PersistentSlabStorage) int {
+	return len(atree.GetDeltas(storage))
 }
 
-func GetCacheCount(storage *PersistentSlabStorage) int {
-	return len(GetCache(storage))
+func GetCacheCount(storage *atree.PersistentSlabStorage) int {
+	return len(atree.GetCache(storage))
 }
 
-func NewSlabIDFromRawAddressAndIndex(rawAddress, rawIndex []byte) SlabID {
-	var address Address
+func NewSlabIDFromRawAddressAndIndex(rawAddress, rawIndex []byte) atree.SlabID {
+	var address atree.Address
 	copy(address[:], rawAddress)
 
-	var index SlabIndex
+	var index atree.SlabIndex
 	copy(index[:], rawIndex)
 
-	return NewSlabID(address, index)
+	return atree.NewSlabID(address, index)
 }
 
-func testEqualValueIDAndSlabID(t *testing.T, slabID SlabID, valueID ValueID) {
+func testEqualValueIDAndSlabID(t *testing.T, slabID atree.SlabID, valueID atree.ValueID) {
 	sidAddress := slabID.Address()
 	sidIndex := slabID.Index()
 
-	require.Equal(t, sidAddress[:], valueID[:SlabAddressLength])
-	require.Equal(t, sidIndex[:], valueID[SlabAddressLength:])
+	require.Equal(t, sidAddress[:], valueID[:atree.SlabAddressLength])
+	require.Equal(t, sidIndex[:], valueID[atree.SlabAddressLength:])
 }
 
-func IsArrayRootDataSlab(array *Array) bool {
-	return GetArrayRootSlab(array).IsData()
+func IsArrayRootDataSlab(array *atree.Array) bool {
+	return atree.GetArrayRootSlab(array).IsData()
 }
 
-func GetArrayRootSlabByteSize(array *Array) uint32 {
-	return GetArrayRootSlab(array).ByteSize()
+func GetArrayRootSlabByteSize(array *atree.Array) uint32 {
+	return atree.GetArrayRootSlab(array).ByteSize()
 }
 
-func IsMapRootDataSlab(m *OrderedMap) bool {
-	return GetMapRootSlab(m).IsData()
+func IsMapRootDataSlab(m *atree.OrderedMap) bool {
+	return atree.GetMapRootSlab(m).IsData()
 }
 
-func GetMapRootSlabByteSize(m *OrderedMap) uint32 {
-	return GetMapRootSlab(m).ByteSize()
+func GetMapRootSlabByteSize(m *atree.OrderedMap) uint32 {
+	return atree.GetMapRootSlab(m).ByteSize()
 }
 
 var (
-	slabIDStorableByteSize    = SlabIDStorable{}.ByteSize()
-	emptyInlinedArrayByteSize = ComputeInlinedArraySlabByteSize(nil)
-	emptyInlinedMapByteSize   = ComputeInlinedMapSlabByteSize(nil)
+	slabIDStorableByteSize    = atree.SlabIDStorable{}.ByteSize()
+	emptyInlinedArrayByteSize = atree.ComputeInlinedArraySlabByteSize(nil)
+	emptyInlinedMapByteSize   = atree.ComputeInlinedMapSlabByteSize(nil)
 )

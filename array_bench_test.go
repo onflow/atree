@@ -336,7 +336,7 @@ func benchmarkArrayPopIterate(b *testing.B, initialArrayCount int) {
 			storable = s
 		})
 		if err != nil {
-			b.Errorf(err.Error())
+			b.Error(err.Error())
 		}
 	}
 

@@ -19,17 +19,13 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 	"math/rand"
-	"reflect"
-	"sync"
 	"time"
 
-	"github.com/fxamacker/cbor/v2"
-
 	"github.com/onflow/atree"
+	"github.com/onflow/atree/test_utils"
 )
 
 const (
@@ -83,29 +79,29 @@ func generateSimpleValue(
 ) (expected atree.Value, actual atree.Value, err error) {
 	switch valueType {
 	case uint8Type:
-		v := Uint8Value(r.Intn(math.MaxUint8)) // 255
+		v := test_utils.Uint8Value(r.Intn(math.MaxUint8)) // 255
 		return v, v, nil
 
 	case uint16Type:
-		v := Uint16Value(r.Intn(math.MaxUint16)) // 65535
+		v := test_utils.Uint16Value(r.Intn(math.MaxUint16)) // 65535
 		return v, v, nil
 
 	case uint32Type:
-		v := Uint32Value(r.Intn(math.MaxUint32)) // 4294967295
+		v := test_utils.Uint32Value(r.Intn(math.MaxUint32)) // 4294967295
 		return v, v, nil
 
 	case uint64Type:
-		v := Uint64Value(r.Intn(math.MaxInt)) // 9_223_372_036_854_775_807
+		v := test_utils.Uint64Value(r.Intn(math.MaxInt)) // 9_223_372_036_854_775_807
 		return v, v, nil
 
 	case smallStringType:
 		slen := r.Intn(125)
-		v := NewStringValue(randStr(slen))
+		v := test_utils.NewStringValue(randStr(slen))
 		return v, v, nil
 
 	case largeStringType:
 		slen := r.Intn(125) + 1024/2
-		v := NewStringValue(randStr(slen))
+		v := test_utils.NewStringValue(randStr(slen))
 		return v, v, nil
 
 	default:
@@ -174,7 +170,7 @@ func randomWrapperValue(expected atree.Value, actual atree.Value) (atree.Value, 
 	)
 
 	if flagAlwaysUseWrapperValue || r.Intn(maxWrapperValueChoice) == useWrapperValue {
-		return someValue{expected}, SomeValue{actual}
+		return test_utils.NewExpectedWrapperValue(expected), test_utils.NewSomeValue(actual)
 	}
 
 	return expected, actual
@@ -215,138 +211,13 @@ func removeStorable(storage atree.SlabStorage, storable atree.Storable) error {
 	return nil
 }
 
-func valueEqual(expected atree.Value, actual atree.Value) error {
-	switch expected := expected.(type) {
-	case arrayValue:
-		actual, ok := actual.(*atree.Array)
-		if !ok {
-			return fmt.Errorf("failed to convert actual value to *Array, got %T", actual)
-		}
-
-		return arrayEqual(expected, actual)
-
-	case *atree.Array:
-		return fmt.Errorf("expected value shouldn't be *Array")
-
-	case mapValue:
-		actual, ok := actual.(*atree.OrderedMap)
-		if !ok {
-			return fmt.Errorf("failed to convert actual value to *OrderedMap, got %T", actual)
-		}
-
-		return mapEqual(expected, actual)
-
-	case *atree.OrderedMap:
-		return fmt.Errorf("expected value shouldn't be *OrderedMap")
-
-	case someValue:
-		actual, ok := actual.(SomeValue)
-		if !ok {
-			return fmt.Errorf("failed to convert actual value to SomeValue, got %T", actual)
-		}
-
-		return valueEqual(expected.Value, actual.Value)
-
-	case SomeValue:
-		return fmt.Errorf("expected value shouldn't be SomeValue")
-
-	default:
-		if !reflect.DeepEqual(expected, actual) {
-			return fmt.Errorf("expected value %v (%T) != actual value %v (%T)", expected, expected, actual, actual)
-		}
-	}
-
-	return nil
-}
-
-func arrayEqual(expected arrayValue, actual *atree.Array) error {
-	if uint64(len(expected)) != actual.Count() {
-		return fmt.Errorf("array count %d != expected count %d", actual.Count(), len(expected))
-	}
-
-	iterator, err := actual.ReadOnlyIterator()
-	if err != nil {
-		return fmt.Errorf("failed to get array iterator: %w", err)
-	}
-
-	i := 0
-	for {
-		actualValue, err := iterator.Next()
-		if err != nil {
-			return fmt.Errorf("iterator.Next() error: %w", err)
-		}
-
-		if actualValue == nil {
-			break
-		}
-
-		if i >= len(expected) {
-			return fmt.Errorf("more elements from array iterator than expected")
-		}
-
-		err = valueEqual(expected[i], actualValue)
-		if err != nil {
-			return fmt.Errorf("array elements are different: %w", err)
-		}
-
-		i++
-	}
-
-	if i != len(expected) {
-		return fmt.Errorf("got %d iterated array elements, expect %d values", i, len(expected))
-	}
-
-	return nil
-}
-
-func mapEqual(expected mapValue, actual *atree.OrderedMap) error {
-	if uint64(len(expected)) != actual.Count() {
-		return fmt.Errorf("map count %d != expected count %d", actual.Count(), len(expected))
-	}
-
-	iterator, err := actual.ReadOnlyIterator()
-	if err != nil {
-		return fmt.Errorf("failed to get map iterator: %w", err)
-	}
-
-	i := 0
-	for {
-		actualKey, actualValue, err := iterator.Next()
-		if err != nil {
-			return fmt.Errorf("iterator.Next() error: %w", err)
-		}
-
-		if actualKey == nil {
-			break
-		}
-
-		expectedValue, exist := expected[actualKey]
-		if !exist {
-			return fmt.Errorf("failed to find key %v in expected values", actualKey)
-		}
-
-		err = valueEqual(expectedValue, actualValue)
-		if err != nil {
-			return fmt.Errorf("map values are different: %w", err)
-		}
-
-		i++
-	}
-
-	if i != len(expected) {
-		return fmt.Errorf("got %d iterated map elements, expect %d values", i, len(expected))
-	}
-
-	return nil
-}
-
 // newArray creates atree.Array with random elements of specified size and nested level
 func newArray(
 	storage atree.SlabStorage,
 	address atree.Address,
 	length int,
 	nestedLevel int,
-) (arrayValue, *atree.Array, error) {
+) (test_utils.ExpectedArrayValue, *atree.Array, error) {
 
 	typeInfo := newArrayTypeInfo()
 
@@ -355,7 +226,7 @@ func newArray(
 		return nil, nil, fmt.Errorf("failed to create new array: %w", err)
 	}
 
-	expectedValues := make(arrayValue, length)
+	expectedValues := make(test_utils.ExpectedArrayValue, length)
 
 	for i := 0; i < length; i++ {
 		expectedValue, value, err := randomValue(storage, address, nestedLevel-1)
@@ -385,7 +256,7 @@ func newMap(
 	address atree.Address,
 	length int,
 	nestedLevel int,
-) (mapValue, *atree.OrderedMap, error) {
+) (test_utils.ExpectedMapValue, *atree.OrderedMap, error) {
 
 	typeInfo := newMapTypeInfo()
 
@@ -394,7 +265,7 @@ func newMap(
 		return nil, nil, fmt.Errorf("failed to create new map: %w", err)
 	}
 
-	expectedValues := make(mapValue, length)
+	expectedValues := make(test_utils.ExpectedMapValue, length)
 
 	for m.Count() < uint64(length) {
 		expectedKey, key, err := randomKey()
@@ -409,7 +280,7 @@ func newMap(
 
 		expectedValues[expectedKey] = expectedValue
 
-		existingStorable, err := m.Set(compare, hashInputProvider, key, value)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, key, value)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -436,7 +307,7 @@ func newComposite(
 	storage atree.SlabStorage,
 	address atree.Address,
 	nestedLevel int,
-) (mapValue, *atree.OrderedMap, error) {
+) (test_utils.ExpectedMapValue, *atree.OrderedMap, error) {
 
 	compositeType := newCompositeTypeInfo()
 
@@ -445,11 +316,11 @@ func newComposite(
 		return nil, nil, fmt.Errorf("failed to create new map: %w", err)
 	}
 
-	expectedValues := make(mapValue)
+	expectedValues := make(test_utils.ExpectedMapValue)
 
 	for _, name := range compositeType.getFieldNames() {
 
-		expectedKey, key := NewStringValue(name), NewStringValue(name)
+		expectedKey, key := test_utils.NewStringValue(name), test_utils.NewStringValue(name)
 
 		expectedValue, value, err := randomValue(storage, address, nestedLevel-1)
 		if err != nil {
@@ -458,7 +329,7 @@ func newComposite(
 
 		expectedValues[expectedKey] = expectedValue
 
-		existingStorable, err := m.Set(compare, hashInputProvider, key, value)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, key, value)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -473,170 +344,6 @@ func newComposite(
 	}
 
 	return expectedValues, m, nil
-}
-
-type InMemBaseStorage struct {
-	segments       map[atree.SlabID][]byte
-	storageIndex   map[atree.Address]atree.SlabIndex
-	bytesRetrieved int
-	bytesStored    int
-}
-
-var _ atree.BaseStorage = &InMemBaseStorage{}
-
-func NewInMemBaseStorage() *InMemBaseStorage {
-	return NewInMemBaseStorageFromMap(
-		make(map[atree.SlabID][]byte),
-	)
-}
-
-func NewInMemBaseStorageFromMap(segments map[atree.SlabID][]byte) *InMemBaseStorage {
-	return &InMemBaseStorage{
-		segments:     segments,
-		storageIndex: make(map[atree.Address]atree.SlabIndex),
-	}
-}
-
-func (s *InMemBaseStorage) Retrieve(id atree.SlabID) ([]byte, bool, error) {
-	seg, ok := s.segments[id]
-	s.bytesRetrieved += len(seg)
-	return seg, ok, nil
-}
-
-func (s *InMemBaseStorage) Store(id atree.SlabID, data []byte) error {
-	s.segments[id] = data
-	s.bytesStored += len(data)
-	return nil
-}
-
-func (s *InMemBaseStorage) Remove(id atree.SlabID) error {
-	delete(s.segments, id)
-	return nil
-}
-
-func (s *InMemBaseStorage) GenerateSlabID(address atree.Address) (atree.SlabID, error) {
-	index := s.storageIndex[address]
-	nextIndex := index.Next()
-
-	s.storageIndex[address] = nextIndex
-	return atree.NewSlabID(address, nextIndex), nil
-}
-
-func (s *InMemBaseStorage) SegmentCounts() int {
-	return len(s.segments)
-}
-
-func (s *InMemBaseStorage) Size() int {
-	total := 0
-	for _, seg := range s.segments {
-		total += len(seg)
-	}
-	return total
-}
-
-func (s *InMemBaseStorage) BytesRetrieved() int {
-	return s.bytesRetrieved
-}
-
-func (s *InMemBaseStorage) BytesStored() int {
-	return s.bytesStored
-}
-
-func (s *InMemBaseStorage) SegmentsReturned() int {
-	// not needed
-	return 0
-}
-
-func (s *InMemBaseStorage) SegmentsUpdated() int {
-	// not needed
-	return 0
-}
-
-func (s *InMemBaseStorage) SegmentsTouched() int {
-	// not needed
-	return 0
-}
-
-func (s *InMemBaseStorage) ResetReporter() {
-	// not needed
-}
-
-// arrayValue is an atree.Value that represents an array of atree.Value.
-// It's used to test elements of atree.Array.
-type arrayValue []atree.Value
-
-var _ atree.Value = &arrayValue{}
-
-func (v arrayValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
-	panic("not reachable")
-}
-
-// mapValue is an atree.Value that represents a map of atree.Value.
-// It's used to test elements of atree.OrderedMap.
-type mapValue map[atree.Value]atree.Value
-
-var _ atree.Value = &mapValue{}
-
-func (v mapValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
-	panic("not reachable")
-}
-
-type someValue struct {
-	Value atree.Value
-}
-
-var _ atree.Value = &someValue{}
-var _ atree.WrapperValue = &someValue{}
-
-func (v someValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
-	panic("not reachable")
-}
-
-func (v someValue) String() string {
-	return fmt.Sprintf("someValue(%s)", v.Value)
-}
-
-func (v someValue) UnwrapAtreeValue() (atree.Value, uint64) {
-	return unwrapValue(v.Value)
-}
-
-var typeInfoComparator = func(a atree.TypeInfo, b atree.TypeInfo) bool {
-	aID, _ := getEncodedTypeInfo(a)
-	bID, _ := getEncodedTypeInfo(b)
-	return aID == bID
-}
-
-func getEncodedTypeInfo(ti atree.TypeInfo) (string, error) {
-	b := getTypeIDBuffer()
-	defer putTypeIDBuffer(b)
-
-	enc := cbor.NewStreamEncoder(b)
-	err := ti.Encode(enc)
-	if err != nil {
-		return "", err
-	}
-	enc.Flush()
-
-	return b.String(), nil
-}
-
-const defaultTypeIDBufferSize = 256
-
-var typeIDBufferPool = sync.Pool{
-	New: func() interface{} {
-		e := new(bytes.Buffer)
-		e.Grow(defaultTypeIDBufferSize)
-		return e
-	},
-}
-
-func getTypeIDBuffer() *bytes.Buffer {
-	return typeIDBufferPool.Get().(*bytes.Buffer)
-}
-
-func putTypeIDBuffer(e *bytes.Buffer) {
-	e.Reset()
-	typeIDBufferPool.Put(e)
 }
 
 func unwrapValue(v atree.Value) (atree.Value, uint64) {

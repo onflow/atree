@@ -19,7 +19,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"sync"
 
 	"github.com/onflow/atree"
 
@@ -230,4 +232,43 @@ func decodeTypeInfo(dec *cbor.StreamDecoder) (atree.TypeInfo, error) {
 	default:
 		return nil, fmt.Errorf("failed to decode type info with tag number %d", num)
 	}
+}
+
+func compareTypeInfo(a atree.TypeInfo, b atree.TypeInfo) bool {
+	aID, _ := getEncodedTypeInfo(a)
+	bID, _ := getEncodedTypeInfo(b)
+	return aID == bID
+}
+
+func getEncodedTypeInfo(ti atree.TypeInfo) (string, error) {
+	b := getTypeIDBuffer()
+	defer putTypeIDBuffer(b)
+
+	enc := cbor.NewStreamEncoder(b)
+	err := ti.Encode(enc)
+	if err != nil {
+		return "", err
+	}
+	enc.Flush()
+
+	return b.String(), nil
+}
+
+const defaultTypeIDBufferSize = 256
+
+var typeIDBufferPool = sync.Pool{
+	New: func() interface{} {
+		e := new(bytes.Buffer)
+		e.Grow(defaultTypeIDBufferSize)
+		return e
+	},
+}
+
+func getTypeIDBuffer() *bytes.Buffer {
+	return typeIDBufferPool.Get().(*bytes.Buffer)
+}
+
+func putTypeIDBuffer(e *bytes.Buffer) {
+	e.Reset()
+	typeIDBufferPool.Put(e)
 }

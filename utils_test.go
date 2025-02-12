@@ -497,3 +497,9 @@ func IsMapRootDataSlab(m *OrderedMap) bool {
 func GetMapRootSlabByteSize(m *OrderedMap) uint32 {
 	return GetMapRootSlab(m).ByteSize()
 }
+
+var (
+	slabIDStorableByteSize    = SlabIDStorable{}.ByteSize()
+	emptyInlinedArrayByteSize = ComputeInlinedArraySlabByteSize(nil)
+	emptyInlinedMapByteSize   = ComputeInlinedMapSlabByteSize(nil)
+)

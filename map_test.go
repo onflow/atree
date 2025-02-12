@@ -16704,10 +16704,12 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 	)
 
 	keyValues := make(map[Value]*testMutableValue, mapCount)
+	elementByteSizes := make([][2]uint32, mapCount)
 	for i := 0; i < mapCount; i++ {
 		k := Uint64Value(i)
 		v := newTestMutableValue(initialStorableSize)
 		keyValues[k] = v
+		elementByteSizes[i] = [2]uint32{k.ByteSize(), initialStorableSize}
 	}
 
 	typeInfo := testTypeInfo{42}
@@ -16725,26 +16727,29 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 
 	require.True(t, IsMapRootDataSlab(m))
 
-	expectedElementSize := singleElementPrefixSize + digestSize + Uint64Value(0).ByteSize() + initialStorableSize
-	expectedMapRootDataSlabSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize + expectedElementSize*mapCount
+	expectedMapRootDataSlabSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 	require.Equal(t, expectedMapRootDataSlabSize, GetMapRootSlabByteSize(m))
 
 	err = VerifyMap(m, address, typeInfo, typeInfoComparator, hashInputProvider, true)
 	require.NoError(t, err)
 
 	// Reset mutable values after changing its storable size
+	elementByteSizes = elementByteSizes[:0]
 	for k, v := range keyValues {
 		v.updateStorableSize(mutatedStorableSize)
 
 		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
 		require.NoError(t, err)
 		require.NotNil(t, existingStorable)
+
+		ks, err := k.Storable(storage, address, MaxInlineMapKeySize())
+		require.NoError(t, err)
+		elementByteSizes = append(elementByteSizes, [2]uint32{ks.ByteSize(), mutatedStorableSize})
 	}
 
 	require.True(t, IsMapRootDataSlab(m))
 
-	expectedElementSize = singleElementPrefixSize + digestSize + Uint64Value(0).ByteSize() + mutatedStorableSize
-	expectedMapRootDataSlabSize = mapRootDataSlabPrefixSize + hkeyElementsPrefixSize + expectedElementSize*mapCount
+	expectedMapRootDataSlabSize = ComputeMapRootDataSlabByteSize(elementByteSizes)
 	require.Equal(t, expectedMapRootDataSlabSize, GetMapRootSlabByteSize(m))
 
 	err = VerifyMap(m, address, typeInfo, typeInfoComparator, hashInputProvider, true)
@@ -16755,8 +16760,6 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 
 	SetThreshold(256)
 	defer SetThreshold(1024)
-
-	const expectedEmptyInlinedMapSize = uint32(inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize) // 22
 
 	t.Run("parent is root data slab, with one child map", func(t *testing.T) {
 		const (
@@ -16775,7 +16778,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		parentMap, expectedKeyValues := createMapWithEmptyChildMap(t, storage, address, typeInfo, mapCount, func() Value {
+		parentMap, expectedKeyValues, elementByteSizesByKey := createMapWithEmptyChildMap(t, storage, address, typeInfo, mapCount, func() Value {
 			return NewStringValue(randStr(r, keyStringSize))
 		})
 
@@ -16812,15 +16815,20 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				require.Equal(t, 1, getStoredDeltas(storage))
 
 				// Test inlined child slab size
-				expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-				expectedInlinedMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedChildElementSize*uint32(childMap.Count())
+				expectedInlinedMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					encodedValueSize,
+					int(childMap.Count()))
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
 				// Test parent slab size
-				expectedParentElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedInlinedMapSize
-				expectedParentSize := uint32(mapRootDataSlabPrefixSize+hkeyElementsPrefixSize) +
-					expectedParentElementSize*mapCount
+				elementByteSizesByKey[childKey] = [2]uint32{elementByteSizesByKey[childKey][0], expectedInlinedMapSize}
+
+				elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+				for _, v := range elementByteSizesByKey {
+					elementByteSizes = append(elementByteSizes, v)
+				}
+				expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 				require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 				testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -16854,14 +16862,23 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, expectedSlabID, childMap.SlabID()) // Storage ID is the same bytewise as value ID.
 			require.Equal(t, valueID, childMap.ValueID())       // Value ID is unchanged
 
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedStandaloneSlabSize := uint32(mapRootDataSlabPrefixSize+hkeyElementsPrefixSize) +
-				expectedChildElementSize*uint32(childMap.Count())
+			expectedStandaloneSlabSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(childMap.Count()),
+			)
 			require.Equal(t, expectedStandaloneSlabSize, GetMapRootSlabByteSize(childMap))
 
-			expectedParentElementSize := singleElementPrefixSize + digestSize + encodedKeySize + SlabIDStorable(expectedSlabID).ByteSize()
-			expectedParentSize := uint32(mapRootDataSlabPrefixSize+hkeyElementsPrefixSize) +
-				expectedParentElementSize*mapCount
+			elementByteSizesByKey[childKey] = [2]uint32{
+				elementByteSizesByKey[childKey][0],
+				slabIDStorableByteSize,
+			}
+
+			elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+			for _, v := range elementByteSizesByKey {
+				elementByteSizes = append(elementByteSizes, v)
+			}
+			expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 			require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -16893,14 +16910,19 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				require.Equal(t, valueID, childMap.ValueID()) // value ID is unchanged
 				require.Equal(t, 1, getStoredDeltas(storage))
 
-				expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-				expectedInlinedMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedChildElementSize*uint32(childMap.Count())
+				expectedInlinedMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					encodedValueSize,
+					int(childMap.Count()))
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
-				expectedParentElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedInlinedMapSize
-				expectedParentSize := uint32(mapRootDataSlabPrefixSize+hkeyElementsPrefixSize) +
-					expectedParentElementSize*mapCount
+				elementByteSizesByKey[childKey] = [2]uint32{elementByteSizesByKey[childKey][0], expectedInlinedMapSize}
+
+				elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+				for _, v := range elementByteSizesByKey {
+					elementByteSizes = append(elementByteSizes, v)
+				}
+				expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 				require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 				testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -16929,7 +16951,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		parentMap, expectedKeyValues := createMapWithEmptyChildMap(t, storage, address, typeInfo, mapCount, func() Value {
+		parentMap, expectedKeyValues, elementByteSizesByKey := createMapWithEmptyChildMap(t, storage, address, typeInfo, mapCount, func() Value {
 			return NewStringValue(randStr(r, keyStringSize))
 		})
 
@@ -16940,8 +16962,6 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
 		children := getInlinedChildMapsFromParentMap(t, address, parentMap)
-
-		expectedParentSize := GetMapRootSlabByteSize(parentMap)
 
 		// Appending 3 elements to child map so that inlined child map reaches max inlined size as map element.
 		for i := 0; i < 3; i++ {
@@ -16968,13 +16988,23 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				require.Equal(t, 1, getStoredDeltas(storage))
 
 				// Test inlined child slab size
-				expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-				expectedInlinedMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedChildElementSize*uint32(childMap.Count())
+				expectedInlinedMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					encodedValueSize,
+					int(childMap.Count()),
+				)
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
 				// Test parent slab size
-				expectedParentSize += expectedChildElementSize
+				elementByteSizesByKey[childKey] = [2]uint32{
+					elementByteSizesByKey[childKey][0],
+					expectedInlinedMapSize}
+
+				elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+				for _, v := range elementByteSizesByKey {
+					elementByteSizes = append(elementByteSizes, v)
+				}
+				expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 				require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 				testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17008,16 +17038,23 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, expectedSlabID, childMap.SlabID()) // Storage ID is the same bytewise as value ID.
 			require.Equal(t, valueID, childMap.ValueID())       // Value ID is unchanged
 
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedStandaloneSlabSize := uint32(mapRootDataSlabPrefixSize+hkeyElementsPrefixSize) +
-				expectedChildElementSize*uint32(childMap.Count())
+			expectedStandaloneSlabSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(childMap.Count()),
+			)
 			require.Equal(t, expectedStandaloneSlabSize, GetMapRootSlabByteSize(childMap))
 
-			// Subtract inlined child map size from expected parent size
-			expectedParentSize -= uint32(inlinedMapDataSlabPrefixSize+hkeyElementsPrefixSize) +
-				expectedChildElementSize*uint32(childMap.Count()-1)
-			// Add slab id storable size to expected parent size
-			expectedParentSize += SlabIDStorable(expectedSlabID).ByteSize()
+			elementByteSizesByKey[childKey] = [2]uint32{
+				elementByteSizesByKey[childKey][0],
+				slabIDStorableByteSize,
+			}
+
+			elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+			for _, v := range elementByteSizesByKey {
+				elementByteSizes = append(elementByteSizes, v)
+			}
+			expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 			require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17055,15 +17092,23 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, SlabIDUndefined, childMap.SlabID())
 			require.Equal(t, valueID, childMap.ValueID()) // value ID is unchanged
 
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedInlinedMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize*uint32(childMap.Count())
+			expectedInlinedMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(childMap.Count()),
+			)
 			require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
-			// Subtract slab id storable size from expected parent size
-			expectedParentSize -= SlabIDStorable(SlabID{}).ByteSize()
-			// Add expected inlined child map to expected parent size
-			expectedParentSize += expectedInlinedMapSize
+			elementByteSizesByKey[childKey] = [2]uint32{
+				elementByteSizesByKey[childKey][0],
+				expectedInlinedMapSize,
+			}
+
+			elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+			for _, v := range elementByteSizesByKey {
+				elementByteSizes = append(elementByteSizes, v)
+			}
+			expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 			require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17096,12 +17141,23 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				require.Equal(t, SlabIDUndefined, childMap.SlabID())
 				require.Equal(t, valueID, childMap.ValueID()) // value ID is unchanged
 
-				expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-				expectedInlinedMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedChildElementSize*uint32(childMap.Count())
+				expectedInlinedMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					encodedValueSize,
+					int(childMap.Count()),
+				)
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
-				expectedParentSize -= expectedChildElementSize
+				elementByteSizesByKey[childKey] = [2]uint32{
+					elementByteSizesByKey[childKey][0],
+					expectedInlinedMapSize,
+				}
+
+				elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+				for _, v := range elementByteSizesByKey {
+					elementByteSizes = append(elementByteSizes, v)
+				}
+				expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 				require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 				testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17130,7 +17186,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 		address := Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		parentMap, expectedKeyValues := createMapWithEmptyChildMap(t, storage, address, typeInfo, mapCount, func() Value {
+		parentMap, expectedKeyValues, _ := createMapWithEmptyChildMap(t, storage, address, typeInfo, mapCount, func() Value {
 			return NewStringValue(randStr(r, keyStringSize))
 		})
 
@@ -17166,9 +17222,11 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				require.Equal(t, valueID, childMap.ValueID())        // Value ID is unchanged
 
 				// Test inlined child slab size
-				expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-				expectedInlinedMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedChildElementSize*uint32(childMap.Count())
+				expectedInlinedMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					encodedValueSize,
+					int(childMap.Count()),
+				)
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
 				testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17203,9 +17261,11 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, expectedSlabID, childMap.SlabID()) // Storage ID is the same bytewise as value ID.
 			require.Equal(t, valueID, childMap.ValueID())       // Value ID is unchanged
 
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedStandaloneSlabSize := uint32(mapRootDataSlabPrefixSize+hkeyElementsPrefixSize) +
-				expectedChildElementSize*uint32(childMap.Count())
+			expectedStandaloneSlabSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(childMap.Count()),
+			)
 			require.Equal(t, expectedStandaloneSlabSize, GetMapRootSlabByteSize(childMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17241,9 +17301,11 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, SlabIDUndefined, childMap.SlabID())
 			require.Equal(t, valueID, childMap.ValueID()) // value ID is unchanged
 
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedInlinedMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize*uint32(childMap.Count())
+			expectedInlinedMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(childMap.Count()),
+			)
 			require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17278,9 +17340,11 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				require.Equal(t, SlabIDUndefined, childMap.SlabID())
 				require.Equal(t, valueID, childMap.ValueID()) // value ID is unchanged
 
-				expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-				expectedInlinedMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedChildElementSize*uint32(childMap.Count())
+				expectedInlinedMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					encodedValueSize,
+					int(childMap.Count()),
+				)
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
 				testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17296,9 +17360,11 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child map is inlined.
 
 		// Test parent map slab size
-		expectedParentElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedEmptyInlinedMapSize
-		expectedParentSize := uint32(mapRootDataSlabPrefixSize+hkeyElementsPrefixSize) + // standalone map data slab with 0 element
-			expectedParentElementSize*uint32(mapCount)
+		expectedParentSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+			encodedKeySize,
+			emptyInlinedMapByteSize,
+			mapCount,
+		)
 		require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 	})
 }
@@ -17330,7 +17396,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		}
 
 		// Create a parent map, with an inlined child map, with an inlined grand child map
-		parentMap, expectedKeyValues := createMapWithEmpty2LevelChildMap(t, storage, address, typeInfo, mapCount, getKeyFunc)
+		parentMap, expectedKeyValues, elementByteSizesByKey := createMapWithEmpty2LevelChildMap(t, storage, address, typeInfo, mapCount, getKeyFunc)
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
 		require.True(t, IsMapRootDataSlab(parentMap))
@@ -17340,8 +17406,6 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 
 		children := getInlinedChildMapsFromParentMap(t, address, parentMap)
 		require.Equal(t, mapCount, len(children))
-
-		expectedParentSize := GetMapRootSlabByteSize(parentMap)
 
 		// Inserting 1 elements to grand child map so that inlined grand child map reaches max inlined size as map element.
 		for childKey, child := range children {
@@ -17391,19 +17455,33 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, 1, getStoredDeltas(storage))
 
 			// Test inlined grand child slab size
-			expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedGrandChildElementSize*uint32(gchildMap.Count())
+			expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(gchildMap.Count()),
+			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test inlined child slab size
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedGrandChildMapSize
-			expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize*uint32(childMap.Count())
+			expectedChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				expectedGrandChildMapSize,
+				int(childMap.Count()),
+			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 			// Test parent slab size
-			expectedParentSize += expectedGrandChildElementSize
+			elementByteSizesByKey[childKey] = [2]uint32{
+				elementByteSizesByKey[childKey][0],
+				expectedChildMapSize,
+			}
+
+			elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+			for _, v := range elementByteSizesByKey {
+				elementByteSizes = append(elementByteSizes, v)
+			}
+
+			expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 			require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17462,20 +17540,27 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, 2, getStoredDeltas(storage))
 
 			// Test inlined grand child slab size
-			expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedGrandChildElementSize*uint32(gchildMap.Count())
+			expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(gchildMap.Count()),
+			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test standalone child slab size
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedGrandChildMapSize
-			expectedChildMapSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize*uint32(childMap.Count())
+			expectedChildMapSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				expectedGrandChildMapSize,
+				int(childMap.Count()),
+			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 			// Test parent slab size
-			expectedParentSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize +
-				singleElementPrefixSize + digestSize + encodedKeySize + SlabIDStorable(SlabID{}).ByteSize()
+			expectedParentSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				slabIDStorableByteSize,
+				int(parentMap.Count()),
+			)
 			require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17532,21 +17617,27 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 				require.Equal(t, gValueID, gchildMap.ValueID()) // value ID is unchanged
 
 				// Test inlined grand child slab size
-				expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-				expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedGrandChildElementSize*uint32(gchildMap.Count())
+				expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					encodedValueSize,
+					int(gchildMap.Count()),
+				)
 				require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 				// Test inlined child slab size
-				expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedGrandChildMapSize
-				expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedChildElementSize*uint32(childMap.Count())
+				expectedChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					expectedGrandChildMapSize,
+					int(childMap.Count()),
+				)
 				require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 				// Test parent child slab size
-				expectedParentElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedChildMapSize
-				expectedParentMapSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedParentElementSize*uint32(parentMap.Count())
+				expectedParentMapSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					expectedChildMapSize,
+					int(parentMap.Count()),
+				)
 				require.Equal(t, expectedParentMapSize, GetMapRootSlabByteSize(parentMap))
 
 				testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17575,7 +17666,6 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		encodedKeySize := NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
 		encodedValueSize := NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
 		encodedLargeValueSize := NewStringValue(strings.Repeat("a", largeValueStringSize)).ByteSize()
-		slabIDStorableSize := SlabIDStorable(SlabID{}).ByteSize()
 
 		r := newRand(t)
 
@@ -17588,7 +17678,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		}
 
 		// Create a parent map, with an inlined child map, with an inlined grand child map
-		parentMap, expectedKeyValues := createMapWithEmpty2LevelChildMap(t, storage, address, typeInfo, mapCount, getKeyFunc)
+		parentMap, expectedKeyValues, elementByteSizesByKey := createMapWithEmpty2LevelChildMap(t, storage, address, typeInfo, mapCount, getKeyFunc)
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
 		require.True(t, IsMapRootDataSlab(parentMap))
@@ -17598,8 +17688,6 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 
 		children := getInlinedChildMapsFromParentMap(t, address, parentMap)
 		require.Equal(t, mapCount, len(children))
-
-		expectedParentSize := GetMapRootSlabByteSize(parentMap)
 
 		// Inserting 1 elements to grand child map so that inlined grand child map reaches max inlined size as map element.
 		for childKey, child := range children {
@@ -17649,19 +17737,30 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, 1, getStoredDeltas(storage))
 
 			// Test inlined grand child slab size
-			expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedGrandChildElementSize*uint32(gchildMap.Count())
+			expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(gchildMap.Count()),
+			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test inlined child slab size
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedGrandChildMapSize
-			expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize*uint32(childMap.Count())
+			expectedChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				expectedGrandChildMapSize,
+				int(childMap.Count()),
+			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 			// Test parent slab size
-			expectedParentSize += expectedGrandChildElementSize
+			elementByteSizesByKey[childKey] = [2]uint32{elementByteSizesByKey[childKey][0], expectedChildMapSize}
+
+			elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+			for _, v := range elementByteSizesByKey {
+				elementByteSizes = append(elementByteSizes, v)
+			}
+
+			expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 			require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17723,20 +17822,24 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, 2, getStoredDeltas(storage))
 
 			// Test standalone grand child slab size
-			expectedGrandChildElement1Size := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedGrandChildElement2Size := singleElementPrefixSize + digestSize + encodedKeySize + encodedLargeValueSize
-			expectedGrandChildMapSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedGrandChildElement1Size + expectedGrandChildElement2Size
+			expectedGrandChildMapSize := ComputeMapRootDataSlabByteSize(
+				[][2]uint32{
+					{encodedKeySize, encodedValueSize},
+					{encodedKeySize, encodedLargeValueSize},
+				},
+			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test inlined child slab size
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + slabIDStorableSize
-			expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize + expectedChildElementSize
+			expectedChildMapSize := ComputeInlinedMapSlabByteSize([][2]uint32{{encodedKeySize, slabIDStorableByteSize}})
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 			// Test parent slab size
-			expectedParentSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize +
-				singleElementPrefixSize + digestSize + encodedKeySize + expectedChildMapSize
+			expectedParentSize := ComputeMapRootDataSlabByteSize(
+				[][2]uint32{
+					{encodedKeySize, expectedChildMapSize},
+				},
+			)
 			require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17799,21 +17902,26 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 				require.Equal(t, gValueID, gchildMap.ValueID()) // value ID is unchanged
 
 				// Test inlined grand child slab size
-				expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-				expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedGrandChildElementSize*uint32(gchildMap.Count())
+				expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					encodedValueSize,
+					int(gchildMap.Count()),
+				)
 				require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 				// Test inlined child slab size
-				expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedGrandChildMapSize
-				expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedChildElementSize*uint32(childMap.Count())
+				expectedChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					expectedGrandChildMapSize,
+					int(childMap.Count()),
+				)
 				require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 				// Test parent child slab size
-				expectedParentElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedChildMapSize
-				expectedParentMapSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedParentElementSize*uint32(parentMap.Count())
+				expectedParentMapSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+					encodedKeySize, expectedChildMapSize,
+					int(parentMap.Count()),
+				)
 				require.Equal(t, expectedParentMapSize, GetMapRootSlabByteSize(parentMap))
 
 				testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17853,7 +17961,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		}
 
 		// Create a parent map, with inlined child map, containing inlined grand child map
-		parentMap, expectedKeyValues := createMapWithEmpty2LevelChildMap(t, storage, address, typeInfo, mapCount, getKeyFunc)
+		parentMap, expectedKeyValues, elementByteSizesByKey := createMapWithEmpty2LevelChildMap(t, storage, address, typeInfo, mapCount, getKeyFunc)
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
 		require.True(t, IsMapRootDataSlab(parentMap))
@@ -17863,8 +17971,6 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 
 		children := getInlinedChildMapsFromParentMap(t, address, parentMap)
 		require.Equal(t, mapCount, len(children))
-
-		expectedParentSize := GetMapRootSlabByteSize(parentMap)
 
 		// Insert 1 elements to grand child map (both child map and grand child map are still inlined).
 		for childKey, child := range children {
@@ -17912,19 +18018,30 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, 1, getStoredDeltas(storage))
 
 			// Test inlined grand child slab size
-			expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedGrandChildElementSize*uint32(gchildMap.Count())
+			expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(gchildMap.Count()),
+			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test inlined child slab size
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedGrandChildMapSize
-			expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize*uint32(childMap.Count())
+			expectedChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				expectedGrandChildMapSize,
+				int(childMap.Count()),
+			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 			// Test parent slab size
-			expectedParentSize += expectedGrandChildElementSize
+			elementByteSizesByKey[childKey] = [2]uint32{elementByteSizesByKey[childKey][0], expectedChildMapSize}
+
+			elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+			for _, v := range elementByteSizesByKey {
+				elementByteSizes = append(elementByteSizes, v)
+			}
+
+			expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 			require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -17934,8 +18051,6 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child map is inlined.
 
 		testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
-
-		expectedParentSize = GetMapRootSlabByteSize(parentMap)
 
 		// Add 1 element to each child map so child map reaches its max size
 		for childKey, child := range children {
@@ -17979,19 +18094,31 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, 1, getStoredDeltas(storage))
 
 			// Test inlined grand child slab size
-			expectedGrandChildElementSize := digestSize + singleElementPrefixSize + encodedKeySize + encodedValueSize
-			expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedGrandChildElementSize*uint32(gchildMap.Count())
+			expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(gchildMap.Count()),
+			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test inlined child slab size
-			expectedChildElementSize := digestSize + singleElementPrefixSize + encodedKeySize + encodedValueSize
-			expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize + (digestSize + singleElementPrefixSize + encodedKeySize + expectedGrandChildMapSize)
+			expectedChildMapSize := ComputeInlinedMapSlabByteSize(
+				[][2]uint32{
+					{encodedKeySize, encodedValueSize},
+					{encodedKeySize, expectedGrandChildMapSize},
+				},
+			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 			// Test parent slab size
-			expectedParentSize += digestSize + singleElementPrefixSize + encodedKeySize + encodedValueSize
+			elementByteSizesByKey[childKey] = [2]uint32{elementByteSizesByKey[childKey][0], expectedChildMapSize}
+
+			elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+			for _, v := range elementByteSizesByKey {
+				elementByteSizes = append(elementByteSizes, v)
+			}
+
+			expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 			require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -18047,16 +18174,33 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			i++
 
 			// Test inlined grand child slab size
-			expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedGrandChildElementSize*uint32(gchildMap.Count())
+			expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(gchildMap.Count()),
+			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test standalone child slab size
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedChildMapSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize*2 + (digestSize + singleElementPrefixSize + encodedKeySize + expectedGrandChildMapSize)
+			expectedChildMapSize := ComputeMapRootDataSlabByteSize(
+				[][2]uint32{
+					{encodedKeySize, encodedValueSize},
+					{encodedKeySize, encodedValueSize},
+					{encodedKeySize, expectedGrandChildMapSize},
+				},
+			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
+
+			// Test parent slab size
+			elementByteSizesByKey[childKey] = [2]uint32{elementByteSizesByKey[childKey][0], slabIDStorableSize}
+
+			elementByteSizes := make([][2]uint32, 0, len(elementByteSizesByKey))
+			for _, v := range elementByteSizesByKey {
+				elementByteSizes = append(elementByteSizes, v)
+			}
+
+			expectedParentSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
+			require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 		}
@@ -18065,13 +18209,14 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		require.Equal(t, 1+mapCount, getStoredDeltas(storage)) // There is 1+mapCount stored slab because all child maps are standalone.
 
 		// Test parent slab size
-		expectedParentSize = mapRootDataSlabPrefixSize + hkeyElementsPrefixSize +
-			(singleElementPrefixSize+digestSize+encodedKeySize+slabIDStorableSize)*mapCount
+		expectedParentSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+			encodedKeySize,
+			slabIDStorableSize,
+			mapCount,
+		)
 		require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
 		testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
-
-		expectedParentMapSize := GetMapRootSlabByteSize(parentMap)
 
 		// Remove one element from child map which triggers standalone child map slab becomes inlined slab again.
 		for childKey, child := range children {
@@ -18118,20 +18263,31 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, gValueID, gchildMap.ValueID()) // value ID is unchanged
 
 			// Test inlined grand child slab size
-			expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedGrandChildElementSize*uint32(gchildMap.Count())
+			expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(gchildMap.Count()),
+			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test inlined child slab size
-			expectedChildElementSize1 := singleElementPrefixSize + digestSize + encodedKeySize + expectedGrandChildMapSize
-			expectedChildElementSize2 := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize1 + expectedChildElementSize2*uint32(childMap.Count()-1)
+			elementByteSizes := make([][2]uint32, int(childMap.Count()))
+			elementByteSizes[0] = [2]uint32{encodedKeySize, expectedGrandChildMapSize}
+			for i := 1; i < int(childMap.Count()); i++ {
+				elementByteSizes[i] = [2]uint32{encodedKeySize, encodedValueSize}
+			}
+			expectedChildMapSize := ComputeInlinedMapSlabByteSize(elementByteSizes)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 			// Test parent child slab size
-			expectedParentMapSize = expectedParentMapSize - slabIDStorableSize + expectedChildMapSize
+			elementByteSizesByKey[childKey] = [2]uint32{elementByteSizesByKey[childKey][0], expectedChildMapSize}
+
+			elementByteSizes = make([][2]uint32, 0, len(elementByteSizesByKey))
+			for _, v := range elementByteSizesByKey {
+				elementByteSizes = append(elementByteSizes, v)
+			}
+
+			expectedParentMapSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 			require.Equal(t, expectedParentMapSize, GetMapRootSlabByteSize(parentMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -18188,20 +18344,31 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 				require.Equal(t, gValueID, gchildMap.ValueID()) // value ID is unchanged
 
 				// Test inlined grand child slab size
-				expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-				expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedGrandChildElementSize*uint32(gchildMap.Count())
+				expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					encodedKeySize,
+					encodedValueSize,
+					int(gchildMap.Count()),
+				)
 				require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 				// Test inlined child slab size
-				expectedChildElementSize1 := singleElementPrefixSize + digestSize + encodedKeySize + expectedGrandChildMapSize
-				expectedChildElementSize2 := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-				expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedChildElementSize1 + expectedChildElementSize2*uint32(childMap.Count()-1)
+				elementByteSizes := make([][2]uint32, int(childMap.Count()))
+				elementByteSizes[0] = [2]uint32{encodedKeySize, expectedGrandChildMapSize}
+				for i := 1; i < int(childMap.Count()); i++ {
+					elementByteSizes[i] = [2]uint32{encodedKeySize, encodedValueSize}
+				}
+				expectedChildMapSize := ComputeInlinedMapSlabByteSize(elementByteSizes)
 				require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 				// Test parent child slab size
-				expectedParentMapSize -= digestSize + singleElementPrefixSize + encodedKeySize + encodedValueSize
+				elementByteSizesByKey[childKey] = [2]uint32{elementByteSizesByKey[childKey][0], expectedChildMapSize}
+
+				elementByteSizes = make([][2]uint32, 0, len(elementByteSizesByKey))
+				for _, v := range elementByteSizesByKey {
+					elementByteSizes = append(elementByteSizes, v)
+				}
+
+				expectedParentMapSize := ComputeMapRootDataSlabByteSize(elementByteSizes)
 				require.Equal(t, expectedParentMapSize, GetMapRootSlabByteSize(parentMap))
 
 				testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -18241,7 +18408,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		}
 
 		// Create a parent map, with inlined child map, containing inlined grand child map
-		parentMap, expectedKeyValues := createMapWithEmpty2LevelChildMap(t, storage, address, typeInfo, mapCount, getKeyFunc)
+		parentMap, expectedKeyValues, _ := createMapWithEmpty2LevelChildMap(t, storage, address, typeInfo, mapCount, getKeyFunc)
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
 		require.True(t, IsMapRootDataSlab(parentMap))
@@ -18294,15 +18461,19 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, cValueID, childMap.ValueID())       // Value ID is unchanged
 
 			// Test inlined grand child slab size
-			expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedGrandChildElementSize*uint32(gchildMap.Count())
+			expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(gchildMap.Count()),
+			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test inlined child slab size
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedGrandChildMapSize
-			expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize*uint32(childMap.Count())
+			expectedChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				expectedGrandChildMapSize,
+				int(childMap.Count()),
+			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -18359,15 +18530,19 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, cValueID, childMap.ValueID())                 // Value ID is unchanged
 
 			// Test inlined grand child slab size
-			expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedGrandChildElementSize*uint32(gchildMap.Count())
+			expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(gchildMap.Count()),
+			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test standalone child slab size
-			expectedChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedGrandChildMapSize
-			expectedChildMapSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize*uint32(childMap.Count())
+			expectedChildMapSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				expectedGrandChildMapSize,
+				int(childMap.Count()),
+			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -18378,9 +18553,11 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		require.Equal(t, 1+mapCount, getStoredDeltas(storage))
 
 		// Test parent slab size
-		expectedParentElementSize := singleElementPrefixSize + digestSize + encodedKeySize + slabIDStorableSize
-		expectedParentMapSize := mapRootDataSlabPrefixSize + hkeyElementsPrefixSize +
-			expectedParentElementSize*uint32(parentMap.Count())
+		expectedParentMapSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+			encodedKeySize,
+			slabIDStorableSize,
+			int(parentMap.Count()),
+		)
 		require.Equal(t, expectedParentMapSize, GetMapRootSlabByteSize(parentMap))
 
 		testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -18434,16 +18611,20 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			require.Equal(t, gValueID, gchildMap.ValueID()) // value ID is unchanged
 
 			// Test inlined grand child slab size
-			expectedGrandChildElementSize := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedGrandChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedGrandChildElementSize*uint32(gchildMap.Count())
+			expectedGrandChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+				encodedKeySize,
+				encodedValueSize,
+				int(gchildMap.Count()),
+			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test inlined child slab size
-			expectedChildElementSize1 := singleElementPrefixSize + digestSize + encodedKeySize + expectedGrandChildMapSize
-			expectedChildElementSize2 := singleElementPrefixSize + digestSize + encodedKeySize + encodedValueSize
-			expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-				expectedChildElementSize1 + expectedChildElementSize2*uint32(childMap.Count()-1)
+			elementByteSizes := make([][2]uint32, int(childMap.Count()))
+			elementByteSizes[0] = [2]uint32{encodedKeySize, expectedGrandChildMapSize}
+			for i := 1; i < int(childMap.Count()); i++ {
+				elementByteSizes[i] = [2]uint32{encodedKeySize, encodedValueSize}
+			}
+			expectedChildMapSize := ComputeInlinedMapSlabByteSize(elementByteSizes)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 			testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -18505,7 +18686,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 				testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 			}
 
-			expectedChildMapSize := uint32(inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize)
+			expectedChildMapSize := emptyInlinedMapByteSize
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 			require.Equal(t, uint64(0), childMap.Count())
@@ -18517,19 +18698,21 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 
 		testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
-		expectedChildMapSize := uint32(inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize)
-		expectedParentMapSize = mapRootDataSlabPrefixSize + hkeyElementsPrefixSize +
-			(digestSize+singleElementPrefixSize+encodedKeySize+expectedChildMapSize)*uint32(mapCount)
+		expectedChildMapSize := emptyInlinedMapByteSize
+		expectedParentMapSize = ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+			encodedKeySize,
+			expectedChildMapSize,
+			mapCount,
+		)
 		require.Equal(t, expectedParentMapSize, GetMapRootSlabByteSize(parentMap))
 	})
 }
 
 func TestChildMapWhenParentMapIsModified(t *testing.T) {
 	const (
-		mapCount                    = 2
-		keyStringSize               = 4
-		valueStringSize             = 4
-		expectedEmptyInlinedMapSize = uint32(inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize) // 22
+		mapCount        = 2
+		keyStringSize   = 4
+		valueStringSize = 4
 	)
 
 	// encoded key size is the same for all string keys of the same length.
@@ -18575,12 +18758,14 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 		testInlinedMapIDs(t, address, childMap)
 
 		// Test child map slab size
-		require.Equal(t, expectedEmptyInlinedMapSize, GetMapRootSlabByteSize(childMap))
+		require.Equal(t, emptyInlinedMapByteSize, GetMapRootSlabByteSize(childMap))
 
 		// Test parent map slab size
-		expectedParentElementSize := singleElementPrefixSize + digestSize + encodedKeySize + expectedEmptyInlinedMapSize
-		expectedParentSize := uint32(mapRootDataSlabPrefixSize+hkeyElementsPrefixSize) + // standalone map data slab with 0 element
-			expectedParentElementSize*uint32(i+1)
+		expectedParentSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+			encodedKeySize,
+			emptyInlinedMapByteSize,
+			i+1,
+		)
 		require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 	}
 
@@ -18642,9 +18827,11 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 				require.Equal(t, childValueID, childMap.ValueID())   // Value ID is unchanged
 
 				// Test inlined child slab size
-				expectedChildElementSize := singleElementPrefixSize + digestSize + k.ByteSize() + v.ByteSize()
-				expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-					expectedChildElementSize*uint32(childMap.Count())
+				expectedChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+					k.ByteSize(),
+					v.ByteSize(),
+					int(childMap.Count()),
+				)
 				require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 				testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -18689,9 +18876,11 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 					require.Equal(t, childValueID, childMap.ValueID())   // Value ID is unchanged
 
 					// Test inlined child slab size
-					expectedChildElementSize := singleElementPrefixSize + digestSize + k.ByteSize() + v.ByteSize()
-					expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-						expectedChildElementSize*uint32(childMap.Count())
+					expectedChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+						k.ByteSize(),
+						v.ByteSize(),
+						int(childMap.Count()),
+					)
 					require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 					testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -18708,15 +18897,15 @@ func createMapWithEmptyChildMap(
 	typeInfo TypeInfo,
 	mapCount int,
 	getKey func() Value,
-) (*OrderedMap, map[Value]Value) {
-
-	const expectedEmptyInlinedMapSize = uint32(inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize) // 22
+) (*OrderedMap, map[Value]Value, map[Value][2]uint32) {
 
 	// Create parent map
 	parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	expectedKeyValues := make(map[Value]Value)
+
+	elementByteSizesByKey := make(map[Value][2]uint32)
 
 	for i := 0; i < mapCount; i++ {
 		// Create child map
@@ -18739,16 +18928,20 @@ func createMapWithEmptyChildMap(
 		testInlinedMapIDs(t, address, childMap)
 
 		// Test child map slab size
-		require.Equal(t, expectedEmptyInlinedMapSize, GetMapRootSlabByteSize(childMap))
+		require.Equal(t, emptyInlinedMapByteSize, GetMapRootSlabByteSize(childMap))
 
 		// Test parent map slab size
-		expectedParentElementSize := singleElementPrefixSize + digestSize + ks.ByteSize() + expectedEmptyInlinedMapSize
-		expectedParentSize := uint32(mapRootDataSlabPrefixSize+hkeyElementsPrefixSize) + // standalone map data slab with 0 element
-			expectedParentElementSize*uint32(i+1)
+		expectedParentSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+			ks.ByteSize(),
+			emptyInlinedMapByteSize,
+			i+1,
+		)
 		require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
+
+		elementByteSizesByKey[k] = [2]uint32{ks.ByteSize(), emptyInlinedMapByteSize}
 	}
 
-	return parentMap, expectedKeyValues
+	return parentMap, expectedKeyValues, elementByteSizesByKey
 }
 
 func createMapWithEmpty2LevelChildMap(
@@ -18758,15 +18951,15 @@ func createMapWithEmpty2LevelChildMap(
 	typeInfo TypeInfo,
 	mapCount int,
 	getKey func() Value,
-) (*OrderedMap, map[Value]Value) {
-
-	const expectedEmptyInlinedMapSize = uint32(inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize) // 22
+) (*OrderedMap, map[Value]Value, map[Value][2]uint32) {
 
 	// Create parent map
 	parentMap, err := NewMap(storage, address, NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
 	expectedKeyValues := make(map[Value]Value)
+
+	elementByteSizesByKey := make(map[Value][2]uint32)
 
 	for i := 0; i < mapCount; i++ {
 		// Create child map
@@ -18801,24 +18994,30 @@ func createMapWithEmpty2LevelChildMap(
 		testInlinedMapIDs(t, address, childMap)
 
 		// Test grand child map slab size
-		require.Equal(t, expectedEmptyInlinedMapSize, GetMapRootSlabByteSize(gchildMap))
+		require.Equal(t, emptyInlinedMapByteSize, GetMapRootSlabByteSize(gchildMap))
 
 		// Test child map slab size
-		expectedChildElementSize := singleElementPrefixSize + digestSize + ks.ByteSize() + expectedEmptyInlinedMapSize
-		expectedChildMapSize := inlinedMapDataSlabPrefixSize + hkeyElementsPrefixSize +
-			expectedChildElementSize*uint32(childMap.Count())
+		expectedChildMapSize := ComputeInlinedMapSlabByteSizeWithFixSizedElement(
+			ks.ByteSize(),
+			emptyInlinedMapByteSize,
+			int(childMap.Count()),
+		)
 		require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 		// Test parent map slab size
-		expectedParentElementSize := singleElementPrefixSize + digestSize + ks.ByteSize() + expectedChildMapSize
-		expectedParentSize := uint32(mapRootDataSlabPrefixSize+hkeyElementsPrefixSize) + // standalone map data slab with 0 element
-			expectedParentElementSize*uint32(i+1)
+		expectedParentSize := ComputeMapRootDataSlabByteSizeWithFixSizedElement(
+			ks.ByteSize(),
+			expectedChildMapSize,
+			i+1,
+		)
 		require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
+
+		elementByteSizesByKey[k] = [2]uint32{ks.ByteSize(), expectedChildMapSize}
 	}
 
 	testNotInlinedMapIDs(t, address, parentMap)
 
-	return parentMap, expectedKeyValues
+	return parentMap, expectedKeyValues, elementByteSizesByKey
 }
 
 type mapInfo struct {

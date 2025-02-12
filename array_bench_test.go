@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/atree"
+	"github.com/onflow/atree/test_utils"
 )
 
 var noopValue atree.Value
@@ -192,7 +193,7 @@ func setupArray(b *testing.B, r *rand.Rand, storage *atree.PersistentSlabStorage
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(b, err)

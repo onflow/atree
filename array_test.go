@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/atree"
+	"github.com/onflow/atree/test_utils"
 )
 
 func testEmptyArrayV0(
@@ -83,11 +84,11 @@ func _testArray(
 	typeInfo atree.TypeInfo,
 	address atree.Address,
 	array *atree.Array,
-	expectedValues arrayValue,
+	expectedValues ExpectedArrayValue,
 	hasNestedArrayMapElement bool,
 	inlineEnabled bool,
 ) {
-	require.True(t, typeInfoComparator(typeInfo, array.Type()))
+	require.True(t, test_utils.CompareTypeInfo(typeInfo, array.Type()))
 	require.Equal(t, address, array.Address())
 	require.Equal(t, uint64(len(expectedValues)), array.Count())
 
@@ -98,13 +99,13 @@ func _testArray(
 		actual, err := array.Get(uint64(i))
 		require.NoError(t, err)
 
-		valueEqual(t, expected, actual)
+		testValueEqual(t, expected, actual)
 	}
 
 	// Verify array elements by iterator
 	i := 0
 	err = array.IterateReadOnly(func(v atree.Value) (bool, error) {
-		valueEqual(t, expectedValues[i], v)
+		testValueEqual(t, expectedValues[i], v)
 		i++
 		return true, nil
 	})
@@ -112,7 +113,7 @@ func _testArray(
 	require.Equal(t, len(expectedValues), i)
 
 	// Verify in-memory slabs
-	err = atree.VerifyArray(array, address, typeInfo, typeInfoComparator, hashInputProvider, inlineEnabled)
+	err = atree.VerifyArray(array, address, typeInfo, test_utils.CompareTypeInfo, test_utils.GetHashInput, inlineEnabled)
 	if err != nil {
 		atree.PrintArray(array)
 	}
@@ -167,7 +168,7 @@ func _testArray(
 		actual, err := decodedArray.Get(uint64(i))
 		require.NoError(t, err)
 
-		valueEqual(t, expected, actual)
+		testValueEqual(t, expected, actual)
 	}
 
 	if !hasNestedArrayMapElement {
@@ -198,7 +199,7 @@ func TestArrayAppendAndGet(t *testing.T) {
 
 	const arrayCount = 4096
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -207,7 +208,7 @@ func TestArrayAppendAndGet(t *testing.T) {
 
 	values := make([]atree.Value, arrayCount)
 	for i := uint64(0); i < arrayCount; i++ {
-		v := Uint64Value(i)
+		v := test_utils.Uint64Value(i)
 		values[i] = v
 		err := array.Append(v)
 		require.NoError(t, err)
@@ -231,7 +232,7 @@ func TestArraySetAndGet(t *testing.T) {
 	t.Run("new elements with similar bytesize", func(t *testing.T) {
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -240,7 +241,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -250,7 +251,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 		for i := uint64(0); i < arrayCount; i++ {
 			oldValue := values[i]
-			newValue := Uint64Value(i * 10)
+			newValue := test_utils.Uint64Value(i * 10)
 			values[i] = newValue
 
 			existingStorable, err := array.Set(i, newValue)
@@ -258,7 +259,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, oldValue, existingValue)
+			testValueEqual(t, oldValue, existingValue)
 		}
 
 		testArray(t, storage, typeInfo, address, array, values, false)
@@ -277,7 +278,7 @@ func TestArraySetAndGet(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -286,7 +287,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -296,7 +297,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 		for i := uint64(0); i < arrayCount; i++ {
 			oldValue := values[i]
-			newValue := Uint64Value(math.MaxUint64 - arrayCount + i + 1)
+			newValue := test_utils.Uint64Value(math.MaxUint64 - arrayCount + i + 1)
 			values[i] = newValue
 
 			existingStorable, err := array.Set(i, newValue)
@@ -304,7 +305,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, oldValue, existingValue)
+			testValueEqual(t, oldValue, existingValue)
 		}
 
 		testArray(t, storage, typeInfo, address, array, values, false)
@@ -324,7 +325,7 @@ func TestArraySetAndGet(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -333,7 +334,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(math.MaxUint64 - arrayCount + i + 1)
+			v := test_utils.Uint64Value(math.MaxUint64 - arrayCount + i + 1)
 			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -343,7 +344,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 		for i := uint64(0); i < arrayCount; i++ {
 			oldValue := values[i]
-			newValue := Uint64Value(i)
+			newValue := test_utils.Uint64Value(i)
 			values[i] = newValue
 
 			existingStorable, err := array.Set(i, newValue)
@@ -351,7 +352,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, oldValue, existingValue)
+			testValueEqual(t, oldValue, existingValue)
 		}
 
 		testArray(t, storage, typeInfo, address, array, values, false)
@@ -361,7 +362,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 		const arrayCount = 1024
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -370,7 +371,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 		values := make([]atree.Value, 0, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values = append(values, v)
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -378,7 +379,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 		r := newRand(t)
 
-		v := NewStringValue(randStr(r, 1024))
+		v := test_utils.NewStringValue(randStr(r, 1024))
 		storable, err := array.Set(array.Count(), v)
 		require.Nil(t, storable)
 		require.Equal(t, 1, errorCategorizationCount(err))
@@ -402,7 +403,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -411,7 +412,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(arrayCount - i - 1)
+			v := test_utils.Uint64Value(arrayCount - i - 1)
 			values[arrayCount-i-1] = v
 			err := array.Insert(0, v)
 			require.NoError(t, err)
@@ -424,7 +425,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -433,7 +434,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values[i] = v
 			err := array.Insert(i, v)
 			require.NoError(t, err)
@@ -446,7 +447,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -455,14 +456,14 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 		values := make([]atree.Value, 0, arrayCount)
 		for i := uint64(0); i < arrayCount; i += 2 {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values = append(values, v)
 			err := array.Append(v)
 			require.NoError(t, err)
 		}
 
 		for i := uint64(1); i < arrayCount; i += 2 {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
 			values = append(values, nil)
 			copy(values[i+1:], values[i:])
@@ -479,7 +480,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 		const arrayCount = 1024
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -488,7 +489,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 		values := make([]atree.Value, 0, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values = append(values, v)
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -496,7 +497,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 		r := newRand(t)
 
-		v := NewStringValue(randStr(r, 1024))
+		v := test_utils.NewStringValue(randStr(r, 1024))
 		err = array.Insert(array.Count()+1, v)
 		require.Equal(t, 1, errorCategorizationCount(err))
 
@@ -518,7 +519,7 @@ func TestArrayRemove(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -527,13 +528,13 @@ func TestArrayRemove(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
 		}
 
-		require.True(t, typeInfoComparator(typeInfo, array.Type()))
+		require.True(t, test_utils.CompareTypeInfo(typeInfo, array.Type()))
 		require.Equal(t, address, array.Address())
 		require.Equal(t, uint64(arrayCount), array.Count())
 
@@ -544,7 +545,7 @@ func TestArrayRemove(t *testing.T) {
 			existingValue, err := existingStorable.StoredValue(array.Storage)
 			require.NoError(t, err)
 
-			valueEqual(t, values[i], existingValue)
+			testValueEqual(t, values[i], existingValue)
 
 			if id, ok := existingStorable.(atree.SlabIDStorable); ok {
 				err = array.Storage.Remove(atree.SlabID(id))
@@ -565,7 +566,7 @@ func TestArrayRemove(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -574,13 +575,13 @@ func TestArrayRemove(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
 		}
 
-		require.True(t, typeInfoComparator(typeInfo, array.Type()))
+		require.True(t, test_utils.CompareTypeInfo(typeInfo, array.Type()))
 		require.Equal(t, address, array.Address())
 		require.Equal(t, uint64(arrayCount), array.Count())
 
@@ -591,7 +592,7 @@ func TestArrayRemove(t *testing.T) {
 			existingValue, err := existingStorable.StoredValue(array.Storage)
 			require.NoError(t, err)
 
-			valueEqual(t, values[i], existingValue)
+			testValueEqual(t, values[i], existingValue)
 
 			if id, ok := existingStorable.(atree.SlabIDStorable); ok {
 				err = array.Storage.Remove(atree.SlabID(id))
@@ -612,7 +613,7 @@ func TestArrayRemove(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -621,13 +622,13 @@ func TestArrayRemove(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
 		}
 
-		require.True(t, typeInfoComparator(typeInfo, array.Type()))
+		require.True(t, test_utils.CompareTypeInfo(typeInfo, array.Type()))
 		require.Equal(t, address, array.Address())
 		require.Equal(t, uint64(arrayCount), array.Count())
 
@@ -641,7 +642,7 @@ func TestArrayRemove(t *testing.T) {
 			existingValue, err := existingStorable.StoredValue(array.Storage)
 			require.NoError(t, err)
 
-			valueEqual(t, v, existingValue)
+			testValueEqual(t, v, existingValue)
 
 			if id, ok := existingStorable.(atree.SlabIDStorable); ok {
 				err = array.Storage.Remove(atree.SlabID(id))
@@ -667,7 +668,7 @@ func TestArrayRemove(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -676,7 +677,7 @@ func TestArrayRemove(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -699,7 +700,7 @@ func TestArrayRemove(t *testing.T) {
 func TestReadOnlyArrayIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -721,7 +722,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -729,13 +730,13 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arrayCount; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
 		i := uint64(0)
 		err = array.IterateReadOnly(func(v atree.Value) (bool, error) {
-			require.Equal(t, Uint64Value(i), v)
+			require.Equal(t, test_utils.Uint64Value(i), v)
 			i++
 			return true, nil
 		})
@@ -749,7 +750,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -757,22 +758,22 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arrayCount; i++ {
-			err := array.Append(Uint64Value(0))
+			err := array.Append(test_utils.Uint64Value(0))
 			require.NoError(t, err)
 		}
 
 		for i := uint64(0); i < arrayCount; i++ {
-			existingStorable, err := array.Set(i, Uint64Value(i))
+			existingStorable, err := array.Set(i, test_utils.Uint64Value(i))
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, Uint64Value(0), existingValue)
+			require.Equal(t, test_utils.Uint64Value(0), existingValue)
 		}
 
 		i := uint64(0)
 		err = array.IterateReadOnly(func(v atree.Value) (bool, error) {
-			require.Equal(t, Uint64Value(i), v)
+			require.Equal(t, test_utils.Uint64Value(i), v)
 			i++
 			return true, nil
 		})
@@ -786,7 +787,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -794,18 +795,18 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arrayCount; i += 2 {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
 		for i := uint64(1); i < arrayCount; i += 2 {
-			err := array.Insert(i, Uint64Value(i))
+			err := array.Insert(i, test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
 		i := uint64(0)
 		err = array.IterateReadOnly(func(v atree.Value) (bool, error) {
-			require.Equal(t, Uint64Value(i), v)
+			require.Equal(t, test_utils.Uint64Value(i), v)
 			i++
 			return true, nil
 		})
@@ -819,7 +820,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -827,7 +828,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arrayCount; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -835,13 +836,13 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 		for i := uint64(0); i < array.Count(); i++ {
 			storable, err := array.Remove(i)
 			require.NoError(t, err)
-			require.Equal(t, Uint64Value(i*2), storable)
+			require.Equal(t, test_utils.Uint64Value(i*2), storable)
 		}
 
 		i := uint64(0)
 		j := uint64(1)
 		err = array.IterateReadOnly(func(v atree.Value) (bool, error) {
-			require.Equal(t, Uint64Value(j), v)
+			require.Equal(t, test_utils.Uint64Value(j), v)
 			i++
 			j += 2
 			return true, nil
@@ -852,7 +853,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 
 	t.Run("stop", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -861,7 +862,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 
 		const count = 10
 		for i := uint64(0); i < count; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -879,7 +880,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -888,7 +889,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 
 		const count = 10
 		for i := uint64(0); i < count; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -917,7 +918,7 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 	atree.SetThreshold(256)
 	defer atree.SetThreshold(1024)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestPersistentStorage(t)
 
@@ -945,7 +946,7 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 				require.True(t, ok)
 				require.True(t, c.Inlined())
 
-				err = c.Append(Uint64Value(0))
+				err = c.Append(test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 
 				return true, err
@@ -982,7 +983,7 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 				require.True(t, ok)
 				require.True(t, c.Inlined())
 
-				err = c.Append(Uint64Value(0))
+				err = c.Append(test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 
 				return true, err
@@ -1011,7 +1012,7 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 
 		// Inserting elements into childArray so it can't be inlined
 		for i := 0; childArray.Inlined(); i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			err = childArray.Append(v)
 			require.NoError(t, err)
 		}
@@ -1054,7 +1055,7 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 
 		// Inserting elements into childArray so it can't be inlined
 		for i := 0; childArray.Inlined(); i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			err = childArray.Append(v)
 			require.NoError(t, err)
 		}
@@ -1087,7 +1088,7 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 func TestMutableArrayIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1109,7 +1110,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		const arrayCount = 15
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1118,7 +1119,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			err = array.Append(v)
 			require.NoError(t, err)
 
@@ -1128,16 +1129,16 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		i := 0
 		err = array.Iterate(func(v atree.Value) (bool, error) {
-			require.Equal(t, Uint64Value(i), v)
+			require.Equal(t, test_utils.Uint64Value(i), v)
 
 			// Mutate primitive array elements by overwritting existing elements of similar byte size.
-			newValue := Uint64Value(i * 2)
+			newValue := test_utils.Uint64Value(i * 2)
 			existingStorable, err := array.Set(uint64(i), newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, Uint64Value(i), existingValue)
+			require.Equal(t, test_utils.Uint64Value(i), existingValue)
 
 			expectedValues[i] = newValue
 
@@ -1158,7 +1159,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		const arrayCount = 1024
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1167,7 +1168,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			err = array.Append(v)
 			require.NoError(t, err)
 
@@ -1177,16 +1178,16 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		i := 0
 		err = array.Iterate(func(v atree.Value) (bool, error) {
-			require.Equal(t, Uint64Value(i), v)
+			require.Equal(t, test_utils.Uint64Value(i), v)
 
 			// Mutate primitive array elements by overwritting existing elements with elements of similar size.
-			newValue := Uint64Value(i * 2)
+			newValue := test_utils.Uint64Value(i * 2)
 			existingStorable, err := array.Set(uint64(i), newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, Uint64Value(i), existingValue)
+			require.Equal(t, test_utils.Uint64Value(i), existingValue)
 
 			expectedValues[i] = newValue
 
@@ -1207,7 +1208,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		const arrayCount = 15
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1217,7 +1218,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		expectedValues := make([]atree.Value, arrayCount)
 		r := rune('a')
 		for i := uint64(0); i < arrayCount; i++ {
-			v := NewStringValue(string(r))
+			v := test_utils.NewStringValue(string(r))
 			err = array.Append(v)
 			require.NoError(t, err)
 
@@ -1229,17 +1230,17 @@ func TestMutableArrayIterate(t *testing.T) {
 		i := 0
 		r = rune('a')
 		err = array.Iterate(func(v atree.Value) (bool, error) {
-			require.Equal(t, NewStringValue(string(r)), v)
+			require.Equal(t, test_utils.NewStringValue(string(r)), v)
 
 			// Mutate primitive array elements by overwritting existing elements with larger elements.
 			// Larger elements causes slabs to split.
-			newValue := NewStringValue(strings.Repeat(string(r), 25))
+			newValue := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 			existingStorable, err := array.Set(uint64(i), newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, NewStringValue(string(r)), existingValue)
+			require.Equal(t, test_utils.NewStringValue(string(r)), existingValue)
 
 			expectedValues[i] = newValue
 
@@ -1261,7 +1262,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		const arrayCount = 200
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1271,7 +1272,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		expectedValues := make([]atree.Value, arrayCount)
 		r := rune('a')
 		for i := uint64(0); i < arrayCount; i++ {
-			v := NewStringValue(string(r))
+			v := test_utils.NewStringValue(string(r))
 			err = array.Append(v)
 			require.NoError(t, err)
 
@@ -1283,17 +1284,17 @@ func TestMutableArrayIterate(t *testing.T) {
 		i := 0
 		r = rune('a')
 		err = array.Iterate(func(v atree.Value) (bool, error) {
-			require.Equal(t, NewStringValue(string(r)), v)
+			require.Equal(t, test_utils.NewStringValue(string(r)), v)
 
 			// Mutate primitive array elements by overwritting existing elements with larger elements.
 			// Larger elements causes slabs to split.
-			newValue := NewStringValue(strings.Repeat(string(r), 25))
+			newValue := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 			existingStorable, err := array.Set(uint64(i), newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, NewStringValue(string(r)), existingValue)
+			require.Equal(t, test_utils.NewStringValue(string(r)), existingValue)
 
 			expectedValues[i] = newValue
 
@@ -1315,7 +1316,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		const arrayCount = 80
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1325,7 +1326,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		expectedValues := make([]atree.Value, arrayCount)
 		r := rune('a')
 		for i := uint64(0); i < arrayCount; i++ {
-			v := NewStringValue(strings.Repeat(string(r), 25))
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 			err = array.Append(v)
 			require.NoError(t, err)
 
@@ -1337,17 +1338,17 @@ func TestMutableArrayIterate(t *testing.T) {
 		i := 0
 		r = rune('a')
 		err = array.Iterate(func(v atree.Value) (bool, error) {
-			require.Equal(t, NewStringValue(strings.Repeat(string(r), 25)), v)
+			require.Equal(t, test_utils.NewStringValue(strings.Repeat(string(r), 25)), v)
 
 			// Mutate primitive array elements by overwritting existing elements with smaller elements.
 			// Smaller elements causes slabs to merge.
-			newValue := NewStringValue(string(r))
+			newValue := test_utils.NewStringValue(string(r))
 			existingStorable, err := array.Set(uint64(i), newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			require.Equal(t, NewStringValue(strings.Repeat(string(r), 25)), existingValue)
+			require.Equal(t, test_utils.NewStringValue(strings.Repeat(string(r), 25)), existingValue)
 
 			expectedValues[i] = newValue
 
@@ -1369,7 +1370,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		const arrayCount = 15
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1381,14 +1382,14 @@ func TestMutableArrayIterate(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			err = childArray.Append(v)
 			require.NoError(t, err)
 
 			err = array.Append(childArray)
 			require.NoError(t, err)
 
-			expectedValues[i] = arrayValue{v}
+			expectedValues[i] = ExpectedArrayValue{v}
 		}
 		require.True(t, IsArrayRootDataSlab(array))
 
@@ -1400,13 +1401,13 @@ func TestMutableArrayIterate(t *testing.T) {
 			require.True(t, childArray.Inlined())
 
 			// Mutate array elements by inserting more elements to child arrays.
-			newElement := Uint64Value(0)
+			newElement := test_utils.Uint64Value(0)
 			err := childArray.Append(newElement)
 			require.NoError(t, err)
 			require.Equal(t, uint64(2), childArray.Count())
 			require.True(t, childArray.Inlined())
 
-			expectedChildArrayValues, ok := expectedValues[i].(arrayValue)
+			expectedChildArrayValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildArrayValues = append(expectedChildArrayValues, newElement)
@@ -1429,7 +1430,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		const arrayCount = 25
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1441,14 +1442,14 @@ func TestMutableArrayIterate(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			err = childArray.Append(v)
 			require.NoError(t, err)
 
 			err = array.Append(childArray)
 			require.NoError(t, err)
 
-			expectedValues[i] = arrayValue{v}
+			expectedValues[i] = ExpectedArrayValue{v}
 		}
 		require.False(t, IsArrayRootDataSlab(array))
 
@@ -1460,13 +1461,13 @@ func TestMutableArrayIterate(t *testing.T) {
 			require.True(t, childArray.Inlined())
 
 			// Mutate array elements by inserting more elements to child arrays.
-			newElement := Uint64Value(0)
+			newElement := test_utils.Uint64Value(0)
 			err := childArray.Append(newElement)
 			require.NoError(t, err)
 			require.Equal(t, uint64(2), childArray.Count())
 			require.True(t, childArray.Inlined())
 
-			expectedChildArrayValues, ok := expectedValues[i].(arrayValue)
+			expectedChildArrayValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildArrayValues = append(expectedChildArrayValues, newElement)
@@ -1493,7 +1494,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			mutatedChildArrayCount = 4
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1505,9 +1506,9 @@ func TestMutableArrayIterate(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			var expectedValue arrayValue
+			var expectedValue ExpectedArrayValue
 			for j := i; j < i+childArrayCount; j++ {
-				v := Uint64Value(j)
+				v := test_utils.Uint64Value(j)
 				err = childArray.Append(v)
 				require.NoError(t, err)
 
@@ -1528,12 +1529,12 @@ func TestMutableArrayIterate(t *testing.T) {
 			require.Equal(t, uint64(childArrayCount), childArray.Count())
 			require.True(t, childArray.Inlined())
 
-			expectedChildArrayValues, ok := expectedValues[i].(arrayValue)
+			expectedChildArrayValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			// Mutate array elements by inserting more elements to child arrays.
 			for j := i; j < i+mutatedChildArrayCount-childArrayCount; j++ {
-				newElement := Uint64Value(j)
+				newElement := test_utils.Uint64Value(j)
 
 				err := childArray.Append(newElement)
 				require.NoError(t, err)
@@ -1567,7 +1568,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			mutatedChildArrayCount = 4
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1579,9 +1580,9 @@ func TestMutableArrayIterate(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			var expectedValue arrayValue
+			var expectedValue ExpectedArrayValue
 			for j := i; j < i+childArrayCount; j++ {
-				v := Uint64Value(j)
+				v := test_utils.Uint64Value(j)
 				err = childArray.Append(v)
 				require.NoError(t, err)
 
@@ -1602,12 +1603,12 @@ func TestMutableArrayIterate(t *testing.T) {
 			require.Equal(t, uint64(childArrayCount), childArray.Count())
 			require.True(t, childArray.Inlined())
 
-			expectedChildArrayValues, ok := expectedValues[i].(arrayValue)
+			expectedChildArrayValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			// Mutate array elements by inserting more elements to child arrays.
 			for j := i; j < i+mutatedChildArrayCount-childArrayCount; j++ {
-				newElement := Uint64Value(j)
+				newElement := test_utils.Uint64Value(j)
 
 				err := childArray.Append(newElement)
 				require.NoError(t, err)
@@ -1641,7 +1642,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			mutatedChildArrayCount = 1
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1653,9 +1654,9 @@ func TestMutableArrayIterate(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			var expectedValue arrayValue
+			var expectedValue ExpectedArrayValue
 			for j := i; j < i+childArrayCount; j++ {
-				v := Uint64Value(j)
+				v := test_utils.Uint64Value(j)
 				err = childArray.Append(v)
 				require.NoError(t, err)
 
@@ -1677,7 +1678,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			require.Equal(t, uint64(childArrayCount), childArray.Count())
 			require.True(t, childArray.Inlined())
 
-			expectedChildArrayValues, ok := expectedValues[i].(arrayValue)
+			expectedChildArrayValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			for j := childArrayCount - 1; j > mutatedChildArrayCount-1; j-- {
@@ -1686,7 +1687,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 				existingValue, err := existingStorble.StoredValue(storage)
 				require.NoError(t, err)
-				require.Equal(t, Uint64Value(i+j), existingValue)
+				require.Equal(t, test_utils.Uint64Value(i+j), existingValue)
 			}
 
 			require.Equal(t, uint64(mutatedChildArrayCount), childArray.Count())
@@ -1715,7 +1716,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			mutatedChildArrayCount = 50
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1727,9 +1728,9 @@ func TestMutableArrayIterate(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			var expectedValue arrayValue
+			var expectedValue ExpectedArrayValue
 			for j := i; j < i+childArrayCount; j++ {
-				v := Uint64Value(j)
+				v := test_utils.Uint64Value(j)
 				err = childArray.Append(v)
 				require.NoError(t, err)
 
@@ -1751,11 +1752,11 @@ func TestMutableArrayIterate(t *testing.T) {
 			require.Equal(t, uint64(childArrayCount), childArray.Count())
 			require.True(t, childArray.Inlined())
 
-			expectedChildArrayValues, ok := expectedValues[i].(arrayValue)
+			expectedChildArrayValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			for j := childArrayCount; j < mutatedChildArrayCount; j++ {
-				v := Uint64Value(i + j)
+				v := test_utils.Uint64Value(i + j)
 
 				err := childArray.Append(v)
 				require.NoError(t, err)
@@ -1790,7 +1791,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			mutatedChildArrayCount = 50
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1802,10 +1803,10 @@ func TestMutableArrayIterate(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			var expectedValue arrayValue
+			var expectedValue ExpectedArrayValue
 
 			for j := i; j < i+childArrayCount; j++ {
-				v := Uint64Value(j)
+				v := test_utils.Uint64Value(j)
 				err = childArray.Append(v)
 				require.NoError(t, err)
 
@@ -1827,11 +1828,11 @@ func TestMutableArrayIterate(t *testing.T) {
 			require.Equal(t, uint64(childArrayCount), childArray.Count())
 			require.True(t, childArray.Inlined())
 
-			expectedChildArrayValues, ok := expectedValues[i].(arrayValue)
+			expectedChildArrayValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			for j := childArrayCount; j < mutatedChildArrayCount; j++ {
-				v := Uint64Value(i + j)
+				v := test_utils.Uint64Value(i + j)
 
 				err := childArray.Append(v)
 				require.NoError(t, err)
@@ -1865,7 +1866,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			mutatedChildArrayCount = 1
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1877,10 +1878,10 @@ func TestMutableArrayIterate(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			var expectedValue arrayValue
+			var expectedValue ExpectedArrayValue
 
 			for j := i; j < i+childArrayCount; j++ {
-				v := Uint64Value(j)
+				v := test_utils.Uint64Value(j)
 				err = childArray.Append(v)
 				require.NoError(t, err)
 
@@ -1902,7 +1903,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			require.Equal(t, uint64(childArrayCount), childArray.Count())
 			require.False(t, childArray.Inlined())
 
-			expectedChildArrayValues, ok := expectedValues[i].(arrayValue)
+			expectedChildArrayValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			for j := childArrayCount - 1; j > mutatedChildArrayCount-1; j-- {
@@ -1911,7 +1912,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 				value, err := existingStorable.StoredValue(storage)
 				require.NoError(t, err)
-				require.Equal(t, Uint64Value(i+j), value)
+				require.Equal(t, test_utils.Uint64Value(i+j), value)
 			}
 
 			require.Equal(t, uint64(mutatedChildArrayCount), childArray.Count())
@@ -1941,7 +1942,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			mutatedChildArrayCount = 25
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -1953,10 +1954,10 @@ func TestMutableArrayIterate(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			var expectedValue arrayValue
+			var expectedValue ExpectedArrayValue
 
 			for j := i; j < i+childArrayCount; j++ {
-				v := Uint64Value(j)
+				v := test_utils.Uint64Value(j)
 				err = childArray.Append(v)
 				require.NoError(t, err)
 
@@ -1978,7 +1979,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			require.Equal(t, uint64(childArrayCount), childArray.Count())
 			require.False(t, childArray.Inlined())
 
-			expectedChildArrayValues, ok := expectedValues[i].(arrayValue)
+			expectedChildArrayValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			for j := childArrayCount - 1; j >= mutatedChildArrayCount; j-- {
@@ -1987,7 +1988,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 				value, err := existingStorable.StoredValue(storage)
 				require.NoError(t, err)
-				require.Equal(t, Uint64Value(i+j), value)
+				require.Equal(t, test_utils.Uint64Value(i+j), value)
 			}
 
 			require.Equal(t, uint64(mutatedChildArrayCount), childArray.Count())
@@ -2009,7 +2010,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 	t.Run("stop", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2018,7 +2019,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		const count = 10
 		for i := uint64(0); i < count; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -2036,7 +2037,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2045,7 +2046,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 		const count = 10
 		for i := uint64(0); i < count; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -2119,7 +2120,7 @@ func testArrayIterateRange(t *testing.T, array *atree.Array, values []atree.Valu
 		for endIndex := startIndex; endIndex <= count; endIndex++ {
 			i = uint64(0)
 			err = array.IterateReadOnlyRange(startIndex, endIndex, func(v atree.Value) (bool, error) {
-				valueEqual(t, v, values[int(startIndex+i)])
+				testValueEqual(t, v, values[int(startIndex+i)])
 				i++
 				return true, nil
 			})
@@ -2130,7 +2131,7 @@ func testArrayIterateRange(t *testing.T, array *atree.Array, values []atree.Valu
 }
 
 func TestReadOnlyArrayIterateRange(t *testing.T) {
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
@@ -2152,7 +2153,7 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			value := Uint64Value(i)
+			value := test_utils.Uint64Value(i)
 			values[i] = value
 			err := array.Append(value)
 			require.NoError(t, err)
@@ -2174,7 +2175,7 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			value := Uint64Value(i)
+			value := test_utils.Uint64Value(i)
 			values[i] = value
 			err := array.Append(value)
 			require.NoError(t, err)
@@ -2192,7 +2193,7 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arrayCount; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -2219,7 +2220,7 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 
 		const arrayCount = 10
 		for i := uint64(0); i < arrayCount; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -2247,7 +2248,7 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 
 func TestMutableArrayIterateRange(t *testing.T) {
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
@@ -2271,7 +2272,7 @@ func TestMutableArrayIterateRange(t *testing.T) {
 
 		const arrayCount = 15
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2283,14 +2284,14 @@ func TestMutableArrayIterateRange(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			err = childArray.Append(v)
 			require.NoError(t, err)
 
 			err = array.Append(childArray)
 			require.NoError(t, err)
 
-			expectedValues[i] = arrayValue{v}
+			expectedValues[i] = ExpectedArrayValue{v}
 		}
 		require.True(t, IsArrayRootDataSlab(array))
 
@@ -2299,7 +2300,7 @@ func TestMutableArrayIterateRange(t *testing.T) {
 		i := 0
 		startIndex := uint64(1)
 		endIndex := array.Count() - 2
-		newElement := Uint64Value(0)
+		newElement := test_utils.Uint64Value(0)
 		err = array.IterateRange(startIndex, endIndex, func(v atree.Value) (bool, error) {
 			childArray, ok := v.(*atree.Array)
 			require.True(t, ok)
@@ -2310,7 +2311,7 @@ func TestMutableArrayIterateRange(t *testing.T) {
 			require.NoError(t, err)
 
 			index := int(startIndex) + i
-			expectedChildArrayValues, ok := expectedValues[index].(arrayValue)
+			expectedChildArrayValues, ok := expectedValues[index].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildArrayValues = append(expectedChildArrayValues, newElement)
@@ -2338,7 +2339,7 @@ func TestMutableArrayIterateRange(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arrayCount; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -2365,7 +2366,7 @@ func TestMutableArrayIterateRange(t *testing.T) {
 
 		const arrayCount = 10
 		for i := uint64(0); i < arrayCount; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -2397,7 +2398,7 @@ func TestArrayRootSlabID(t *testing.T) {
 
 	const arrayCount = 4096
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2409,12 +2410,12 @@ func TestArrayRootSlabID(t *testing.T) {
 
 	// Append elements
 	for i := uint64(0); i < arrayCount; i++ {
-		err := array.Append(Uint64Value(i))
+		err := array.Append(test_utils.Uint64Value(i))
 		require.NoError(t, err)
 		require.Equal(t, savedRootID, array.SlabID())
 	}
 
-	require.True(t, typeInfoComparator(typeInfo, array.Type()))
+	require.True(t, test_utils.CompareTypeInfo(typeInfo, array.Type()))
 	require.Equal(t, address, array.Address())
 	require.Equal(t, uint64(arrayCount), array.Count())
 
@@ -2422,11 +2423,11 @@ func TestArrayRootSlabID(t *testing.T) {
 	for i := uint64(0); i < arrayCount; i++ {
 		storable, err := array.Remove(0)
 		require.NoError(t, err)
-		require.Equal(t, Uint64Value(i), storable)
+		require.Equal(t, test_utils.Uint64Value(i), storable)
 		require.Equal(t, savedRootID, array.SlabID())
 	}
 
-	require.True(t, typeInfoComparator(typeInfo, array.Type()))
+	require.True(t, test_utils.CompareTypeInfo(typeInfo, array.Type()))
 	require.Equal(t, address, array.Address())
 	require.Equal(t, uint64(0), array.Count())
 	require.Equal(t, savedRootID, array.SlabID())
@@ -2441,7 +2442,7 @@ func TestArraySetRandomValues(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2450,7 +2451,7 @@ func TestArraySetRandomValues(t *testing.T) {
 
 	values := make([]atree.Value, arrayCount)
 	for i := uint64(0); i < arrayCount; i++ {
-		v := Uint64Value(i)
+		v := test_utils.Uint64Value(i)
 		values[i] = v
 		err := array.Append(v)
 		require.NoError(t, err)
@@ -2466,7 +2467,7 @@ func TestArraySetRandomValues(t *testing.T) {
 
 		existingValue, err := existingStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, oldValue, existingValue)
+		testValueEqual(t, oldValue, existingValue)
 	}
 
 	testArray(t, storage, typeInfo, address, array, values, false)
@@ -2483,7 +2484,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2508,7 +2509,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2533,7 +2534,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2565,7 +2566,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2593,7 +2594,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 
 		existingValue, err := existingStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, values[k], existingValue)
+		testValueEqual(t, values[k], existingValue)
 
 		copy(values[k:], values[k+1:])
 		values = values[:len(values)-1]
@@ -2661,7 +2662,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, oldV, existingValue)
+			testValueEqual(t, oldV, existingValue)
 
 			if id, ok := existingStorable.(atree.SlabIDStorable); ok {
 				err = storage.Remove(atree.SlabID(id))
@@ -2691,7 +2692,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, values[k], existingValue)
+			testValueEqual(t, values[k], existingValue)
 
 			copy(values[k:], values[k+1:])
 			values = values[:len(values)-1]
@@ -2703,7 +2704,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 		}
 
 		require.Equal(t, uint64(len(values)), array.Count())
-		require.True(t, typeInfoComparator(typeInfo, array.Type()))
+		require.True(t, test_utils.CompareTypeInfo(typeInfo, array.Type()))
 		require.Equal(t, address, array.Address())
 	}
 
@@ -2719,7 +2720,7 @@ func TestArrayAppendSetInsertRemoveRandomValues(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2736,8 +2737,8 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
-		childTypeInfo := testTypeInfo{43}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		childTypeInfo := test_utils.NewSimpleTypeInfo(43)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2750,7 +2751,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, childTypeInfo)
 			require.NoError(t, err)
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
 			err = childArray.Append(v)
 			require.NoError(t, err)
@@ -2762,7 +2763,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, childArray.Inlined())
 
-			expectedValues[i] = arrayValue{v}
+			expectedValues[i] = ExpectedArrayValue{v}
 		}
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false)
@@ -2773,8 +2774,8 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 		const arrayCount = 4096
 		const childArrayCount = 40
 
-		typeInfo := testTypeInfo{42}
-		childTypeInfo := testTypeInfo{43}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		childTypeInfo := test_utils.NewSimpleTypeInfo(43)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2789,7 +2790,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 
 			expectedChildArrayValues := make([]atree.Value, childArrayCount)
 			for i := uint64(0); i < childArrayCount; i++ {
-				v := Uint64Value(math.MaxUint64)
+				v := test_utils.Uint64Value(math.MaxUint64)
 
 				err := childArray.Append(v)
 				require.NoError(t, err)
@@ -2803,7 +2804,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			require.NoError(t, err)
 			require.False(t, childArray.Inlined())
 
-			expectedValues[i] = arrayValue(expectedChildArrayValues)
+			expectedValues[i] = ExpectedArrayValue(expectedChildArrayValues)
 		}
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, true)
@@ -2813,8 +2814,8 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
-		childArayTypeInfo := testTypeInfo{43}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		childArayTypeInfo := test_utils.NewSimpleTypeInfo(43)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2826,9 +2827,9 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childArayTypeInfo)
 			require.NoError(t, err)
 
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
-			storable, err := childMap.Set(compare, hashInputProvider, k, v)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
+			storable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, storable)
 
@@ -2837,7 +2838,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			err = array.Append(childMap)
 			require.NoError(t, err)
 
-			expectedValues[i] = mapValue{k: v}
+			expectedValues[i] = ExpectedMapValue{k: v}
 		}
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false)
@@ -2847,8 +2848,8 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
-		nestedTypeInfo := testTypeInfo{43}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		nestedTypeInfo := test_utils.NewSimpleTypeInfo(43)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2861,12 +2862,12 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), nestedTypeInfo)
 			require.NoError(t, err)
 
-			expectedChildMapValues := mapValue{}
+			expectedChildMapValues := ExpectedMapValue{}
 			for i := uint64(0); i < 25; i++ {
-				k := Uint64Value(i)
-				v := Uint64Value(i * 2)
+				k := test_utils.Uint64Value(i)
+				v := test_utils.Uint64Value(i * 2)
 
-				storable, err := childMap.Set(compare, hashInputProvider, k, v)
+				storable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				require.NoError(t, err)
 				require.Nil(t, storable)
 
@@ -2891,7 +2892,7 @@ func TestArrayDecodeV0(t *testing.T) {
 	defer atree.SetThreshold(1024)
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		arraySlabID := atree.NewSlabID(
@@ -2931,7 +2932,7 @@ func TestArrayDecodeV0(t *testing.T) {
 	})
 
 	t.Run("dataslab as root", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		arraySlabID := atree.NewSlabID(
@@ -2940,7 +2941,7 @@ func TestArrayDecodeV0(t *testing.T) {
 		)
 
 		values := []atree.Value{
-			Uint64Value(0),
+			test_utils.Uint64Value(0),
 		}
 
 		slabData := map[atree.SlabID][]byte{
@@ -2977,7 +2978,7 @@ func TestArrayDecodeV0(t *testing.T) {
 	})
 
 	t.Run("metadataslab as root", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2989,10 +2990,10 @@ func TestArrayDecodeV0(t *testing.T) {
 		const arrayCount = 20
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount-1; i++ {
-			values[i] = NewStringValue(strings.Repeat("a", 22))
+			values[i] = test_utils.NewStringValue(strings.Repeat("a", 22))
 		}
 
-		values[arrayCount-1] = arrayValue{Uint64Value(0)}
+		values[arrayCount-1] = ExpectedArrayValue{test_utils.Uint64Value(0)}
 
 		slabData := map[atree.SlabID][]byte{
 			// (metadata slab) headers: [{id:2 size:228 count:9} {id:3 size:270 count:11} ]
@@ -3109,7 +3110,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 	defer atree.SetThreshold(1024)
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3148,14 +3149,14 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root dataslab", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		v := Uint64Value(0)
+		v := test_utils.Uint64Value(0)
 		values := []atree.Value{v}
 		err = array.Append(v)
 		require.NoError(t, err)
@@ -3194,7 +3195,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root metadata slab", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3204,7 +3205,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		const arrayCount = 18
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := NewStringValue(strings.Repeat("a", 22))
+			v := test_utils.NewStringValue(strings.Repeat("a", 22))
 			values[i] = v
 
 			err := array.Append(v)
@@ -3307,8 +3308,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 	// Same type info is reused.
 	t.Run("root data slab, inlined child array of same type", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
-		childTypeInfo := testTypeInfo{43}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		childTypeInfo := test_utils.NewSimpleTypeInfo(43)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3318,7 +3319,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		const arrayCount = 2
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := 0; i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
 			childArray, err := atree.NewArray(storage, address, childTypeInfo)
 			require.NoError(t, err)
@@ -3329,7 +3330,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			err = parentArray.Append(childArray)
 			require.NoError(t, err)
 
-			expectedValues[i] = arrayValue{v}
+			expectedValues[i] = ExpectedArrayValue{v}
 		}
 
 		id1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
@@ -3386,9 +3387,9 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 	// Different type info are encoded.
 	t.Run("root data slab, inlined array of different type", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
-		typeInfo2 := testTypeInfo{43}
-		typeInfo3 := testTypeInfo{44}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		typeInfo2 := test_utils.NewSimpleTypeInfo(43)
+		typeInfo3 := test_utils.NewSimpleTypeInfo(44)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3398,7 +3399,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		const arrayCount = 2
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := 0; i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
 			var ti atree.TypeInfo
 			if i == 0 {
@@ -3415,7 +3416,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			err = parentArray.Append(childArray)
 			require.NoError(t, err)
 
-			expectedValues[i] = arrayValue{v}
+			expectedValues[i] = ExpectedArrayValue{v}
 		}
 
 		id1 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
@@ -3475,9 +3476,9 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 	// Same type info is reused.
 	t.Run("root data slab, multiple levels of inlined array of same type", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
-		typeInfo2 := testTypeInfo{43}
-		typeInfo3 := testTypeInfo{44}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		typeInfo2 := test_utils.NewSimpleTypeInfo(43)
+		typeInfo3 := test_utils.NewSimpleTypeInfo(44)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3487,7 +3488,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		const arrayCount = 2
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := 0; i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
 			gchildArray, err := atree.NewArray(storage, address, typeInfo2)
 			require.NoError(t, err)
@@ -3504,8 +3505,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 			err = parentArray.Append(childArray)
 			require.NoError(t, err)
 
-			expectedValues[i] = arrayValue{
-				arrayValue{
+			expectedValues[i] = ExpectedArrayValue{
+				ExpectedArrayValue{
 					v,
 				},
 			}
@@ -3566,11 +3567,11 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root data slab, multiple levels of inlined array of different type", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
-		typeInfo2 := testTypeInfo{43}
-		typeInfo3 := testTypeInfo{44}
-		typeInfo4 := testTypeInfo{45}
-		typeInfo5 := testTypeInfo{46}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		typeInfo2 := test_utils.NewSimpleTypeInfo(43)
+		typeInfo3 := test_utils.NewSimpleTypeInfo(44)
+		typeInfo4 := test_utils.NewSimpleTypeInfo(45)
+		typeInfo5 := test_utils.NewSimpleTypeInfo(46)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3580,7 +3581,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		const arrayCount = 2
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := 0; i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
 			var ti atree.TypeInfo
 			if i == 0 {
@@ -3608,8 +3609,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 			err = parentArray.Append(childArray)
 			require.NoError(t, err)
 
-			expectedValues[i] = arrayValue{
-				arrayValue{
+			expectedValues[i] = ExpectedArrayValue{
+				ExpectedArrayValue{
 					v,
 				},
 			}
@@ -3680,8 +3681,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 	t.Run("root metadata slab, inlined array of same type", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
-		typeInfo2 := testTypeInfo{43}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		typeInfo2 := test_utils.NewSimpleTypeInfo(43)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3691,7 +3692,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		const arrayCount = 20
 		expectedValues := make([]atree.Value, 0, arrayCount)
 		for i := uint64(0); i < arrayCount-2; i++ {
-			v := NewStringValue(strings.Repeat("a", 22))
+			v := test_utils.NewStringValue(strings.Repeat("a", 22))
 
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -3703,14 +3704,14 @@ func TestArrayEncodeDecode(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo2)
 			require.NoError(t, err)
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			err = childArray.Append(v)
 			require.NoError(t, err)
 
 			err = array.Append(childArray)
 			require.NoError(t, err)
 
-			expectedValues = append(expectedValues, arrayValue{v})
+			expectedValues = append(expectedValues, ExpectedArrayValue{v})
 		}
 
 		require.Equal(t, uint64(arrayCount), array.Count())
@@ -3823,9 +3824,9 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 	t.Run("root metadata slab, inlined array of different type", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
-		typeInfo2 := testTypeInfo{43}
-		typeInfo3 := testTypeInfo{44}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		typeInfo2 := test_utils.NewSimpleTypeInfo(43)
+		typeInfo3 := test_utils.NewSimpleTypeInfo(44)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3835,7 +3836,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		const arrayCount = 20
 		expectedValues := make([]atree.Value, 0, arrayCount)
 		for i := uint64(0); i < arrayCount-2; i++ {
-			v := NewStringValue(strings.Repeat("a", 22))
+			v := test_utils.NewStringValue(strings.Repeat("a", 22))
 
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -3854,7 +3855,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, ti)
 			require.NoError(t, err)
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
 			err = childArray.Append(v)
 			require.NoError(t, err)
@@ -3862,7 +3863,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 			err = array.Append(childArray)
 			require.NoError(t, err)
 
-			expectedValues = append(expectedValues, arrayValue{v})
+			expectedValues = append(expectedValues, ExpectedArrayValue{v})
 		}
 
 		require.Equal(t, uint64(arrayCount), array.Count())
@@ -3977,8 +3978,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("has pointers", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
-		typeInfo2 := testTypeInfo{43}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		typeInfo2 := test_utils.NewSimpleTypeInfo(43)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -3988,7 +3989,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		const arrayCount = 20
 		expectedValues := make([]atree.Value, 0, arrayCount)
 		for i := uint64(0); i < arrayCount-1; i++ {
-			v := NewStringValue(strings.Repeat("a", 22))
+			v := test_utils.NewStringValue(strings.Repeat("a", 22))
 
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -4003,7 +4004,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 		expectedChildArrayValues := make([]atree.Value, childArrayCount)
 		for i := 0; i < childArrayCount; i++ {
-			v := NewStringValue(strings.Repeat("b", 22))
+			v := test_utils.NewStringValue(strings.Repeat("b", 22))
 			err = childArray.Append(v)
 			require.NoError(t, err)
 			expectedChildArrayValues[i] = v
@@ -4012,7 +4013,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		err = array.Append(childArray)
 		require.NoError(t, err)
 
-		expectedValues = append(expectedValues, arrayValue(expectedChildArrayValues))
+		expectedValues = append(expectedValues, ExpectedArrayValue(expectedChildArrayValues))
 
 		require.Equal(t, uint64(arrayCount), array.Count())
 		require.Equal(t, uint64(5), childArray.Count())
@@ -4139,9 +4140,9 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("has pointers in inlined slab", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
-		typeInfo2 := testTypeInfo{43}
-		typeInfo3 := testTypeInfo{44}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		typeInfo2 := test_utils.NewSimpleTypeInfo(43)
+		typeInfo3 := test_utils.NewSimpleTypeInfo(44)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -4151,7 +4152,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		const arrayCount = 20
 		expectedValues := make([]atree.Value, 0, arrayCount)
 		for i := uint64(0); i < arrayCount-1; i++ {
-			v := NewStringValue(strings.Repeat("a", 22))
+			v := test_utils.NewStringValue(strings.Repeat("a", 22))
 
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -4169,7 +4170,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 		expectedGChildArrayValues := make([]atree.Value, gchildArrayCount)
 		for i := 0; i < gchildArrayCount; i++ {
-			v := NewStringValue(strings.Repeat("b", 22))
+			v := test_utils.NewStringValue(strings.Repeat("b", 22))
 
 			err = gchildArray.Append(v)
 			require.NoError(t, err)
@@ -4183,8 +4184,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 		err = array.Append(childArray)
 		require.NoError(t, err)
 
-		expectedValues = append(expectedValues, arrayValue{
-			arrayValue(expectedGChildArrayValues),
+		expectedValues = append(expectedValues, ExpectedArrayValue{
+			ExpectedArrayValue(expectedGChildArrayValues),
 		})
 
 		require.Equal(t, uint64(arrayCount), array.Count())
@@ -4335,7 +4336,7 @@ func TestArrayEncodeDecodeRandomValues(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -4357,7 +4358,7 @@ func TestEmptyArray(t *testing.T) {
 
 	t.Parallel()
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestBasicStorage(t)
 
@@ -4376,7 +4377,7 @@ func TestEmptyArray(t *testing.T) {
 	})
 
 	t.Run("set", func(t *testing.T) {
-		s, err := array.Set(0, Uint64Value(0))
+		s, err := array.Set(0, test_utils.Uint64Value(0))
 		require.Equal(t, 1, errorCategorizationCount(err))
 		var userError *atree.UserError
 		var indexOutOfBoundsError *atree.IndexOutOfBoundsError
@@ -4387,7 +4388,7 @@ func TestEmptyArray(t *testing.T) {
 	})
 
 	t.Run("insert", func(t *testing.T) {
-		err := array.Insert(1, Uint64Value(0))
+		err := array.Insert(1, test_utils.Uint64Value(0))
 		require.Equal(t, 1, errorCategorizationCount(err))
 		var userError *atree.UserError
 		var indexOutOfBoundsError *atree.IndexOutOfBoundsError
@@ -4433,7 +4434,7 @@ func TestEmptyArray(t *testing.T) {
 	})
 
 	t.Run("type", func(t *testing.T) {
-		require.True(t, typeInfoComparator(typeInfo, array.Type()))
+		require.True(t, test_utils.CompareTypeInfo(typeInfo, array.Type()))
 	})
 
 	// TestArrayEncodeDecode/empty tests empty array encoding and decoding
@@ -4454,12 +4455,12 @@ func TestArrayStringElement(t *testing.T) {
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
 			s := randStr(r, stringSize)
-			values[i] = NewStringValue(s)
+			values[i] = test_utils.NewStringValue(s)
 		}
 
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
@@ -4487,12 +4488,12 @@ func TestArrayStringElement(t *testing.T) {
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
 			s := randStr(r, stringSize)
-			values[i] = NewStringValue(s)
+			values[i] = test_utils.NewStringValue(s)
 		}
 
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
@@ -4514,7 +4515,7 @@ func TestArrayStoredValue(t *testing.T) {
 
 	const arrayCount = 4096
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestPersistentStorage(t)
 
@@ -4523,7 +4524,7 @@ func TestArrayStoredValue(t *testing.T) {
 
 	values := make([]atree.Value, arrayCount)
 	for i := uint64(0); i < arrayCount; i++ {
-		v := Uint64Value(i)
+		v := test_utils.Uint64Value(i)
 		values[i] = v
 		err := array.Append(v)
 		require.NoError(t, err)
@@ -4565,7 +4566,7 @@ func TestArrayStoredValue(t *testing.T) {
 func TestArrayPopIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -4586,7 +4587,7 @@ func TestArrayPopIterate(t *testing.T) {
 
 		const arrayCount = 10
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -4595,7 +4596,7 @@ func TestArrayPopIterate(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -4605,7 +4606,7 @@ func TestArrayPopIterate(t *testing.T) {
 		err = array.PopIterate(func(v atree.Storable) {
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, values[arrayCount-i-1], vv)
+			testValueEqual(t, values[arrayCount-i-1], vv)
 			i++
 		})
 		require.NoError(t, err)
@@ -4620,7 +4621,7 @@ func TestArrayPopIterate(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -4629,7 +4630,7 @@ func TestArrayPopIterate(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -4639,7 +4640,7 @@ func TestArrayPopIterate(t *testing.T) {
 		err = array.PopIterate(func(v atree.Storable) {
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, values[arrayCount-i-1], vv)
+			testValueEqual(t, values[arrayCount-i-1], vv)
 			i++
 		})
 		require.NoError(t, err)
@@ -4652,7 +4653,7 @@ func TestArrayPopIterate(t *testing.T) {
 func TestArrayFromBatchData(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		array, err := atree.NewArray(
 			newTestPersistentStorage(t),
@@ -4684,7 +4685,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		const arrayCount = 10
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		array, err := atree.NewArray(
 			newTestPersistentStorage(t),
 			atree.Address{1, 2, 3, 4, 5, 6, 7, 8},
@@ -4693,7 +4694,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -4727,7 +4728,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		const arrayCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		array, err := atree.NewArray(
 			newTestPersistentStorage(t),
@@ -4737,7 +4738,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		values := make([]atree.Value, arrayCount)
 		for i := uint64(0); i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			values[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -4768,7 +4769,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		array, err := atree.NewArray(
 			newTestPersistentStorage(t),
@@ -4779,14 +4780,14 @@ func TestArrayFromBatchData(t *testing.T) {
 		var values []atree.Value
 		var v atree.Value
 
-		v = NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()-2)))
+		v = test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()-2)))
 		values = append(values, v)
 
 		err = array.Insert(0, v)
 		require.NoError(t, err)
 
 		for i := 0; i < 35; i++ {
-			v = Uint64Value(i)
+			v = test_utils.Uint64Value(i)
 			values = append(values, v)
 
 			err = array.Append(v)
@@ -4818,7 +4819,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		array, err := atree.NewArray(
 			newTestPersistentStorage(t),
@@ -4829,13 +4830,13 @@ func TestArrayFromBatchData(t *testing.T) {
 		var values []atree.Value
 		var v atree.Value
 		for i := 0; i < 35; i++ {
-			v = Uint64Value(i)
+			v = test_utils.Uint64Value(i)
 			values = append(values, v)
 			err = array.Append(v)
 			require.NoError(t, err)
 		}
 
-		v = NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()-2)))
+		v = test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()-2)))
 		values = append(values, nil)
 		copy(values[25+1:], values[25:])
 		values[25] = v
@@ -4872,7 +4873,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		array, err := atree.NewArray(
 			newTestPersistentStorage(t),
@@ -4921,7 +4922,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		array, err := atree.NewArray(
 			newTestPersistentStorage(t),
 			atree.Address{1, 2, 3, 4, 5, 6, 7, 8},
@@ -4931,17 +4932,17 @@ func TestArrayFromBatchData(t *testing.T) {
 		var values []atree.Value
 		var v atree.Value
 
-		v = NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2)))
+		v = test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2)))
 		values = append(values, v)
 		err = array.Append(v)
 		require.NoError(t, err)
 
-		v = NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2)))
+		v = test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2)))
 		values = append(values, v)
 		err = array.Append(v)
 		require.NoError(t, err)
 
-		v = NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2)))
+		v = test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2)))
 		values = append(values, v)
 		err = array.Append(v)
 		require.NoError(t, err)
@@ -4970,7 +4971,7 @@ func TestArrayNestedStorables(t *testing.T) {
 
 	t.Parallel()
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 	const arrayCount = 1024 * 4
 
@@ -4983,8 +4984,8 @@ func TestArrayNestedStorables(t *testing.T) {
 	values := make([]atree.Value, arrayCount)
 	for i := uint64(0); i < arrayCount; i++ {
 		s := strings.Repeat("a", int(i))
-		v := SomeValue{Value: NewStringValue(s)}
-		values[i] = someValue{NewStringValue(s)}
+		v := test_utils.NewSomeValue(test_utils.NewStringValue(s))
+		values[i] = ExpectedWrapperValue{test_utils.NewStringValue(s)}
 
 		err := array.Append(v)
 		require.NoError(t, err)
@@ -4998,7 +4999,7 @@ func TestArrayMaxInlineElement(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -5008,7 +5009,7 @@ func TestArrayMaxInlineElement(t *testing.T) {
 	var values []atree.Value
 	for i := 0; i < 2; i++ {
 		// String length is atree.MaxInlineArrayElementSize - 3 to account for string encoding overhead.
-		v := NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-3)))
+		v := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-3)))
 		values = append(values, v)
 
 		err = array.Append(v)
@@ -5033,7 +5034,7 @@ func TestArrayString(t *testing.T) {
 	t.Run("small", func(t *testing.T) {
 		const arrayCount = 6
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -5041,7 +5042,7 @@ func TestArrayString(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arrayCount; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -5052,7 +5053,7 @@ func TestArrayString(t *testing.T) {
 	t.Run("large", func(t *testing.T) {
 		const arrayCount = 120
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -5060,7 +5061,7 @@ func TestArrayString(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arrayCount; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -5076,7 +5077,7 @@ func TestArraySlabDump(t *testing.T) {
 	t.Run("small", func(t *testing.T) {
 		const arrayCount = 6
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -5084,7 +5085,7 @@ func TestArraySlabDump(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arrayCount; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -5099,7 +5100,7 @@ func TestArraySlabDump(t *testing.T) {
 	t.Run("large", func(t *testing.T) {
 		const arrayCount = 120
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -5107,7 +5108,7 @@ func TestArraySlabDump(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < arrayCount; i++ {
-			err := array.Append(Uint64Value(i))
+			err := array.Append(test_utils.Uint64Value(i))
 			require.NoError(t, err)
 		}
 
@@ -5124,14 +5125,14 @@ func TestArraySlabDump(t *testing.T) {
 
 	t.Run("overflow", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		err = array.Append(NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()))))
+		err = array.Append(test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()))))
 		require.NoError(t, err)
 
 		want := []string{
@@ -5168,7 +5169,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 	atree.SetThreshold(256)
 	defer atree.SetThreshold(1024)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	runTest := func(name string, f func(useWrapperValue bool) func(*testing.T)) {
@@ -5333,7 +5334,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 				}
 
 				require.Equal(t, 0, i)
-				valueEqual(t, values[0], v)
+				testValueEqual(t, values[0], v)
 				i++
 				return true, nil
 			})
@@ -5974,13 +5975,13 @@ func createArrayWithSimpleValues(
 	values := make([]atree.Value, arrayCount)
 	r := rune('a')
 	for i := 0; i < arrayCount; i++ {
-		s := NewStringValue(strings.Repeat(string(r), 20))
+		s := test_utils.NewStringValue(strings.Repeat(string(r), 20))
 
 		if useWrapperValue {
-			err := array.Append(SomeValue{s})
+			err := array.Append(test_utils.NewSomeValue(s))
 			require.NoError(t, err)
 
-			values[i] = someValue{s}
+			values[i] = ExpectedWrapperValue{s}
 		} else {
 			err := array.Append(s)
 			require.NoError(t, err)
@@ -6016,7 +6017,7 @@ func createArrayWithChildArrays(
 
 		expectedChildArrayValues := make([]atree.Value, childArrayCount)
 		for j := 0; j < childArrayCount; j++ {
-			v := Uint64Value(j)
+			v := test_utils.Uint64Value(j)
 			err = childArray.Append(v)
 			require.NoError(t, err)
 
@@ -6027,15 +6028,15 @@ func createArrayWithChildArrays(
 
 		// Append nested array to parent
 		if useWrapperValue {
-			err = array.Append(SomeValue{childArray})
+			err = array.Append(test_utils.NewSomeValue(childArray))
 			require.NoError(t, err)
 
-			expectedValues[i] = someValue{arrayValue(expectedChildArrayValues)}
+			expectedValues[i] = ExpectedWrapperValue{ExpectedArrayValue(expectedChildArrayValues)}
 		} else {
 			err = array.Append(childArray)
 			require.NoError(t, err)
 
-			expectedValues[i] = arrayValue(expectedChildArrayValues)
+			expectedValues[i] = ExpectedArrayValue(expectedChildArrayValues)
 		}
 	}
 
@@ -6070,7 +6071,7 @@ func createArrayWithSimpleAndChildArrayValues(
 
 			expectedChildArrayValues := make([]atree.Value, childArrayCount)
 			for j := 0; j < childArrayCount; j++ {
-				v := Uint64Value(j)
+				v := test_utils.Uint64Value(j)
 				err = childArray.Append(v)
 				require.NoError(t, err)
 
@@ -6078,27 +6079,27 @@ func createArrayWithSimpleAndChildArrayValues(
 			}
 
 			if useWrapperValue {
-				err = array.Append(SomeValue{childArray})
+				err = array.Append(test_utils.NewSomeValue(childArray))
 				require.NoError(t, err)
 
-				expectedValues[i] = someValue{arrayValue(expectedChildArrayValues)}
+				expectedValues[i] = ExpectedWrapperValue{ExpectedArrayValue(expectedChildArrayValues)}
 			} else {
 				err = array.Append(childArray)
 				require.NoError(t, err)
 
-				expectedValues[i] = arrayValue(expectedChildArrayValues)
+				expectedValues[i] = ExpectedArrayValue(expectedChildArrayValues)
 			}
 
 			childSlabID = childArray.SlabID()
 		} else {
-			v := NewStringValue(strings.Repeat(string(r), 20))
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 20))
 			r++
 
 			if useWrapperValue {
-				err = array.Append(SomeValue{v})
+				err = array.Append(test_utils.NewSomeValue(v))
 				require.NoError(t, err)
 
-				expectedValues[i] = someValue{v}
+				expectedValues[i] = ExpectedWrapperValue{v}
 			} else {
 				err = array.Append(v)
 				require.NoError(t, err)
@@ -6115,7 +6116,7 @@ func testArrayLoadedElements(t *testing.T, array *atree.Array, expectedValues []
 	i := 0
 	err := array.IterateReadOnlyLoadedValues(func(v atree.Value) (bool, error) {
 		require.True(t, i < len(expectedValues))
-		valueEqual(t, expectedValues[i], v)
+		testValueEqual(t, expectedValues[i], v)
 		i++
 		return true, nil
 	})
@@ -6135,7 +6136,7 @@ func getArrayMetaDataSlabCount(storage *atree.PersistentSlabStorage) int {
 }
 
 func TestArrayID(t *testing.T) {
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -6155,16 +6156,16 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 		mutatedStorableSize = 5
 	)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	values := make([]*testMutableValue, arrayCount)
+	values := make([]*test_utils.MutableValue, arrayCount)
 	for i := uint64(0); i < arrayCount; i++ {
-		v := newTestMutableValue(initialStorableSize)
+		v := test_utils.NewMutableValue(initialStorableSize)
 		values[i] = v
 
 		err := array.Append(v)
@@ -6176,12 +6177,12 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 	expectedArrayRootDataSlabSize := atree.ComputeArrayRootDataSlabByteSizeWithFixSizedElement(initialStorableSize, arrayCount)
 	require.Equal(t, expectedArrayRootDataSlabSize, GetArrayRootSlabByteSize(array))
 
-	err = atree.VerifyArray(array, address, typeInfo, typeInfoComparator, hashInputProvider, true)
+	err = atree.VerifyArray(array, address, typeInfo, test_utils.CompareTypeInfo, test_utils.GetHashInput, true)
 	require.NoError(t, err)
 
 	for i := uint64(0); i < arrayCount; i++ {
 		mv := values[i]
-		mv.updateStorableSize(mutatedStorableSize)
+		mv.UpdateStorableSize(mutatedStorableSize)
 
 		existingStorable, err := array.Set(i, mv)
 		require.NoError(t, err)
@@ -6193,7 +6194,7 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 	expectedArrayRootDataSlabSize = atree.ComputeArrayRootDataSlabByteSizeWithFixSizedElement(mutatedStorableSize, arrayCount)
 	require.Equal(t, expectedArrayRootDataSlabSize, GetArrayRootSlabByteSize(array))
 
-	err = atree.VerifyArray(array, address, typeInfo, typeInfoComparator, hashInputProvider, true)
+	err = atree.VerifyArray(array, address, typeInfo, test_utils.CompareTypeInfo, test_utils.GetHashInput, true)
 	require.NoError(t, err)
 }
 
@@ -6205,7 +6206,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 	t.Run("parent is root data slab, with one child array", func(t *testing.T) {
 		const arrayCount = 1
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -6229,7 +6230,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, getStoredDeltas(storage))
 
-		expectedChildValues, ok := expectedValues[0].(arrayValue)
+		expectedChildValues, ok := expectedValues[0].(ExpectedArrayValue)
 		require.True(t, ok)
 
 		childArray, ok := e.(*atree.Array)
@@ -6241,8 +6242,8 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, address[:], valueID[:atree.SlabAddressLength])
 		require.NotEqual(t, atree.SlabIndexUndefined[:], valueID[atree.SlabAddressLength:])
 
-		v := NewStringValue(strings.Repeat("a", 9))
-		vSize := v.size
+		v := test_utils.NewStringValue(strings.Repeat("a", 9))
+		vSize := v.ByteSize()
 
 		// Appending 10 elements to child array so that inlined child array reaches max inlined size as array element.
 		for i := 0; i < 10; i++ {
@@ -6301,7 +6302,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		for childArray.Count() > 0 {
 			existingStorable, err := childArray.Remove(0)
 			require.NoError(t, err)
-			require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+			require.Equal(t, test_utils.NewStringValue(strings.Repeat("a", 9)), existingStorable)
 
 			expectedChildValues = expectedChildValues[1:]
 			expectedValues[0] = expectedChildValues
@@ -6330,7 +6331,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 	t.Run("parent is root data slab, with two child arrays", func(t *testing.T) {
 		const arrayCount = 2
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -6377,8 +6378,8 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			children[i].valueID = valueID
 		}
 
-		v := NewStringValue(strings.Repeat("a", 9))
-		vSize := v.size
+		v := test_utils.NewStringValue(strings.Repeat("a", 9))
+		vSize := v.ByteSize()
 
 		// Appending 10 elements to child array so that inlined child array reaches max inlined size as array element.
 		for i := 0; i < 10; i++ {
@@ -6390,7 +6391,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, uint64(i+1), childArray.Count())
 
-				expectedChildValues, ok := expectedValues[j].(arrayValue)
+				expectedChildValues, ok := expectedValues[j].(ExpectedArrayValue)
 				require.True(t, ok)
 
 				expectedChildValues = append(expectedChildValues, v)
@@ -6427,7 +6428,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.NoError(t, err)
 			require.False(t, childArray.Inlined())
 
-			expectedChildValues, ok := expectedValues[i].(arrayValue)
+			expectedChildValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = append(expectedChildValues, v)
@@ -6459,9 +6460,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 
 			existingStorable, err := childArray.Remove(0)
 			require.NoError(t, err)
-			require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+			require.Equal(t, test_utils.NewStringValue(strings.Repeat("a", 9)), existingStorable)
 
-			expectedChildValues, ok := expectedValues[i].(arrayValue)
+			expectedChildValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = expectedChildValues[1:]
@@ -6496,9 +6497,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 
 				existingStorable, err := childArray.Remove(0)
 				require.NoError(t, err)
-				require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+				require.Equal(t, test_utils.NewStringValue(strings.Repeat("a", 9)), existingStorable)
 
-				expectedChildValues, ok := expectedValues[j].(arrayValue)
+				expectedChildValues, ok := expectedValues[j].(ExpectedArrayValue)
 				require.True(t, ok)
 
 				expectedChildValues = expectedChildValues[1:]
@@ -6531,7 +6532,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 	t.Run("parent is root metadata slab, with four child arrays", func(t *testing.T) {
 		const arrayCount = 4
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -6575,8 +6576,8 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			children[i].valueID = valueID
 		}
 
-		v := NewStringValue(strings.Repeat("a", 9))
-		vSize := v.size
+		v := test_utils.NewStringValue(strings.Repeat("a", 9))
+		vSize := v.ByteSize()
 
 		// Appending 10 elements to child array so that inlined child array reaches max inlined size as array element.
 		for i := 0; i < 10; i++ {
@@ -6588,7 +6589,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, uint64(i+1), childArray.Count())
 
-				expectedChildValues, ok := expectedValues[j].(arrayValue)
+				expectedChildValues, ok := expectedValues[j].(ExpectedArrayValue)
 				require.True(t, ok)
 
 				expectedChildValues = append(expectedChildValues, v)
@@ -6623,7 +6624,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.NoError(t, err)
 			require.False(t, childArray.Inlined())
 
-			expectedChildValues, ok := expectedValues[i].(arrayValue)
+			expectedChildValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = append(expectedChildValues, v)
@@ -6653,9 +6654,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 
 			existingStorable, err := childArray.Remove(0)
 			require.NoError(t, err)
-			require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+			require.Equal(t, test_utils.NewStringValue(strings.Repeat("a", 9)), existingStorable)
 
-			expectedChildValues, ok := expectedValues[i].(arrayValue)
+			expectedChildValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = expectedChildValues[1:]
@@ -6688,9 +6689,9 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 
 				existingStorable, err := childArray.Remove(0)
 				require.NoError(t, err)
-				require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+				require.Equal(t, test_utils.NewStringValue(strings.Repeat("a", 9)), existingStorable)
 
-				expectedChildValues, ok := expectedValues[j].(arrayValue)
+				expectedChildValues, ok := expectedValues[j].(ExpectedArrayValue)
 				require.True(t, ok)
 
 				expectedChildValues = expectedChildValues[1:]
@@ -6730,7 +6731,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 	t.Run("parent is root data slab, one child array, one grand child array, changes to grand child array triggers child array slab to become standalone slab", func(t *testing.T) {
 		const arrayCount = 1
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -6781,8 +6782,8 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.NotEqual(t, atree.SlabIndexUndefined[:], gValueID[atree.SlabAddressLength:])
 		require.NotEqual(t, valueID[atree.SlabAddressLength:], gValueID[atree.SlabAddressLength:])
 
-		v := NewStringValue(strings.Repeat("a", 9))
-		vSize := v.size
+		v := test_utils.NewStringValue(strings.Repeat("a", 9))
+		vSize := v.ByteSize()
 
 		// Appending 8 elements to grand child array so that inlined grand child array reaches max inlined size as array element.
 		for i := 0; i < 8; i++ {
@@ -6791,10 +6792,10 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, uint64(i+1), gchildArray.Count())
 			require.Equal(t, uint64(1), childArray.Count())
 
-			expectedChildValues, ok := expectedValues[0].(arrayValue)
+			expectedChildValues, ok := expectedValues[0].(ExpectedArrayValue)
 			require.True(t, ok)
 
-			expectedGChildValues, ok := expectedChildValues[0].(arrayValue)
+			expectedGChildValues, ok := expectedChildValues[0].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedGChildValues = append(expectedGChildValues, v)
@@ -6836,10 +6837,10 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		err = gchildArray.Append(v)
 		require.NoError(t, err)
 
-		expectedChildValues, ok := expectedValues[0].(arrayValue)
+		expectedChildValues, ok := expectedValues[0].(ExpectedArrayValue)
 		require.True(t, ok)
 
-		expectedGChildValues, ok := expectedChildValues[0].(arrayValue)
+		expectedGChildValues, ok := expectedChildValues[0].(ExpectedArrayValue)
 		require.True(t, ok)
 
 		expectedGChildValues = append(expectedGChildValues, v)
@@ -6878,12 +6879,12 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		for gchildArray.Count() > 0 {
 			existingStorable, err := gchildArray.Remove(0)
 			require.NoError(t, err)
-			require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+			require.Equal(t, test_utils.NewStringValue(strings.Repeat("a", 9)), existingStorable)
 
-			expectedChildValues, ok := expectedValues[0].(arrayValue)
+			expectedChildValues, ok := expectedValues[0].(ExpectedArrayValue)
 			require.True(t, ok)
 
-			expectedGChildValues, ok := expectedChildValues[0].(arrayValue)
+			expectedGChildValues, ok := expectedChildValues[0].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedGChildValues = expectedGChildValues[1:]
@@ -6928,7 +6929,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 	t.Run("parent is root data slab, one child array, one grand child array, changes to grand child array triggers grand child array slab to become standalone slab", func(t *testing.T) {
 		const arrayCount = 1
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -6979,8 +6980,8 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.NotEqual(t, atree.SlabIndexUndefined[:], gValueID[atree.SlabAddressLength:])
 		require.NotEqual(t, valueID[atree.SlabAddressLength:], gValueID[atree.SlabAddressLength:])
 
-		v := NewStringValue(strings.Repeat("a", 9))
-		vSize := v.size
+		v := test_utils.NewStringValue(strings.Repeat("a", 9))
+		vSize := v.ByteSize()
 
 		// Appending 8 elements to grand child array so that inlined grand child array reaches max inlined size as array element.
 		for i := 0; i < 8; i++ {
@@ -6989,10 +6990,10 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, uint64(i+1), gchildArray.Count())
 			require.Equal(t, uint64(1), childArray.Count())
 
-			expectedChildValues, ok := expectedValues[0].(arrayValue)
+			expectedChildValues, ok := expectedValues[0].(ExpectedArrayValue)
 			require.True(t, ok)
 
-			expectedGChildValues, ok := expectedChildValues[0].(arrayValue)
+			expectedGChildValues, ok := expectedChildValues[0].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedGChildValues = append(expectedGChildValues, v)
@@ -7030,15 +7031,15 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		}
 
 		// Add one more element to grand child array which triggers inlined grand child array slab (NOT child array slab) becomes standalone slab
-		largeValue := NewStringValue(strings.Repeat("b", 20))
+		largeValue := test_utils.NewStringValue(strings.Repeat("b", 20))
 		largeValueSize := largeValue.ByteSize()
 		err = gchildArray.Append(largeValue)
 		require.NoError(t, err)
 
-		expectedChildValues, ok := expectedValues[0].(arrayValue)
+		expectedChildValues, ok := expectedValues[0].(ExpectedArrayValue)
 		require.True(t, ok)
 
-		expectedGChildValues, ok := expectedChildValues[0].(arrayValue)
+		expectedGChildValues, ok := expectedChildValues[0].(ExpectedArrayValue)
 		require.True(t, ok)
 
 		expectedGChildValues = append(expectedGChildValues, largeValue)
@@ -7083,10 +7084,10 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			_, err := gchildArray.Remove(gchildArray.Count() - 1)
 			require.NoError(t, err)
 
-			expectedChildValues, ok := expectedValues[0].(arrayValue)
+			expectedChildValues, ok := expectedValues[0].(ExpectedArrayValue)
 			require.True(t, ok)
 
-			expectedGChildValues, ok := expectedChildValues[0].(arrayValue)
+			expectedGChildValues, ok := expectedChildValues[0].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedGChildValues = expectedGChildValues[:len(expectedGChildValues)-1]
@@ -7131,12 +7132,12 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 	t.Run("parent is root data slab, two child array, one grand child array each, changes to child array triggers child array slab to become standalone slab", func(t *testing.T) {
 		const arrayCount = 2
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		v := NewStringValue(strings.Repeat("a", 9))
-		vSize := v.size
+		v := test_utils.NewStringValue(strings.Repeat("a", 9))
+		vSize := v.ByteSize()
 
 		// Create parent array
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
@@ -7164,7 +7165,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			err = parentArray.Append(child)
 			require.NoError(t, err)
 
-			expectedValues[i] = arrayValue{arrayValue{v}}
+			expectedValues[i] = ExpectedArrayValue{ExpectedArrayValue{v}}
 		}
 
 		require.Equal(t, uint64(arrayCount), parentArray.Count())
@@ -7237,7 +7238,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, uint64(i+2), childArray.Count())
 
-				expectedChildValues, ok := expectedValues[j].(arrayValue)
+				expectedChildValues, ok := expectedValues[j].(ExpectedArrayValue)
 				require.True(t, ok)
 
 				expectedChildValues = append(expectedChildValues, v)
@@ -7291,7 +7292,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			err = childArray.Append(v)
 			require.NoError(t, err)
 
-			expectedChildValues, ok := expectedValues[i].(arrayValue)
+			expectedChildValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = append(expectedChildValues, v)
@@ -7347,7 +7348,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			_, err = childArray.Remove(childArray.Count() - 1)
 			require.NoError(t, err)
 
-			expectedChildValues, ok := expectedValues[i].(arrayValue)
+			expectedChildValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = expectedChildValues[:len(expectedChildValues)-1]
@@ -7402,9 +7403,9 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 				existingStorable, err := childArray.Remove(childArray.Count() - 1)
 				require.NoError(t, err)
-				require.Equal(t, NewStringValue(strings.Repeat("a", 9)), existingStorable)
+				require.Equal(t, test_utils.NewStringValue(strings.Repeat("a", 9)), existingStorable)
 
-				expectedChildValues, ok := expectedValues[j].(arrayValue)
+				expectedChildValues, ok := expectedValues[j].(ExpectedArrayValue)
 				require.True(t, ok)
 
 				expectedChildValues = expectedChildValues[:len(expectedChildValues)-1]
@@ -7457,12 +7458,12 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 	t.Run("parent is root metadata slab, with four child arrays, each child array has grand child arrays", func(t *testing.T) {
 		const arrayCount = 4
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-		v := NewStringValue(strings.Repeat("a", 9))
-		vSize := v.size
+		v := test_utils.NewStringValue(strings.Repeat("a", 9))
+		vSize := v.ByteSize()
 
 		// Create parent array
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
@@ -7486,7 +7487,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			err = parentArray.Append(child)
 			require.NoError(t, err)
 
-			expectedValues[i] = arrayValue{arrayValue{}}
+			expectedValues[i] = ExpectedArrayValue{ExpectedArrayValue{}}
 		}
 
 		require.Equal(t, uint64(arrayCount), parentArray.Count())
@@ -7558,10 +7559,10 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, uint64(i+1), gchildArray.Count())
 
-				expectedChildValues, ok := expectedValues[j].(arrayValue)
+				expectedChildValues, ok := expectedValues[j].(ExpectedArrayValue)
 				require.True(t, ok)
 
-				expectedGChildValues, ok := expectedChildValues[0].(arrayValue)
+				expectedGChildValues, ok := expectedChildValues[0].(ExpectedArrayValue)
 				require.True(t, ok)
 
 				expectedGChildValues = append(expectedGChildValues, v)
@@ -7606,10 +7607,10 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			err = gchildArray.Append(v)
 			require.NoError(t, err)
 
-			expectedChildValues, ok := expectedValues[i].(arrayValue)
+			expectedChildValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
-			expectedGChildValues, ok := expectedChildValues[0].(arrayValue)
+			expectedGChildValues, ok := expectedChildValues[0].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedGChildValues = append(expectedGChildValues, v)
@@ -7654,10 +7655,10 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			gchildArray := child.child.array
 			gValueID := child.child.valueID
 
-			expectedChildValues, ok := expectedValues[i].(arrayValue)
+			expectedChildValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
-			expectedGChildValues, ok := expectedChildValues[0].(arrayValue)
+			expectedGChildValues, ok := expectedChildValues[0].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			for j := 0; j < 2; j++ {
@@ -7706,10 +7707,10 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			gchildArray := child.child.array
 			gValueID := child.child.valueID
 
-			expectedChildValues, ok := expectedValues[i].(arrayValue)
+			expectedChildValues, ok := expectedValues[i].(ExpectedArrayValue)
 			require.True(t, ok)
 
-			expectedGChildValues, ok := expectedChildValues[0].(arrayValue)
+			expectedGChildValues, ok := expectedChildValues[0].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			for j := 0; j < 2; j++ {
@@ -7765,10 +7766,10 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, v, existingStorable)
 
-				expectedChildValues, ok := expectedValues[j].(arrayValue)
+				expectedChildValues, ok := expectedValues[j].(ExpectedArrayValue)
 				require.True(t, ok)
 
-				expectedGChildValues, ok := expectedChildValues[0].(arrayValue)
+				expectedGChildValues, ok := expectedChildValues[0].(ExpectedArrayValue)
 				require.True(t, ok)
 
 				expectedGChildValues = expectedGChildValues[1:]
@@ -7820,7 +7821,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 
 	const arrayCount = 2
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -7872,7 +7873,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 
 	t.Run("insert elements in parent array", func(t *testing.T) {
 		// insert value at index 0, so all child array indexes are moved by +1
-		v := Uint64Value(0)
+		v := test_utils.Uint64Value(0)
 		err := parentArray.Insert(0, v)
 		require.NoError(t, err)
 
@@ -7884,7 +7885,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			childArray := child.array
 			childValueID := child.valueID
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			vSize := v.ByteSize()
 
 			err := childArray.Append(v)
@@ -7893,7 +7894,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 
 			child.parentIndex = i + 1
 
-			expectedChildValues, ok := expectedValues[child.parentIndex].(arrayValue)
+			expectedChildValues, ok := expectedValues[child.parentIndex].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = append(expectedChildValues, v)
@@ -7915,7 +7916,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 		}
 
 		// insert value at index 2, so only second child array index is moved by +1
-		v = Uint64Value(2)
+		v = test_utils.Uint64Value(2)
 		err = parentArray.Insert(2, v)
 		require.NoError(t, err)
 
@@ -7927,7 +7928,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			childArray := child.array
 			childValueID := child.valueID
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			vSize := v.ByteSize()
 
 			err := childArray.Append(v)
@@ -7938,7 +7939,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 				child.parentIndex++
 			}
 
-			expectedChildValues, ok := expectedValues[child.parentIndex].(arrayValue)
+			expectedChildValues, ok := expectedValues[child.parentIndex].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = append(expectedChildValues, v)
@@ -7960,7 +7961,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 		}
 
 		// insert value at index 4, so none of child array indexes are affected.
-		v = Uint64Value(4)
+		v = test_utils.Uint64Value(4)
 		err = parentArray.Insert(4, v)
 		require.NoError(t, err)
 
@@ -7971,14 +7972,14 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			childArray := child.array
 			childValueID := child.valueID
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			vSize := v.ByteSize()
 
 			err := childArray.Append(v)
 			require.NoError(t, err)
 			require.Equal(t, uint64(3), childArray.Count())
 
-			expectedChildValues, ok := expectedValues[child.parentIndex].(arrayValue)
+			expectedChildValues, ok := expectedValues[child.parentIndex].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = append(expectedChildValues, v)
@@ -8004,7 +8005,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 		// remove value at index 0, so all child array indexes are moved by -1.
 		existingStorable, err := parentArray.Remove(0)
 		require.NoError(t, err)
-		require.Equal(t, Uint64Value(0), existingStorable)
+		require.Equal(t, test_utils.Uint64Value(0), existingStorable)
 
 		copy(expectedValues, expectedValues[1:])
 		expectedValues[len(expectedValues)-1] = nil
@@ -8014,7 +8015,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			childArray := child.array
 			childValueID := child.valueID
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			vSize := v.ByteSize()
 
 			err := childArray.Append(v)
@@ -8023,7 +8024,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 
 			child.parentIndex--
 
-			expectedChildValues, ok := expectedValues[child.parentIndex].(arrayValue)
+			expectedChildValues, ok := expectedValues[child.parentIndex].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = append(expectedChildValues, v)
@@ -8047,7 +8048,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 		// Remove value at index 1, so only second child array index is moved by -1
 		existingStorable, err = parentArray.Remove(1)
 		require.NoError(t, err)
-		require.Equal(t, Uint64Value(2), existingStorable)
+		require.Equal(t, test_utils.Uint64Value(2), existingStorable)
 
 		copy(expectedValues[1:], expectedValues[2:])
 		expectedValues[len(expectedValues)-1] = nil
@@ -8057,7 +8058,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			childArray := child.array
 			childValueID := child.valueID
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			vSize := v.ByteSize()
 
 			err := childArray.Append(v)
@@ -8068,7 +8069,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 				child.parentIndex--
 			}
 
-			expectedChildValues, ok := expectedValues[child.parentIndex].(arrayValue)
+			expectedChildValues, ok := expectedValues[child.parentIndex].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = append(expectedChildValues, v)
@@ -8092,7 +8093,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 		// Remove value at index 2 (last element), so none of child array indexes are affected.
 		existingStorable, err = parentArray.Remove(2)
 		require.NoError(t, err)
-		require.Equal(t, Uint64Value(4), existingStorable)
+		require.Equal(t, test_utils.Uint64Value(4), existingStorable)
 
 		expectedValues[len(expectedValues)-1] = nil
 		expectedValues = expectedValues[:len(expectedValues)-1]
@@ -8101,14 +8102,14 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 			childArray := child.array
 			childValueID := child.valueID
 
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			vSize := v.ByteSize()
 
 			err := childArray.Append(v)
 			require.NoError(t, err)
 			require.Equal(t, uint64(6), childArray.Count())
 
-			expectedChildValues, ok := expectedValues[child.parentIndex].(arrayValue)
+			expectedChildValues, ok := expectedValues[child.parentIndex].(ExpectedArrayValue)
 			require.True(t, ok)
 
 			expectedChildValues = append(expectedChildValues, v)
@@ -8153,7 +8154,7 @@ func createArrayWithEmptyChildArray(
 		err = array.Append(child)
 		require.NoError(t, err)
 
-		expectedValues[i] = arrayValue{}
+		expectedValues[i] = ExpectedArrayValue{}
 	}
 
 	return array, expectedValues
@@ -8189,7 +8190,7 @@ func createArrayWithEmpty2LevelChildArray(
 		err = array.Append(child)
 		require.NoError(t, err)
 
-		expectedValues[i] = arrayValue{arrayValue{}}
+		expectedValues[i] = ExpectedArrayValue{ExpectedArrayValue{}}
 	}
 
 	return array, expectedValues
@@ -8207,7 +8208,7 @@ func getStoredDeltas(storage *atree.PersistentSlabStorage) int {
 }
 
 func TestArraySetReturnedValue(t *testing.T) {
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("child array is not inlined", func(t *testing.T) {
@@ -8219,7 +8220,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues arrayValue
+		var expectedValues ExpectedArrayValue
 
 		for i := 0; i < arrayCount; i++ {
 			// Create child array
@@ -8229,9 +8230,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			err = parentArray.Append(childArray)
 			require.NoError(t, err)
 
-			var expectedChildValues arrayValue
+			var expectedChildValues ExpectedArrayValue
 			for {
-				v := NewStringValue(strings.Repeat("a", 10))
+				v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 				err = childArray.Append(v)
 				require.NoError(t, err)
@@ -8253,7 +8254,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 
 		// Overwrite existing child array value
 		for i := 0; i < arrayCount; i++ {
-			existingStorable, err := parentArray.Set(uint64(i), Uint64Value(0))
+			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -8263,12 +8264,12 @@ func TestArraySetReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedValues[i], child)
+			testValueEqual(t, expectedValues[i], child)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
 
-			expectedValues[i] = Uint64Value(0)
+			expectedValues[i] = test_utils.Uint64Value(0)
 
 			// Test array's mutableElementIndex
 			require.True(t, uint64(atree.GetArrayMutableElementIndexCount(parentArray)) <= parentArray.Count())
@@ -8286,7 +8287,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues arrayValue
+		var expectedValues ExpectedArrayValue
 
 		for i := 0; i < arrayCount; i++ {
 			// Create child array
@@ -8297,13 +8298,13 @@ func TestArraySetReturnedValue(t *testing.T) {
 			require.NoError(t, err)
 
 			// Insert one element to child array
-			v := NewStringValue(strings.Repeat("a", 10))
+			v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 			err = childArray.Append(v)
 			require.NoError(t, err)
 			require.True(t, childArray.Inlined())
 
-			expectedValues = append(expectedValues, arrayValue{v})
+			expectedValues = append(expectedValues, ExpectedArrayValue{v})
 		}
 
 		// Test array's mutableElementIndex
@@ -8313,7 +8314,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 
 		// Overwrite existing child array value
 		for i := 0; i < arrayCount; i++ {
-			existingStorable, err := parentArray.Set(uint64(i), Uint64Value(0))
+			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -8323,9 +8324,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedValues[i], child)
+			testValueEqual(t, expectedValues[i], child)
 
-			expectedValues[i] = Uint64Value(0)
+			expectedValues[i] = test_utils.Uint64Value(0)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
@@ -8346,7 +8347,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues arrayValue
+		var expectedValues ExpectedArrayValue
 
 		for i := 0; i < arrayCount; i++ {
 			// Create child map
@@ -8356,17 +8357,17 @@ func TestArraySetReturnedValue(t *testing.T) {
 			err = parentArray.Append(childMap)
 			require.NoError(t, err)
 
-			expectedChildValues := make(mapValue)
+			expectedChildValues := make(ExpectedMapValue)
 			expectedValues = append(expectedValues, expectedChildValues)
 
 			// Insert into child map until child map is not inlined
 			j := 0
 			for {
-				k := Uint64Value(j)
-				v := NewStringValue(strings.Repeat("a", 10))
+				k := test_utils.Uint64Value(j)
+				v := test_utils.NewStringValue(strings.Repeat("a", 10))
 				j++
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -8385,7 +8386,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 
 		// Overwrite existing child map value
 		for i := 0; i < arrayCount; i++ {
-			existingStorable, err := parentArray.Set(uint64(i), Uint64Value(0))
+			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -8395,9 +8396,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedValues[i], child)
+			testValueEqual(t, expectedValues[i], child)
 
-			expectedValues[i] = Uint64Value(0)
+			expectedValues[i] = test_utils.Uint64Value(0)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
@@ -8418,25 +8419,25 @@ func TestArraySetReturnedValue(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues arrayValue
+		var expectedValues ExpectedArrayValue
 
 		for i := 0; i < arrayCount; i++ {
 			// Create child map
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			err = parentArray.Append(childMap)
 			require.NoError(t, err)
 
-			expectedChildValues := make(mapValue)
+			expectedChildValues := make(ExpectedMapValue)
 			expectedValues = append(expectedValues, expectedChildValues)
 
 			// Insert into child map until child map is not inlined
-			v := NewStringValue(strings.Repeat("a", 10))
+			v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -8450,7 +8451,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 
 		// Overwrite existing child map value
 		for i := 0; i < arrayCount; i++ {
-			existingStorable, err := parentArray.Set(uint64(i), Uint64Value(0))
+			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -8460,9 +8461,9 @@ func TestArraySetReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedValues[i], child)
+			testValueEqual(t, expectedValues[i], child)
 
-			expectedValues[i] = Uint64Value(0)
+			expectedValues[i] = test_utils.Uint64Value(0)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
@@ -8476,7 +8477,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 }
 
 func TestArrayRemoveReturnedValue(t *testing.T) {
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("child array is not inlined", func(t *testing.T) {
@@ -8488,7 +8489,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues arrayValue
+		var expectedValues ExpectedArrayValue
 
 		for i := 0; i < arrayCount; i++ {
 			// Create child array
@@ -8498,9 +8499,9 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			err = parentArray.Append(childArray)
 			require.NoError(t, err)
 
-			var expectedChildValues arrayValue
+			var expectedChildValues ExpectedArrayValue
 			for {
-				v := NewStringValue(strings.Repeat("a", 10))
+				v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 				err = childArray.Append(v)
 				require.NoError(t, err)
@@ -8531,7 +8532,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedValues[i], child)
+			testValueEqual(t, expectedValues[i], child)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
@@ -8552,7 +8553,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues arrayValue
+		var expectedValues ExpectedArrayValue
 
 		for i := 0; i < arrayCount; i++ {
 			// Create child array
@@ -8563,13 +8564,13 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			require.NoError(t, err)
 
 			// Insert one element to child array
-			v := NewStringValue(strings.Repeat("a", 10))
+			v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 			err = childArray.Append(v)
 			require.NoError(t, err)
 			require.True(t, childArray.Inlined())
 
-			expectedValues = append(expectedValues, arrayValue{v})
+			expectedValues = append(expectedValues, ExpectedArrayValue{v})
 		}
 
 		// Test array's mutableElementIndex
@@ -8588,7 +8589,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedValues[i], child)
+			testValueEqual(t, expectedValues[i], child)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
@@ -8609,7 +8610,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues arrayValue
+		var expectedValues ExpectedArrayValue
 
 		for i := 0; i < arrayCount; i++ {
 			// Create child map
@@ -8619,17 +8620,17 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			err = parentArray.Append(childMap)
 			require.NoError(t, err)
 
-			expectedChildValues := make(mapValue)
+			expectedChildValues := make(ExpectedMapValue)
 			expectedValues = append(expectedValues, expectedChildValues)
 
 			// Insert into child map until child map is not inlined
 			j := 0
 			for {
-				k := Uint64Value(j)
-				v := NewStringValue(strings.Repeat("a", 10))
+				k := test_utils.Uint64Value(j)
+				v := test_utils.NewStringValue(strings.Repeat("a", 10))
 				j++
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -8657,7 +8658,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedValues[i], child)
+			testValueEqual(t, expectedValues[i], child)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
@@ -8678,25 +8679,25 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues arrayValue
+		var expectedValues ExpectedArrayValue
 
 		for i := 0; i < arrayCount; i++ {
 			// Create child map
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			err = parentArray.Append(childMap)
 			require.NoError(t, err)
 
-			expectedChildValues := make(mapValue)
+			expectedChildValues := make(ExpectedMapValue)
 			expectedValues = append(expectedValues, expectedChildValues)
 
 			// Insert into child map until child map is not inlined
-			v := NewStringValue(strings.Repeat("a", 10))
+			v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -8719,7 +8720,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedValues[i], child)
+			testValueEqual(t, expectedValues[i], child)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
@@ -8733,7 +8734,7 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 }
 
 func TestArrayWithOutdatedCallback(t *testing.T) {
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("overwritten child array", func(t *testing.T) {
@@ -8744,7 +8745,7 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues arrayValue
+		var expectedValues ExpectedArrayValue
 
 		// Create child array
 		childArray, err := atree.NewArray(storage, address, typeInfo)
@@ -8754,17 +8755,17 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 		err = parentArray.Append(childArray)
 		require.NoError(t, err)
 
-		v := NewStringValue(strings.Repeat("a", 10))
+		v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 		err = childArray.Append(v)
 		require.NoError(t, err)
 
-		expectedValues = append(expectedValues, arrayValue{v})
+		expectedValues = append(expectedValues, ExpectedArrayValue{v})
 
 		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
 		// Overwrite child array value from parent
-		valueStorable, err := parentArray.Set(0, Uint64Value(0))
+		valueStorable, err := parentArray.Set(0, test_utils.Uint64Value(0))
 		require.NoError(t, err)
 
 		id, ok := valueStorable.(atree.SlabIDStorable)
@@ -8773,22 +8774,22 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 		child, err := id.StoredValue(storage)
 		require.NoError(t, err)
 
-		valueEqual(t, expectedValues[0], child)
+		testValueEqual(t, expectedValues[0], child)
 
-		expectedValues[0] = Uint64Value(0)
+		expectedValues[0] = test_utils.Uint64Value(0)
 
 		// childArray.parentUpdater isn't nil before callback is invoked.
 		require.True(t, atree.ArrayHasParentUpdater(childArray))
 
 		// modify overwritten child array
-		err = childArray.Append(Uint64Value(0))
+		err = childArray.Append(test_utils.Uint64Value(0))
 		require.NoError(t, err)
 
 		// childArray.parentUpdater is nil after callback is invoked.
 		require.False(t, atree.ArrayHasParentUpdater(childArray))
 
 		// No-op on parent
-		valueEqual(t, expectedValues, parentArray)
+		testValueEqual(t, expectedValues, parentArray)
 	})
 
 	t.Run("removed child array", func(t *testing.T) {
@@ -8799,7 +8800,7 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues arrayValue
+		var expectedValues ExpectedArrayValue
 
 		// Create child array
 		childArray, err := atree.NewArray(storage, address, typeInfo)
@@ -8809,12 +8810,12 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 		err = parentArray.Append(childArray)
 		require.NoError(t, err)
 
-		v := NewStringValue(strings.Repeat("a", 10))
+		v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 		err = childArray.Append(v)
 		require.NoError(t, err)
 
-		expectedValues = append(expectedValues, arrayValue{v})
+		expectedValues = append(expectedValues, ExpectedArrayValue{v})
 
 		testArray(t, storage, typeInfo, address, parentArray, expectedValues, true)
 
@@ -8828,28 +8829,28 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 		child, err := id.StoredValue(storage)
 		require.NoError(t, err)
 
-		valueEqual(t, expectedValues[0], child)
+		testValueEqual(t, expectedValues[0], child)
 
-		expectedValues = arrayValue{}
+		expectedValues = ExpectedArrayValue{}
 
 		// childArray.parentUpdater isn't nil before callback is invoked.
 		require.True(t, atree.ArrayHasParentUpdater(childArray))
 
 		// modify removed child array
-		err = childArray.Append(Uint64Value(0))
+		err = childArray.Append(test_utils.Uint64Value(0))
 		require.NoError(t, err)
 
 		// childArray.parentUpdater is nil after callback is invoked.
 		require.False(t, atree.ArrayHasParentUpdater(childArray))
 
 		// No-op on parent
-		valueEqual(t, expectedValues, parentArray)
+		testValueEqual(t, expectedValues, parentArray)
 	})
 }
 
 func TestArraySetType(t *testing.T) {
-	typeInfo := testTypeInfo{42}
-	newTypeInfo := testTypeInfo{43}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	newTypeInfo := test_utils.NewSimpleTypeInfo(43)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
@@ -8882,7 +8883,7 @@ func TestArraySetType(t *testing.T) {
 
 		arrayCount := 10
 		for i := 0; i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			err := array.Append(v)
 			require.NoError(t, err)
 		}
@@ -8910,7 +8911,7 @@ func TestArraySetType(t *testing.T) {
 
 		arrayCount := 10_000
 		for i := 0; i < arrayCount; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			err := array.Append(v)
 			require.NoError(t, err)
 		}
@@ -8971,7 +8972,7 @@ func TestArraySetType(t *testing.T) {
 
 		arrayCount := 10_000
 		for i := 0; i < arrayCount-1; i++ {
-			v := Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			err := parentArray.Append(v)
 			require.NoError(t, err)
 		}
@@ -9008,10 +9009,10 @@ func testExistingArraySetType(
 	t *testing.T,
 	id atree.SlabID,
 	baseStorage atree.BaseStorage,
-	expectedTypeInfo testTypeInfo,
+	expectedTypeInfo test_utils.SimpleTypeInfo,
 	expectedCount uint64,
 ) {
-	newTypeInfo := testTypeInfo{value: expectedTypeInfo.value + 1}
+	newTypeInfo := test_utils.NewSimpleTypeInfo(expectedTypeInfo.Value() + 1)
 
 	// Create storage from existing data
 	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
@@ -9047,10 +9048,10 @@ func testExistingInlinedArraySetType(
 	parentID atree.SlabID,
 	inlinedChildIndex int,
 	baseStorage atree.BaseStorage,
-	expectedTypeInfo testTypeInfo,
+	expectedTypeInfo test_utils.SimpleTypeInfo,
 	expectedCount uint64,
 ) {
-	newTypeInfo := testTypeInfo{value: expectedTypeInfo.value + 1}
+	newTypeInfo := test_utils.NewSimpleTypeInfo(expectedTypeInfo.Value() + 1)
 
 	// Create storage from existing data
 	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)

@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/atree"
+	"github.com/onflow/atree/test_utils"
 )
 
 // GENERAL COMMENT:
@@ -53,15 +54,15 @@ func BenchmarkXXXLArray(b *testing.B) { benchmarkArray(b, 100_000_000, opCount) 
 func RandomValue(r *rand.Rand) atree.Value {
 	switch r.Intn(4) {
 	case 0:
-		return Uint8Value(r.Intn(255))
+		return test_utils.Uint8Value(r.Intn(255))
 	case 1:
-		return Uint16Value(r.Intn(6535))
+		return test_utils.Uint16Value(r.Intn(6535))
 	case 2:
-		return Uint32Value(r.Intn(4294967295))
+		return test_utils.Uint32Value(r.Intn(4294967295))
 	case 3:
-		return Uint64Value(r.Intn(1844674407370955161))
+		return test_utils.Uint64Value(r.Intn(1844674407370955161))
 	default:
-		return Uint8Value(r.Intn(255))
+		return test_utils.Uint8Value(r.Intn(255))
 	}
 }
 
@@ -74,7 +75,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 
@@ -207,7 +208,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 

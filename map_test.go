@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/atree"
+	"github.com/onflow/atree/test_utils"
 )
 
 type mockDigesterBuilder struct {
@@ -131,7 +132,7 @@ func testMap(
 	typeInfo atree.TypeInfo,
 	address atree.Address,
 	m *atree.OrderedMap,
-	keyValues mapValue,
+	keyValues ExpectedMapValue,
 	sortedKeys []atree.Value,
 	hasNestedArrayMapElement bool,
 ) {
@@ -151,7 +152,7 @@ func _testMap(
 	hasNestedArrayMapElement bool,
 	inlineEnabled bool,
 ) {
-	require.True(t, typeInfoComparator(typeInfo, m.Type()))
+	require.True(t, test_utils.CompareTypeInfo(typeInfo, m.Type()))
 	require.Equal(t, address, m.Address())
 	require.Equal(t, uint64(len(expectedKeyValues)), m.Count())
 
@@ -159,10 +160,10 @@ func _testMap(
 
 	// Verify map elements
 	for k, expected := range expectedKeyValues {
-		actual, err := m.Get(compare, hashInputProvider, k)
+		actual, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.NoError(t, err)
 
-		valueEqual(t, expected, actual)
+		testValueEqual(t, expected, actual)
 	}
 
 	// Verify map elements ordering
@@ -174,8 +175,8 @@ func _testMap(
 			expectedKey := sortedKeys[i]
 			expectedValue := expectedKeyValues[expectedKey]
 
-			valueEqual(t, expectedKey, k)
-			valueEqual(t, expectedValue, v)
+			testValueEqual(t, expectedKey, k)
+			testValueEqual(t, expectedValue, v)
 
 			i++
 			return true, nil
@@ -185,7 +186,7 @@ func _testMap(
 	}
 
 	// Verify in-memory slabs
-	err = atree.VerifyMap(m, address, typeInfo, typeInfoComparator, hashInputProvider, inlineEnabled)
+	err = atree.VerifyMap(m, address, typeInfo, test_utils.CompareTypeInfo, test_utils.GetHashInput, inlineEnabled)
 	if err != nil {
 		atree.PrintMap(m)
 	}
@@ -238,10 +239,10 @@ func _testMap(
 
 	// Verify decoded map elements
 	for k, expected := range expectedKeyValues {
-		actual, err := decodedMap.Get(compare, hashInputProvider, k)
+		actual, err := decodedMap.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.NoError(t, err)
 
-		valueEqual(t, expected, actual)
+		testValueEqual(t, expected, actual)
 	}
 
 	if !hasNestedArrayMapElement {
@@ -273,7 +274,7 @@ func (d keysByDigest) Len() int { return len(d.keys) }
 func (d keysByDigest) Swap(i, j int) { d.keys[i], d.keys[j] = d.keys[j], d.keys[i] }
 
 func (d keysByDigest) Less(i, j int) bool {
-	d1, err := d.digesterBuilder.Digest(hashInputProvider, d.keys[i])
+	d1, err := d.digesterBuilder.Digest(test_utils.GetHashInput, d.keys[i])
 	if err != nil {
 		panic(err)
 	}
@@ -283,7 +284,7 @@ func (d keysByDigest) Less(i, j int) bool {
 		panic(err)
 	}
 
-	d2, err := d.digesterBuilder.Digest(hashInputProvider, d.keys[j])
+	d2, err := d.digesterBuilder.Digest(test_utils.GetHashInput, d.keys[j])
 	if err != nil {
 		panic(err)
 	}
@@ -321,13 +322,13 @@ func TestMapSetAndGet(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		i := uint64(0)
 		for len(keyValues) < mapCount {
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := Uint64Value(i)
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
 			i++
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -335,7 +336,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -357,13 +358,13 @@ func TestMapSetAndGet(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		i := uint64(0)
 		for len(keyValues) < mapCount {
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := Uint64Value(i)
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
 			i++
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -371,23 +372,23 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		// Overwrite values
 		for k, v := range keyValues {
-			oldValue := v.(Uint64Value)
-			newValue := Uint64Value(uint64(oldValue) + mapCount)
+			oldValue := v.(test_utils.Uint64Value)
+			newValue := test_utils.Uint64Value(uint64(oldValue) + mapCount)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, oldValue, existingValue)
+			testValueEqual(t, oldValue, existingValue)
 
 			keyValues[k] = newValue
 		}
@@ -409,12 +410,12 @@ func TestMapSetAndGet(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for len(keyValues) < mapCount {
 			slen := r.Intn(keyStringMaxSize)
-			k := NewStringValue(randStr(r, slen))
+			k := test_utils.NewStringValue(randStr(r, slen))
 			v := randomValue(r, int(atree.MaxInlineMapElementSize()))
 			keyValues[k] = v
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -422,7 +423,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -452,8 +453,8 @@ func TestMapSetAndGet(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		i := uint64(0)
 		for len(keyValues) < mapCount {
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := Uint64Value(i)
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
 			i++
 
@@ -463,7 +464,7 @@ func TestMapSetAndGet(t *testing.T) {
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -471,7 +472,7 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -500,8 +501,8 @@ func TestMapSetAndGet(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		i := uint64(0)
 		for len(keyValues) < mapCount {
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := Uint64Value(i)
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
 			i++
 
@@ -511,7 +512,7 @@ func TestMapSetAndGet(t *testing.T) {
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -519,23 +520,23 @@ func TestMapSetAndGet(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		// Overwrite values
 		for k, v := range keyValues {
-			oldValue := v.(Uint64Value)
-			newValue := Uint64Value(uint64(oldValue) + mapCount)
+			oldValue := v.(test_utils.Uint64Value)
+			newValue := test_utils.Uint64Value(uint64(oldValue) + mapCount)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, oldValue, existingValue)
+			testValueEqual(t, oldValue, existingValue)
 
 			keyValues[k] = newValue
 		}
@@ -548,7 +549,7 @@ func TestMapGetKeyNotFound(t *testing.T) {
 	t.Run("no collision", func(t *testing.T) {
 		const mapCount = 1024
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -557,18 +558,18 @@ func TestMapGetKeyNotFound(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
-			storable, err := m.Set(compare, hashInputProvider, k, v)
+			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, storable)
 		}
 
 		r := newRand(t)
 
-		k := NewStringValue(randStr(r, 1024))
-		storable, err := m.Get(compare, hashInputProvider, k)
+		k := test_utils.NewStringValue(randStr(r, 1024))
+		storable, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.Nil(t, storable)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		var userError *atree.UserError
@@ -583,7 +584,7 @@ func TestMapGetKeyNotFound(t *testing.T) {
 	t.Run("collision", func(t *testing.T) {
 		const mapCount = 256
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := &mockDigesterBuilder{}
@@ -593,25 +594,25 @@ func TestMapGetKeyNotFound(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			storable, err := m.Set(compare, hashInputProvider, k, v)
+			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, storable)
 		}
 
 		r := newRand(t)
-		k := NewStringValue(randStr(r, 1024))
+		k := test_utils.NewStringValue(randStr(r, 1024))
 
 		digests := []atree.Digest{atree.Digest(0)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-		storable, err := m.Get(compare, hashInputProvider, k)
+		storable, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.Nil(t, storable)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		var userError *atree.UserError
@@ -626,7 +627,7 @@ func TestMapGetKeyNotFound(t *testing.T) {
 	t.Run("collision group", func(t *testing.T) {
 		const mapCount = 256
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := &mockDigesterBuilder{}
@@ -636,25 +637,25 @@ func TestMapGetKeyNotFound(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i % 10)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			storable, err := m.Set(compare, hashInputProvider, k, v)
+			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, storable)
 		}
 
 		r := newRand(t)
-		k := NewStringValue(randStr(r, 1024))
+		k := test_utils.NewStringValue(randStr(r, 1024))
 
 		digests := []atree.Digest{atree.Digest(0)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-		storable, err := m.Get(compare, hashInputProvider, k)
+		storable, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.Nil(t, storable)
 		require.Equal(t, 1, errorCategorizationCount(err))
 		var userError *atree.UserError
@@ -681,7 +682,7 @@ func TestMapHas(t *testing.T) {
 		keysToInsert := make([]atree.Value, 0, mapCount)
 		keysToNotInsert := make([]atree.Value, 0, mapCount)
 		for len(keysToInsert) < mapCount || len(keysToNotInsert) < mapCount {
-			k := NewStringValue(randStr(r, keyStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
 			if !keys[k] {
 				keys[k] = true
 
@@ -693,7 +694,7 @@ func TestMapHas(t *testing.T) {
 			}
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -701,19 +702,19 @@ func TestMapHas(t *testing.T) {
 		require.NoError(t, err)
 
 		for i, k := range keysToInsert {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, Uint64Value(i))
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.Uint64Value(i))
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		for _, k := range keysToInsert {
-			exist, err := m.Has(compare, hashInputProvider, k)
+			exist, err := m.Has(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 			require.True(t, exist)
 		}
 
 		for _, k := range keysToNotInsert {
-			exist, err := m.Has(compare, hashInputProvider, k)
+			exist, err := m.Has(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 			require.False(t, exist)
 		}
@@ -721,7 +722,7 @@ func TestMapHas(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -731,7 +732,7 @@ func TestMapHas(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		exist, err := m.Has(compare, hashInputProvider, Uint64Value(0))
+		exist, err := m.Has(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 		// err is testErr wrapped in atree.ExternalError.
 		require.Equal(t, 1, errorCategorizationCount(err))
 		var externalError *atree.ExternalError
@@ -743,16 +744,16 @@ func TestMapHas(t *testing.T) {
 
 func testMapRemoveElement(t *testing.T, m *atree.OrderedMap, k atree.Value, expectedV atree.Value) {
 
-	removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
+	removedKeyStorable, removedValueStorable, err := m.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 	require.NoError(t, err)
 
 	removedKey, err := removedKeyStorable.StoredValue(m.Storage)
 	require.NoError(t, err)
-	valueEqual(t, k, removedKey)
+	testValueEqual(t, k, removedKey)
 
 	removedValue, err := removedValueStorable.StoredValue(m.Storage)
 	require.NoError(t, err)
-	valueEqual(t, expectedV, removedValue)
+	testValueEqual(t, expectedV, removedValue)
 
 	if id, ok := removedKeyStorable.(atree.SlabIDStorable); ok {
 		err = m.Storage.Remove(atree.SlabID(id))
@@ -765,7 +766,7 @@ func testMapRemoveElement(t *testing.T, m *atree.OrderedMap, k atree.Value, expe
 	}
 
 	// Remove the same key for the second time.
-	removedKeyStorable, removedValueStorable, err = m.Remove(compare, hashInputProvider, k)
+	removedKeyStorable, removedValueStorable, err = m.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 	require.Equal(t, 1, errorCategorizationCount(err))
 	var userError *atree.UserError
 	var keyNotFoundError *atree.KeyNotFoundError
@@ -793,15 +794,15 @@ func TestMapRemove(t *testing.T) {
 
 	smallKeyValues := make(map[atree.Value]atree.Value, mapCount)
 	for len(smallKeyValues) < mapCount {
-		k := NewStringValue(randStr(r, smallKeyStringSize))
-		v := NewStringValue(randStr(r, smallValueStringSize))
+		k := test_utils.NewStringValue(randStr(r, smallKeyStringSize))
+		v := test_utils.NewStringValue(randStr(r, smallValueStringSize))
 		smallKeyValues[k] = v
 	}
 
 	largeKeyValues := make(map[atree.Value]atree.Value, mapCount)
 	for len(largeKeyValues) < mapCount {
-		k := NewStringValue(randStr(r, largeKeyStringSize))
-		v := NewStringValue(randStr(r, largeValueStringSize))
+		k := test_utils.NewStringValue(randStr(r, largeKeyStringSize))
+		v := test_utils.NewStringValue(randStr(r, largeValueStringSize))
 		largeKeyValues[k] = v
 	}
 
@@ -815,7 +816,7 @@ func TestMapRemove(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			typeInfo := testTypeInfo{42}
+			typeInfo := test_utils.NewSimpleTypeInfo(42)
 			address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 			storage := newTestPersistentStorage(t)
 
@@ -824,7 +825,7 @@ func TestMapRemove(t *testing.T) {
 
 			// Insert elements
 			for k, v := range tc.keyValues {
-				existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+				existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 			}
@@ -840,7 +841,7 @@ func TestMapRemove(t *testing.T) {
 
 				count--
 
-				require.True(t, typeInfoComparator(typeInfo, m.Type()))
+				require.True(t, test_utils.CompareTypeInfo(typeInfo, m.Type()))
 				require.Equal(t, address, m.Address())
 				require.Equal(t, uint64(count), m.Count())
 			}
@@ -866,7 +867,7 @@ func TestMapRemove(t *testing.T) {
 		)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		r := newRand(t)
@@ -878,41 +879,41 @@ func TestMapRemove(t *testing.T) {
 
 		nonCollisionKeyValues := make(map[atree.Value]atree.Value)
 		for i := 0; i < numOfElementsBeforeCollision; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			nonCollisionKeyValues[k] = v
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{nextDigest}})
 			nextDigest++
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		collisionKeyValues := make(map[atree.Value]atree.Value)
 		for len(collisionKeyValues) < numOfElementsWithCollision {
-			k := NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
-			v := NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
+			k := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
+			v := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
 			collisionKeyValues[k] = v
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{nextDigest}})
 		}
 
 		for k, v := range collisionKeyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		nextDigest++
-		k := Uint64Value(nextDigest)
-		v := Uint64Value(nextDigest)
+		k := test_utils.Uint64Value(nextDigest)
+		v := test_utils.Uint64Value(nextDigest)
 		nonCollisionKeyValues[k] = v
 
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{nextDigest}})
 
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -925,7 +926,7 @@ func TestMapRemove(t *testing.T) {
 
 			count--
 
-			require.True(t, typeInfoComparator(typeInfo, m.Type()))
+			require.True(t, test_utils.CompareTypeInfo(typeInfo, m.Type()))
 			require.Equal(t, address, m.Address())
 			require.Equal(t, uint64(count), m.Count())
 		}
@@ -939,7 +940,7 @@ func TestMapRemove(t *testing.T) {
 
 			count--
 
-			require.True(t, typeInfoComparator(typeInfo, m.Type()))
+			require.True(t, test_utils.CompareTypeInfo(typeInfo, m.Type()))
 			require.Equal(t, address, m.Address())
 			require.Equal(t, uint64(count), m.Count())
 		}
@@ -963,7 +964,7 @@ func TestMapRemove(t *testing.T) {
 		)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		r := newRand(t)
@@ -973,28 +974,28 @@ func TestMapRemove(t *testing.T) {
 
 		collisionKeyValues := make(map[atree.Value]atree.Value)
 		for len(collisionKeyValues) < numOfElementsWithCollision {
-			k := NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
-			v := NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
+			k := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
+			v := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
 			collisionKeyValues[k] = v
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{0}})
 		}
 
 		for k, v := range collisionKeyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		nonCollisionKeyValues := make(map[atree.Value]atree.Value)
 		for i := 0; i < numOfElementsWithoutCollision; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			nonCollisionKeyValues[k] = v
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i) + 1}})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1008,7 +1009,7 @@ func TestMapRemove(t *testing.T) {
 
 			count--
 
-			require.True(t, typeInfoComparator(typeInfo, m.Type()))
+			require.True(t, test_utils.CompareTypeInfo(typeInfo, m.Type()))
 			require.Equal(t, address, m.Address())
 			require.Equal(t, uint64(count), m.Count())
 		}
@@ -1022,7 +1023,7 @@ func TestMapRemove(t *testing.T) {
 
 			count--
 
-			require.True(t, typeInfoComparator(typeInfo, m.Type()))
+			require.True(t, test_utils.CompareTypeInfo(typeInfo, m.Type()))
 			require.Equal(t, address, m.Address())
 			require.Equal(t, uint64(count), m.Count())
 		}
@@ -1033,7 +1034,7 @@ func TestMapRemove(t *testing.T) {
 	t.Run("no collision key not found", func(t *testing.T) {
 		const mapCount = 1024
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -1042,18 +1043,18 @@ func TestMapRemove(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
-			storable, err := m.Set(compare, hashInputProvider, k, v)
+			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, storable)
 		}
 
 		r := newRand(t)
 
-		k := NewStringValue(randStr(r, 1024))
-		existingKeyStorable, existingValueStorable, err := m.Remove(compare, hashInputProvider, k)
+		k := test_utils.NewStringValue(randStr(r, 1024))
+		existingKeyStorable, existingValueStorable, err := m.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.Nil(t, existingKeyStorable)
 		require.Nil(t, existingValueStorable)
 		require.Equal(t, 1, errorCategorizationCount(err))
@@ -1069,7 +1070,7 @@ func TestMapRemove(t *testing.T) {
 	t.Run("collision key not found", func(t *testing.T) {
 		const mapCount = 256
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := &mockDigesterBuilder{}
@@ -1079,25 +1080,25 @@ func TestMapRemove(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i % 10)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			storable, err := m.Set(compare, hashInputProvider, k, v)
+			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, storable)
 		}
 
 		r := newRand(t)
-		k := NewStringValue(randStr(r, 1024))
+		k := test_utils.NewStringValue(randStr(r, 1024))
 
 		digests := []atree.Digest{atree.Digest(0)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-		existingKeyStorable, existingValueStorable, err := m.Remove(compare, hashInputProvider, k)
+		existingKeyStorable, existingValueStorable, err := m.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.Nil(t, existingKeyStorable)
 		require.Nil(t, existingValueStorable)
 		require.Equal(t, 1, errorCategorizationCount(err))
@@ -1115,7 +1116,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -1152,7 +1153,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		testMap(t, storage, typeInfo, address, m, mapValue{}, nil, false)
+		testMap(t, storage, typeInfo, address, m, ExpectedMapValue{}, nil, false)
 	})
 
 	t.Run("no collision", func(t *testing.T) {
@@ -1167,15 +1168,15 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		sortedKeys := make([]atree.Value, mapCount)
 		i := uint64(0)
 		for len(keyValues) < mapCount {
-			k := NewStringValue(randStr(r, keyStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
 			if _, found := keyValues[k]; !found {
-				keyValues[k] = Uint64Value(i)
+				keyValues[k] = test_utils.Uint64Value(i)
 				sortedKeys[i] = k
 				i++
 			}
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -1184,7 +1185,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1195,8 +1196,8 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		// Iterate key value pairs
 		i = uint64(0)
 		err = m.IterateReadOnly(func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 			i++
 			return true, nil
 		})
@@ -1207,7 +1208,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		// Iterate keys
 		i = uint64(0)
 		err = m.IterateReadOnlyKeys(func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, sortedKeys[i], k)
 			i++
 			return true, nil
 		})
@@ -1219,7 +1220,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		i = uint64(0)
 		err = m.IterateReadOnlyValues(func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 			i++
 			return true, nil
 		})
@@ -1240,7 +1241,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -1250,10 +1251,10 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, 0, mapCount)
 		for len(keyValues) < mapCount {
-			k := NewStringValue(randStr(r, keyStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
 
 			if _, found := keyValues[k]; !found {
-				v := NewStringValue(randStr(r, valueStringSize))
+				v := test_utils.NewStringValue(randStr(r, valueStringSize))
 				sortedKeys = append(sortedKeys, k)
 				keyValues[k] = v
 
@@ -1265,7 +1266,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 				}
 				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-				existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+				existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 			}
@@ -1277,8 +1278,8 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		// Iterate key value pairs
 		i := uint64(0)
 		err = m.IterateReadOnly(func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 			i++
 			return true, nil
 		})
@@ -1288,7 +1289,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		// Iterate keys
 		i = uint64(0)
 		err = m.IterateReadOnlyKeys(func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, sortedKeys[i], k)
 			i++
 			return true, nil
 		})
@@ -1298,7 +1299,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		// Iterate values
 		i = uint64(0)
 		err = m.IterateReadOnlyValues(func(v atree.Value) (resume bool, err error) {
-			valueEqual(t, keyValues[sortedKeys[i]], v)
+			testValueEqual(t, keyValues[sortedKeys[i]], v)
 			i++
 			return true, nil
 		})
@@ -1314,7 +1315,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	atree.SetThreshold(256)
 	defer atree.SetThreshold(1024)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestPersistentStorage(t)
 	digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -1331,7 +1332,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		require.False(t, childMapKey.Inlined())
 
 		// parent map {{}: 0}
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, NewHashableMap(childMapKey), Uint64Value(0))
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.NewHashableMap(childMapKey), test_utils.Uint64Value(0))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 		require.True(t, childMapKey.Inlined())
@@ -1344,7 +1345,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.True(t, c.Inlined())
 
-				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				existingStorable, err := c.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingStorable)
 
@@ -1375,7 +1376,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		require.False(t, childMap.Inlined())
 
 		// parent map {0: {}}
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(0), childMap)
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), childMap)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 		require.True(t, childMap.Inlined())
@@ -1388,7 +1389,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.True(t, c.Inlined())
 
-				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				existingStorable, err := c.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingStorable)
 
@@ -1419,7 +1420,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		require.False(t, childMapKey.Inlined())
 
 		// parent map {{}: 0}
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, NewHashableMap(childMapKey), Uint64Value(0))
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.NewHashableMap(childMapKey), test_utils.Uint64Value(0))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 		require.True(t, childMapKey.Inlined())
@@ -1432,7 +1433,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.True(t, c.Inlined())
 
-				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				existingStorable, err := c.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingStorable)
 
@@ -1459,7 +1460,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		require.False(t, childMap.Inlined())
 
 		// parent map {0: {}}
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(0), childMap)
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), childMap)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 		require.True(t, childMap.Inlined())
@@ -1472,7 +1473,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.True(t, c.Inlined())
 
-				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(1), Uint64Value(1))
+				existingStorable, err := c.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(1), test_utils.Uint64Value(1))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingStorable)
 
@@ -1501,15 +1502,15 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		// Inserting elements into childMapKey so it can't be inlined
 		const size = 20
 		for i := 0; i < size; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
-			existingStorable, err := childMapKey.Set(compare, hashInputProvider, k, v)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
+			existingStorable, err := childMapKey.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		// parent map {{...}: 0}
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, NewHashableMap(childMapKey), Uint64Value(0))
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.NewHashableMap(childMapKey), test_utils.Uint64Value(0))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 		require.False(t, childMapKey.Inlined())
@@ -1522,7 +1523,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.False(t, c.Inlined())
 
-				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				existingKeyStorable, existingValueStorable, err := c.Remove(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingKeyStorable)
 				require.Nil(t, existingValueStorable)
@@ -1554,16 +1555,16 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		require.False(t, childMap.Inlined())
 
 		// parent map {0: {}}
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(0), childMap)
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), childMap)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 		require.True(t, childMap.Inlined())
 
 		// Inserting elements into childMap until it is no longer inlined
 		for i := 0; childMap.Inlined(); i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1576,7 +1577,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.False(t, c.Inlined())
 
-				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				existingKeyStorable, existingValueStorable, err := c.Remove(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingKeyStorable)
 				require.Nil(t, existingValueStorable)
@@ -1610,15 +1611,15 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		// Inserting elements into childMap so it can't be inlined.
 		const size = 20
 		for i := 0; i < size; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
-			existingStorable, err := childMapKey.Set(compare, hashInputProvider, k, v)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
+			existingStorable, err := childMapKey.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		// parent map {{...}: 0}
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, NewHashableMap(childMapKey), Uint64Value(0))
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.NewHashableMap(childMapKey), test_utils.Uint64Value(0))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 		require.False(t, childMapKey.Inlined())
@@ -1631,7 +1632,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.False(t, c.Inlined())
 
-				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				existingKeyStorable, existingValueStorable, err := c.Remove(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingKeyStorable)
 				require.Nil(t, existingValueStorable)
@@ -1659,16 +1660,16 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		require.False(t, childMap.Inlined())
 
 		// parent map {0: {}}
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(0), childMap)
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), childMap)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 		require.True(t, childMap.Inlined())
 
 		// Inserting elements into childMap until it is no longer inlined
 		for i := 0; childMap.Inlined(); i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1681,7 +1682,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.False(t, c.Inlined())
 
-				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				existingKeyStorable, existingValueStorable, err := c.Remove(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingKeyStorable)
 				require.Nil(t, existingValueStorable)
@@ -1715,15 +1716,15 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {{}:0, {}:1} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMapKey1, childMapKey2} {
-			k := NewHashableMap(m)
-			v := Uint64Value(i)
+			k := test_utils.NewHashableMap(m)
+			v := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 			// This is needed because atree.Digest is called again on atree.OrderedMap when inserting collision element.
 			digesterBuilder.On("Digest", m).Return(mockDigester{digests})
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1736,7 +1737,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.True(t, c.Inlined())
 
-				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				existingStorable, err := c.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingStorable)
 
@@ -1773,12 +1774,12 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMap1, childMap2} {
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, m)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, m)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1791,7 +1792,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.True(t, c.Inlined())
 
-				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(1), Uint64Value(1))
+				existingStorable, err := c.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(1), test_utils.Uint64Value(1))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingStorable)
 
@@ -1828,15 +1829,15 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {{}: 0, {}: 1} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMapKey1, childMapKey2} {
-			k := NewHashableMap(m)
-			v := Uint64Value(i)
+			k := test_utils.NewHashableMap(m)
+			v := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 			// This is needed because atree.Digest is called again on atree.OrderedMap when inserting collision element.
 			digesterBuilder.On("Digest", m).Return(mockDigester{digests})
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1849,7 +1850,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.True(t, c.Inlined())
 
-				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				existingStorable, err := c.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingStorable)
 
@@ -1882,12 +1883,12 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMap1, childMap2} {
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, m)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, m)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1900,7 +1901,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.True(t, c.Inlined())
 
-				existingStorable, err := c.Set(compare, hashInputProvider, Uint64Value(0), Uint64Value(0))
+				existingStorable, err := c.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingStorable)
 
@@ -1926,10 +1927,10 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		const size = 20
 		for i := 0; i < size; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMapKey1.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMapKey1.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1939,10 +1940,10 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := 0; i < size; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMapKey2.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMapKey2.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1952,15 +1953,15 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMapKey1, childMapKey2} {
-			k := NewHashableMap(m)
-			v := Uint64Value(i)
+			k := test_utils.NewHashableMap(m)
+			v := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 			// This is needed because atree.Digest is called again on atree.OrderedMap when inserting collision element.
 			digesterBuilder.On("Digest", m).Return(mockDigester{digests})
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -1973,7 +1974,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.False(t, c.Inlined())
 
-				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				existingKeyStorable, existingValueStorable, err := c.Remove(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingKeyStorable)
 				require.Nil(t, existingValueStorable)
@@ -2011,30 +2012,30 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMap1, childMap2} {
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, m)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, m)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		for i := 0; childMap1.Inlined(); i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap1.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap1.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		for i := 0; childMap2.Inlined(); i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap2.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap2.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -2047,7 +2048,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.False(t, c.Inlined())
 
-				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				existingKeyStorable, existingValueStorable, err := c.Remove(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingKeyStorable)
 				require.Nil(t, existingValueStorable)
@@ -2078,10 +2079,10 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		size := 20
 		for i := 0; i < size; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMapKey1.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMapKey1.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -2091,10 +2092,10 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := 0; i < size; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMapKey2.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMapKey2.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -2104,15 +2105,15 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMapKey1, childMapKey2} {
-			k := NewHashableMap(m)
-			v := Uint64Value(i)
+			k := test_utils.NewHashableMap(m)
+			v := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 			// This is needed because atree.Digest is called again on atree.OrderedMap when inserting collision element.
 			digesterBuilder.On("Digest", m).Return(mockDigester{digests})
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -2125,7 +2126,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.False(t, c.Inlined())
 
-				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				existingKeyStorable, existingValueStorable, err := c.Remove(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingKeyStorable)
 				require.Nil(t, existingValueStorable)
@@ -2159,30 +2160,30 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMap1, childMap2} {
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, m)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, m)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		for i := 0; childMap1.Inlined(); i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap1.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap1.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		for i := 0; childMap2.Inlined(); i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap2.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap2.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -2195,7 +2196,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 				require.True(t, ok)
 				require.False(t, c.Inlined())
 
-				existingKeyStorable, existingValueStorable, err := c.Remove(compare, hashInputProvider, Uint64Value(0))
+				existingKeyStorable, existingValueStorable, err := c.Remove(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 				require.ErrorAs(t, err, &mutationError)
 				require.Nil(t, existingKeyStorable)
 				require.Nil(t, existingValueStorable)
@@ -2218,7 +2219,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -2227,7 +2228,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate key value pairs
 		i := 0
-		err = m.Iterate(compare, hashInputProvider, func(atree.Value, atree.Value) (resume bool, err error) {
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(atree.Value, atree.Value) (resume bool, err error) {
 			i++
 			return true, nil
 		})
@@ -2235,7 +2236,7 @@ func TestMutableMapIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		testMap(t, storage, typeInfo, address, m, mapValue{}, nil, false)
+		testMap(t, storage, typeInfo, address, m, ExpectedMapValue{}, nil, false)
 	})
 
 	t.Run("mutate primitive values, root is data slab, no slab operation", func(t *testing.T) {
@@ -2244,7 +2245,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		const mapCount = 15
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -2255,10 +2256,10 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -2272,13 +2273,13 @@ func TestMutableMapIterate(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := 0
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (bool, error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := v.(Uint64Value) * 2
+			newValue := v.(test_utils.Uint64Value) * 2
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -2304,7 +2305,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		const mapCount = 25
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -2315,10 +2316,10 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -2332,13 +2333,13 @@ func TestMutableMapIterate(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := 0
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (bool, error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := v.(Uint64Value) * 2
+			newValue := v.(test_utils.Uint64Value) * 2
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -2364,7 +2365,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		const mapCount = 15
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -2375,10 +2376,10 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -2393,13 +2394,13 @@ func TestMutableMapIterate(t *testing.T) {
 
 		i := 0
 		r := 'a'
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (bool, error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := NewStringValue(strings.Repeat(string(r), 25))
+			newValue := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -2426,7 +2427,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		const mapCount = 25
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -2437,10 +2438,10 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -2455,13 +2456,13 @@ func TestMutableMapIterate(t *testing.T) {
 
 		i := 0
 		r := 'a'
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (bool, error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := NewStringValue(strings.Repeat(string(r), 25))
+			newValue := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -2488,7 +2489,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		const mapCount = 10
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -2500,10 +2501,10 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := NewStringValue(strings.Repeat(string(r), 25))
+			k := test_utils.Uint64Value(i)
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -2518,13 +2519,13 @@ func TestMutableMapIterate(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := 0
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (bool, error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := Uint64Value(i)
+			newValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -2553,7 +2554,7 @@ func TestMutableMapIterate(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -2563,15 +2564,15 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -2584,12 +2585,12 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate key value pairs
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := v.(Uint64Value) / 2
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			newValue := v.(test_utils.Uint64Value) / 2
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -2615,7 +2616,7 @@ func TestMutableMapIterate(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -2625,8 +2626,8 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
@@ -2636,7 +2637,7 @@ func TestMutableMapIterate(t *testing.T) {
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -2649,12 +2650,12 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate key value pairs
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := v.(Uint64Value) / 2
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			newValue := v.(test_utils.Uint64Value) / 2
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -2677,7 +2678,7 @@ func TestMutableMapIterate(t *testing.T) {
 			mapCount = 15
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -2688,26 +2689,26 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -2721,25 +2722,25 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate and mutate child map (updating elements)
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			expectedChildMapValues[childKey] = childNewValue
@@ -2761,7 +2762,7 @@ func TestMutableMapIterate(t *testing.T) {
 			mapCount = 35
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -2772,26 +2773,26 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -2805,25 +2806,25 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate and mutate child map (updating elements)
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			expectedChildMapValues[childKey] = childNewValue
@@ -2847,7 +2848,7 @@ func TestMutableMapIterate(t *testing.T) {
 			mutatedChildMapCount = 5
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -2862,21 +2863,21 @@ func TestMutableMapIterate(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -2897,23 +2898,23 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -2942,7 +2943,7 @@ func TestMutableMapIterate(t *testing.T) {
 			mutatedChildMapCount = 5
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -2957,21 +2958,21 @@ func TestMutableMapIterate(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -2992,23 +2993,23 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -3037,7 +3038,7 @@ func TestMutableMapIterate(t *testing.T) {
 			mutatedChildMapCount = 1
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -3052,21 +3053,21 @@ func TestMutableMapIterate(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -3087,22 +3088,22 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount - 1; j >= mutatedChildMapCount; j-- {
-				childKey := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
 
-				existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, childKey)
+				existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, childKey)
 				require.NoError(t, err)
 				require.NotNil(t, existingKeyStorable)
 				require.NotNil(t, existingValueStorable)
@@ -3133,7 +3134,7 @@ func TestMutableMapIterate(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -3146,28 +3147,28 @@ func TestMutableMapIterate(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -3176,22 +3177,22 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate key value pairs
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
@@ -3216,7 +3217,7 @@ func TestMutableMapIterate(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -3229,14 +3230,14 @@ func TestMutableMapIterate(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
@@ -3246,14 +3247,14 @@ func TestMutableMapIterate(t *testing.T) {
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -3262,22 +3263,22 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate key value pairs
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
@@ -3302,7 +3303,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -3314,27 +3315,27 @@ func TestMutableMapIterate(t *testing.T) {
 		sortedKeys := make([]atree.Value, mapCount)
 		i := uint64(0)
 		for i := 0; i < mapCount; i++ {
-			ck := Uint64Value(0)
-			cv := NewStringValue(randStr(r, valueStringSize))
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.NewStringValue(randStr(r, valueStringSize))
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 			sortedKeys[i] = k
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 		}
 		require.Equal(t, uint64(mapCount), m.Count())
 		require.True(t, IsMapRootDataSlab(m))
@@ -3346,25 +3347,25 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i = uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			newChildMapKey := Uint64Value(1) // Previous key is 0
-			newChildMapValue := NewStringValue(randStr(r, valueStringSize))
+			newChildMapKey := test_utils.Uint64Value(1) // Previous key is 0
+			newChildMapValue := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, newChildMapKey, newChildMapValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, newChildMapKey, newChildMapValue)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(2), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			expectedChildMapValues[newChildMapKey] = newChildMapValue
@@ -3380,22 +3381,22 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate and mutate child map (removing elements)
 		i = uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(2), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			// Remove key 0
-			ck := Uint64Value(0)
+			ck := test_utils.Uint64Value(0)
 
-			existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, ck)
+			existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, ck)
 			require.NoError(t, err)
 			require.NotNil(t, existingKeyStorable)
 			require.NotNil(t, existingValueStorable)
@@ -3422,7 +3423,7 @@ func TestMutableMapIterate(t *testing.T) {
 			mutatedChildMapCount = 35
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -3437,21 +3438,21 @@ func TestMutableMapIterate(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -3471,23 +3472,23 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -3516,7 +3517,7 @@ func TestMutableMapIterate(t *testing.T) {
 			mutatedChildMapCount = 35
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -3531,21 +3532,21 @@ func TestMutableMapIterate(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -3565,23 +3566,23 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -3610,7 +3611,7 @@ func TestMutableMapIterate(t *testing.T) {
 			mutatedChildMapCount = 1
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -3625,21 +3626,21 @@ func TestMutableMapIterate(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -3659,22 +3660,22 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.False(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount - 1; j > mutatedChildMapCount-1; j-- {
-				childKey := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
 
-				existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, childKey)
+				existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, childKey)
 				require.NoError(t, err)
 				require.NotNil(t, existingKeyStorable)
 				require.NotNil(t, existingValueStorable)
@@ -3704,7 +3705,7 @@ func TestMutableMapIterate(t *testing.T) {
 			mutatedChildMapCount = 10
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -3719,21 +3720,21 @@ func TestMutableMapIterate(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -3753,22 +3754,22 @@ func TestMutableMapIterate(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.Iterate(compare, hashInputProvider, func(k atree.Value, v atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+		err = m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value, v atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.False(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount - 1; j > mutatedChildMapCount-1; j-- {
-				childKey := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
 
-				existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, childKey)
+				existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, childKey)
 				require.NoError(t, err)
 				require.NotNil(t, existingKeyStorable)
 				require.NotNil(t, existingValueStorable)
@@ -3796,7 +3797,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -3804,7 +3805,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		require.NoError(t, err)
 
 		i := 0
-		err = m.IterateKeys(compare, hashInputProvider, func(atree.Value) (resume bool, err error) {
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(atree.Value) (resume bool, err error) {
 			i++
 			return true, nil
 		})
@@ -3812,7 +3813,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		testMap(t, storage, typeInfo, address, m, mapValue{}, nil, false)
+		testMap(t, storage, typeInfo, address, m, ExpectedMapValue{}, nil, false)
 	})
 
 	t.Run("mutate primitive values, root is data slab, no slab operation", func(t *testing.T) {
@@ -3821,7 +3822,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		const mapCount = 15
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -3832,10 +3833,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -3849,13 +3850,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := 0
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (bool, error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
 
 			v := keyValues[k]
-			newValue := v.(Uint64Value) * 2
+			newValue := v.(test_utils.Uint64Value) * 2
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -3881,7 +3882,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		const mapCount = 25
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -3892,10 +3893,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -3909,13 +3910,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := 0
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (bool, error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
 
 			v := keyValues[k]
-			newValue := v.(Uint64Value) * 2
+			newValue := v.(test_utils.Uint64Value) * 2
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -3941,7 +3942,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		const mapCount = 15
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -3952,10 +3953,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -3970,13 +3971,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		i := 0
 		r := 'a'
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (bool, error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
 
 			v := keyValues[k]
-			newValue := NewStringValue(strings.Repeat(string(r), 25))
+			newValue := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -4003,7 +4004,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		const mapCount = 25
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -4014,10 +4015,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -4032,13 +4033,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		i := 0
 		r := 'a'
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (bool, error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
 
 			v := keyValues[k]
-			newValue := NewStringValue(strings.Repeat(string(r), 25))
+			newValue := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -4065,7 +4066,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		const mapCount = 10
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -4077,10 +4078,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := NewStringValue(strings.Repeat(string(r), 25))
+			k := test_utils.Uint64Value(i)
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -4095,13 +4096,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := 0
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (bool, error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
 
 			v := keyValues[k]
-			newValue := Uint64Value(i)
+			newValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -4130,7 +4131,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -4140,15 +4141,15 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -4160,12 +4161,12 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
 			v := keyValues[k]
-			newValue := v.(Uint64Value) / 2
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			newValue := v.(test_utils.Uint64Value) / 2
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -4191,7 +4192,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -4201,8 +4202,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
@@ -4212,7 +4213,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -4224,12 +4225,12 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
 			v := keyValues[k]
-			newValue := v.(Uint64Value) / 2
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			newValue := v.(test_utils.Uint64Value) / 2
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -4252,7 +4253,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			mapCount = 15
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -4263,26 +4264,26 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -4296,10 +4297,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate and mutate child map (updating elements)
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -4307,16 +4308,16 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			expectedChildMapValues[childKey] = childNewValue
@@ -4338,7 +4339,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			mapCount = 35
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -4349,26 +4350,26 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -4382,10 +4383,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate and mutate child map (updating elements)
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -4393,16 +4394,16 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			expectedChildMapValues[childKey] = childNewValue
@@ -4426,7 +4427,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			mutatedChildMapCount = 5
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -4441,21 +4442,21 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -4476,10 +4477,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -4487,14 +4488,14 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -4523,7 +4524,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			mutatedChildMapCount = 5
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -4538,21 +4539,21 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -4573,10 +4574,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -4584,14 +4585,14 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -4620,7 +4621,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			mutatedChildMapCount = 1
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -4635,21 +4636,21 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -4670,10 +4671,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -4681,13 +4682,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount - 1; j >= mutatedChildMapCount; j-- {
-				childKey := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
 
-				existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, childKey)
+				existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, childKey)
 				require.NoError(t, err)
 				require.NotNil(t, existingKeyStorable)
 				require.NotNil(t, existingValueStorable)
@@ -4718,7 +4719,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -4731,28 +4732,28 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -4761,10 +4762,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate key value pairs
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -4772,13 +4773,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
@@ -4803,7 +4804,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -4816,14 +4817,14 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
@@ -4833,14 +4834,14 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -4848,10 +4849,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -4859,13 +4860,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
@@ -4890,7 +4891,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -4902,27 +4903,27 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		sortedKeys := make([]atree.Value, mapCount)
 		i := uint64(0)
 		for i := 0; i < mapCount; i++ {
-			ck := Uint64Value(0)
-			cv := NewStringValue(randStr(r, valueStringSize))
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.NewStringValue(randStr(r, valueStringSize))
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 			sortedKeys[i] = k
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 		}
 		require.Equal(t, uint64(mapCount), m.Count())
 		require.True(t, IsMapRootDataSlab(m))
@@ -4934,10 +4935,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i = uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -4945,16 +4946,16 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			newChildMapKey := Uint64Value(1) // Previous key is 0
-			newChildMapValue := NewStringValue(randStr(r, valueStringSize))
+			newChildMapKey := test_utils.Uint64Value(1) // Previous key is 0
+			newChildMapValue := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, newChildMapKey, newChildMapValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, newChildMapKey, newChildMapValue)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(2), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			expectedChildMapValues[newChildMapKey] = newChildMapValue
@@ -4970,10 +4971,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate and mutate child map (removing elements)
 		i = uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -4981,13 +4982,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(2), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			// Remove key 0
-			ck := Uint64Value(0)
+			ck := test_utils.Uint64Value(0)
 
-			existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, ck)
+			existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, ck)
 			require.NoError(t, err)
 			require.NotNil(t, existingKeyStorable)
 			require.NotNil(t, existingValueStorable)
@@ -5014,7 +5015,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			mutatedChildMapCount = 35
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -5029,21 +5030,21 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -5063,10 +5064,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -5074,14 +5075,14 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -5110,7 +5111,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			mutatedChildMapCount = 35
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -5125,21 +5126,21 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -5159,10 +5160,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -5170,14 +5171,14 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -5206,7 +5207,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			mutatedChildMapCount = 1
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -5221,21 +5222,21 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -5255,10 +5256,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -5266,13 +5267,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.False(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount - 1; j > mutatedChildMapCount-1; j-- {
-				childKey := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
 
-				existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, childKey)
+				existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, childKey)
 				require.NoError(t, err)
 				require.NotNil(t, existingKeyStorable)
 				require.NotNil(t, existingValueStorable)
@@ -5302,7 +5303,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			mutatedChildMapCount = 10
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -5317,21 +5318,21 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -5351,10 +5352,10 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateKeys(compare, hashInputProvider, func(k atree.Value) (resume bool, err error) {
-			valueEqual(t, sortedKeys[i], k)
+		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+			testValueEqual(t, sortedKeys[i], k)
 
-			v, err := m.Get(compare, hashInputProvider, k)
+			v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			childMap, ok := v.(*atree.OrderedMap)
@@ -5362,13 +5363,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.False(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount - 1; j > mutatedChildMapCount-1; j-- {
-				childKey := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
 
-				existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, childKey)
+				existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, childKey)
 				require.NoError(t, err)
 				require.NotNil(t, existingKeyStorable)
 				require.NotNil(t, existingValueStorable)
@@ -5396,7 +5397,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -5404,7 +5405,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		require.NoError(t, err)
 
 		i := 0
-		err = m.IterateValues(compare, hashInputProvider, func(atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(atree.Value) (resume bool, err error) {
 			i++
 			return true, nil
 		})
@@ -5412,7 +5413,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 0, i)
 
-		testMap(t, storage, typeInfo, address, m, mapValue{}, nil, false)
+		testMap(t, storage, typeInfo, address, m, ExpectedMapValue{}, nil, false)
 	})
 
 	t.Run("mutate primitive values, root is data slab, no slab operation", func(t *testing.T) {
@@ -5421,7 +5422,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		const mapCount = 15
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -5432,10 +5433,10 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -5449,14 +5450,14 @@ func TestMutableMapIterateValues(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := 0
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (bool, error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (bool, error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := v.(Uint64Value) * 2
+			newValue := v.(test_utils.Uint64Value) * 2
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -5482,7 +5483,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		const mapCount = 25
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -5493,10 +5494,10 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -5510,14 +5511,14 @@ func TestMutableMapIterateValues(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := 0
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (bool, error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (bool, error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := v.(Uint64Value) * 2
+			newValue := v.(test_utils.Uint64Value) * 2
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -5543,7 +5544,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		const mapCount = 15
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -5554,10 +5555,10 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -5572,15 +5573,15 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		i := 0
 		r := 'a'
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (bool, error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (bool, error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, sortedKeys[i], k)
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := NewStringValue(strings.Repeat(string(r), 25))
+			newValue := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -5607,7 +5608,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		const mapCount = 25
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -5618,10 +5619,10 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -5636,14 +5637,14 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		i := 0
 		r := 'a'
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (bool, error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (bool, error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := NewStringValue(strings.Repeat(string(r), 25))
+			newValue := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -5670,7 +5671,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		const mapCount = 10
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -5682,10 +5683,10 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := NewStringValue(strings.Repeat(string(r), 25))
+			k := test_utils.Uint64Value(i)
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -5700,14 +5701,14 @@ func TestMutableMapIterateValues(t *testing.T) {
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
 		i := 0
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (bool, error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (bool, error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := Uint64Value(i)
+			newValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -5736,7 +5737,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -5746,15 +5747,15 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -5767,13 +5768,13 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate key value pairs
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := v.(Uint64Value) / 2
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			newValue := v.(test_utils.Uint64Value) / 2
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -5799,7 +5800,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -5809,8 +5810,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
@@ -5820,7 +5821,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -5833,13 +5834,13 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate key value pairs
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
-			newValue := v.(Uint64Value) / 2
-			existingStorable, err := m.Set(compare, hashInputProvider, k, newValue)
+			newValue := v.(test_utils.Uint64Value) / 2
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -5862,7 +5863,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			mapCount = 15
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -5873,26 +5874,26 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -5906,26 +5907,26 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate and mutate child map (updating elements)
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			expectedChildMapValues[childKey] = childNewValue
@@ -5947,7 +5948,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			mapCount = 35
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -5958,26 +5959,26 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := 0; i < mapCount; i++ {
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -5991,26 +5992,26 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate and mutate child map (updating elements)
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			expectedChildMapValues[childKey] = childNewValue
@@ -6034,7 +6035,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			mutatedChildMapCount = 5
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -6049,21 +6050,21 @@ func TestMutableMapIterateValues(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -6084,24 +6085,24 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -6130,7 +6131,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			mutatedChildMapCount = 5
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -6145,21 +6146,21 @@ func TestMutableMapIterateValues(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -6180,24 +6181,24 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -6226,7 +6227,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			mutatedChildMapCount = 1
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -6241,21 +6242,21 @@ func TestMutableMapIterateValues(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -6276,23 +6277,23 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount - 1; j >= mutatedChildMapCount; j-- {
-				childKey := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
 
-				existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, childKey)
+				existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, childKey)
 				require.NoError(t, err)
 				require.NotNil(t, existingKeyStorable)
 				require.NotNil(t, existingValueStorable)
@@ -6323,7 +6324,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -6336,28 +6337,28 @@ func TestMutableMapIterateValues(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -6366,23 +6367,23 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate key value pairs
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
@@ -6407,7 +6408,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		r := newRand(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -6420,14 +6421,14 @@ func TestMutableMapIterateValues(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			ck := Uint64Value(0)
-			cv := Uint64Value(i)
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digests := []atree.Digest{
 				atree.Digest(r.Intn(256)),
@@ -6437,14 +6438,14 @@ func TestMutableMapIterateValues(t *testing.T) {
 			}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 			sortedKeys[i] = k
 		}
 
@@ -6453,23 +6454,23 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate key value pairs
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
-			childKey := Uint64Value(0)
-			childNewValue := Uint64Value(i)
+			childKey := test_utils.Uint64Value(0)
+			childNewValue := test_utils.Uint64Value(i)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childNewValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 			require.Equal(t, uint64(1), childMap.Count())
@@ -6494,7 +6495,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -6506,27 +6507,27 @@ func TestMutableMapIterateValues(t *testing.T) {
 		sortedKeys := make([]atree.Value, mapCount)
 		i := uint64(0)
 		for i := 0; i < mapCount; i++ {
-			ck := Uint64Value(0)
-			cv := NewStringValue(randStr(r, valueStringSize))
+			ck := test_utils.Uint64Value(0)
+			cv := test_utils.NewStringValue(randStr(r, valueStringSize))
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 			sortedKeys[i] = k
 
-			existingStorable, err = m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 		}
 		require.Equal(t, uint64(mapCount), m.Count())
 		require.True(t, IsMapRootDataSlab(m))
@@ -6538,26 +6539,26 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i = uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(1), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			newChildMapKey := Uint64Value(1) // Previous key is 0
-			newChildMapValue := NewStringValue(randStr(r, valueStringSize))
+			newChildMapKey := test_utils.Uint64Value(1) // Previous key is 0
+			newChildMapValue := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, newChildMapKey, newChildMapValue)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, newChildMapKey, newChildMapValue)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(2), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			expectedChildMapValues[newChildMapKey] = newChildMapValue
@@ -6573,23 +6574,23 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate and mutate child map (removing elements)
 		i = uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(2), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			// Remove key 0
-			ck := Uint64Value(0)
+			ck := test_utils.Uint64Value(0)
 
-			existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, ck)
+			existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, ck)
 			require.NoError(t, err)
 			require.NotNil(t, existingKeyStorable)
 			require.NotNil(t, existingValueStorable)
@@ -6616,7 +6617,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			mutatedChildMapCount = 35
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -6631,21 +6632,21 @@ func TestMutableMapIterateValues(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -6665,24 +6666,24 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -6711,7 +6712,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			mutatedChildMapCount = 35
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -6726,21 +6727,21 @@ func TestMutableMapIterateValues(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -6760,24 +6761,24 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.True(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount; j < mutatedChildMapCount; j++ {
-				childKey := Uint64Value(j)
-				childValue := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
+				childValue := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, childKey, childValue)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childValue)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -6806,7 +6807,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			mutatedChildMapCount = 1
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -6821,21 +6822,21 @@ func TestMutableMapIterateValues(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -6855,23 +6856,23 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.False(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount - 1; j > mutatedChildMapCount-1; j-- {
-				childKey := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
 
-				existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, childKey)
+				existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, childKey)
 				require.NoError(t, err)
 				require.NotNil(t, existingKeyStorable)
 				require.NotNil(t, existingValueStorable)
@@ -6901,7 +6902,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			mutatedChildMapCount = 10
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -6916,21 +6917,21 @@ func TestMutableMapIterateValues(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			childMapValues := make(mapValue)
+			childMapValues := make(ExpectedMapValue)
 			for j := 0; j < childMapCount; j++ {
-				ck := Uint64Value(j)
-				cv := Uint64Value(j)
+				ck := test_utils.Uint64Value(j)
+				cv := test_utils.Uint64Value(j)
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				childMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
@@ -6950,23 +6951,23 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		// Iterate and mutate child map (inserting elements)
 		i := uint64(0)
-		err = m.IterateValues(compare, hashInputProvider, func(v atree.Value) (resume bool, err error) {
+		err = m.IterateValues(test_utils.CompareValue, test_utils.GetHashInput, func(v atree.Value) (resume bool, err error) {
 			k := sortedKeys[i]
 
-			valueEqual(t, keyValues[k], v)
+			testValueEqual(t, keyValues[k], v)
 
 			childMap, ok := v.(*atree.OrderedMap)
 			require.True(t, ok)
 			require.Equal(t, uint64(childMapCount), childMap.Count())
 			require.False(t, childMap.Inlined())
 
-			expectedChildMapValues, ok := keyValues[k].(mapValue)
+			expectedChildMapValues, ok := keyValues[k].(ExpectedMapValue)
 			require.True(t, ok)
 
 			for j := childMapCount - 1; j > mutatedChildMapCount-1; j-- {
-				childKey := Uint64Value(j)
+				childKey := test_utils.Uint64Value(j)
 
-				existingKeyStorable, existingValueStorable, err := childMap.Remove(compare, hashInputProvider, childKey)
+				existingKeyStorable, existingValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, childKey)
 				require.NoError(t, err)
 				require.NotNil(t, existingKeyStorable)
 				require.NotNil(t, existingValueStorable)
@@ -7027,9 +7028,9 @@ func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLeve
 	keyValues := make(map[atree.Value]atree.Value, mapCount)
 	i := 0
 	for len(keyValues) < mapCount {
-		k := NewStringValue(randStr(r, r.Intn(keyStringMaxSize)))
+		k := test_utils.NewStringValue(randStr(r, r.Intn(keyStringMaxSize)))
 		if _, found := keyValues[k]; !found {
-			keyValues[k] = NewStringValue(randStr(r, r.Intn(valueStringMaxSize)))
+			keyValues[k] = test_utils.NewStringValue(randStr(r, r.Intn(valueStringMaxSize)))
 
 			index := i % len(digestsGroup)
 			digests := digestsGroup[index]
@@ -7039,7 +7040,7 @@ func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLeve
 		}
 	}
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestPersistentStorage(t)
 
@@ -7047,7 +7048,7 @@ func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLeve
 	require.NoError(t, err)
 
 	for k, v := range keyValues {
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
@@ -7060,16 +7061,16 @@ func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLeve
 
 	// Remove all elements
 	for k, v := range keyValues {
-		removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
+		removedKeyStorable, removedValueStorable, err := m.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.NoError(t, err)
 
 		removedKey, err := removedKeyStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, k, removedKey)
+		testValueEqual(t, k, removedKey)
 
 		removedValue, err := removedValueStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, v, removedValue)
+		testValueEqual(t, v, removedValue)
 
 		if id, ok := removedKeyStorable.(atree.SlabIDStorable); ok {
 			err = storage.Remove(atree.SlabID(id))
@@ -7097,10 +7098,10 @@ func testMapRandomHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) 
 
 	keyValues := make(map[atree.Value]atree.Value, mapCount)
 	for len(keyValues) < mapCount {
-		k := NewStringValue(randStr(r, r.Intn(keyStringMaxSize)))
+		k := test_utils.NewStringValue(randStr(r, r.Intn(keyStringMaxSize)))
 
 		if _, found := keyValues[k]; !found {
-			keyValues[k] = NewStringValue(randStr(r, valueStringMaxSize))
+			keyValues[k] = test_utils.NewStringValue(randStr(r, valueStringMaxSize))
 
 			var digests []atree.Digest
 			for i := 0; i < maxDigestLevel; i++ {
@@ -7111,7 +7112,7 @@ func testMapRandomHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) 
 		}
 	}
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestPersistentStorage(t)
 
@@ -7119,7 +7120,7 @@ func testMapRandomHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) 
 	require.NoError(t, err)
 
 	for k, v := range keyValues {
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
@@ -7128,16 +7129,16 @@ func testMapRandomHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) 
 
 	// Remove all elements
 	for k, v := range keyValues {
-		removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
+		removedKeyStorable, removedValueStorable, err := m.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.NoError(t, err)
 
 		removedKey, err := removedKeyStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, k, removedKey)
+		testValueEqual(t, k, removedKey)
 
 		removedValue, err := removedValueStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, v, removedValue)
+		testValueEqual(t, v, removedValue)
 
 		if id, ok := removedKeyStorable.(atree.SlabIDStorable); ok {
 			err = storage.Remove(atree.SlabID(id))
@@ -7226,7 +7227,7 @@ func testMapSetRemoveRandomValues(
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 
 			if oldv, ok := keyValues[k]; ok {
@@ -7234,7 +7235,7 @@ func testMapSetRemoveRandomValues(
 
 				existingValue, err := existingStorable.StoredValue(storage)
 				require.NoError(t, err)
-				valueEqual(t, oldv, existingValue)
+				testValueEqual(t, oldv, existingValue)
 
 				if id, ok := existingStorable.(atree.SlabIDStorable); ok {
 					err = storage.Remove(atree.SlabID(id))
@@ -7252,16 +7253,16 @@ func testMapSetRemoveRandomValues(
 			index := r.Intn(len(keys))
 			k := keys[index]
 
-			removedKeyStorable, removedValueStorable, err := m.Remove(compare, hashInputProvider, k)
+			removedKeyStorable, removedValueStorable, err := m.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 
 			removedKey, err := removedKeyStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, k, removedKey)
+			testValueEqual(t, k, removedKey)
 
 			removedValue, err := removedValueStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, keyValues[k], removedValue)
+			testValueEqual(t, keyValues[k], removedValue)
 
 			if id, ok := removedKeyStorable.(atree.SlabIDStorable); ok {
 				err := storage.Remove(atree.SlabID(id))
@@ -7278,7 +7279,7 @@ func testMapSetRemoveRandomValues(
 			keys = keys[:len(keys)-1]
 		}
 
-		require.True(t, typeInfoComparator(typeInfo, m.Type()))
+		require.True(t, test_utils.CompareTypeInfo(typeInfo, m.Type()))
 		require.Equal(t, address, m.Address())
 		require.Equal(t, uint64(len(keys)), m.Count())
 	}
@@ -7294,7 +7295,7 @@ func TestMapSetRemoveRandomValues(t *testing.T) {
 	r := newRand(t)
 
 	storage := newTestPersistentStorage(t)
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	m, keyValues := testMapSetRemoveRandomValues(t, r, storage, typeInfo, address)
@@ -7304,7 +7305,7 @@ func TestMapSetRemoveRandomValues(t *testing.T) {
 
 func TestMapDecodeV0(t *testing.T) {
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
@@ -7368,8 +7369,8 @@ func TestMapDecodeV0(t *testing.T) {
 		const mapCount = 1
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i), atree.Digest(i * 2)}
@@ -7443,8 +7444,8 @@ func TestMapDecodeV0(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
 		for i := uint64(0); i < mapCount-1; i++ {
-			k := NewStringValue(strings.Repeat(string(r), 22))
-			v := NewStringValue(strings.Repeat(string(r), 22))
+			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i), atree.Digest(i * 2)}
@@ -7458,9 +7459,9 @@ func TestMapDecodeV0(t *testing.T) {
 		id3 := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 3})
 		nestedSlabID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
-		k := NewStringValue(strings.Repeat(string(r), 22))
+		k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 
-		keyValues[k] = arrayValue{Uint64Value(0)}
+		keyValues[k] = ExpectedArrayValue{test_utils.Uint64Value(0)}
 
 		digests := []atree.Digest{atree.Digest(mapCount - 1), atree.Digest((mapCount - 1) * 2)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
@@ -7643,8 +7644,8 @@ func TestMapDecodeV0(t *testing.T) {
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{atree.Digest(i % 4), atree.Digest(i)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
@@ -7817,8 +7818,8 @@ func TestMapDecodeV0(t *testing.T) {
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{atree.Digest(i % 4), atree.Digest(i % 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
@@ -8041,8 +8042,8 @@ func TestMapDecodeV0(t *testing.T) {
 		const mapCount = 20
 		keyValues := make(map[atree.Value]atree.Value)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{atree.Digest(i % 2), atree.Digest(i)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
@@ -8253,7 +8254,7 @@ func TestMapDecodeV0(t *testing.T) {
 
 func TestMapEncodeDecode(t *testing.T) {
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
@@ -8333,14 +8334,14 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 1
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i), atree.Digest(i * 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -8424,14 +8425,14 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
 		for i := uint64(0); i < mapCount-1; i++ {
-			k := NewStringValue(strings.Repeat(string(r), 22))
-			v := NewStringValue(strings.Repeat(string(r), 22))
+			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i), atree.Digest(i * 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -8439,24 +8440,24 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Create child array
-		typeInfo2 := testTypeInfo{43}
+		typeInfo2 := test_utils.NewSimpleTypeInfo(43)
 
 		childArray, err := atree.NewArray(storage, address, typeInfo2)
 		require.NoError(t, err)
 
-		err = childArray.Append(Uint64Value(0))
+		err = childArray.Append(test_utils.Uint64Value(0))
 		require.NoError(t, err)
 
-		k := NewStringValue(strings.Repeat(string(r), 22))
+		k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 		v := childArray
 
-		keyValues[k] = arrayValue{Uint64Value(0)}
+		keyValues[k] = ExpectedArrayValue{test_utils.Uint64Value(0)}
 
 		digests := []atree.Digest{atree.Digest(mapCount - 1), atree.Digest((mapCount - 1) * 2)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
 		// Insert nested array
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -8644,7 +8645,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo := testTypeInfo{43}
+		childMapTypeInfo := test_utils.NewSimpleTypeInfo(43)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -8664,25 +8665,25 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			ck := Uint64Value(i)
-			cv := Uint64Value(i * 2)
+			ck := test_utils.Uint64Value(i)
+			cv := test_utils.Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := NewStringValue(string(r))
+			k := test_utils.NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 		}
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
@@ -8831,8 +8832,8 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo1 := testTypeInfo{43}
-		childMapTypeInfo2 := testTypeInfo{44}
+		childMapTypeInfo1 := test_utils.NewSimpleTypeInfo(43)
+		childMapTypeInfo2 := test_utils.NewSimpleTypeInfo(44)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -8859,25 +8860,25 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), ti)
 			require.NoError(t, err)
 
-			ck := Uint64Value(i)
-			cv := Uint64Value(i * 2)
+			ck := test_utils.Uint64Value(i)
+			cv := test_utils.Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := NewStringValue(string(r))
+			k := test_utils.NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 		}
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
@@ -9022,7 +9023,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo := testTypeInfo{43}
+		childMapTypeInfo := test_utils.NewSimpleTypeInfo(43)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -9041,11 +9042,11 @@ func TestMapEncodeDecode(t *testing.T) {
 			gchildMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			gck := Uint64Value(i)
-			gcv := Uint64Value(i * 2)
+			gck := test_utils.Uint64Value(i)
+			gcv := test_utils.Uint64Value(i * 2)
 
 			// Insert element to grand child map
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, gck, gcv)
+			existingStorable, err := gchildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, gck, gcv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -9053,24 +9054,24 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			ck := Uint64Value(i)
+			ck := test_utils.Uint64Value(i)
 
 			// Insert grand child map to child map
-			existingStorable, err = childMap.Set(compare, hashInputProvider, ck, gchildMap)
+			existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, gchildMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := NewStringValue(string(r))
+			k := test_utils.NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = mapValue{ck: mapValue{gck: gcv}}
+			keyValues[k] = ExpectedMapValue{ck: ExpectedMapValue{gck: gcv}}
 		}
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
@@ -9284,10 +9285,10 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo1 := testTypeInfo{43}
-		childMapTypeInfo2 := testTypeInfo{44}
-		gchildMapTypeInfo1 := testTypeInfo{45}
-		gchildMapTypeInfo2 := testTypeInfo{46}
+		childMapTypeInfo1 := test_utils.NewSimpleTypeInfo(43)
+		childMapTypeInfo2 := test_utils.NewSimpleTypeInfo(44)
+		gchildMapTypeInfo1 := test_utils.NewSimpleTypeInfo(45)
+		gchildMapTypeInfo2 := test_utils.NewSimpleTypeInfo(46)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -9313,11 +9314,11 @@ func TestMapEncodeDecode(t *testing.T) {
 			gchildMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), gti)
 			require.NoError(t, err)
 
-			gck := Uint64Value(i)
-			gcv := Uint64Value(i * 2)
+			gck := test_utils.Uint64Value(i)
+			gcv := test_utils.Uint64Value(i * 2)
 
 			// Insert element to grand child map
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, gck, gcv)
+			existingStorable, err := gchildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, gck, gcv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -9332,24 +9333,24 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), cti)
 			require.NoError(t, err)
 
-			ck := Uint64Value(i)
+			ck := test_utils.Uint64Value(i)
 
 			// Insert grand child map to child map
-			existingStorable, err = childMap.Set(compare, hashInputProvider, ck, gchildMap)
+			existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, gchildMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := NewStringValue(string(r))
+			k := test_utils.NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = mapValue{ck: mapValue{gck: gcv}}
+			keyValues[k] = ExpectedMapValue{ck: ExpectedMapValue{gck: gcv}}
 		}
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
@@ -9556,7 +9557,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo := testTypeInfo{43}
+		childMapTypeInfo := test_utils.NewSimpleTypeInfo(43)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -9576,25 +9577,25 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			ck := Uint64Value(i)
-			cv := Uint64Value(i * 2)
+			ck := test_utils.Uint64Value(i)
+			cv := test_utils.Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := NewStringValue(string(r))
+			k := test_utils.NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 		}
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
@@ -10040,10 +10041,10 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo1 := testTypeInfo{43}
-		childMapTypeInfo2 := testTypeInfo{44}
-		childMapTypeInfo3 := testTypeInfo{45}
-		childMapTypeInfo4 := testTypeInfo{46}
+		childMapTypeInfo1 := test_utils.NewSimpleTypeInfo(43)
+		childMapTypeInfo2 := test_utils.NewSimpleTypeInfo(44)
+		childMapTypeInfo3 := test_utils.NewSimpleTypeInfo(45)
+		childMapTypeInfo4 := test_utils.NewSimpleTypeInfo(46)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -10075,25 +10076,25 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), ti)
 			require.NoError(t, err)
 
-			ck := Uint64Value(i)
-			cv := Uint64Value(i * 2)
+			ck := test_utils.Uint64Value(i)
+			cv := test_utils.Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := NewStringValue(string(r))
+			k := test_utils.NewStringValue(string(r))
 			r++
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 		}
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
@@ -10534,13 +10535,13 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{atree.Digest(i % 4), atree.Digest(i)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -10721,13 +10722,13 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{atree.Digest(i % 4), atree.Digest(i % 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -10958,13 +10959,13 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 20
 		keyValues := make(map[atree.Value]atree.Value)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 
 			digests := []atree.Digest{atree.Digest(i % 2), atree.Digest(i)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -11188,14 +11189,14 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
 		for i := uint64(0); i < mapCount-1; i++ {
-			k := NewStringValue(strings.Repeat(string(r), 22))
-			v := NewStringValue(strings.Repeat(string(r), 22))
+			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i), atree.Digest(i * 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -11203,24 +11204,24 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Create child map
-		typeInfo2 := testTypeInfo{43}
+		typeInfo2 := test_utils.NewSimpleTypeInfo(43)
 
 		childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo2)
 		require.NoError(t, err)
 
-		expectedChildMapValues := mapValue{}
+		expectedChildMapValues := ExpectedMapValue{}
 		for i := 0; i < 2; i++ {
-			k := Uint64Value(i)
-			v := NewStringValue(strings.Repeat("b", 22))
+			k := test_utils.Uint64Value(i)
+			v := test_utils.NewStringValue(strings.Repeat("b", 22))
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			expectedChildMapValues[k] = v
 		}
 
-		k := NewStringValue(strings.Repeat(string(r), 22))
+		k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 		v := childMap
 		keyValues[k] = expectedChildMapValues
 
@@ -11228,7 +11229,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
 		// Insert child map
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -11366,37 +11367,37 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := uint64(0); i < mapCount-1; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i * 2)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i * 2)
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i), atree.Digest(i * 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
 		// Create child map
-		childTypeInfo := testTypeInfo{43}
+		childTypeInfo := test_utils.NewSimpleTypeInfo(43)
 
 		childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childTypeInfo)
 		require.NoError(t, err)
 
 		// Create grand child map
-		gchildTypeInfo := testTypeInfo{44}
+		gchildTypeInfo := test_utils.NewSimpleTypeInfo(44)
 
 		gchildMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), gchildTypeInfo)
 		require.NoError(t, err)
 
-		expectedGChildMapValues := mapValue{}
+		expectedGChildMapValues := ExpectedMapValue{}
 		r := 'a'
 		for i := 0; i < 2; i++ {
-			k := NewStringValue(strings.Repeat(string(r), 22))
-			v := NewStringValue(strings.Repeat(string(r), 22))
+			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := gchildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -11406,19 +11407,19 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Insert grand child map to child map
-		existingStorable, err := childMap.Set(compare, hashInputProvider, Uint64Value(0), gchildMap)
+		existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), gchildMap)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		k := Uint64Value(mapCount - 1)
+		k := test_utils.Uint64Value(mapCount - 1)
 		v := childMap
-		keyValues[k] = mapValue{Uint64Value(0): expectedGChildMapValues}
+		keyValues[k] = ExpectedMapValue{test_utils.Uint64Value(0): expectedGChildMapValues}
 
 		digests := []atree.Digest{atree.Digest(mapCount - 1), atree.Digest((mapCount - 1) * 2)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
 		// Insert child map
-		existingStorable, err = m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -11597,14 +11598,14 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
 		for i := uint64(0); i < mapCount-1; i++ {
-			k := NewStringValue(strings.Repeat(string(r), 22))
-			v := NewStringValue(strings.Repeat(string(r), 22))
+			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i), atree.Digest(i * 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -11614,30 +11615,30 @@ func TestMapEncodeDecode(t *testing.T) {
 		// Create child array
 		const childArrayCount = 5
 
-		typeInfo2 := testTypeInfo{43}
+		typeInfo2 := test_utils.NewSimpleTypeInfo(43)
 
 		childArray, err := atree.NewArray(storage, address, typeInfo2)
 		require.NoError(t, err)
 
 		expectedChildValues := make([]atree.Value, childArrayCount)
 		for i := 0; i < childArrayCount; i++ {
-			v := NewStringValue(strings.Repeat("b", 22))
+			v := test_utils.NewStringValue(strings.Repeat("b", 22))
 			err = childArray.Append(v)
 			require.NoError(t, err)
 
 			expectedChildValues[i] = v
 		}
 
-		k := NewStringValue(strings.Repeat(string(r), 22))
+		k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 		v := childArray
 
-		keyValues[k] = arrayValue(expectedChildValues)
+		keyValues[k] = ExpectedArrayValue(expectedChildValues)
 
 		digests := []atree.Digest{atree.Digest(mapCount - 1), atree.Digest((mapCount - 1) * 2)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
 		// Insert nested array
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -11849,14 +11850,14 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
 		for i := uint64(0); i < mapCount-1; i++ {
-			k := NewStringValue(strings.Repeat(string(r), 22))
-			v := NewStringValue(strings.Repeat(string(r), 22))
+			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i), atree.Digest(i * 2)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -11864,7 +11865,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		}
 
 		// Create child array
-		childTypeInfo := testTypeInfo{43}
+		childTypeInfo := test_utils.NewSimpleTypeInfo(43)
 
 		childArray, err := atree.NewArray(storage, address, childTypeInfo)
 		require.NoError(t, err)
@@ -11872,14 +11873,14 @@ func TestMapEncodeDecode(t *testing.T) {
 		// Create grand child array
 		const gchildArrayCount = 5
 
-		gchildTypeInfo := testTypeInfo{44}
+		gchildTypeInfo := test_utils.NewSimpleTypeInfo(44)
 
 		gchildArray, err := atree.NewArray(storage, address, gchildTypeInfo)
 		require.NoError(t, err)
 
 		expectedGChildValues := make([]atree.Value, gchildArrayCount)
 		for i := 0; i < gchildArrayCount; i++ {
-			v := NewStringValue(strings.Repeat("b", 22))
+			v := test_utils.NewStringValue(strings.Repeat("b", 22))
 			err = gchildArray.Append(v)
 			require.NoError(t, err)
 
@@ -11890,16 +11891,16 @@ func TestMapEncodeDecode(t *testing.T) {
 		err = childArray.Append(gchildArray)
 		require.NoError(t, err)
 
-		k := NewStringValue(strings.Repeat(string(r), 22))
+		k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 		v := childArray
 
-		keyValues[k] = arrayValue{arrayValue(expectedGChildValues)}
+		keyValues[k] = ExpectedArrayValue{ExpectedArrayValue(expectedGChildValues)}
 
 		digests := []atree.Digest{atree.Digest(mapCount - 1), atree.Digest((mapCount - 1) * 2)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
 		// Insert child array to parent map
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -12036,13 +12037,13 @@ func TestMapEncodeDecode(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		k := Uint64Value(0)
-		v := Uint64Value(0)
+		k := test_utils.Uint64Value(0)
+		v := test_utils.Uint64Value(0)
 
 		digests := []atree.Digest{atree.Digest(0), atree.Digest(1)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: digests})
 
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -12093,13 +12094,13 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.Equal(t, expectedNoPointer, stored[id1])
 
 		// Overwrite existing value with long string
-		vs := NewStringValue(strings.Repeat("a", 128))
-		existingStorable, err = m.Set(compare, hashInputProvider, k, vs)
+		vs := test_utils.NewStringValue(strings.Repeat("a", 128))
+		existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, vs)
 		require.NoError(t, err)
 
 		existingValue, err := existingStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, v, existingValue)
+		testValueEqual(t, v, existingValue)
 
 		expectedHasPointer := []byte{
 
@@ -12167,7 +12168,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo := testCompositeTypeInfo{43}
+		childMapTypeInfo := test_utils.NewCompositeTypeInfo(43)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -12186,24 +12187,24 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			ck := NewStringValue("uuid")
-			cv := Uint64Value(i)
+			ck := test_utils.NewStringValue("uuid")
+			cv := test_utils.Uint64Value(i)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			keyValues[k] = mapValue{ck: cv}
+			keyValues[k] = ExpectedMapValue{ck: cv}
 		}
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
@@ -12326,7 +12327,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo := testCompositeTypeInfo{43}
+		childMapTypeInfo := test_utils.NewCompositeTypeInfo(43)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -12340,38 +12341,38 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := uint64(0); i < mapCount; i++ {
-			expectedChildMapVaues := mapValue{}
+			expectedChildMapVaues := ExpectedMapValue{}
 
 			// Create child map, composite with one field "uuid"
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			ck := NewStringValue("uuid")
-			cv := Uint64Value(i)
+			ck := test_utils.NewStringValue("uuid")
+			cv := test_utils.Uint64Value(i)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			expectedChildMapVaues[ck] = cv
 
-			ck = NewStringValue("amount")
-			cv = Uint64Value(i * 2)
+			ck = test_utils.NewStringValue("amount")
+			cv = test_utils.Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			expectedChildMapVaues[ck] = cv
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -12504,7 +12505,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo := testCompositeTypeInfo{43}
+		childMapTypeInfo := test_utils.NewCompositeTypeInfo(43)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -12519,38 +12520,38 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		// fields are ordered differently because of different seed.
 		for i := uint64(0); i < mapCount; i++ {
-			expectedChildMapValues := mapValue{}
+			expectedChildMapValues := ExpectedMapValue{}
 
 			// Create child map, composite with one field "uuid"
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			ck := NewStringValue("uuid")
-			cv := Uint64Value(i)
+			ck := test_utils.NewStringValue("uuid")
+			cv := test_utils.Uint64Value(i)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			expectedChildMapValues[ck] = cv
 
-			ck = NewStringValue("a")
-			cv = Uint64Value(i * 2)
+			ck = test_utils.NewStringValue("a")
+			cv = test_utils.Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			expectedChildMapValues[ck] = cv
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -12685,7 +12686,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo := testCompositeTypeInfo{43}
+		childMapTypeInfo := test_utils.NewCompositeTypeInfo(43)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -12700,17 +12701,17 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 
 		for i := uint64(0); i < mapCount; i++ {
-			expectedChildMapValues := mapValue{}
+			expectedChildMapValues := ExpectedMapValue{}
 
 			// Create child map
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			ck := NewStringValue("uuid")
-			cv := Uint64Value(i)
+			ck := test_utils.NewStringValue("uuid")
+			cv := test_utils.Uint64Value(i)
 
 			// Insert first element "uuid" to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -12719,19 +12720,19 @@ func TestMapEncodeDecode(t *testing.T) {
 			// Insert second element to child map (second element is different)
 			switch i % 3 {
 			case 0:
-				ck = NewStringValue("a")
-				cv = Uint64Value(i * 2)
-				existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
+				ck = test_utils.NewStringValue("a")
+				cv = test_utils.Uint64Value(i * 2)
+				existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 
 			case 1:
-				ck = NewStringValue("b")
-				cv = Uint64Value(i * 2)
-				existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
+				ck = test_utils.NewStringValue("b")
+				cv = test_utils.Uint64Value(i * 2)
+				existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 
 			case 2:
-				ck = NewStringValue("c")
-				cv = Uint64Value(i * 2)
-				existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
+				ck = test_utils.NewStringValue("c")
+				cv = test_utils.Uint64Value(i * 2)
+				existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			}
 
 			require.NoError(t, err)
@@ -12739,12 +12740,12 @@ func TestMapEncodeDecode(t *testing.T) {
 
 			expectedChildMapValues[ck] = cv
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -12940,7 +12941,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo := testCompositeTypeInfo{43}
+		childMapTypeInfo := test_utils.NewCompositeTypeInfo(43)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -12955,40 +12956,40 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		// fields are ordered differently because of different seed.
 		for i := uint64(0); i < mapCount; i++ {
-			expectedChildMapValues := mapValue{}
+			expectedChildMapValues := ExpectedMapValue{}
 
 			// Create child map, composite with one field "uuid"
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
 
-			ck := NewStringValue("uuid")
-			cv := Uint64Value(i)
+			ck := test_utils.NewStringValue("uuid")
+			cv := test_utils.Uint64Value(i)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			expectedChildMapValues[ck] = cv
 
 			if i == 0 {
-				ck = NewStringValue("a")
-				cv = Uint64Value(i * 2)
+				ck = test_utils.NewStringValue("a")
+				cv = test_utils.Uint64Value(i * 2)
 
 				// Insert element to child map
-				existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
+				existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
 				expectedChildMapValues[ck] = cv
 			}
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -13139,8 +13140,8 @@ func TestMapEncodeDecode(t *testing.T) {
 		atree.SetThreshold(256)
 		defer atree.SetThreshold(1024)
 
-		childMapTypeInfo1 := testCompositeTypeInfo{43}
-		childMapTypeInfo2 := testCompositeTypeInfo{44}
+		childMapTypeInfo1 := test_utils.NewCompositeTypeInfo(43)
+		childMapTypeInfo2 := test_utils.NewCompositeTypeInfo(44)
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -13155,7 +13156,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		// fields are ordered differently because of different seed.
 		for i := uint64(0); i < mapCount; i++ {
-			expectedChildMapValues := mapValue{}
+			expectedChildMapValues := ExpectedMapValue{}
 
 			var ti atree.TypeInfo
 			if i%2 == 0 {
@@ -13168,32 +13169,32 @@ func TestMapEncodeDecode(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), ti)
 			require.NoError(t, err)
 
-			ck := NewStringValue("uuid")
-			cv := Uint64Value(i)
+			ck := test_utils.NewStringValue("uuid")
+			cv := test_utils.Uint64Value(i)
 
 			// Insert element to child map
-			existingStorable, err := childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			expectedChildMapValues[ck] = cv
 
-			ck = NewStringValue("a")
-			cv = Uint64Value(i * 2)
+			ck = test_utils.NewStringValue("a")
+			cv = test_utils.Uint64Value(i * 2)
 
 			// Insert element to child map
-			existingStorable, err = childMap.Set(compare, hashInputProvider, ck, cv)
+			existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, ck, cv)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			expectedChildMapValues[ck] = cv
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
 			// Insert child map to parent map
-			existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -13390,7 +13391,7 @@ func TestMapEncodeDecodeRandomValues(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -13414,15 +13415,15 @@ func TestMapStoredValue(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestPersistentStorage(t)
 
 	keyValues := make(map[atree.Value]atree.Value, mapCount)
 	i := 0
 	for len(keyValues) < mapCount {
-		k := NewStringValue(randStr(r, 16))
-		keyValues[k] = Uint64Value(i)
+		k := test_utils.NewStringValue(randStr(r, 16))
+		keyValues[k] = test_utils.Uint64Value(i)
 		i++
 	}
 
@@ -13430,7 +13431,7 @@ func TestMapStoredValue(t *testing.T) {
 	require.NoError(t, err)
 
 	for k, v := range keyValues {
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
@@ -13471,7 +13472,7 @@ func TestMapStoredValue(t *testing.T) {
 func TestMapPopIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -13496,7 +13497,7 @@ func TestMapPopIterate(t *testing.T) {
 	t.Run("root-dataslab", func(t *testing.T) {
 		const mapCount = 10
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -13507,11 +13508,11 @@ func TestMapPopIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := uint64(0); i < mapCount; i++ {
-			key, value := Uint64Value(i), Uint64Value(i*10)
+			key, value := test_utils.Uint64Value(i), test_utils.Uint64Value(i*10)
 			sortedKeys[i] = key
 			keyValues[key] = value
 
-			existingStorable, err := m.Set(compare, hashInputProvider, key, value)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, key, value)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -13531,11 +13532,11 @@ func TestMapPopIterate(t *testing.T) {
 
 			kv, err := k.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, sortedKeys[i], kv)
+			testValueEqual(t, sortedKeys[i], kv)
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, keyValues[sortedKeys[i]], vv)
+			testValueEqual(t, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
@@ -13553,15 +13554,15 @@ func TestMapPopIterate(t *testing.T) {
 		sortedKeys := make([]atree.Value, mapCount)
 		i := 0
 		for len(keyValues) < mapCount {
-			k := NewStringValue(randStr(r, 16))
+			k := test_utils.NewStringValue(randStr(r, 16))
 			if _, found := keyValues[k]; !found {
 				sortedKeys[i] = k
-				keyValues[k] = NewStringValue(randStr(r, 16))
+				keyValues[k] = test_utils.NewStringValue(randStr(r, 16))
 				i++
 			}
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 		digesterBuilder := atree.NewDefaultDigesterBuilder()
@@ -13570,7 +13571,7 @@ func TestMapPopIterate(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -13587,11 +13588,11 @@ func TestMapPopIterate(t *testing.T) {
 
 			kv, err := k.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, sortedKeys[i], kv)
+			testValueEqual(t, sortedKeys[i], kv)
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, keyValues[sortedKeys[i]], vv)
+			testValueEqual(t, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
@@ -13610,7 +13611,7 @@ func TestMapPopIterate(t *testing.T) {
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		digesterBuilder := &mockDigesterBuilder{}
 		storage := newTestPersistentStorage(t)
@@ -13622,12 +13623,12 @@ func TestMapPopIterate(t *testing.T) {
 		sortedKeys := make([]atree.Value, mapCount)
 		i := 0
 		for len(keyValues) < mapCount {
-			k := NewStringValue(randStr(r, 16))
+			k := test_utils.NewStringValue(randStr(r, 16))
 
 			if _, found := keyValues[k]; !found {
 
 				sortedKeys[i] = k
-				keyValues[k] = NewStringValue(randStr(r, 16))
+				keyValues[k] = test_utils.NewStringValue(randStr(r, 16))
 
 				digests := []atree.Digest{
 					atree.Digest(i % 100),
@@ -13636,7 +13637,7 @@ func TestMapPopIterate(t *testing.T) {
 
 				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-				existingStorable, err := m.Set(compare, hashInputProvider, k, keyValues[k])
+				existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, keyValues[k])
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -13656,11 +13657,11 @@ func TestMapPopIterate(t *testing.T) {
 
 			kv, err := k.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, sortedKeys[i], kv)
+			testValueEqual(t, sortedKeys[i], kv)
 
 			vv, err := v.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, keyValues[sortedKeys[i]], vv)
+			testValueEqual(t, keyValues[sortedKeys[i]], vv)
 		})
 
 		require.NoError(t, err)
@@ -13674,7 +13675,7 @@ func TestEmptyMap(t *testing.T) {
 
 	t.Parallel()
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -13682,7 +13683,7 @@ func TestEmptyMap(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("get", func(t *testing.T) {
-		s, err := m.Get(compare, hashInputProvider, Uint64Value(0))
+		s, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 		require.Equal(t, 1, errorCategorizationCount(err))
 		var userError *atree.UserError
 		var keyNotFoundError *atree.KeyNotFoundError
@@ -13693,7 +13694,7 @@ func TestEmptyMap(t *testing.T) {
 	})
 
 	t.Run("remove", func(t *testing.T) {
-		existingMapKeyStorable, existingMapValueStorable, err := m.Remove(compare, hashInputProvider, Uint64Value(0))
+		existingMapKeyStorable, existingMapValueStorable, err := m.Remove(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 		require.Equal(t, 1, errorCategorizationCount(err))
 		var userError *atree.UserError
 		var keyNotFoundError *atree.KeyNotFoundError
@@ -13716,7 +13717,7 @@ func TestEmptyMap(t *testing.T) {
 
 	t.Run("iterate", func(t *testing.T) {
 		i := 0
-		err := m.Iterate(compare, hashInputProvider, func(atree.Value, atree.Value) (bool, error) {
+		err := m.Iterate(test_utils.CompareValue, test_utils.GetHashInput, func(atree.Value, atree.Value) (bool, error) {
 			i++
 			return true, nil
 		})
@@ -13730,7 +13731,7 @@ func TestEmptyMap(t *testing.T) {
 	})
 
 	t.Run("type", func(t *testing.T) {
-		require.True(t, typeInfoComparator(typeInfo, m.Type()))
+		require.True(t, test_utils.CompareTypeInfo(typeInfo, m.Type()))
 	})
 
 	t.Run("address", func(t *testing.T) {
@@ -13743,7 +13744,7 @@ func TestEmptyMap(t *testing.T) {
 func TestMapFromBatchData(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		m, err := atree.NewMap(
 			newTestPersistentStorage(t),
@@ -13766,8 +13767,8 @@ func TestMapFromBatchData(t *testing.T) {
 			address,
 			atree.NewDefaultDigesterBuilder(),
 			m.Type(),
-			compare,
-			hashInputProvider,
+			test_utils.CompareValue,
+			test_utils.GetHashInput,
 			m.Seed(),
 			func() (atree.Value, atree.Value, error) {
 				return iter.Next()
@@ -13783,7 +13784,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		const mapCount = 10
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		m, err := atree.NewMap(
 			newTestPersistentStorage(t),
@@ -13794,7 +13795,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapCount; i++ {
-			storable, err := m.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*10))
+			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(i), test_utils.Uint64Value(i*10))
 			require.NoError(t, err)
 			require.Nil(t, storable)
 		}
@@ -13817,8 +13818,8 @@ func TestMapFromBatchData(t *testing.T) {
 			address,
 			digesterBuilder,
 			m.Type(),
-			compare,
-			hashInputProvider,
+			test_utils.CompareValue,
+			test_utils.GetHashInput,
 			m.Seed(),
 			func() (atree.Value, atree.Value, error) {
 
@@ -13845,7 +13846,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		const mapCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		m, err := atree.NewMap(
 			newTestPersistentStorage(t),
@@ -13856,7 +13857,7 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapCount; i++ {
-			storable, err := m.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*10))
+			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(i), test_utils.Uint64Value(i*10))
 			require.NoError(t, err)
 			require.Nil(t, storable)
 		}
@@ -13878,8 +13879,8 @@ func TestMapFromBatchData(t *testing.T) {
 			address,
 			digesterBuilder,
 			m.Type(),
-			compare,
-			hashInputProvider,
+			test_utils.CompareValue,
+			test_utils.GetHashInput,
 			m.Seed(),
 			func() (atree.Value, atree.Value, error) {
 				k, v, err := iter.Next()
@@ -13904,7 +13905,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		const mapCount = 10
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		m, err := atree.NewMap(
 			newTestPersistentStorage(t),
@@ -13915,14 +13916,14 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapCount; i++ {
-			storable, err := m.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*10))
+			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(i), test_utils.Uint64Value(i*10))
 			require.NoError(t, err)
 			require.Nil(t, storable)
 		}
 
-		k := NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapElementSize()-2)))
-		v := NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2)))
-		storable, err := m.Set(compare, hashInputProvider, k, v)
+		k := test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapElementSize()-2)))
+		v := test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2)))
+		storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, storable)
 
@@ -13943,8 +13944,8 @@ func TestMapFromBatchData(t *testing.T) {
 			address,
 			digesterBuilder,
 			m.Type(),
-			compare,
-			hashInputProvider,
+			test_utils.CompareValue,
+			test_utils.GetHashInput,
 			m.Seed(),
 			func() (atree.Value, atree.Value, error) {
 				k, v, err := iter.Next()
@@ -13969,7 +13970,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		const mapCount = 8
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		m, err := atree.NewMap(
 			newTestPersistentStorage(t),
@@ -13980,16 +13981,16 @@ func TestMapFromBatchData(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapCount; i++ {
-			storable, err := m.Set(compare, hashInputProvider, Uint64Value(i), Uint64Value(i*10))
+			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(i), test_utils.Uint64Value(i*10))
 			require.NoError(t, err)
 			require.Nil(t, storable)
 		}
 
 		storable, err := m.Set(
-			compare,
-			hashInputProvider,
-			NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2))),
-			NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2))),
+			test_utils.CompareValue,
+			test_utils.GetHashInput,
+			test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2))),
+			test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2))),
 		)
 		require.NoError(t, err)
 		require.Nil(t, storable)
@@ -14012,8 +14013,8 @@ func TestMapFromBatchData(t *testing.T) {
 			address,
 			digesterBuilder,
 			m.Type(),
-			compare,
-			hashInputProvider,
+			test_utils.CompareValue,
+			test_utils.GetHashInput,
 			m.Seed(),
 			func() (atree.Value, atree.Value, error) {
 				k, v, err := iter.Next()
@@ -14040,7 +14041,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		m, err := atree.NewMap(
 			newTestPersistentStorage(t),
@@ -14054,7 +14055,7 @@ func TestMapFromBatchData(t *testing.T) {
 			k := randomValue(r, int(atree.MaxInlineMapElementSize()))
 			v := randomValue(r, int(atree.MaxInlineMapElementSize()))
 
-			_, err = m.Set(compare, hashInputProvider, k, v)
+			_, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 		}
 
@@ -14075,8 +14076,8 @@ func TestMapFromBatchData(t *testing.T) {
 			address,
 			digesterBuilder,
 			m.Type(),
-			compare,
-			hashInputProvider,
+			test_utils.CompareValue,
+			test_utils.GetHashInput,
 			m.Seed(),
 			func() (atree.Value, atree.Value, error) {
 				k, v, err := iter.Next()
@@ -14108,7 +14109,7 @@ func TestMapFromBatchData(t *testing.T) {
 		}()
 		atree.MaxCollisionLimitPerDigest = mapCount / 2
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -14122,7 +14123,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		for i := uint64(0); i < mapCount; i++ {
 
-			k, v := Uint64Value(i), Uint64Value(i*10)
+			k, v := test_utils.Uint64Value(i), test_utils.Uint64Value(i*10)
 
 			digests := make([]atree.Digest, 2)
 			if i%2 == 0 {
@@ -14134,7 +14135,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			storable, err := m.Set(compare, hashInputProvider, k, v)
+			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, storable)
 		}
@@ -14156,8 +14157,8 @@ func TestMapFromBatchData(t *testing.T) {
 			address,
 			digesterBuilder,
 			m.Type(),
-			compare,
-			hashInputProvider,
+			test_utils.CompareValue,
+			test_utils.GetHashInput,
 			m.Seed(),
 			func() (atree.Value, atree.Value, error) {
 				k, v, err := iter.Next()
@@ -14189,7 +14190,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		maxStringSize := int(atree.MaxInlineMapKeySize() - 2)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -14201,27 +14202,27 @@ func TestMapFromBatchData(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		k := NewStringValue(randStr(r, maxStringSize))
-		v := NewStringValue(randStr(r, maxStringSize))
+		k := test_utils.NewStringValue(randStr(r, maxStringSize))
+		v := test_utils.NewStringValue(randStr(r, maxStringSize))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{3881892766069237908}})
 
-		storable, err := m.Set(compare, hashInputProvider, k, v)
+		storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, storable)
 
-		k = NewStringValue(randStr(r, maxStringSize))
-		v = NewStringValue(randStr(r, maxStringSize))
+		k = test_utils.NewStringValue(randStr(r, maxStringSize))
+		v = test_utils.NewStringValue(randStr(r, maxStringSize))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{3882976639190041664}})
 
-		storable, err = m.Set(compare, hashInputProvider, k, v)
+		storable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, storable)
 
-		k = NewStringValue("zFKUYYNfIfJCCakcDuIEHj")
-		v = NewStringValue("EZbaCxxjDtMnbRlXJMgfHnZ")
+		k = test_utils.NewStringValue("zFKUYYNfIfJCCakcDuIEHj")
+		v = test_utils.NewStringValue("EZbaCxxjDtMnbRlXJMgfHnZ")
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{3883321011075439822}})
 
-		storable, err = m.Set(compare, hashInputProvider, k, v)
+		storable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, storable)
 
@@ -14239,8 +14240,8 @@ func TestMapFromBatchData(t *testing.T) {
 			address,
 			digesterBuilder,
 			m.Type(),
-			compare,
-			hashInputProvider,
+			test_utils.CompareValue,
+			test_utils.GetHashInput,
 			m.Seed(),
 			func() (atree.Value, atree.Value, error) {
 				k, v, err := iter.Next()
@@ -14262,11 +14263,11 @@ func TestMapFromBatchData(t *testing.T) {
 
 func TestMapNestedStorables(t *testing.T) {
 
-	t.Run("SomeValue", func(t *testing.T) {
+	t.Run("test_utils.SomeValue", func(t *testing.T) {
 
 		const mapCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -14277,14 +14278,14 @@ func TestMapNestedStorables(t *testing.T) {
 		for i := uint64(0); i < mapCount; i++ {
 
 			ks := strings.Repeat("a", int(i))
-			k := SomeValue{Value: NewStringValue(ks)}
+			k := test_utils.NewSomeValue(test_utils.NewStringValue(ks))
 
 			vs := strings.Repeat("b", int(i))
-			v := SomeValue{Value: NewStringValue(vs)}
+			v := test_utils.NewSomeValue(test_utils.NewStringValue(vs))
 
-			keyValues[k] = someValue{NewStringValue(vs)}
+			keyValues[k] = ExpectedWrapperValue{test_utils.NewStringValue(vs)}
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -14296,7 +14297,7 @@ func TestMapNestedStorables(t *testing.T) {
 
 		const mapCount = 4096
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -14311,18 +14312,18 @@ func TestMapNestedStorables(t *testing.T) {
 			require.NoError(t, err)
 
 			vs := strings.Repeat("b", int(i))
-			v := SomeValue{Value: NewStringValue(vs)}
+			v := test_utils.NewSomeValue(test_utils.NewStringValue(vs))
 
 			err = childArray.Append(v)
 			require.NoError(t, err)
 
 			// Insert nested array into map
 			ks := strings.Repeat("a", int(i))
-			k := SomeValue{Value: NewStringValue(ks)}
+			k := test_utils.NewSomeValue(test_utils.NewStringValue(ks))
 
-			keyValues[k] = arrayValue{someValue{NewStringValue(vs)}}
+			keyValues[k] = ExpectedArrayValue{ExpectedWrapperValue{test_utils.NewStringValue(vs)}}
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, childArray)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childArray)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -14336,7 +14337,7 @@ func TestMapMaxInlineElement(t *testing.T) {
 
 	r := newRand(t)
 	maxStringSize := int(atree.MaxInlineMapKeySize() - 2)
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -14346,11 +14347,11 @@ func TestMapMaxInlineElement(t *testing.T) {
 	keyValues := make(map[atree.Value]atree.Value)
 	for len(keyValues) < 2 {
 		// String length is maxInlineMapKeySize - 2 to account for string encoding overhead.
-		k := NewStringValue(randStr(r, maxStringSize))
-		v := NewStringValue(randStr(r, maxStringSize))
+		k := test_utils.NewStringValue(randStr(r, maxStringSize))
+		v := test_utils.NewStringValue(randStr(r, maxStringSize))
 		keyValues[k] = v
 
-		_, err := m.Set(compare, hashInputProvider, k, v)
+		_, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 	}
 
@@ -14373,7 +14374,7 @@ func TestMapString(t *testing.T) {
 		const mapCount = 3
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -14381,11 +14382,11 @@ func TestMapString(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -14398,7 +14399,7 @@ func TestMapString(t *testing.T) {
 		const mapCount = 30
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -14406,11 +14407,11 @@ func TestMapString(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -14429,7 +14430,7 @@ func TestMapSlabDump(t *testing.T) {
 		const mapCount = 3
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -14437,11 +14438,11 @@ func TestMapSlabDump(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -14458,7 +14459,7 @@ func TestMapSlabDump(t *testing.T) {
 		const mapCount = 30
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -14466,11 +14467,11 @@ func TestMapSlabDump(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -14489,7 +14490,7 @@ func TestMapSlabDump(t *testing.T) {
 		const mapCount = 30
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -14497,11 +14498,11 @@ func TestMapSlabDump(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i % 10)}})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -14520,7 +14521,7 @@ func TestMapSlabDump(t *testing.T) {
 		const mapCount = 30
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -14528,11 +14529,11 @@ func TestMapSlabDump(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i % 2)}})
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -14550,18 +14551,18 @@ func TestMapSlabDump(t *testing.T) {
 	t.Run("key overflow", func(t *testing.T) {
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		k := NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapKeySize())))
-		v := NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapKeySize())))
+		k := test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapKeySize())))
+		v := test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapKeySize())))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(0)}})
 
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -14577,18 +14578,18 @@ func TestMapSlabDump(t *testing.T) {
 	t.Run("value overflow", func(t *testing.T) {
 
 		digesterBuilder := &mockDigesterBuilder{}
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		k := NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapKeySize()-2)))
-		v := NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize())))
+		k := test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapKeySize()-2)))
+		v := test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize())))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(0)}})
 
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -14621,15 +14622,15 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 		digesterBuilder := &mockDigesterBuilder{}
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -14638,7 +14639,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		// Insert elements within collision limits
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -14648,8 +14649,8 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 		// Insert elements exceeding collision limits
 		collisionKeyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(mapCount + i)
-			v := Uint64Value(mapCount + i)
+			k := test_utils.Uint64Value(mapCount + i)
+			v := test_utils.Uint64Value(mapCount + i)
 			collisionKeyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i)}
@@ -14657,7 +14658,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 		}
 
 		for k, v := range collisionKeyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.Equal(t, 1, errorCategorizationCount(err))
 			var fatalError *atree.FatalError
 			var collisionLimitError *atree.CollisionLimitError
@@ -14672,9 +14673,9 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		// Update elements within collision limits
 		for k := range keyValues {
-			v := Uint64Value(0)
+			v := test_utils.Uint64Value(0)
 			keyValues[k] = v
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 		}
@@ -14695,15 +14696,15 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 		digesterBuilder := &mockDigesterBuilder{}
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(i)
-			v := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
+			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i % 128)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -14712,7 +14713,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		// Insert elements within collision limits
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -14722,8 +14723,8 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 		// Insert elements exceeding collision limits
 		collisionKeyValues := make(map[atree.Value]atree.Value, mapCount)
 		for i := uint64(0); i < mapCount; i++ {
-			k := Uint64Value(mapCount + i)
-			v := Uint64Value(mapCount + i)
+			k := test_utils.Uint64Value(mapCount + i)
+			v := test_utils.Uint64Value(mapCount + i)
 			collisionKeyValues[k] = v
 
 			digests := []atree.Digest{atree.Digest(i % 128)}
@@ -14731,7 +14732,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 		}
 
 		for k, v := range collisionKeyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.Equal(t, 1, errorCategorizationCount(err))
 			var fatalError *atree.FatalError
 			var collisionLimitError *atree.CollisionLimitError
@@ -14746,9 +14747,9 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		// Update elements within collision limits
 		for k := range keyValues {
-			v := Uint64Value(0)
+			v := test_utils.Uint64Value(0)
 			keyValues[k] = v
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 		}
@@ -14762,7 +14763,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 	atree.SetThreshold(256)
 	defer atree.SetThreshold(1024)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	runTest := func(name string, f func(useWrapperValue bool) func(*testing.T)) {
@@ -14938,7 +14939,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			for i := 0; i < len(values); i++ {
 				k := values[i][0]
 
-				s, ok := k.(StringValue)
+				s, ok := k.(test_utils.StringValue)
 				require.True(t, ok)
 
 				// Find storage id for StringValue s.
@@ -14946,8 +14947,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				deltas := atree.GetDeltas(storage)
 				for id, slab := range deltas {
 					if sslab, ok := slab.(*atree.StorableSlab); ok {
-						if other, ok := sslab.ChildStorables()[0].(StringValue); ok {
-							if s.str == other.str {
+						if other, ok := sslab.ChildStorables()[0].(test_utils.StringValue); ok {
+							if s.Equal(other) {
 								keyID = id
 								break
 							}
@@ -15140,7 +15141,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			for i := len(values) - 1; i >= 0; i-- {
 				k := values[i][0]
 
-				s, ok := k.(StringValue)
+				s, ok := k.(test_utils.StringValue)
 				require.True(t, ok)
 
 				// Find storage id for StringValue s.
@@ -15148,8 +15149,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				deltas := atree.GetDeltas(storage)
 				for id, slab := range deltas {
 					if sslab, ok := slab.(*atree.StorableSlab); ok {
-						if other, ok := sslab.ChildStorables()[0].(StringValue); ok {
-							if s.str == other.str {
+						if other, ok := sslab.ChildStorables()[0].(test_utils.StringValue); ok {
+							if s.Equal(other) {
 								keyID = id
 								break
 							}
@@ -15344,7 +15345,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			k := values[unloadValueIndex][0]
 
-			s, ok := k.(StringValue)
+			s, ok := k.(test_utils.StringValue)
 			require.True(t, ok)
 
 			// Find storage id for StringValue s.
@@ -15352,8 +15353,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			deltas := atree.GetDeltas(storage)
 			for id, slab := range deltas {
 				if sslab, ok := slab.(*atree.StorableSlab); ok {
-					if other, ok := sslab.ChildStorables()[0].(StringValue); ok {
-						if s.str == other.str {
+					if other, ok := sslab.ChildStorables()[0].(test_utils.StringValue); ok {
+						if s.Equal(other) {
 							keyID = id
 							break
 						}
@@ -15540,8 +15541,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				}
 
 				require.Equal(t, 0, i)
-				valueEqual(t, values[0][0], k)
-				valueEqual(t, values[0][1], v)
+				testValueEqual(t, values[0][0], k)
+				testValueEqual(t, values[0][1], v)
 				i++
 				return true, nil
 			})
@@ -16339,20 +16340,20 @@ func createMapWithLongStringKey(
 	for i := 0; i < size; i++ {
 		s := strings.Repeat(string(r), int(atree.MaxInlineMapElementSize()))
 
-		k := NewStringValue(s)
-		v := Uint64Value(i)
+		k := test_utils.NewStringValue(s)
+		v := test_utils.Uint64Value(i)
 
 		digests := []atree.Digest{atree.Digest(i)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 		if useWrapperValue {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, SomeValue{v})
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.NewSomeValue(v))
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			expectedValues[i] = [2]atree.Value{k, someValue{v}}
+			expectedValues[i] = [2]atree.Value{k, ExpectedWrapperValue{v}}
 		} else {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -16383,22 +16384,22 @@ func createMapWithSimpleValues(
 	expectedValues := make([][2]atree.Value, size)
 	r := rune('a')
 	for i := 0; i < size; i++ {
-		k := Uint64Value(i)
-		v := NewStringValue(strings.Repeat(string(r), 20))
+		k := test_utils.Uint64Value(i)
+		v := test_utils.NewStringValue(strings.Repeat(string(r), 20))
 
 		digests := newDigests(i)
 		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 		if useWrapperValue {
-			expectedValues[i] = [2]atree.Value{k, someValue{v}}
+			expectedValues[i] = [2]atree.Value{k, ExpectedWrapperValue{v}}
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, SomeValue{v})
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.NewSomeValue(v))
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		} else {
 			expectedValues[i] = [2]atree.Value{k, v}
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -16434,7 +16435,7 @@ func createMapWithChildArrayValues(
 
 		expectedChildValues := make([]atree.Value, childArrayCount)
 		for j := 0; j < childArrayCount; j++ {
-			v := Uint64Value(j)
+			v := test_utils.Uint64Value(j)
 
 			err = childArray.Append(v)
 			require.NoError(t, err)
@@ -16442,7 +16443,7 @@ func createMapWithChildArrayValues(
 			expectedChildValues[j] = v
 		}
 
-		k := Uint64Value(i)
+		k := test_utils.Uint64Value(i)
 		v := childArray
 
 		slabIDs[i] = childArray.SlabID()
@@ -16452,17 +16453,17 @@ func createMapWithChildArrayValues(
 
 		// Set child array to parent
 		if useWrapperValue {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, SomeValue{v})
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.NewSomeValue(v))
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			expectedValues[i] = [2]atree.Value{k, someValue{arrayValue(expectedChildValues)}}
+			expectedValues[i] = [2]atree.Value{k, ExpectedWrapperValue{ExpectedArrayValue(expectedChildValues)}}
 		} else {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			expectedValues[i] = [2]atree.Value{k, arrayValue(expectedChildValues)}
+			expectedValues[i] = [2]atree.Value{k, ExpectedArrayValue(expectedChildValues)}
 		}
 	}
 
@@ -16492,7 +16493,7 @@ func createMapWithSimpleAndChildArrayValues(
 	r := 'a'
 	for i := 0; i < size; i++ {
 
-		k := Uint64Value(i)
+		k := test_utils.Uint64Value(i)
 
 		digests := newDigests(i)
 		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -16504,7 +16505,7 @@ func createMapWithSimpleAndChildArrayValues(
 
 			expectedChildValues := make([]atree.Value, childArrayCount)
 			for j := 0; j < childArrayCount; j++ {
-				v := Uint64Value(j)
+				v := test_utils.Uint64Value(j)
 				err = childArray.Append(v)
 				require.NoError(t, err)
 
@@ -16512,26 +16513,26 @@ func createMapWithSimpleAndChildArrayValues(
 			}
 
 			if useWrapperValue {
-				existingStorable, err := m.Set(compare, hashInputProvider, k, SomeValue{childArray})
+				existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.NewSomeValue(childArray))
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
-				values[i] = [2]atree.Value{k, someValue{arrayValue(expectedChildValues)}}
+				values[i] = [2]atree.Value{k, ExpectedWrapperValue{ExpectedArrayValue(expectedChildValues)}}
 			} else {
-				existingStorable, err := m.Set(compare, hashInputProvider, k, childArray)
+				existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childArray)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
-				values[i] = [2]atree.Value{k, arrayValue(expectedChildValues)}
+				values[i] = [2]atree.Value{k, ExpectedArrayValue(expectedChildValues)}
 			}
 
 			slabID = childArray.SlabID()
 
 		} else {
-			v := NewStringValue(strings.Repeat(string(r), 18))
+			v := test_utils.NewStringValue(strings.Repeat(string(r), 18))
 			values[i] = [2]atree.Value{k, v}
 
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -16544,8 +16545,8 @@ func testMapLoadedElements(t *testing.T, m *atree.OrderedMap, expectedValues [][
 	i := 0
 	err := m.IterateReadOnlyLoadedValues(func(k atree.Value, v atree.Value) (bool, error) {
 		require.True(t, i < len(expectedValues))
-		valueEqual(t, expectedValues[i][0], k)
-		valueEqual(t, expectedValues[i][1], v)
+		testValueEqual(t, expectedValues[i][0], k)
+		testValueEqual(t, expectedValues[i][1], v)
 		i++
 		return true, nil
 	})
@@ -16580,12 +16581,12 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for len(keyValues) < mapCount {
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, int(valueStringSize)))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, int(valueStringSize)))
 			keyValues[k] = v
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -16593,7 +16594,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -16618,12 +16619,12 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for len(keyValues) < mapCount {
-			k := NewStringValue(randStr(r, int(keyStringSize)))
-			v := NewStringValue(randStr(r, int(valueStringSize)))
+			k := test_utils.NewStringValue(randStr(r, int(keyStringSize)))
+			v := test_utils.NewStringValue(randStr(r, int(valueStringSize)))
 			keyValues[k] = v
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -16631,7 +16632,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -16658,12 +16659,12 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for len(keyValues) < mapCount {
-			k := NewStringValue(randStr(r, int(keyStringSize)))
-			v := NewStringValue(randStr(r, int(valueStringSize)))
+			k := test_utils.NewStringValue(randStr(r, int(keyStringSize)))
+			v := test_utils.NewStringValue(randStr(r, int(valueStringSize)))
 			keyValues[k] = v
 		}
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 		storage := newTestPersistentStorage(t)
 
@@ -16671,7 +16672,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		require.NoError(t, err)
 
 		for k, v := range keyValues {
-			existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -16684,7 +16685,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 }
 
 func TestMapID(t *testing.T) {
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -16705,16 +16706,16 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 		mutatedStorableSize = 5
 	)
 
-	keyValues := make(map[atree.Value]*testMutableValue, mapCount)
+	keyValues := make(map[atree.Value]*test_utils.MutableValue, mapCount)
 	elementByteSizes := make([][2]uint32, mapCount)
 	for i := 0; i < mapCount; i++ {
-		k := Uint64Value(i)
-		v := newTestMutableValue(initialStorableSize)
+		k := test_utils.Uint64Value(i)
+		v := test_utils.NewMutableValue(initialStorableSize)
 		keyValues[k] = v
 		elementByteSizes[i] = [2]uint32{k.ByteSize(), initialStorableSize}
 	}
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	storage := newTestPersistentStorage(t)
 
@@ -16722,7 +16723,7 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 	require.NoError(t, err)
 
 	for k, v := range keyValues {
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 	}
@@ -16732,15 +16733,15 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 	expectedMapRootDataSlabSize := atree.ComputeMapRootDataSlabByteSize(elementByteSizes)
 	require.Equal(t, expectedMapRootDataSlabSize, GetMapRootSlabByteSize(m))
 
-	err = atree.VerifyMap(m, address, typeInfo, typeInfoComparator, hashInputProvider, true)
+	err = atree.VerifyMap(m, address, typeInfo, test_utils.CompareTypeInfo, test_utils.GetHashInput, true)
 	require.NoError(t, err)
 
 	// Reset mutable values after changing its storable size
 	elementByteSizes = elementByteSizes[:0]
 	for k, v := range keyValues {
-		v.updateStorableSize(mutatedStorableSize)
+		v.UpdateStorableSize(mutatedStorableSize)
 
-		existingStorable, err := m.Set(compare, hashInputProvider, k, v)
+		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.NotNil(t, existingStorable)
 
@@ -16754,7 +16755,7 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 	expectedMapRootDataSlabSize = atree.ComputeMapRootDataSlabByteSize(elementByteSizes)
 	require.Equal(t, expectedMapRootDataSlabSize, GetMapRootSlabByteSize(m))
 
-	err = atree.VerifyMap(m, address, typeInfo, typeInfoComparator, hashInputProvider, true)
+	err = atree.VerifyMap(m, address, typeInfo, test_utils.CompareTypeInfo, test_utils.GetHashInput, true)
 	require.NoError(t, err)
 }
 
@@ -16771,17 +16772,17 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		)
 
 		// encoded key size is the same for all string keys of the same length.
-		encodedKeySize := NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
-		encodedValueSize := NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
+		encodedKeySize := test_utils.NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
+		encodedValueSize := test_utils.NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		parentMap, expectedKeyValues, elementByteSizesByKey := createMapWithEmptyChildMap(t, storage, address, typeInfo, mapCount, func() atree.Value {
-			return NewStringValue(randStr(r, keyStringSize))
+			return test_utils.NewStringValue(randStr(r, keyStringSize))
 		})
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
@@ -16798,13 +16799,13 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				childMap := child.m
 				valueID := child.valueID
 
-				expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+				expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 				require.True(t, ok)
 
-				k := NewStringValue(randStr(r, keyStringSize))
-				v := NewStringValue(randStr(r, valueStringSize))
+				k := test_utils.NewStringValue(randStr(r, keyStringSize))
+				v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 				require.Equal(t, uint64(i+1), childMap.Count())
@@ -16843,13 +16844,13 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			childMap := child.m
 			valueID := child.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -16891,7 +16892,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			childMap := child.m
 			valueID := child.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
 			keys := make([]atree.Value, 0, len(expectedChildMapValues))
@@ -16900,7 +16901,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			for _, k := range keys {
-				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingMapKeyStorable)
 				require.NotNil(t, existingMapValueStorable)
@@ -16944,17 +16945,17 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		)
 
 		// encoded key size is the same for all string keys of the same length.
-		encodedKeySize := NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
-		encodedValueSize := NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
+		encodedKeySize := test_utils.NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
+		encodedValueSize := test_utils.NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		parentMap, expectedKeyValues, elementByteSizesByKey := createMapWithEmptyChildMap(t, storage, address, typeInfo, mapCount, func() atree.Value {
-			return NewStringValue(randStr(r, keyStringSize))
+			return test_utils.NewStringValue(randStr(r, keyStringSize))
 		})
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
@@ -16971,13 +16972,13 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				childMap := child.m
 				valueID := child.valueID
 
-				expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+				expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 				require.True(t, ok)
 
-				k := NewStringValue(randStr(r, keyStringSize))
-				v := NewStringValue(randStr(r, valueStringSize))
+				k := test_utils.NewStringValue(randStr(r, keyStringSize))
+				v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 				require.Equal(t, uint64(i+1), childMap.Count())
@@ -17019,13 +17020,13 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			childMap := child.m
 			valueID := child.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -17070,7 +17071,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			childMap := child.m
 			valueID := child.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
 			var aKey atree.Value
@@ -17079,7 +17080,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				break
 			}
 
-			existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, aKey)
+			existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, aKey)
 			require.NoError(t, err)
 			require.Equal(t, aKey, existingMapKeyStorable)
 			require.NotNil(t, existingMapValueStorable)
@@ -17121,7 +17122,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			childMap := child.m
 			valueID := child.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
 			keys := make([]atree.Value, 0, len(expectedChildMapValues))
@@ -17130,7 +17131,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			for _, k := range keys {
-				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingMapKeyStorable)
 				require.NotNil(t, existingMapValueStorable)
@@ -17179,17 +17180,17 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		)
 
 		// encoded key size is the same for all string keys of the same length.
-		encodedKeySize := NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
-		encodedValueSize := NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
+		encodedKeySize := test_utils.NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
+		encodedValueSize := test_utils.NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		parentMap, expectedKeyValues, _ := createMapWithEmptyChildMap(t, storage, address, typeInfo, mapCount, func() atree.Value {
-			return NewStringValue(randStr(r, keyStringSize))
+			return test_utils.NewStringValue(randStr(r, keyStringSize))
 		})
 
 		require.Equal(t, uint64(mapCount), parentMap.Count())
@@ -17206,13 +17207,13 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				childMap := child.m
 				valueID := child.valueID
 
-				expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+				expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 				require.True(t, ok)
 
-				k := NewStringValue(randStr(r, keyStringSize))
-				v := NewStringValue(randStr(r, valueStringSize))
+				k := test_utils.NewStringValue(randStr(r, keyStringSize))
+				v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 				require.Equal(t, uint64(i+1), childMap.Count())
@@ -17245,13 +17246,13 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			childMap := child.m
 			valueID := child.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -17283,7 +17284,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			childMap := child.m
 			valueID := child.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
 			var aKey atree.Value
@@ -17292,7 +17293,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				break
 			}
 
-			existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, aKey)
+			existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, aKey)
 			require.NoError(t, err)
 			require.Equal(t, aKey, existingMapKeyStorable)
 			require.NotNil(t, existingMapValueStorable)
@@ -17322,7 +17323,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			childMap := child.m
 			valueID := child.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
 			keys := make([]atree.Value, 0, len(expectedChildMapValues))
@@ -17331,7 +17332,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			for _, k := range keys {
-				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingMapKeyStorable)
 				require.NotNil(t, existingMapValueStorable)
@@ -17384,17 +17385,17 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		)
 
 		// encoded key size is the same for all string keys of the same length.
-		encodedKeySize := NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
-		encodedValueSize := NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
+		encodedKeySize := test_utils.NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
+		encodedValueSize := test_utils.NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		getKeyFunc := func() atree.Value {
-			return NewStringValue(randStr(r, keyStringSize))
+			return test_utils.NewStringValue(randStr(r, keyStringSize))
 		}
 
 		// Create a parent map, with an inlined child map, with an inlined grand child map
@@ -17427,16 +17428,16 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := gchildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -17512,16 +17513,16 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := gchildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -17589,10 +17590,10 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(ExpectedMapValue)
 			require.True(t, ok)
 
 			gchildKeys := make([]atree.Value, 0, len(expectedGChildMapValues))
@@ -17601,7 +17602,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			for _, k := range gchildKeys {
-				existingMapKey, existingMapValueStorable, err := gchildMap.Remove(compare, hashInputProvider, k)
+				existingMapKey, existingMapValueStorable, err := gchildMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingMapKey)
 				require.NotNil(t, existingMapValueStorable)
@@ -17665,18 +17666,18 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		)
 
 		// encoded key size is the same for all string keys of the same length.
-		encodedKeySize := NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
-		encodedValueSize := NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
-		encodedLargeValueSize := NewStringValue(strings.Repeat("a", largeValueStringSize)).ByteSize()
+		encodedKeySize := test_utils.NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
+		encodedValueSize := test_utils.NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
+		encodedLargeValueSize := test_utils.NewStringValue(strings.Repeat("a", largeValueStringSize)).ByteSize()
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		getKeyFunc := func() atree.Value {
-			return NewStringValue(randStr(r, keyStringSize))
+			return test_utils.NewStringValue(randStr(r, keyStringSize))
 		}
 
 		// Create a parent map, with an inlined child map, with an inlined grand child map
@@ -17709,16 +17710,16 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := gchildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -17792,16 +17793,16 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, largeValueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, largeValueStringSize))
 
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := gchildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -17868,10 +17869,10 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(ExpectedMapValue)
 			require.True(t, ok)
 
 			// Get all grand child map keys with large element key first
@@ -17886,7 +17887,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			// Remove all elements (large element first) to trigger grand child map being inlined again.
 			for _, k := range keys {
 
-				existingMapKeyStorable, existingMapValueStorable, err := gchildMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := gchildMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingMapKeyStorable)
 				require.NotNil(t, existingMapValueStorable)
@@ -17948,18 +17949,18 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		)
 
 		// encoded key size is the same for all string keys of the same length.
-		encodedKeySize := NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
-		encodedValueSize := NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
+		encodedKeySize := test_utils.NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
+		encodedValueSize := test_utils.NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
 		slabIDStorableSize := atree.SlabIDStorable(atree.SlabID{}).ByteSize()
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		getKeyFunc := func() atree.Value {
-			return NewStringValue(randStr(r, keyStringSize))
+			return test_utils.NewStringValue(randStr(r, keyStringSize))
 		}
 
 		// Create a parent map, with inlined child map, containing inlined grand child map
@@ -17990,16 +17991,16 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := gchildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -18069,13 +18070,13 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -18147,13 +18148,13 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -18235,7 +18236,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
 			var aKey atree.Value
@@ -18247,7 +18248,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			// Remove one element
-			existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, aKey)
+			existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, aKey)
 			require.NoError(t, err)
 			require.Equal(t, aKey, existingMapKeyStorable)
 			require.NotNil(t, existingMapValueStorable)
@@ -18316,7 +18317,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
 			keys := make([]atree.Value, 0, len(expectedChildMapValues)-1)
@@ -18328,7 +18329,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 
 			// Remove all elements, except grand child map
 			for _, k := range keys {
-				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingMapKeyStorable)
 				require.NotNil(t, existingMapValueStorable)
@@ -18395,18 +18396,18 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		)
 
 		// encoded key size is the same for all string keys of the same length.
-		encodedKeySize := NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
-		encodedValueSize := NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
+		encodedKeySize := test_utils.NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
+		encodedValueSize := test_utils.NewStringValue(strings.Repeat("a", valueStringSize)).ByteSize()
 		slabIDStorableSize := atree.SlabIDStorable(atree.SlabID{}).ByteSize()
 
 		r := newRand(t)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 		getKeyFunc := func() atree.Value {
-			return NewStringValue(randStr(r, keyStringSize))
+			return test_utils.NewStringValue(randStr(r, keyStringSize))
 		}
 
 		// Create a parent map, with inlined child map, containing inlined grand child map
@@ -18437,16 +18438,16 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := gchildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -18506,16 +18507,16 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
-			existingStorable, err := gchildMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := gchildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -18582,10 +18583,10 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			gchildMap := gchild.m
 			gValueID := gchild.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
-			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(mapValue)
+			expectedGChildMapValues, ok := expectedChildMapValues[gchildKey].(ExpectedMapValue)
 			require.True(t, ok)
 
 			var aKey atree.Value
@@ -18595,7 +18596,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			}
 
 			// Remove one element from grand child map
-			existingMapKeyStorable, existingMapValueStorable, err := gchildMap.Remove(compare, hashInputProvider, aKey)
+			existingMapKeyStorable, existingMapValueStorable, err := gchildMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, aKey)
 			require.NoError(t, err)
 			require.Equal(t, aKey, existingMapKeyStorable)
 			require.NotNil(t, existingMapValueStorable)
@@ -18645,7 +18646,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			childMap := child.m
 			cValueID := child.valueID
 
-			expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+			expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 			require.True(t, ok)
 
 			keys := make([]atree.Value, 0, len(expectedChildMapValues))
@@ -18655,7 +18656,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 
 			// Remove grand children
 			for _, k := range keys {
-				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := childMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 				require.NoError(t, err)
 				require.Equal(t, k, existingMapKeyStorable)
 				require.NotNil(t, existingMapValueStorable)
@@ -18670,10 +18671,10 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 				gchildMap, ok := v.(*atree.OrderedMap)
 				require.True(t, ok)
 
-				expectedGChildMapValues, ok := expectedChildMapValues[k].(mapValue)
+				expectedGChildMapValues, ok := expectedChildMapValues[k].(ExpectedMapValue)
 				require.True(t, ok)
 
-				valueEqual(t, expectedGChildMapValues, gchildMap)
+				testValueEqual(t, expectedGChildMapValues, gchildMap)
 
 				err = storage.Remove(atree.SlabID(id))
 				require.NoError(t, err)
@@ -18718,11 +18719,11 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 	)
 
 	// encoded key size is the same for all string keys of the same length.
-	encodedKeySize := NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
+	encodedKeySize := test_utils.NewStringValue(strings.Repeat("a", keyStringSize)).ByteSize()
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -18741,7 +18742,7 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 		childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		k := NewStringValue(randStr(r, keyStringSize))
+		k := test_utils.NewStringValue(randStr(r, keyStringSize))
 
 		digests := []atree.Digest{
 			atree.Digest(parentDigest),
@@ -18750,11 +18751,11 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 		parentDigest += 2
 
 		// Insert child map to parent map
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childMap)
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedKeyValues[k] = mapValue{}
+		expectedKeyValues[k] = ExpectedMapValue{}
 
 		require.True(t, childMap.Inlined())
 		testInlinedMapIDs(t, address, childMap)
@@ -18792,13 +18793,13 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 
 		for _, digest := range newDigests {
 
-			k := NewStringValue(randStr(r, keyStringSize))
-			v := NewStringValue(randStr(r, valueStringSize))
+			k := test_utils.NewStringValue(randStr(r, keyStringSize))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
 
 			digests := []atree.Digest{digest}
 			parentMapDigesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -18810,15 +18811,15 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 				childMap := child.m
 				childValueID := child.valueID
 
-				expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+				expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 				require.True(t, ok)
 
-				k := NewStringValue(randStr(r, keyStringSize))
-				v := Uint64Value(i)
+				k := test_utils.NewStringValue(randStr(r, keyStringSize))
+				v := test_utils.Uint64Value(i)
 
 				i++
 
-				existingStorable, err = childMap.Set(compare, hashInputProvider, k, v)
+				existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -18847,7 +18848,7 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 
 			for _, k := range keysForNonChildMaps {
 
-				existingMapKeyStorable, existingMapValueStorable, err := parentMap.Remove(compare, hashInputProvider, k)
+				existingMapKeyStorable, existingMapValueStorable, err := parentMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 				require.NoError(t, err)
 				require.NotNil(t, existingMapKeyStorable)
 				require.NotNil(t, existingMapValueStorable)
@@ -18859,15 +18860,15 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 					childMap := child.m
 					childValueID := child.valueID
 
-					expectedChildMapValues, ok := expectedKeyValues[childKey].(mapValue)
+					expectedChildMapValues, ok := expectedKeyValues[childKey].(ExpectedMapValue)
 					require.True(t, ok)
 
-					k := NewStringValue(randStr(r, keyStringSize))
-					v := Uint64Value(i)
+					k := test_utils.NewStringValue(randStr(r, keyStringSize))
+					v := test_utils.Uint64Value(i)
 
 					i++
 
-					existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+					existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 					require.NoError(t, err)
 					require.Nil(t, existingStorable)
 
@@ -18920,11 +18921,11 @@ func createMapWithEmptyChildMap(
 		require.NoError(t, err)
 
 		// Insert child map to parent map
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childMap)
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedKeyValues[k] = mapValue{}
+		expectedKeyValues[k] = ExpectedMapValue{}
 
 		require.True(t, childMap.Inlined())
 		testInlinedMapIDs(t, address, childMap)
@@ -18978,7 +18979,7 @@ func createMapWithEmpty2LevelChildMap(
 		require.NoError(t, err)
 
 		// Insert grand child map to child map
-		existingStorable, err := childMap.Set(compare, hashInputProvider, k, gchildMap)
+		existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, gchildMap)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -18986,11 +18987,11 @@ func createMapWithEmpty2LevelChildMap(
 		testInlinedMapIDs(t, address, gchildMap)
 
 		// Insert child map to parent map
-		existingStorable, err = parentMap.Set(compare, hashInputProvider, k, childMap)
+		existingStorable, err = parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedKeyValues[k] = mapValue{k: mapValue{}}
+		expectedKeyValues[k] = ExpectedMapValue{k: ExpectedMapValue{}}
 
 		require.True(t, childMap.Inlined())
 		testInlinedMapIDs(t, address, childMap)
@@ -19037,7 +19038,7 @@ func getInlinedChildMapsFromParentMap(t *testing.T, address atree.Address, paren
 			return false, nil
 		}
 
-		e, err := parentMap.Get(compare, hashInputProvider, k)
+		e, err := parentMap.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.NoError(t, err)
 
 		childMap, ok := e.(*atree.OrderedMap)
@@ -19065,7 +19066,7 @@ func getInlinedChildMapsFromParentMap(t *testing.T, address atree.Address, paren
 }
 
 func TestMapSetReturnedValue(t *testing.T) {
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("child array is not inlined", func(t *testing.T) {
@@ -19084,15 +19085,15 @@ func TestMapSetReturnedValue(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childArray)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childArray)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			var expectedChildValues arrayValue
+			var expectedChildValues ExpectedArrayValue
 			for {
-				v := NewStringValue(strings.Repeat("a", 10))
+				v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 				err = childArray.Append(v)
 				require.NoError(t, err)
@@ -19111,7 +19112,7 @@ func TestMapSetReturnedValue(t *testing.T) {
 
 		// Overwrite existing child array value
 		for k := range expectedKeyValues {
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, Uint64Value(0))
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -19121,12 +19122,12 @@ func TestMapSetReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedKeyValues[k], child)
+			testValueEqual(t, expectedKeyValues[k], child)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
 
-			expectedKeyValues[k] = Uint64Value(0)
+			expectedKeyValues[k] = test_utils.Uint64Value(0)
 		}
 
 		testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
@@ -19148,27 +19149,27 @@ func TestMapSetReturnedValue(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childArray)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childArray)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			// Insert one element to child array
-			v := NewStringValue(strings.Repeat("a", 10))
+			v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 			err = childArray.Append(v)
 			require.NoError(t, err)
 			require.True(t, childArray.Inlined())
 
-			expectedKeyValues[k] = arrayValue{v}
+			expectedKeyValues[k] = ExpectedArrayValue{v}
 		}
 
 		testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
 		// Overwrite existing child array value
 		for k := range expectedKeyValues {
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, Uint64Value(0))
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -19178,9 +19179,9 @@ func TestMapSetReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedKeyValues[k], child)
+			testValueEqual(t, expectedKeyValues[k], child)
 
-			expectedKeyValues[k] = Uint64Value(0)
+			expectedKeyValues[k] = test_utils.Uint64Value(0)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
@@ -19205,23 +19206,23 @@ func TestMapSetReturnedValue(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			expectedChildValues := make(mapValue)
+			expectedChildValues := make(ExpectedMapValue)
 			expectedKeyValues[k] = expectedChildValues
 
 			// Insert into child map until child map is not inlined
 			j := 0
 			for {
-				k := Uint64Value(j)
-				v := NewStringValue(strings.Repeat("a", 10))
+				k := test_utils.Uint64Value(j)
+				v := test_utils.NewStringValue(strings.Repeat("a", 10))
 				j++
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -19237,7 +19238,7 @@ func TestMapSetReturnedValue(t *testing.T) {
 
 		// Overwrite existing child map value
 		for k := range expectedKeyValues {
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, Uint64Value(0))
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -19247,9 +19248,9 @@ func TestMapSetReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedKeyValues[k], child)
+			testValueEqual(t, expectedKeyValues[k], child)
 
-			expectedKeyValues[k] = Uint64Value(0)
+			expectedKeyValues[k] = test_utils.Uint64Value(0)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
@@ -19274,19 +19275,19 @@ func TestMapSetReturnedValue(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			expectedChildValues := make(mapValue)
+			expectedChildValues := make(ExpectedMapValue)
 			expectedKeyValues[k] = expectedChildValues
 
 			// Insert into child map until child map is not inlined
-			v := NewStringValue(strings.Repeat("a", 10))
+			v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
-			existingStorable, err = childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -19297,7 +19298,7 @@ func TestMapSetReturnedValue(t *testing.T) {
 
 		// Overwrite existing child map value
 		for k := range expectedKeyValues {
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, Uint64Value(0))
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -19307,9 +19308,9 @@ func TestMapSetReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedKeyValues[k], child)
+			testValueEqual(t, expectedKeyValues[k], child)
 
-			expectedKeyValues[k] = Uint64Value(0)
+			expectedKeyValues[k] = test_utils.Uint64Value(0)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
@@ -19320,7 +19321,7 @@ func TestMapSetReturnedValue(t *testing.T) {
 }
 
 func TestMapRemoveReturnedValue(t *testing.T) {
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("child array is not inlined", func(t *testing.T) {
@@ -19339,15 +19340,15 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childArray)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childArray)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			var expectedChildValues arrayValue
+			var expectedChildValues ExpectedArrayValue
 			for {
-				v := NewStringValue(strings.Repeat("a", 10))
+				v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 				err = childArray.Append(v)
 				require.NoError(t, err)
@@ -19366,7 +19367,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 
 		// Remove child array value
 		for k := range expectedKeyValues {
-			keyStorable, valueStorable, err := parentMap.Remove(compare, hashInputProvider, k)
+			keyStorable, valueStorable, err := parentMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 			require.Equal(t, keyStorable, k)
 
@@ -19376,7 +19377,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedKeyValues[k], child)
+			testValueEqual(t, expectedKeyValues[k], child)
 
 			err = storage.Remove(atree.SlabID(id))
 			require.NoError(t, err)
@@ -19403,27 +19404,27 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childArray)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childArray)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			// Insert one element to child array
-			v := NewStringValue(strings.Repeat("a", 10))
+			v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 			err = childArray.Append(v)
 			require.NoError(t, err)
 			require.True(t, childArray.Inlined())
 
-			expectedKeyValues[k] = arrayValue{v}
+			expectedKeyValues[k] = ExpectedArrayValue{v}
 		}
 
 		testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
 		// Remove child array value
 		for k := range expectedKeyValues {
-			keyStorable, valueStorable, err := parentMap.Remove(compare, hashInputProvider, k)
+			keyStorable, valueStorable, err := parentMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 			require.Equal(t, keyStorable, k)
 
@@ -19433,7 +19434,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedKeyValues[k], child)
+			testValueEqual(t, expectedKeyValues[k], child)
 
 			delete(expectedKeyValues, k)
 
@@ -19460,23 +19461,23 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			expectedChildValues := make(mapValue)
+			expectedChildValues := make(ExpectedMapValue)
 			expectedKeyValues[k] = expectedChildValues
 
 			// Insert into child map until child map is not inlined
 			j := 0
 			for {
-				k := Uint64Value(j)
-				v := NewStringValue(strings.Repeat("a", 10))
+				k := test_utils.Uint64Value(j)
+				v := test_utils.NewStringValue(strings.Repeat("a", 10))
 				j++
 
-				existingStorable, err := childMap.Set(compare, hashInputProvider, k, v)
+				existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
@@ -19492,7 +19493,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 
 		// Remove child map value
 		for k := range expectedKeyValues {
-			keyStorable, valueStorable, err := parentMap.Remove(compare, hashInputProvider, k)
+			keyStorable, valueStorable, err := parentMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 			require.Equal(t, keyStorable, k)
 
@@ -19502,7 +19503,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedKeyValues[k], child)
+			testValueEqual(t, expectedKeyValues[k], child)
 
 			delete(expectedKeyValues, k)
 
@@ -19529,19 +19530,19 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
-			k := Uint64Value(i)
+			k := test_utils.Uint64Value(i)
 
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childMap)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
-			expectedChildValues := make(mapValue)
+			expectedChildValues := make(ExpectedMapValue)
 			expectedKeyValues[k] = expectedChildValues
 
 			// Insert into child map until child map is not inlined
-			v := NewStringValue(strings.Repeat("a", 10))
+			v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
-			existingStorable, err = childMap.Set(compare, hashInputProvider, k, v)
+			existingStorable, err = childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -19552,7 +19553,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 
 		// Remove child map value
 		for k := range expectedKeyValues {
-			keyStorable, valueStorable, err := parentMap.Remove(compare, hashInputProvider, k)
+			keyStorable, valueStorable, err := parentMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 			require.NoError(t, err)
 			require.Equal(t, keyStorable, k)
 
@@ -19562,7 +19563,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 			child, err := id.StoredValue(storage)
 			require.NoError(t, err)
 
-			valueEqual(t, expectedKeyValues[k], child)
+			testValueEqual(t, expectedKeyValues[k], child)
 
 			delete(expectedKeyValues, k)
 
@@ -19575,7 +19576,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 }
 
 func TestMapWithOutdatedCallback(t *testing.T) {
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("overwritten child array", func(t *testing.T) {
@@ -19586,30 +19587,30 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 		parentMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		expectedKeyValues := make(mapValue)
+		expectedKeyValues := make(ExpectedMapValue)
 
 		// Create child array
 		childArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		k := Uint64Value(0)
+		k := test_utils.Uint64Value(0)
 
 		// Insert child array to parent map
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childArray)
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childArray)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		v := NewStringValue(strings.Repeat("a", 10))
+		v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 		err = childArray.Append(v)
 		require.NoError(t, err)
 
-		expectedKeyValues[k] = arrayValue{v}
+		expectedKeyValues[k] = ExpectedArrayValue{v}
 
 		testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
 		// Overwrite child array value from parent
-		valueStorable, err := parentMap.Set(compare, hashInputProvider, k, Uint64Value(0))
+		valueStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.Uint64Value(0))
 		require.NoError(t, err)
 
 		id, ok := valueStorable.(atree.SlabIDStorable)
@@ -19618,22 +19619,22 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 		child, err := id.StoredValue(storage)
 		require.NoError(t, err)
 
-		valueEqual(t, expectedKeyValues[k], child)
+		testValueEqual(t, expectedKeyValues[k], child)
 
-		expectedKeyValues[k] = Uint64Value(0)
+		expectedKeyValues[k] = test_utils.Uint64Value(0)
 
 		// childArray.parentUpdater isn't nil before callback is invoked.
 		require.True(t, atree.ArrayHasParentUpdater(childArray))
 
 		// modify overwritten child array
-		err = childArray.Append(Uint64Value(0))
+		err = childArray.Append(test_utils.Uint64Value(0))
 		require.NoError(t, err)
 
 		// childArray.parentUpdater is nil after callback is invoked.
 		require.False(t, atree.ArrayHasParentUpdater(childArray))
 
 		// No-op on parent
-		valueEqual(t, expectedKeyValues, parentMap)
+		testValueEqual(t, expectedKeyValues, parentMap)
 	})
 
 	t.Run("removed child array", func(t *testing.T) {
@@ -19644,30 +19645,30 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 		parentMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		expectedKeyValues := make(mapValue)
+		expectedKeyValues := make(ExpectedMapValue)
 
 		// Create child array
 		childArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		k := Uint64Value(0)
+		k := test_utils.Uint64Value(0)
 
 		// Insert child array to parent map
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, k, childArray)
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childArray)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		v := NewStringValue(strings.Repeat("a", 10))
+		v := test_utils.NewStringValue(strings.Repeat("a", 10))
 
 		err = childArray.Append(v)
 		require.NoError(t, err)
 
-		expectedKeyValues[k] = arrayValue{v}
+		expectedKeyValues[k] = ExpectedArrayValue{v}
 
 		testMap(t, storage, typeInfo, address, parentMap, expectedKeyValues, nil, true)
 
 		// Remove child array value from parent
-		keyStorable, valueStorable, err := parentMap.Remove(compare, hashInputProvider, k)
+		keyStorable, valueStorable, err := parentMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.NoError(t, err)
 		require.Equal(t, keyStorable, k)
 
@@ -19677,7 +19678,7 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 		child, err := id.StoredValue(storage)
 		require.NoError(t, err)
 
-		valueEqual(t, expectedKeyValues[k], child)
+		testValueEqual(t, expectedKeyValues[k], child)
 
 		delete(expectedKeyValues, k)
 
@@ -19685,20 +19686,20 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 		require.True(t, atree.ArrayHasParentUpdater(childArray))
 
 		// modify removed child array
-		err = childArray.Append(Uint64Value(0))
+		err = childArray.Append(test_utils.Uint64Value(0))
 		require.NoError(t, err)
 
 		// childArray.parentUpdater is nil after callback is invoked.
 		require.False(t, atree.ArrayHasParentUpdater(childArray))
 
 		// No-op on parent
-		valueEqual(t, expectedKeyValues, parentMap)
+		testValueEqual(t, expectedKeyValues, parentMap)
 	})
 }
 
 func TestMapSetType(t *testing.T) {
-	typeInfo := testTypeInfo{42}
-	newTypeInfo := testTypeInfo{43}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	newTypeInfo := test_utils.NewSimpleTypeInfo(43)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
@@ -19733,8 +19734,8 @@ func TestMapSetType(t *testing.T) {
 
 		mapCount := 10
 		for i := 0; i < mapCount; i++ {
-			v := Uint64Value(i)
-			existingStorable, err := m.Set(compare, hashInputProvider, v, v)
+			v := test_utils.Uint64Value(i)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, v, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -19766,8 +19767,8 @@ func TestMapSetType(t *testing.T) {
 
 		mapCount := 10_000
 		for i := 0; i < mapCount; i++ {
-			v := Uint64Value(i)
-			existingStorable, err := m.Set(compare, hashInputProvider, v, v)
+			v := test_utils.Uint64Value(i)
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, v, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -19802,7 +19803,7 @@ func TestMapSetType(t *testing.T) {
 
 		childMapSeed := childMap.Seed()
 
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(0), childMap)
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), childMap)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -19829,7 +19830,7 @@ func TestMapSetType(t *testing.T) {
 		testExistingInlinedMapSetType(
 			t,
 			parentMap.SlabID(),
-			Uint64Value(0),
+			test_utils.Uint64Value(0),
 			atree.GetBaseStorage(storage),
 			newTypeInfo,
 			childMap.Count(),
@@ -19850,13 +19851,13 @@ func TestMapSetType(t *testing.T) {
 
 		mapCount := 10_000
 		for i := 0; i < mapCount-1; i++ {
-			v := Uint64Value(i)
-			existingStorable, err := parentMap.Set(compare, hashInputProvider, v, v)
+			v := test_utils.Uint64Value(i)
+			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, v, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
 
-		existingStorable, err := parentMap.Set(compare, hashInputProvider, Uint64Value(mapCount-1), childMap)
+		existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(mapCount-1), childMap)
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
@@ -19883,7 +19884,7 @@ func TestMapSetType(t *testing.T) {
 		testExistingInlinedMapSetType(
 			t,
 			parentMap.SlabID(),
-			Uint64Value(mapCount-1),
+			test_utils.Uint64Value(mapCount-1),
 			atree.GetBaseStorage(storage),
 			newTypeInfo,
 			childMap.Count(),
@@ -19896,11 +19897,11 @@ func testExistingMapSetType(
 	t *testing.T,
 	id atree.SlabID,
 	baseStorage atree.BaseStorage,
-	expectedTypeInfo testTypeInfo,
+	expectedTypeInfo test_utils.SimpleTypeInfo,
 	expectedCount uint64,
 	expectedSeed uint64,
 ) {
-	newTypeInfo := testTypeInfo{value: expectedTypeInfo.value + 1}
+	newTypeInfo := test_utils.NewSimpleTypeInfo(expectedTypeInfo.Value() + 1)
 
 	// Create storage from existing data
 	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
@@ -19939,11 +19940,11 @@ func testExistingInlinedMapSetType(
 	parentID atree.SlabID,
 	inlinedChildKey atree.Value,
 	baseStorage atree.BaseStorage,
-	expectedTypeInfo testTypeInfo,
+	expectedTypeInfo test_utils.SimpleTypeInfo,
 	expectedCount uint64,
 	expectedSeed uint64,
 ) {
-	newTypeInfo := testTypeInfo{value: expectedTypeInfo.value + 1}
+	newTypeInfo := test_utils.NewSimpleTypeInfo(expectedTypeInfo.Value() + 1)
 
 	// Create storage from existing data
 	storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
@@ -19952,7 +19953,7 @@ func testExistingInlinedMapSetType(
 	parentMap, err := atree.NewMapWithRootID(storage, parentID, atree.NewDefaultDigesterBuilder())
 	require.NoError(t, err)
 
-	element, err := parentMap.Get(compare, hashInputProvider, inlinedChildKey)
+	element, err := parentMap.Get(test_utils.CompareValue, test_utils.GetHashInput, inlinedChildKey)
 	require.NoError(t, err)
 
 	childMap, ok := element.(*atree.OrderedMap)
@@ -19980,7 +19981,7 @@ func testExistingInlinedMapSetType(
 	parentMap2, err := atree.NewMapWithRootID(storage2, parentID, atree.NewDefaultDigesterBuilder())
 	require.NoError(t, err)
 
-	element2, err := parentMap2.Get(compare, hashInputProvider, inlinedChildKey)
+	element2, err := parentMap2.Get(test_utils.CompareValue, test_utils.GetHashInput, inlinedChildKey)
 	require.NoError(t, err)
 
 	childMap2, ok := element2.(*atree.OrderedMap)

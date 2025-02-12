@@ -27,6 +27,7 @@ import (
 	"github.com/zeebo/blake3"
 
 	"github.com/onflow/atree"
+	"github.com/onflow/atree/test_utils"
 )
 
 type collisionDigesterBuilder struct {
@@ -133,12 +134,12 @@ func BenchmarkCollisionPerDigest(b *testing.B) {
 			digesterBuilder := NewCollisionDigesterBuilder(collisionPerDigest)
 			keyValues := make(map[atree.Value]atree.Value, mapCount)
 			for i := uint64(0); i < mapCount; i++ {
-				k := Uint64Value(i)
-				v := Uint64Value(i)
+				k := test_utils.Uint64Value(i)
+				v := test_utils.Uint64Value(i)
 				keyValues[k] = v
 			}
 
-			typeInfo := testTypeInfo{42}
+			typeInfo := test_utils.NewSimpleTypeInfo(42)
 			address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 			storage := newTestPersistentStorage(b)
 
@@ -149,7 +150,7 @@ func BenchmarkCollisionPerDigest(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				for k, v := range keyValues {
-					_, _ = m.Set(compare, hashInputProvider, k, v)
+					_, _ = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				}
 			}
 		})

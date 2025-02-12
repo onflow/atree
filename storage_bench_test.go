@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/atree"
+	"github.com/onflow/atree/test_utils"
 )
 
 func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
@@ -56,7 +57,7 @@ func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
 
-			baseStorage := NewInMemBaseStorage()
+			baseStorage := test_utils.NewInMemBaseStorage()
 			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 			for _, slab := range slabs {
@@ -97,7 +98,7 @@ func benchmarkNondeterministicFastCommit(b *testing.B, seed int64, numberOfSlabs
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
 
-			baseStorage := NewInMemBaseStorage()
+			baseStorage := test_utils.NewInMemBaseStorage()
 			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 			for _, slab := range slabs {
@@ -168,8 +169,8 @@ func benchmarkRetrieve(b *testing.B, seed int64, numberOfSlabs int) {
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
 
-			baseStorage := NewInMemBaseStorageFromMap(encodedSlabs)
-			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+			baseStorage := test_utils.NewInMemBaseStorageFromMap(encodedSlabs)
+			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, test_utils.DecodeStorable, test_utils.DecodeTypeInfo)
 
 			b.StartTimer()
 
@@ -215,8 +216,8 @@ func benchmarkBatchPreload(b *testing.B, seed int64, numberOfSlabs int) {
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
 
-			baseStorage := NewInMemBaseStorageFromMap(encodedSlabs)
-			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, decodeStorable, decodeTypeInfo)
+			baseStorage := test_utils.NewInMemBaseStorageFromMap(encodedSlabs)
+			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, test_utils.DecodeStorable, test_utils.DecodeTypeInfo)
 
 			b.StartTimer()
 

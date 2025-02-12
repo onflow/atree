@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/atree"
+	"github.com/onflow/atree/test_utils"
 )
 
 func newWrapperValue(
@@ -37,12 +38,12 @@ func newWrapperValue(
 	expectedWrappedValue atree.Value,
 ) (wrapperValue atree.Value, expectedWrapperValue atree.Value) {
 
-	wrapperValue = SomeValue{wrappedValue}
-	expectedWrapperValue = someValue{expectedWrappedValue}
+	wrapperValue = test_utils.NewSomeValue(wrappedValue)
+	expectedWrapperValue = ExpectedWrapperValue{expectedWrappedValue}
 
 	for i := 1; i < nestedLevels; i++ {
-		wrapperValue = SomeValue{wrapperValue}
-		expectedWrapperValue = someValue{expectedWrapperValue}
+		wrapperValue = test_utils.NewSomeValue(wrapperValue)
+		expectedWrapperValue = ExpectedWrapperValue{expectedWrapperValue}
 	}
 
 	return
@@ -50,9 +51,9 @@ func newWrapperValue(
 
 func getWrappedValue(t *testing.T, v atree.Value, expected atree.Value) (atree.Value, atree.Value) {
 	for {
-		sw, vIsSomeValue := v.(SomeValue)
+		sw, vIsSomeValue := v.(test_utils.SomeValue)
 
-		esw, expectedIsSomeValue := expected.(someValue)
+		esw, expectedIsSomeValue := expected.(ExpectedWrapperValue)
 
 		require.Equal(t, vIsSomeValue, expectedIsSomeValue)
 
@@ -87,7 +88,7 @@ var newWrapperValueFunc = func(
 
 var newRandomUint64ValueFunc = func(r *rand.Rand) newValueFunc {
 	return func(atree.SlabStorage) (value atree.Value, expected atree.Value) {
-		v := Uint64Value(r.Intn(1844674407370955161))
+		v := test_utils.Uint64Value(r.Intn(1844674407370955161))
 		return v, v
 	}
 }
@@ -114,7 +115,7 @@ var newArrayValueFunc = func(
 			expectedValues[i] = expectedV
 		}
 
-		return array, arrayValue(expectedValues)
+		return array, ExpectedArrayValue(expectedValues)
 	}
 }
 
@@ -171,7 +172,7 @@ var modifyArrayValueFunc = func(
 		array, ok := originalValue.(*atree.Array)
 		require.True(t, ok)
 
-		expectedValues, ok := expectedOrigianlValue.(arrayValue)
+		expectedValues, ok := expectedOrigianlValue.(ExpectedArrayValue)
 		require.True(t, ok)
 
 		require.Equal(t, uint64(len(expectedValues)), array.Count())
@@ -216,7 +217,7 @@ var modifyArrayValueFunc = func(
 
 			existingValue, err := existingStorable.StoredValue(storage)
 			require.NoError(t, err)
-			valueEqual(t, expectedValues[index], existingValue)
+			testValueEqual(t, expectedValues[index], existingValue)
 
 			// Remove slabs from storage
 			if removedSlabID != atree.SlabIDUndefined {
@@ -255,7 +256,7 @@ var modifyArrayValueFunc = func(
 				existingValue, err := existingStorable.StoredValue(storage)
 				require.NoError(t, err)
 
-				valueEqual(t, expectedValues[index], existingValue)
+				testValueEqual(t, expectedValues[index], existingValue)
 
 				if overwrittenSlabID != atree.SlabIDUndefined {
 					// Remove slabs from storage given we are not interested in removed element
@@ -476,7 +477,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
@@ -537,7 +538,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 					require.NoError(t, err)
 
 					expected := expectedValues[i]
-					valueEqual(t, expected, v)
+					testValueEqual(t, expected, v)
 
 					// Verify that v is WrapperValue
 					testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
@@ -588,7 +589,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
@@ -649,7 +650,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 					require.NoError(t, err)
 
 					expected := expectedValues[i]
-					valueEqual(t, expected, v)
+					testValueEqual(t, expected, v)
 
 					// Verify that v is WrapperValue
 					testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
@@ -700,7 +701,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
@@ -776,7 +777,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 					require.NoError(t, err)
 
 					expected := expectedValues[i]
-					valueEqual(t, expected, v)
+					testValueEqual(t, expected, v)
 
 					// Verify that v is WrapperValue
 					testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
@@ -826,7 +827,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
@@ -920,7 +921,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 								require.NoError(t, err)
 
 								expected := expectedValues[i]
-								valueEqual(t, expected, v)
+								testValueEqual(t, expected, v)
 
 								// Verify that v is WrapperValue
 								testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
@@ -990,7 +991,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
@@ -1100,7 +1101,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 								require.NoError(t, err)
 
 								expected := expectedValues[i]
-								valueEqual(t, expected, v)
+								testValueEqual(t, expected, v)
 
 								// Verify that v is WrapperValue
 								testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
@@ -1166,7 +1167,7 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
@@ -1253,7 +1254,7 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 
 						testWrapperValueLevels(t, tc.wrapperValueNestedLevels, next)
 
-						valueEqual(t, expected, next)
+						testValueEqual(t, expected, next)
 
 						// Test modifying elements that don't need to reset in parent container.
 						if testModifyElement {
@@ -1278,7 +1279,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
@@ -1367,7 +1368,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 
 						testWrapperValueLevels(t, tc.wrapperValueNestedLevels, next)
 
-						valueEqual(t, expected, next)
+						testValueEqual(t, expected, next)
 
 						// Test modifying container elements.
 						if testModifyElement {
@@ -1402,7 +1403,7 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 
 		storable := elements[0]
 
-		storabeleAsSomeStoable, isSomeStorable := storable.(SomeStorable)
+		storabeleAsSomeStoable, isSomeStorable := storable.(test_utils.SomeStorable)
 		require.True(t, isSomeStorable)
 
 		wrappedStorable := storabeleAsSomeStoable.Storable
@@ -1429,28 +1430,28 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 	defer atree.SetThreshold(1024)
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 	storage := newTestPersistentStorage(t)
 
-	var expectedValues arrayValue
+	var expectedValues ExpectedArrayValue
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	// Append WrapperValue SomeValue([]) to array
+	// Append WrapperValue test_utils.SomeValue([]) to array
 	{
 		childArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		require.False(t, childArray.Inlined())
 
-		err = array.Append(SomeValue{childArray})
+		err = array.Append(test_utils.NewSomeValue(childArray))
 		require.NoError(t, err)
 
 		require.True(t, childArray.Inlined())
 
-		expectedValues = append(expectedValues, someValue{arrayValue{}})
+		expectedValues = append(expectedValues, ExpectedWrapperValue{ExpectedArrayValue{}})
 
 		require.Equal(t, uint64(1), array.Count())
 
@@ -1471,7 +1472,7 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test retrieved element type
-		elementAsSomeValue, isSomeValue := element.(SomeValue)
+		elementAsSomeValue, isSomeValue := element.(test_utils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValue := elementAsSomeValue.Value
@@ -1479,20 +1480,20 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 		wrappedArray, isArray := wrappedValue.(*atree.Array)
 		require.True(t, isArray)
 
-		expectedWrappedValue := expectedValues[0].(someValue).Value
+		expectedWrappedValue := expectedValues[0].(ExpectedWrapperValue).Value
 
-		expectedWrappedArray := expectedWrappedValue.(arrayValue)
+		expectedWrappedArray := expectedWrappedValue.(ExpectedArrayValue)
 
 		// Append new elements to wrapped child array
 
-		v := Uint64Value(i)
+		v := test_utils.Uint64Value(i)
 
-		err = wrappedArray.Append(SomeValue{v})
+		err = wrappedArray.Append(test_utils.NewSomeValue(v))
 		require.NoError(t, err)
 
-		expectedWrappedArray = append(expectedWrappedArray, someValue{v})
+		expectedWrappedArray = append(expectedWrappedArray, ExpectedWrapperValue{v})
 
-		expectedValues[0] = someValue{expectedWrappedArray}
+		expectedValues[0] = ExpectedWrapperValue{expectedWrappedArray}
 
 		require.Equal(t, uint64(i+1), wrappedArray.Count())
 		require.Equal(t, i+1, len(expectedWrappedArray))
@@ -1516,7 +1517,7 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test retrieved element type
-		elementAsSomeValue, isSomeValue := element.(SomeValue)
+		elementAsSomeValue, isSomeValue := element.(test_utils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValue := elementAsSomeValue.Value
@@ -1524,9 +1525,9 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 		wrappedArray, isArray := wrappedValue.(*atree.Array)
 		require.True(t, isArray)
 
-		expectedWrappedValue := expectedValues[0].(someValue).Value
+		expectedWrappedValue := expectedValues[0].(ExpectedWrapperValue).Value
 
-		expectedWrappedArray := expectedWrappedValue.(arrayValue)
+		expectedWrappedArray := expectedWrappedValue.(ExpectedArrayValue)
 
 		// Remove first element from wrapped child array
 
@@ -1538,11 +1539,11 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 
 		existingValue, err := existingStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, expectedWrappedArray[0], existingValue)
+		testValueEqual(t, expectedWrappedArray[0], existingValue)
 
 		expectedWrappedArray = expectedWrappedArray[1:]
 
-		expectedValues[0] = someValue{expectedWrappedArray}
+		expectedValues[0] = ExpectedWrapperValue{expectedWrappedArray}
 
 		testArrayMutableElementIndex(t, array)
 
@@ -1569,7 +1570,7 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 
 		storableAtLevel1 := elements[0]
 
-		storabeleAsSomeStoable, isSomeStorable := storableAtLevel1.(SomeStorable)
+		storabeleAsSomeStoable, isSomeStorable := storableAtLevel1.(test_utils.SomeStorable)
 		require.True(t, isSomeStorable)
 
 		wrappedStorableAtLevel1 := storabeleAsSomeStoable.Storable
@@ -1581,7 +1582,7 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 
 		storableAtLevel2 := wrappedArrayAtlevel1.ChildStorables()[0]
 
-		storabeleAsSomeStoable, isSomeStorable = storableAtLevel2.(SomeStorable)
+		storabeleAsSomeStoable, isSomeStorable = storableAtLevel2.(test_utils.SomeStorable)
 		require.True(t, isSomeStorable)
 
 		wrappedStorableAtLevel2 := storabeleAsSomeStoable.Storable
@@ -1608,16 +1609,16 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 	defer atree.SetThreshold(1024)
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 	storage := newTestPersistentStorage(t)
 
-	var expectedValues arrayValue
+	var expectedValues ExpectedArrayValue
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	// Append WrapperValue SomeValue([SomeValue[]]) to array
+	// Append WrapperValue test_utils.SomeValue([test_utils.SomeValue[]]) to array
 	{
 		// Create grand child array
 		gchildArray, err := atree.NewArray(storage, address, typeInfo)
@@ -1632,18 +1633,18 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 		require.False(t, childArray.Inlined())
 
 		// Append grand child array to child array
-		err = childArray.Append(SomeValue{gchildArray})
+		err = childArray.Append(test_utils.NewSomeValue(gchildArray))
 		require.NoError(t, err)
 
 		require.True(t, gchildArray.Inlined())
 
 		// Append child array to array
-		err = array.Append(SomeValue{childArray})
+		err = array.Append(test_utils.NewSomeValue(childArray))
 		require.NoError(t, err)
 
 		require.True(t, childArray.Inlined())
 
-		expectedValues = append(expectedValues, someValue{arrayValue{someValue{arrayValue{}}}})
+		expectedValues = append(expectedValues, ExpectedWrapperValue{ExpectedArrayValue{ExpectedWrapperValue{ExpectedArrayValue{}}}})
 
 		require.Equal(t, uint64(1), array.Count())
 
@@ -1665,7 +1666,7 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test retrieved element type
-		elementAsSomeValueAtLevel1, isSomeValue := elementAtLevel1.(SomeValue)
+		elementAsSomeValueAtLevel1, isSomeValue := elementAtLevel1.(test_utils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValueAtLevel1 := elementAsSomeValueAtLevel1.Value
@@ -1673,9 +1674,9 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 		wrappedArrayAtLevel1, isArray := wrappedValueAtLevel1.(*atree.Array)
 		require.True(t, isArray)
 
-		expectedWrappedValueAtLevel1 := expectedValues[0].(someValue).Value
+		expectedWrappedValueAtLevel1 := expectedValues[0].(ExpectedWrapperValue).Value
 
-		expectedWrappedArrayAtLevel1 := expectedWrappedValueAtLevel1.(arrayValue)
+		expectedWrappedArrayAtLevel1 := expectedWrappedValueAtLevel1.(ExpectedArrayValue)
 
 		// Get element at level 2
 
@@ -1683,7 +1684,7 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test retrieved element type
-		elementAsSomeValueAtLevel2, isSomeValue := elementAtLevel2.(SomeValue)
+		elementAsSomeValueAtLevel2, isSomeValue := elementAtLevel2.(test_utils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValueAtLevel2 := elementAsSomeValueAtLevel2.Value
@@ -1691,20 +1692,20 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 		wrappedArrayAtLevel2, isArray := wrappedValueAtLevel2.(*atree.Array)
 		require.True(t, isArray)
 
-		expectedWrappedValueAtLevel2 := expectedWrappedArrayAtLevel1[0].(someValue).Value
+		expectedWrappedValueAtLevel2 := expectedWrappedArrayAtLevel1[0].(ExpectedWrapperValue).Value
 
-		expectedWrappedArrayAtLevel2 := expectedWrappedValueAtLevel2.(arrayValue)
+		expectedWrappedArrayAtLevel2 := expectedWrappedValueAtLevel2.(ExpectedArrayValue)
 
 		// Append new elements to wrapped gchild array
 
-		v := Uint64Value(i)
+		v := test_utils.Uint64Value(i)
 
-		err = wrappedArrayAtLevel2.Append(SomeValue{v})
+		err = wrappedArrayAtLevel2.Append(test_utils.NewSomeValue(v))
 		require.NoError(t, err)
 
-		expectedWrappedArrayAtLevel2 = append(expectedWrappedArrayAtLevel2, someValue{v})
+		expectedWrappedArrayAtLevel2 = append(expectedWrappedArrayAtLevel2, ExpectedWrapperValue{v})
 
-		expectedValues[0] = someValue{arrayValue{someValue{expectedWrappedArrayAtLevel2}}}
+		expectedValues[0] = ExpectedWrapperValue{ExpectedArrayValue{ExpectedWrapperValue{expectedWrappedArrayAtLevel2}}}
 
 		require.Equal(t, uint64(i+1), wrappedArrayAtLevel2.Count())
 		require.Equal(t, i+1, len(expectedWrappedArrayAtLevel2))
@@ -1728,7 +1729,7 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test retrieved element type
-		elementAsSomeValueAtLevel1, isSomeValue := elementAtLevel1.(SomeValue)
+		elementAsSomeValueAtLevel1, isSomeValue := elementAtLevel1.(test_utils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValueAtLevel1 := elementAsSomeValueAtLevel1.Value
@@ -1736,9 +1737,9 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 		wrappedArrayAtLevel1, isArray := wrappedValueAtLevel1.(*atree.Array)
 		require.True(t, isArray)
 
-		expectedWrappedValueAtLevel1 := expectedValues[0].(someValue).Value
+		expectedWrappedValueAtLevel1 := expectedValues[0].(ExpectedWrapperValue).Value
 
-		expectedWrappedArrayAtLevel1 := expectedWrappedValueAtLevel1.(arrayValue)
+		expectedWrappedArrayAtLevel1 := expectedWrappedValueAtLevel1.(ExpectedArrayValue)
 
 		// Get element at level 2
 
@@ -1746,7 +1747,7 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test retrieved element type
-		elementAsSomeValueAtLevel2, isSomeValue := elementAtLevel2.(SomeValue)
+		elementAsSomeValueAtLevel2, isSomeValue := elementAtLevel2.(test_utils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValueAtLevel2 := elementAsSomeValueAtLevel2.Value
@@ -1754,9 +1755,9 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 		wrappedArrayAtLevel2, isArray := wrappedValueAtLevel2.(*atree.Array)
 		require.True(t, isArray)
 
-		expectedWrappedValueAtLevel2 := expectedWrappedArrayAtLevel1[0].(someValue).Value
+		expectedWrappedValueAtLevel2 := expectedWrappedArrayAtLevel1[0].(ExpectedWrapperValue).Value
 
-		expectedWrappedArrayAtLevel2 := expectedWrappedValueAtLevel2.(arrayValue)
+		expectedWrappedArrayAtLevel2 := expectedWrappedValueAtLevel2.(ExpectedArrayValue)
 
 		// Remove first element from wrapped gchild array
 
@@ -1768,11 +1769,11 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 
 		existingValue, err := existingStorable.StoredValue(storage)
 		require.NoError(t, err)
-		valueEqual(t, expectedWrappedArrayAtLevel2[0], existingValue)
+		testValueEqual(t, expectedWrappedArrayAtLevel2[0], existingValue)
 
 		expectedWrappedArrayAtLevel2 = expectedWrappedArrayAtLevel2[1:]
 
-		expectedValues[0] = someValue{arrayValue{someValue{expectedWrappedArrayAtLevel2}}}
+		expectedValues[0] = ExpectedWrapperValue{ExpectedArrayValue{ExpectedWrapperValue{expectedWrappedArrayAtLevel2}}}
 
 		testArrayMutableElementIndex(t, array)
 
@@ -1799,13 +1800,13 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 	defer atree.SetThreshold(1024)
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 	newElementFuncs := []newValueFunc{
-		// SomeValue(uint64)
+		// test_utils.SomeValue(uint64)
 		newWrapperValueFunc(1, newRandomUint64ValueFunc(r)),
 
-		// SomeValue([SomeValue(uint64)])
+		// test_utils.SomeValue([test_utils.SomeValue(uint64)])
 		newWrapperValueFunc(
 			1,
 			newArrayValueFunc(
@@ -1817,7 +1818,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 					1,
 					newRandomUint64ValueFunc(r)))),
 
-		// SomeValue([SomeValue([SomeValue(uint64)])])
+		// test_utils.SomeValue([test_utils.SomeValue([test_utils.SomeValue(uint64)])])
 		newWrapperValueFunc(
 			1,
 			newArrayValueFunc(
@@ -1839,7 +1840,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 	storage := newTestPersistentStorage(t)
 
-	var expectedValues arrayValue
+	var expectedValues ExpectedArrayValue
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
@@ -2099,9 +2100,9 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 	defer atree.SetThreshold(1024)
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 
-	// newValue creates value of type SomeValue([SomeValue(uint64)]).
+	// newValue creates value of type test_utils.SomeValue([test_utils.SomeValue(uint64)]).
 	newValue :=
 		newWrapperValueFunc(
 			1,
@@ -2129,7 +2130,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 
 	storage := newTestPersistentStorage(t)
 
-	var expectedValues arrayValue
+	var expectedValues ExpectedArrayValue
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
@@ -2290,7 +2291,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, originalValue)
 
-			_, isWrapperValue := originalValue.(SomeValue)
+			_, isWrapperValue := originalValue.(test_utils.SomeValue)
 			require.True(t, isWrapperValue)
 
 			// Modify retrieved element without setting back explicitly.
@@ -2395,9 +2396,9 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 	defer atree.SetThreshold(1024)
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	typeInfo := testTypeInfo{42}
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
 
-	// newValue creates value of type SomeValue([SomeValue([SomeValue(uint64)])]))
+	// newValue creates value of type test_utils.SomeValue([test_utils.SomeValue([test_utils.SomeValue(uint64)])]))
 	newValue :=
 		newWrapperValueFunc(
 			1,
@@ -2438,7 +2439,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 	storage := newTestPersistentStorage(t)
 
-	var expectedValues arrayValue
+	var expectedValues ExpectedArrayValue
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
@@ -2597,7 +2598,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, originalValue)
 
-			_, isWrapperValue := originalValue.(SomeValue)
+			_, isWrapperValue := originalValue.(test_utils.SomeValue)
 			require.True(t, isWrapperValue)
 
 			// Modify retrieved element without setting back explicitly.
@@ -2691,13 +2692,13 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	t.Run("modify level-1 wrapper array in [SomeValue([SomeValue(uint64)])]", func(t *testing.T) {
+	t.Run("modify level-1 wrapper array in [test_utils.SomeValue([test_utils.SomeValue(uint64)])]", func(t *testing.T) {
 		const (
 			arrayCount      = 3
 			childArrayCount = 2
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		r := newRand(t)
 
@@ -2728,7 +2729,7 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 			v, expected := createArrayOfSomeValueOfArrayOfSomeValueOfUint64(storage)
 
 			array := v.(*atree.Array)
-			expectedValues = expected.(arrayValue)
+			expectedValues = expected.(ExpectedArrayValue)
 
 			testArray(t, storage, typeInfo, address, array, expectedValues, true)
 
@@ -2739,7 +2740,7 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 		}
 
 		// Create a base storage with array in the format of
-		// [SomeValue([SomeValue(uint64)])]
+		// [test_utils.SomeValue([test_utils.SomeValue(uint64)])]
 		baseStorage, rootSlabID, expectedValues := createStorage(arrayCount)
 		require.Equal(t, arrayCount, len(expectedValues))
 
@@ -2751,43 +2752,43 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(len(expectedValues)), array.Count())
 
-		// Get and verify first element as SomeValue(array)
+		// Get and verify first element as test_utils.SomeValue(array)
 
 		expectedValue := expectedValues[0]
 
-		// Get array element (SomeValue)
+		// Get array element (test_utils.SomeValue)
 		element, err := array.Get(uint64(0))
 		require.NoError(t, err)
 
 		// Test retrieved element type and value
 
-		elementAsSomeValue, isSomeValue := element.(SomeValue)
+		elementAsSomeValue, isSomeValue := element.(test_utils.SomeValue)
 		require.True(t, isSomeValue)
 
 		unwrappedChildArray, isArray := elementAsSomeValue.Value.(*atree.Array)
 		require.True(t, isArray)
 
-		expectedValuesAsSomeValue, isSomeValue := expectedValue.(someValue)
+		expectedValuesAsSomeValue, isSomeValue := expectedValue.(ExpectedWrapperValue)
 		require.True(t, isSomeValue)
 
-		expectedUnwrappedChildArray, isArrayValue := expectedValuesAsSomeValue.Value.(arrayValue)
+		expectedUnwrappedChildArray, isArrayValue := expectedValuesAsSomeValue.Value.(ExpectedArrayValue)
 		require.True(t, isArrayValue)
 
 		require.Equal(t, uint64(len(expectedUnwrappedChildArray)), unwrappedChildArray.Count())
 
-		// Modify wrapped child array of SomeValue
+		// Modify wrapped child array of test_utils.SomeValue
 
-		newValue := NewStringValue("x")
-		err = unwrappedChildArray.Append(SomeValue{newValue})
+		newValue := test_utils.NewStringValue("x")
+		err = unwrappedChildArray.Append(test_utils.NewSomeValue(newValue))
 		require.NoError(t, err)
 
-		expectedUnwrappedChildArray = append(expectedUnwrappedChildArray, someValue{newValue})
-		expectedValues[0] = someValue{expectedUnwrappedChildArray}
+		expectedUnwrappedChildArray = append(expectedUnwrappedChildArray, ExpectedWrapperValue{newValue})
+		expectedValues[0] = ExpectedWrapperValue{expectedUnwrappedChildArray}
 
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		// Verify modified wrapped child array of SomeValue using new storage with committed data
+		// Verify modified wrapped child array of test_utils.SomeValue using new storage with committed data
 
 		storage2 := newTestPersistentStorageWithBaseStorage(t, atree.GetBaseStorage(storage))
 
@@ -2799,14 +2800,14 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 		testArray(t, storage, typeInfo, address, array2, expectedValues, true)
 	})
 
-	t.Run("modify 2-level wrapper array in [SomeValue([SomeValue([SomeValue(uint64)])])]", func(t *testing.T) {
+	t.Run("modify 2-level wrapper array in [test_utils.SomeValue([test_utils.SomeValue([test_utils.SomeValue(uint64)])])]", func(t *testing.T) {
 		const (
 			arrayCount       = 4
 			childArrayCount  = 3
 			gchildArrayCount = 2
 		)
 
-		typeInfo := testTypeInfo{42}
+		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 		createStorage := func(arrayCount int) (
 			_ atree.BaseStorage,
@@ -2844,7 +2845,7 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 			v, expected := createArrayOfSomeValueOfArrayOfSomeValueOfArrayOfSomeValueOfUint64(storage)
 
 			array := v.(*atree.Array)
-			expectedValues = expected.(arrayValue)
+			expectedValues = expected.(ExpectedArrayValue)
 
 			testArray(t, storage, typeInfo, address, array, expectedValues, true)
 
@@ -2855,7 +2856,7 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 		}
 
 		// Create a base storage with array in the format of
-		// [SomeValue([SomeValue([SomeValue(uint64)])])]
+		// [test_utils.SomeValue([test_utils.SomeValue([test_utils.SomeValue(uint64)])])]
 		baseStorage, rootSlabID, expectedValues := createStorage(arrayCount)
 		require.Equal(t, arrayCount, len(expectedValues))
 
@@ -2867,59 +2868,59 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(len(expectedValues)), array.Count())
 
-		// Get and verify first element as SomeValue(array)
+		// Get and verify first element as test_utils.SomeValue(array)
 
 		expectedValue := expectedValues[0]
 
 		element, err := array.Get(uint64(0))
 		require.NoError(t, err)
 
-		elementAsSomeValue, isSomeValue := element.(SomeValue)
+		elementAsSomeValue, isSomeValue := element.(test_utils.SomeValue)
 		require.True(t, isSomeValue)
 
 		unwrappedChildArray, isArray := elementAsSomeValue.Value.(*atree.Array)
 		require.True(t, isArray)
 
-		expectedValuesAsSomeValue, isSomeValue := expectedValue.(someValue)
+		expectedValuesAsSomeValue, isSomeValue := expectedValue.(ExpectedWrapperValue)
 		require.True(t, isSomeValue)
 
-		expectedUnwrappedChildArray, isArrayValue := expectedValuesAsSomeValue.Value.(arrayValue)
+		expectedUnwrappedChildArray, isArrayValue := expectedValuesAsSomeValue.Value.(ExpectedArrayValue)
 		require.True(t, isArrayValue)
 
 		require.Equal(t, uint64(len(expectedUnwrappedChildArray)), unwrappedChildArray.Count())
 
-		// Get and verify nested child element as SomeValue(array)
+		// Get and verify nested child element as test_utils.SomeValue(array)
 
 		childArrayElement, err := unwrappedChildArray.Get(uint64(0))
 		require.NoError(t, err)
 
-		childArrayElementAsSomeValue, isSomeValue := childArrayElement.(SomeValue)
+		childArrayElementAsSomeValue, isSomeValue := childArrayElement.(test_utils.SomeValue)
 		require.True(t, isSomeValue)
 
 		unwrappedGChildArray, isArray := childArrayElementAsSomeValue.Value.(*atree.Array)
 		require.True(t, isArray)
 
-		expectedChildValuesAsSomeValue, isSomeValue := expectedUnwrappedChildArray[0].(someValue)
+		expectedChildValuesAsSomeValue, isSomeValue := expectedUnwrappedChildArray[0].(ExpectedWrapperValue)
 		require.True(t, isSomeValue)
 
-		expectedUnwrappedGChildArray, isArrayValue := expectedChildValuesAsSomeValue.Value.(arrayValue)
+		expectedUnwrappedGChildArray, isArrayValue := expectedChildValuesAsSomeValue.Value.(ExpectedArrayValue)
 		require.True(t, isArrayValue)
 
 		require.Equal(t, uint64(len(expectedUnwrappedGChildArray)), unwrappedGChildArray.Count())
 
-		// Modify wrapped gchild array of SomeValue
+		// Modify wrapped gchild array of test_utils.SomeValue
 
-		newValue := NewStringValue("x")
-		err = unwrappedGChildArray.Append(SomeValue{newValue})
+		newValue := test_utils.NewStringValue("x")
+		err = unwrappedGChildArray.Append(test_utils.NewSomeValue(newValue))
 		require.NoError(t, err)
 
-		expectedUnwrappedGChildArray = append(expectedUnwrappedGChildArray, someValue{newValue})
-		expectedValues[0].(someValue).Value.(arrayValue)[0] = someValue{expectedUnwrappedGChildArray}
+		expectedUnwrappedGChildArray = append(expectedUnwrappedGChildArray, ExpectedWrapperValue{newValue})
+		expectedValues[0].(ExpectedWrapperValue).Value.(ExpectedArrayValue)[0] = ExpectedWrapperValue{expectedUnwrappedGChildArray}
 
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		// Verify modified wrapped child array of SomeValue using new storage with committed data
+		// Verify modified wrapped child array of test_utils.SomeValue using new storage with committed data
 
 		storage2 := newTestPersistentStorageWithBaseStorage(t, atree.GetBaseStorage(storage))
 
@@ -2935,7 +2936,7 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 func testWrapperValueLevels(t *testing.T, expectedNestedLevels int, v atree.Value) {
 	nestedLevels := 0
 	for {
-		sw, ok := v.(SomeValue)
+		sw, ok := v.(test_utils.SomeValue)
 		if !ok {
 			break
 		}
@@ -3011,7 +3012,7 @@ func testSetElementInArray(t *testing.T, storage atree.SlabStorage, array *atree
 
 	existingValue, err := existingStorable.StoredValue(storage)
 	require.NoError(t, err)
-	valueEqual(t, expected, existingValue)
+	testValueEqual(t, expected, existingValue)
 
 	removeFromStorage(t, storage, existingValue)
 }
@@ -3040,7 +3041,7 @@ func testRemoveElementFromArray(t *testing.T, storage atree.SlabStorage, array *
 
 	existingValue, err := existingStorable.StoredValue(storage)
 	require.NoError(t, err)
-	valueEqual(t, expected, existingValue)
+	testValueEqual(t, expected, existingValue)
 
 	removeFromStorage(t, storage, existingValue)
 }
@@ -3091,7 +3092,7 @@ func removeFromStorage(t *testing.T, storage atree.SlabStorage, v atree.Value) {
 		require.NoError(t, err)
 
 		for _, key := range keys {
-			existingKeyStorable, existingValueStorable, err := v.Remove(compare, hashInputProvider, key)
+			existingKeyStorable, existingValueStorable, err := v.Remove(test_utils.CompareValue, test_utils.GetHashInput, key)
 			require.NoError(t, err)
 
 			existingKey, err := existingKeyStorable.StoredValue(storage)

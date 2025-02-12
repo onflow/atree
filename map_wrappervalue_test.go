@@ -73,7 +73,7 @@ var newMapValueFunc = func(
 			keyValues[expectedK] = expectedV
 		}
 
-		return m, ExpectedMapValue(keyValues)
+		return m, test_utils.ExpectedMapValue(keyValues)
 	}
 }
 
@@ -94,7 +94,7 @@ var modifyMapValueFunc = func(
 		m, ok := originalValue.(*atree.OrderedMap)
 		require.True(t, ok)
 
-		expectedValues, ok := expectedOrigianlValue.(ExpectedMapValue)
+		expectedValues, ok := expectedOrigianlValue.(test_utils.ExpectedMapValue)
 		require.True(t, ok)
 
 		require.Equal(t, uint64(len(expectedValues)), m.Count())
@@ -1042,7 +1042,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 
 	storage := newTestPersistentStorage(t)
 
-	expectedValues := make(ExpectedMapValue)
+	expectedValues := make(test_utils.ExpectedMapValue)
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
@@ -1064,7 +1064,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 
 		require.True(t, childMap.Inlined())
 
-		expectedValues[key] = ExpectedWrapperValue{ExpectedMapValue{}}
+		expectedValues[key] = test_utils.NewExpectedWrapperValue(test_utils.ExpectedMapValue{})
 
 		require.Equal(t, uint64(1), m.Count())
 
@@ -1092,9 +1092,9 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 		wrappedMap, isMap := wrappedValue.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValue := expectedValues[test_utils.Uint64Value(0)].(ExpectedWrapperValue).Value
+		expectedWrappedValue := expectedValues[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
 
-		expectedWrappedMap := expectedWrappedValue.(ExpectedMapValue)
+		expectedWrappedMap := expectedWrappedValue.(test_utils.ExpectedMapValue)
 
 		// Insert new elements to wrapped child map
 
@@ -1105,9 +1105,9 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedWrappedMap[k] = ExpectedWrapperValue{v}
+		expectedWrappedMap[k] = test_utils.NewExpectedWrapperValue(v)
 
-		expectedValues[test_utils.Uint64Value(0)] = ExpectedWrapperValue{expectedWrappedMap}
+		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(expectedWrappedMap)
 
 		require.Equal(t, uint64(i+1), wrappedMap.Count())
 		require.Equal(t, i+1, len(expectedWrappedMap))
@@ -1138,9 +1138,9 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 		wrappedMap, isMap := wrappedValue.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValue := expectedValues[test_utils.Uint64Value(0)].(ExpectedWrapperValue).Value
+		expectedWrappedValue := expectedValues[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
 
-		expectedWrappedMap := expectedWrappedValue.(ExpectedMapValue)
+		expectedWrappedMap := expectedWrappedValue.(test_utils.ExpectedMapValue)
 
 		// Remove element from wrapped child map
 
@@ -1157,7 +1157,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 
 		delete(expectedWrappedMap, test_utils.Uint64Value(i))
 
-		expectedValues[test_utils.Uint64Value(0)] = ExpectedWrapperValue{expectedWrappedMap}
+		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(expectedWrappedMap)
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	}
@@ -1227,7 +1227,7 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 
 	storage := newTestPersistentStorage(t)
 
-	expectedValues := make(ExpectedMapValue)
+	expectedValues := make(test_utils.ExpectedMapValue)
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
@@ -1260,7 +1260,9 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 
 		require.True(t, childMap.Inlined())
 
-		expectedValues[test_utils.Uint64Value(0)] = ExpectedWrapperValue{ExpectedMapValue{test_utils.Uint64Value(0): ExpectedWrapperValue{ExpectedMapValue{}}}}
+		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(
+			test_utils.ExpectedMapValue{
+				test_utils.Uint64Value(0): test_utils.NewExpectedWrapperValue(test_utils.ExpectedMapValue{})})
 
 		require.Equal(t, uint64(1), m.Count())
 
@@ -1289,9 +1291,9 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		wrappedMapAtLevel1, isMap := wrappedValueAtLevel1.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValueAtLevel1 := expectedValues[test_utils.Uint64Value(0)].(ExpectedWrapperValue).Value
+		expectedWrappedValueAtLevel1 := expectedValues[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
 
-		expectedWrappedMapAtLevel1 := expectedWrappedValueAtLevel1.(ExpectedMapValue)
+		expectedWrappedMapAtLevel1 := expectedWrappedValueAtLevel1.(test_utils.ExpectedMapValue)
 
 		// Get element at level 2
 
@@ -1307,9 +1309,9 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		wrappedMapAtLevel2, isMap := wrappedValueAtLevel2.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValueAtLevel2 := expectedWrappedMapAtLevel1[test_utils.Uint64Value(0)].(ExpectedWrapperValue).Value
+		expectedWrappedValueAtLevel2 := expectedWrappedMapAtLevel1[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
 
-		expectedWrappedMapAtLevel2 := expectedWrappedValueAtLevel2.(ExpectedMapValue)
+		expectedWrappedMapAtLevel2 := expectedWrappedValueAtLevel2.(test_utils.ExpectedMapValue)
 
 		// Insert new elements to wrapped gchild map
 
@@ -1320,9 +1322,11 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedWrappedMapAtLevel2[k] = ExpectedWrapperValue{v}
+		expectedWrappedMapAtLevel2[k] = test_utils.NewExpectedWrapperValue(v)
 
-		expectedValues[test_utils.Uint64Value(0)] = ExpectedWrapperValue{ExpectedMapValue{test_utils.Uint64Value(0): ExpectedWrapperValue{expectedWrappedMapAtLevel2}}}
+		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(
+			test_utils.ExpectedMapValue{
+				test_utils.Uint64Value(0): test_utils.NewExpectedWrapperValue(expectedWrappedMapAtLevel2)})
 
 		require.Equal(t, uint64(i+1), wrappedMapAtLevel2.Count())
 		require.Equal(t, i+1, len(expectedWrappedMapAtLevel2))
@@ -1352,9 +1356,9 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		wrappedMapAtLevel1, isMap := wrappedValueAtLevel1.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValueAtLevel1 := expectedValues[test_utils.Uint64Value(0)].(ExpectedWrapperValue).Value
+		expectedWrappedValueAtLevel1 := expectedValues[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
 
-		expectedWrappedMapAtLevel1 := expectedWrappedValueAtLevel1.(ExpectedMapValue)
+		expectedWrappedMapAtLevel1 := expectedWrappedValueAtLevel1.(test_utils.ExpectedMapValue)
 
 		// Get element at level 2
 
@@ -1370,9 +1374,9 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		wrappedMapAtLevel2, isMap := wrappedValueAtLevel2.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValueAtLevel2 := expectedWrappedMapAtLevel1[test_utils.Uint64Value(0)].(ExpectedWrapperValue).Value
+		expectedWrappedValueAtLevel2 := expectedWrappedMapAtLevel1[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
 
-		expectedWrappedMapAtLevel2 := expectedWrappedValueAtLevel2.(ExpectedMapValue)
+		expectedWrappedMapAtLevel2 := expectedWrappedValueAtLevel2.(test_utils.ExpectedMapValue)
 
 		// Remove first element from wrapped gchild map
 
@@ -1389,7 +1393,9 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 
 		delete(expectedWrappedMapAtLevel2, test_utils.Uint64Value(i))
 
-		expectedValues[test_utils.Uint64Value(0)] = ExpectedWrapperValue{ExpectedMapValue{test_utils.Uint64Value(0): ExpectedWrapperValue{expectedWrappedMapAtLevel2}}}
+		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(
+			test_utils.ExpectedMapValue{
+				test_utils.Uint64Value(0): test_utils.NewExpectedWrapperValue(expectedWrappedMapAtLevel2)})
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	}
@@ -1455,7 +1461,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 
 	storage := newTestPersistentStorage(t)
 
-	expectedValues := make(ExpectedMapValue)
+	expectedValues := make(test_utils.ExpectedMapValue)
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
@@ -1590,7 +1596,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 
 	storage := newTestPersistentStorage(t)
 
-	expectedValues := make(ExpectedMapValue)
+	expectedValues := make(test_utils.ExpectedMapValue)
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
@@ -1805,7 +1811,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 
 	storage := newTestPersistentStorage(t)
 
-	expectedValues := make(ExpectedMapValue)
+	expectedValues := make(test_utils.ExpectedMapValue)
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
@@ -2003,7 +2009,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 			v, expected := createMapOfSomeValueOfMapOfSomeValueOfUint64(storage)
 
 			m := v.(*atree.OrderedMap)
-			expectedKeyValues = expected.(ExpectedMapValue)
+			expectedKeyValues = expected.(test_utils.ExpectedMapValue)
 
 			testMap(t, storage, typeInfo, address, m, expectedKeyValues, nil, true)
 
@@ -2046,10 +2052,10 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 		unwrappedChildMap, isOrderedMap := elementAsSomeValue.Value.(*atree.OrderedMap)
 		require.True(t, isOrderedMap)
 
-		expectedValuesAsSomeValue, isSomeValue := expectedValues.(ExpectedWrapperValue)
+		expectedValuesAsSomeValue, isSomeValue := expectedValues.(test_utils.ExpectedWrapperValue)
 		require.True(t, isSomeValue)
 
-		expectedUnwrappedChildMap, isMapValue := expectedValuesAsSomeValue.Value.(ExpectedMapValue)
+		expectedUnwrappedChildMap, isMapValue := expectedValuesAsSomeValue.Value.(test_utils.ExpectedMapValue)
 		require.True(t, isMapValue)
 
 		require.Equal(t, uint64(len(expectedUnwrappedChildMap)), unwrappedChildMap.Count())
@@ -2062,8 +2068,8 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedChildMapValues := expectedKeyValues[key].(ExpectedWrapperValue).Value.(ExpectedMapValue)
-		expectedChildMapValues[newKey] = ExpectedWrapperValue{newValue}
+		expectedChildMapValues := expectedKeyValues[key].(test_utils.ExpectedWrapperValue).Value.(test_utils.ExpectedMapValue)
+		expectedChildMapValues[newKey] = test_utils.NewExpectedWrapperValue(newValue)
 
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
@@ -2128,7 +2134,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 			v, expected := createMapOfSomeValueOfMapOfSomeValueOfMapOfSomeValueOfUint64(storage)
 
 			m := v.(*atree.OrderedMap)
-			expectedKeyValues = expected.(ExpectedMapValue)
+			expectedKeyValues = expected.(test_utils.ExpectedMapValue)
 
 			testMap(t, storage, typeInfo, address, m, expectedKeyValues, nil, true)
 
@@ -2171,10 +2177,10 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 		unwrappedChildMap, isOrderedMap := elementAsSomeValue.Value.(*atree.OrderedMap)
 		require.True(t, isOrderedMap)
 
-		expectedValuesAsSomeValue, isSomeValue := expectedValues.(ExpectedWrapperValue)
+		expectedValuesAsSomeValue, isSomeValue := expectedValues.(test_utils.ExpectedWrapperValue)
 		require.True(t, isSomeValue)
 
-		expectedUnwrappedChildMap, isMapValue := expectedValuesAsSomeValue.Value.(ExpectedMapValue)
+		expectedUnwrappedChildMap, isMapValue := expectedValuesAsSomeValue.Value.(test_utils.ExpectedMapValue)
 		require.True(t, isMapValue)
 
 		require.Equal(t, uint64(len(expectedUnwrappedChildMap)), unwrappedChildMap.Count())
@@ -2197,10 +2203,10 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 		unwrappedGChildMap, isOrderedMap := childMapElementAsSomeValue.Value.(*atree.OrderedMap)
 		require.True(t, isOrderedMap)
 
-		expectedChildValuesAsSomeValue, isSomeValue := expectedUnwrappedChildMap[childMapKey].(ExpectedWrapperValue)
+		expectedChildValuesAsSomeValue, isSomeValue := expectedUnwrappedChildMap[childMapKey].(test_utils.ExpectedWrapperValue)
 		require.True(t, isSomeValue)
 
-		expectedUnwrappedGChildMap, isMapValue := expectedChildValuesAsSomeValue.Value.(ExpectedMapValue)
+		expectedUnwrappedGChildMap, isMapValue := expectedChildValuesAsSomeValue.Value.(test_utils.ExpectedMapValue)
 		require.True(t, isMapValue)
 
 		require.Equal(t, uint64(len(expectedUnwrappedGChildMap)), unwrappedGChildMap.Count())
@@ -2213,9 +2219,9 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedChildMapValues := expectedKeyValues[key].(ExpectedWrapperValue).Value.(ExpectedMapValue)
-		expectedGChildMapValues := expectedChildMapValues[childMapKey].(ExpectedWrapperValue).Value.(ExpectedMapValue)
-		expectedGChildMapValues[newKey] = ExpectedWrapperValue{newValue}
+		expectedChildMapValues := expectedKeyValues[key].(test_utils.ExpectedWrapperValue).Value.(test_utils.ExpectedMapValue)
+		expectedGChildMapValues := expectedChildMapValues[childMapKey].(test_utils.ExpectedWrapperValue).Value.(test_utils.ExpectedMapValue)
+		expectedGChildMapValues[newKey] = test_utils.NewExpectedWrapperValue(newValue)
 
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)

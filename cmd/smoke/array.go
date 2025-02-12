@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/onflow/atree"
+	"github.com/onflow/atree/test_utils"
 )
 
 type arrayOpType int
@@ -143,7 +144,7 @@ func testArray(
 	}
 
 	// expectedValues contains array elements in the same order.  It is used to check data loss.
-	expectedValues := make(arrayValue, 0, flagMaxLength)
+	expectedValues := make(test_utils.ExpectedArrayValue, 0, flagMaxLength)
 
 	reduceHeapAllocs := false
 
@@ -257,7 +258,7 @@ func testArray(
 }
 
 func nextArrayOp(
-	expectedValues arrayValue,
+	expectedValues test_utils.ExpectedArrayValue,
 	array *atree.Array,
 	nestedLevels int,
 	forceRemove bool,
@@ -303,11 +304,11 @@ func nextArrayOp(
 }
 
 func modifyArray(
-	expectedValues arrayValue,
+	expectedValues test_utils.ExpectedArrayValue,
 	array *atree.Array,
 	nestedLevels int,
 	forceRemove bool,
-) (arrayValue, arrayOpType, error) {
+) (test_utils.ExpectedArrayValue, arrayOpType, error) {
 
 	storage := array.Storage
 	address := array.Address()
@@ -393,9 +394,12 @@ func modifyArray(
 			return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingStorable, err)
 		}
 
-		err = valueEqual(oldExpectedValue, existingValue)
+		equal, err := test_utils.ValueEqual(oldExpectedValue, existingValue)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to compare %s and %s: %s", existingValue, oldExpectedValue, err)
+		}
+		if !equal {
+			return nil, 0, fmt.Errorf("overwritten map element isn't as expected: %s, %s", existingValue, oldExpectedValue)
 		}
 
 		// Delete overwritten element from storage
@@ -476,9 +480,12 @@ func modifyArray(
 			return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingStorable, err)
 		}
 
-		err = valueEqual(oldExpectedValue, existingValue)
+		equal, err := test_utils.ValueEqual(oldExpectedValue, existingValue)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to compare %s and %s: %s", existingValue, oldExpectedValue, err)
+		}
+		if !equal {
+			return nil, 0, fmt.Errorf("removed array element isn't as expected: %s, %s", existingValue, oldExpectedValue)
 		}
 
 		// Delete removed element from storage
@@ -513,7 +520,7 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 
 	switch value := value.(type) {
 	case *atree.Array:
-		expectedArrayValue, ok := expectedValue.(arrayValue)
+		expectedArrayValue, ok := expectedValue.(test_utils.ExpectedArrayValue)
 		if !ok {
 			return nil, fmt.Errorf("failed to get expected value of type arrayValue: got %T", expectedValue)
 		}
@@ -524,7 +531,7 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 		}
 
 	case *atree.OrderedMap:
-		expectedMapValue, ok := expectedValue.(mapValue)
+		expectedMapValue, ok := expectedValue.(test_utils.ExpectedMapValue)
 		if !ok {
 			return nil, fmt.Errorf("failed to get expected value of type mapValue: got %T", expectedValue)
 		}
@@ -534,8 +541,8 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 			return nil, err
 		}
 
-	case SomeValue:
-		expectedSomeValue, ok := expectedValue.(someValue)
+	case test_utils.SomeValue:
+		expectedSomeValue, ok := expectedValue.(test_utils.ExpectedWrapperValue)
 		if !ok {
 			return nil, fmt.Errorf("failed to get expected value of type someValue: got %T", expectedValue)
 		}
@@ -545,7 +552,7 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 			return nil, err
 		}
 
-		return someValue{expected}, nil
+		return test_utils.NewExpectedWrapperValue(expected), nil
 
 	default:
 		return nil, fmt.Errorf("failed to get container: got %T", value)
@@ -554,23 +561,23 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 	return expectedValue, nil
 }
 
-func hasChildContainerInArray(expectedValues arrayValue) bool {
+func hasChildContainerInArray(expectedValues test_utils.ExpectedArrayValue) bool {
 	for _, v := range expectedValues {
 		v, _ = unwrapValue(v)
 		switch v.(type) {
-		case arrayValue, mapValue:
+		case test_utils.ExpectedArrayValue, test_utils.ExpectedMapValue:
 			return true
 		}
 	}
 	return false
 }
 
-func getRandomChildContainerIndexInArray(expectedValues arrayValue) (index int, found bool) {
+func getRandomChildContainerIndexInArray(expectedValues test_utils.ExpectedArrayValue) (index int, found bool) {
 	indexes := make([]int, 0, len(expectedValues))
 	for i, v := range expectedValues {
 		v, _ = unwrapValue(v)
 		switch v.(type) {
-		case arrayValue, mapValue:
+		case test_utils.ExpectedArrayValue, test_utils.ExpectedMapValue:
 			indexes = append(indexes, i)
 		}
 	}
@@ -605,7 +612,7 @@ func checkStorageHealth(storage *atree.PersistentSlabStorage, rootSlabID atree.S
 	return true
 }
 
-func checkArrayDataLoss(expectedValues arrayValue, array *atree.Array) error {
+func checkArrayDataLoss(expectedValues test_utils.ExpectedArrayValue, array *atree.Array) error {
 
 	// Check array has the same number of elements as values
 	if array.Count() != uint64(len(expectedValues)) {
@@ -618,9 +625,12 @@ func checkArrayDataLoss(expectedValues arrayValue, array *atree.Array) error {
 		if err != nil {
 			return fmt.Errorf("failed to get element at %d: %w", i, err)
 		}
-		err = valueEqual(v, convertedValue)
+		equal, err := test_utils.ValueEqual(v, convertedValue)
 		if err != nil {
 			return fmt.Errorf("failed to compare %s and %s: %w", v, convertedValue, err)
+		}
+		if !equal {
+			return fmt.Errorf("array element isn't as expected: %s, %s", convertedValue, v)
 		}
 	}
 
@@ -635,7 +645,7 @@ func checkArrayDataLoss(expectedValues arrayValue, array *atree.Array) error {
 }
 
 func checkArraySlab(array *atree.Array) error {
-	err := atree.VerifyArray(array, array.Address(), array.Type(), typeInfoComparator, hashInputProvider, true)
+	err := atree.VerifyArray(array, array.Address(), array.Type(), compareTypeInfo, test_utils.GetHashInput, true)
 	if err != nil {
 		return err
 	}
@@ -644,7 +654,7 @@ func checkArraySlab(array *atree.Array) error {
 		array,
 		cborDecMode,
 		cborEncMode,
-		decodeStorable,
+		test_utils.DecodeStorable,
 		decodeTypeInfo,
 		func(a, b atree.Storable) bool {
 			return reflect.DeepEqual(a, b)

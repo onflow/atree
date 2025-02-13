@@ -13,7 +13,7 @@ linters:
     - unused
 
     # enable extra linters
-    - exportloopref
+    - copyloopvar
     - gocritic
     - gofmt
     - goimports

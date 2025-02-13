@@ -1,6 +1,6 @@
 module github.com/onflow/atree
 
-go 1.17
+go 1.23
 
 require (
 	github.com/fxamacker/cbor/v2 v2.4.1-0.20220515183430-ad2eae63303f

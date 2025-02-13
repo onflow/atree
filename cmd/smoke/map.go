@@ -382,7 +382,7 @@ func modifyMap(
 
 		// Compare old value from map with old value from elements
 		if (oldExpectedValue == nil) != (existingStorable == nil) {
-			return nil, 0, fmt.Errorf("Set returned storable %s != expected %s", existingStorable, oldExpectedValue)
+			return nil, 0, fmt.Errorf("set returned storable %s != expected %s", existingStorable, oldExpectedValue)
 		}
 
 		if existingStorable != nil {

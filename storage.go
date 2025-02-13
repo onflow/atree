@@ -1580,7 +1580,7 @@ func (s *PersistentSlabStorage) GetAllChildReferences(id SlabID) (
 		return nil, nil, err
 	}
 	if !found {
-		return nil, nil, NewSlabNotFoundErrorf(id, fmt.Sprintf("failed to get root slab by id %s", id))
+		return nil, nil, NewSlabNotFoundErrorf(id, "failed to get root slab by id %s", id)
 	}
 	return s.getAllChildReferences(slab)
 }

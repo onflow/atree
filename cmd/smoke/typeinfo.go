@@ -125,7 +125,7 @@ func newCompositeTypeInfo() compositeTypeInfo {
 
 	endIndex := startIndex + count
 	if endIndex > len(compositeFieldNames) {
-		panic("not reachable")
+		panic(atree.NewUnreachableError())
 	}
 
 	return compositeTypeInfo{fieldStartIndex: startIndex, fieldEndIndex: endIndex}

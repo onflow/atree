@@ -117,7 +117,8 @@ func main() {
 		var err error
 		seed, err = strconv.ParseInt(strings.ReplaceAll(flagSeedHex, "0x", ""), 16, 64)
 		if err != nil {
-			panic("Failed to parse seed flag (hex string)")
+			fmt.Fprintf(os.Stderr, "failed to parse seed flag (hex string) %s: %s", flagSeedHex, err)
+			return
 		}
 	}
 

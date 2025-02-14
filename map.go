@@ -1137,7 +1137,7 @@ func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (S
 		return SlabIDStorable(m.SlabID()), nil
 
 	default:
-		panic("not reachable")
+		panic(NewUnreachableError())
 	}
 }
 

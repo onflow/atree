@@ -19,6 +19,7 @@
 package atree
 
 import (
+	"bytes"
 	"io"
 	"math"
 
@@ -57,79 +58,22 @@ func (enc *Encoder) hasInlinedExtraData() bool {
 	return !enc._inlinedExtraData.empty()
 }
 
-type StorableDecoder func(
-	decoder *cbor.StreamDecoder,
-	storableSlabID SlabID,
-	inlinedExtraData []ExtraData,
-) (
-	Storable,
-	error,
-)
+func EncodeSlab(slab Slab, encMode cbor.EncMode) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := NewEncoder(&buf, encMode)
 
-func DecodeSlab(
-	id SlabID,
-	data []byte,
-	decMode cbor.DecMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-) (
-	Slab,
-	error,
-) {
-	if len(data) < versionAndFlagSize {
-		return nil, NewDecodingErrorf("data is too short")
-	}
-
-	h, err := newHeadFromData(data[:versionAndFlagSize])
+	err := slab.Encode(enc)
 	if err != nil {
-		return nil, NewDecodingError(err)
+		// Wrap err as external error (if needed) because err is returned by Storable interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to encode storable")
 	}
 
-	switch h.getSlabType() {
-
-	case slabArray:
-
-		arrayDataType := h.getSlabArrayType()
-
-		switch arrayDataType {
-		case slabArrayData:
-			return newArrayDataSlabFromData(id, data, decMode, decodeStorable, decodeTypeInfo)
-		case slabArrayMeta:
-			return newArrayMetaDataSlabFromData(id, data, decMode, decodeTypeInfo)
-		default:
-			return nil, NewDecodingErrorf("data has invalid head 0x%x", h[:])
-		}
-
-	case slabMap:
-
-		mapDataType := h.getSlabMapType()
-
-		switch mapDataType {
-		case slabMapData:
-			return newMapDataSlabFromData(id, data, decMode, decodeStorable, decodeTypeInfo)
-		case slabMapMeta:
-			return newMapMetaDataSlabFromData(id, data, decMode, decodeTypeInfo)
-		case slabMapCollisionGroup:
-			return newMapDataSlabFromData(id, data, decMode, decodeStorable, decodeTypeInfo)
-		default:
-			return nil, NewDecodingErrorf("data has invalid head 0x%x", h[:])
-		}
-
-	case slabStorable:
-		cborDec := decMode.NewByteStreamDecoder(data[versionAndFlagSize:])
-		storable, err := decodeStorable(cborDec, id, nil)
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
-			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode slab storable")
-		}
-		return &StorableSlab{
-			slabID:   id,
-			storable: storable,
-		}, nil
-
-	default:
-		return nil, NewDecodingErrorf("data has invalid head 0x%x", h[:])
+	err = enc.CBOR.Flush()
+	if err != nil {
+		return nil, NewEncodingError(err)
 	}
+
+	return buf.Bytes(), nil
 }
 
 func GetUintCBORSize(n uint64) uint32 {

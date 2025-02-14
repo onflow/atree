@@ -19,7 +19,6 @@
 package atree
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -32,149 +31,8 @@ import (
 
 const LedgerBaseStorageSlabPrefix = "$"
 
-const (
-	SlabAddressLength = 8
-	SlabIndexLength   = 8
-	SlabIDLength      = SlabAddressLength + SlabIndexLength
-	ValueIDLength     = SlabIDLength
-)
-
-// ValueID identifies an Array or OrderedMap. ValueID is consistent
-// independent of inlining status, while ValueID and SlabID are used
-// differently despite having the same size and content under the hood.
-// By contrast, SlabID is affected by inlining because it identifies
-// a slab in storage.  Given this, ValueID should be used for
-// resource tracking, etc.
-type ValueID [ValueIDLength]byte
-
-var emptyValueID = ValueID{}
-
-func slabIDToValueID(sid SlabID) ValueID {
-	var id ValueID
-	n := copy(id[:], sid.address[:])
-	copy(id[n:], sid.index[:])
-	return id
-}
-
-func (vid ValueID) equal(sid SlabID) bool {
-	return bytes.Equal(vid[:len(sid.address)], sid.address[:]) &&
-		bytes.Equal(vid[len(sid.address):], sid.index[:])
-}
-
-func (vid ValueID) String() string {
-	return fmt.Sprintf(
-		"0x%x.%d",
-		binary.BigEndian.Uint64(vid[:SlabAddressLength]),
-		binary.BigEndian.Uint64(vid[SlabAddressLength:]),
-	)
-}
-
-// WARNING: Any changes to SlabID or its components (Address and SlabIndex)
-// require updates to ValueID definition and functions.
-type (
-	Address   [SlabAddressLength]byte
-	SlabIndex [SlabIndexLength]byte
-
-	// SlabID identifies slab in storage.
-	// SlabID should only be used to retrieve,
-	// store, and remove slab in storage.
-	SlabID struct {
-		address Address
-		index   SlabIndex
-	}
-)
-
-var (
-	AddressUndefined   = Address{}
-	SlabIndexUndefined = SlabIndex{}
-	SlabIDUndefined    = SlabID{}
-)
-
-// Next returns new SlabIndex with index+1 value.
-// The caller is responsible for preventing overflow
-// by checking if the index value is valid before
-// calling this function.
-func (index SlabIndex) Next() SlabIndex {
-	i := binary.BigEndian.Uint64(index[:])
-
-	var next SlabIndex
-	binary.BigEndian.PutUint64(next[:], i+1)
-
-	return next
-}
-
-func NewSlabID(address Address, index SlabIndex) SlabID {
-	return SlabID{address, index}
-}
-
-func NewSlabIDFromRawBytes(b []byte) (SlabID, error) {
-	if len(b) < SlabIDLength {
-		return SlabID{}, NewSlabIDErrorf("incorrect slab ID buffer length %d", len(b))
-	}
-
-	var address Address
-	copy(address[:], b)
-
-	var index SlabIndex
-	copy(index[:], b[SlabAddressLength:])
-
-	return SlabID{address, index}, nil
-}
-
-func (id SlabID) ToRawBytes(b []byte) (int, error) {
-	if len(b) < SlabIDLength {
-		return 0, NewSlabIDErrorf("incorrect slab ID buffer length %d", len(b))
-	}
-	copy(b, id.address[:])
-	copy(b[SlabAddressLength:], id.index[:])
-	return SlabIDLength, nil
-}
-
-func (id SlabID) String() string {
-	return fmt.Sprintf(
-		"0x%x.%d",
-		binary.BigEndian.Uint64(id.address[:]),
-		binary.BigEndian.Uint64(id.index[:]),
-	)
-}
-
-func (id SlabID) AddressAsUint64() uint64 {
-	return binary.BigEndian.Uint64(id.address[:])
-}
-
-// Address returns the address of SlabID.
-func (id SlabID) Address() Address {
-	return id.address
-}
-
-func (id SlabID) IndexAsUint64() uint64 {
-	return binary.BigEndian.Uint64(id.index[:])
-}
-
-func (id SlabID) HasTempAddress() bool {
-	return id.address == AddressUndefined
-}
-
-func (id SlabID) Index() SlabIndex {
-	return id.index
-}
-
-func (id SlabID) Valid() error {
-	if id == SlabIDUndefined {
-		return NewSlabIDError("undefined slab ID")
-	}
-	if id.index == SlabIndexUndefined {
-		return NewSlabIDError("undefined slab index")
-	}
-	return nil
-}
-
-func (id SlabID) Compare(other SlabID) int {
-	result := bytes.Compare(id.address[:], other.address[:])
-	if result == 0 {
-		return bytes.Compare(id.index[:], other.index[:])
-	}
-	return result
+func LedgerKeyIsSlabKey(key string) bool {
+	return strings.HasPrefix(key, LedgerBaseStorageSlabPrefix)
 }
 
 type BaseStorageUsageReporter interface {
@@ -206,6 +64,8 @@ type Ledger interface {
 	// AllocateSlabIndex allocates a new slab index under the given account.
 	AllocateSlabIndex(owner []byte) (SlabIndex, error)
 }
+
+// LedgerBaseStorage
 
 type LedgerBaseStorage struct {
 	ledger         Ledger
@@ -273,14 +133,6 @@ func (s *LedgerBaseStorage) GenerateSlabID(address Address) (SlabID, error) {
 	return NewSlabID(address, idx), nil
 }
 
-func SlabIndexToLedgerKey(ind SlabIndex) []byte {
-	return []byte(LedgerBaseStorageSlabPrefix + string(ind[:]))
-}
-
-func LedgerKeyIsSlabKey(key string) bool {
-	return strings.HasPrefix(key, LedgerBaseStorageSlabPrefix)
-}
-
 func (s *LedgerBaseStorage) BytesRetrieved() int {
 	return s.bytesRetrieved
 }
@@ -330,6 +182,8 @@ type SlabStorage interface {
 	Count() int
 	SlabIterator() (SlabIterator, error)
 }
+
+// BasicSlabStorage
 
 type BasicSlabStorage struct {
 	Slabs          map[SlabID]Slab
@@ -443,149 +297,7 @@ func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
 	}, nil
 }
 
-// CheckStorageHealth checks for the health of slab storage.
-// It traverses the slabs and checks these factors:
-// - All non-root slabs only has a single parent reference (no double referencing)
-// - Every child of a parent shares the same ownership (childSlabID.Address == parentSlabID.Address)
-// - The number of root slabs are equal to the expected number (skipped if expectedNumberOfRootSlabs is -1)
-// This should be used for testing purposes only, as it might be slow to process
-func CheckStorageHealth(storage SlabStorage, expectedNumberOfRootSlabs int) (map[SlabID]struct{}, error) {
-	parentOf := make(map[SlabID]SlabID)
-	leaves := make([]SlabID, 0)
-
-	slabIterator, err := storage.SlabIterator()
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to create slab iterator")
-	}
-
-	slabs := map[SlabID]Slab{}
-
-	for {
-		id, slab := slabIterator()
-		if id == SlabIDUndefined {
-			break
-		}
-
-		if _, ok := slabs[id]; ok {
-			return nil, NewFatalError(fmt.Errorf("duplicate slab %s", id))
-		}
-		slabs[id] = slab
-
-		atLeastOneExternalSlab := false
-		childStorables := slab.ChildStorables()
-
-		for len(childStorables) > 0 {
-
-			var next []Storable
-
-			for _, s := range childStorables {
-
-				if sids, ok := s.(SlabIDStorable); ok {
-					sid := SlabID(sids)
-					if _, found := parentOf[sid]; found {
-						return nil, NewFatalError(fmt.Errorf("two parents are captured for the slab %s", sid))
-					}
-					parentOf[sid] = id
-					atLeastOneExternalSlab = true
-				}
-
-				// This handles inlined slab because inlined slab is a child storable (s) and
-				// we traverse s.ChildStorables() for its inlined elements.
-				next = append(next, s.ChildStorables()...)
-			}
-
-			childStorables = next
-		}
-
-		if !atLeastOneExternalSlab {
-			leaves = append(leaves, id)
-		}
-	}
-
-	rootsMap := make(map[SlabID]struct{})
-	visited := make(map[SlabID]struct{})
-	var id SlabID
-	for _, leaf := range leaves {
-		id = leaf
-		if _, ok := visited[id]; ok {
-			return nil, NewFatalError(fmt.Errorf("at least two references found to the leaf slab %s", id))
-		}
-		visited[id] = struct{}{}
-		for {
-			parentID, found := parentOf[id]
-			if !found {
-				// we reach the root
-				rootsMap[id] = struct{}{}
-				break
-			}
-			visited[parentID] = struct{}{}
-
-			childSlab, ok, err := storage.Retrieve(id)
-			if !ok {
-				return nil, NewSlabNotFoundErrorf(id, "failed to get child slab")
-			}
-			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve child slab %s", id))
-			}
-
-			parentSlab, ok, err := storage.Retrieve(parentID)
-			if !ok {
-				return nil, NewSlabNotFoundErrorf(id, "failed to get parent slab")
-			}
-			if err != nil {
-				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-				return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve parent slab %s", parentID))
-			}
-
-			childOwner := childSlab.SlabID().address
-			parentOwner := parentSlab.SlabID().address
-
-			if childOwner != parentOwner {
-				return nil, NewFatalError(
-					fmt.Errorf(
-						"parent and child are not owned by the same account: child.owner %s, parent.owner %s",
-						childOwner,
-						parentOwner,
-					))
-			}
-			id = parentID
-		}
-	}
-
-	if len(visited) != len(slabs) {
-
-		var unreachableID SlabID
-		var unreachableSlab Slab
-
-		for id, slab := range slabs {
-			if _, ok := visited[id]; !ok {
-				unreachableID = id
-				unreachableSlab = slab
-				break
-			}
-		}
-
-		return nil, NewFatalError(
-			fmt.Errorf(
-				"slab was not reachable from leaves: %s: %s",
-				unreachableID,
-				unreachableSlab,
-			))
-	}
-
-	if (expectedNumberOfRootSlabs >= 0) && (len(rootsMap) != expectedNumberOfRootSlabs) {
-		return nil, NewFatalError(
-			fmt.Errorf(
-				"number of root slabs doesn't match: expected %d, got %d",
-				expectedNumberOfRootSlabs,
-				len(rootsMap),
-			))
-	}
-
-	return rootsMap, nil
-}
+// PersistentSlabStorage
 
 type PersistentSlabStorage struct {
 	baseStorage    BaseStorage
@@ -600,34 +312,31 @@ type PersistentSlabStorage struct {
 
 var _ SlabStorage = &PersistentSlabStorage{}
 
-func (s *PersistentSlabStorage) getBaseStorage() BaseStorage {
-	return s.baseStorage
-}
+type StorageOption func(st *PersistentSlabStorage) *PersistentSlabStorage
 
-func (s *PersistentSlabStorage) getCache() map[SlabID]Slab {
-	return s.cache
-}
-
-func (s *PersistentSlabStorage) getDeltas() map[SlabID]Slab {
-	return s.deltas
-}
-
-func (s *PersistentSlabStorage) getCBOREncMode() cbor.EncMode {
-	return s.cborEncMode
-}
-
-func (s *PersistentSlabStorage) getCBORDecMode() cbor.DecMode {
-	return s.cborDecMode
-}
-
-// HasUnsavedChanges returns true if there are any modified and unsaved slabs in storage with given address.
-func (s *PersistentSlabStorage) HasUnsavedChanges(address Address) bool {
-	for k := range s.deltas {
-		if k.address == address {
-			return true
-		}
+func NewPersistentSlabStorage(
+	base BaseStorage,
+	cborEncMode cbor.EncMode,
+	cborDecMode cbor.DecMode,
+	decodeStorable StorableDecoder,
+	decodeTypeInfo TypeInfoDecoder,
+	opts ...StorageOption,
+) *PersistentSlabStorage {
+	storage := &PersistentSlabStorage{
+		baseStorage:    base,
+		cache:          make(map[SlabID]Slab),
+		deltas:         make(map[SlabID]Slab),
+		cborEncMode:    cborEncMode,
+		cborDecMode:    cborDecMode,
+		DecodeStorable: decodeStorable,
+		DecodeTypeInfo: decodeTypeInfo,
 	}
-	return false
+
+	for _, applyOption := range opts {
+		storage = applyOption(storage)
+	}
+
+	return storage
 }
 
 func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
@@ -756,33 +465,6 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 		i++
 		return slabEntry.SlabID, slabEntry.Slab
 	}, nil
-}
-
-type StorageOption func(st *PersistentSlabStorage) *PersistentSlabStorage
-
-func NewPersistentSlabStorage(
-	base BaseStorage,
-	cborEncMode cbor.EncMode,
-	cborDecMode cbor.DecMode,
-	decodeStorable StorableDecoder,
-	decodeTypeInfo TypeInfoDecoder,
-	opts ...StorageOption,
-) *PersistentSlabStorage {
-	storage := &PersistentSlabStorage{
-		baseStorage:    base,
-		cache:          make(map[SlabID]Slab),
-		deltas:         make(map[SlabID]Slab),
-		cborEncMode:    cborEncMode,
-		cborDecMode:    cborDecMode,
-		DecodeStorable: decodeStorable,
-		DecodeTypeInfo: decodeTypeInfo,
-	}
-
-	for _, applyOption := range opts {
-		storage = applyOption(storage)
-	}
-
-	return storage
 }
 
 func (s *PersistentSlabStorage) GenerateSlabID(address Address) (SlabID, error) {
@@ -1331,16 +1013,6 @@ func (s *PersistentSlabStorage) DeltasSizeWithoutTempAddresses() uint64 {
 	return size
 }
 
-func storeSlab(storage SlabStorage, slab Slab) error {
-	id := slab.SlabID()
-	err := storage.Store(id, slab)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
-	}
-	return nil
-}
-
 // FixLoadedBrokenReferences traverses loaded slabs and fixes broken references in maps.
 // A broken reference is a SlabID referencing a non-existent slab.
 // To fix a map containing broken references, this function replaces broken map with
@@ -1783,5 +1455,45 @@ func (s *PersistentSlabStorage) BatchPreload(ids []SlabID, numWorkers int) error
 		s.cache[result.slabID] = result.slab
 	}
 
+	return nil
+}
+
+// HasUnsavedChanges returns true if there are any modified and unsaved slabs in storage with given address.
+func (s *PersistentSlabStorage) HasUnsavedChanges(address Address) bool {
+	for k := range s.deltas {
+		if k.address == address {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *PersistentSlabStorage) getBaseStorage() BaseStorage {
+	return s.baseStorage
+}
+
+func (s *PersistentSlabStorage) getCache() map[SlabID]Slab {
+	return s.cache
+}
+
+func (s *PersistentSlabStorage) getDeltas() map[SlabID]Slab {
+	return s.deltas
+}
+
+func (s *PersistentSlabStorage) getCBOREncMode() cbor.EncMode {
+	return s.cborEncMode
+}
+
+func (s *PersistentSlabStorage) getCBORDecMode() cbor.DecMode {
+	return s.cborDecMode
+}
+
+func storeSlab(storage SlabStorage, slab Slab) error {
+	id := slab.SlabID()
+	err := storage.Store(id, slab)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to store slab %s", id))
+	}
 	return nil
 }

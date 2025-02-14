@@ -939,7 +939,7 @@ func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storab
 		return SlabIDStorable(a.SlabID()), nil
 
 	default:
-		panic("not reachable")
+		panic(NewUnreachableError())
 	}
 }
 

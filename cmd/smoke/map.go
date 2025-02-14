@@ -337,7 +337,7 @@ func modifyMap(
 		case mapMutateChildContainerAfterSet:
 			nextNestedLevels = nestedLevels - 1
 		default:
-			panic("not reachable")
+			panic(atree.NewUnreachableError())
 		}
 
 		var expectedKey, key atree.Value
@@ -416,7 +416,7 @@ func modifyMap(
 
 	case mapRemoveOp:
 		if m.Type().IsComposite() {
-			panic("not reachable")
+			panic(atree.NewUnreachableError())
 		}
 
 		// Use for-range on Go map to get random key

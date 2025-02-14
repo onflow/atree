@@ -329,7 +329,7 @@ func modifyArray(
 		case arrayMutateChildContainerAfterAppend:
 			nextNestedLevels = nestedLevels - 1
 		default:
-			panic("not reachable")
+			panic(atree.NewUnreachableError())
 		}
 
 		// Create new chid child
@@ -366,7 +366,7 @@ func modifyArray(
 		case arrayMutateChildContainerAfterSet:
 			nextNestedLevels = nestedLevels - 1
 		default:
-			panic("not reachable")
+			panic(atree.NewUnreachableError())
 		}
 
 		// Create new child child
@@ -425,7 +425,7 @@ func modifyArray(
 		case arrayMutateChildContainerAfterInsert:
 			nextNestedLevels = nestedLevels - 1
 		default:
-			panic("not reachable")
+			panic(atree.NewUnreachableError())
 		}
 
 		// Create new child child

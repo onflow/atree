@@ -163,29 +163,6 @@ func (i *readOnlyArrayIterator) Next() (Value, error) {
 	return element, nil
 }
 
-type ArrayIterationFunc func(element Value) (resume bool, err error)
-
-func iterateArray(iterator ArrayIterator, fn ArrayIterationFunc) error {
-	for {
-		value, err := iterator.Next()
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ArrayIterator.Next().
-			return err
-		}
-		if value == nil {
-			return nil
-		}
-		resume, err := fn(value)
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by ArrayIterationFunc callback.
-			return wrapErrorAsExternalErrorIfNeeded(err)
-		}
-		if !resume {
-			return nil
-		}
-	}
-}
-
 // Array loaded value iterator
 
 type arrayLoadedElementIterator struct {
@@ -321,4 +298,29 @@ func (i *ArrayLoadedValueIterator) Next() (Value, error) {
 
 	// Reach end of loaded value iterator
 	return nil, nil
+}
+
+// Iterate functions
+
+type ArrayIterationFunc func(element Value) (resume bool, err error)
+
+func iterateArray(iterator ArrayIterator, fn ArrayIterationFunc) error {
+	for {
+		value, err := iterator.Next()
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by ArrayIterator.Next().
+			return err
+		}
+		if value == nil {
+			return nil
+		}
+		resume, err := fn(value)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by ArrayIterationFunc callback.
+			return wrapErrorAsExternalErrorIfNeeded(err)
+		}
+		if !resume {
+			return nil
+		}
+	}
 }

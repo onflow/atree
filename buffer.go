@@ -24,7 +24,7 @@ import (
 )
 
 var bufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		e := new(bytes.Buffer)
 		e.Grow(int(maxThreshold))
 		return e

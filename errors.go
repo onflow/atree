@@ -159,10 +159,10 @@ func (e *NotValueError) Error() string {
 
 // DuplicateKeyError is returned when the duplicate key is found in the dictionary when none is expected.
 type DuplicateKeyError struct {
-	key interface{}
+	key any
 }
 
-func NewDuplicateKeyError(key interface{}) error {
+func NewDuplicateKeyError(key any) error {
 	return NewFatalError(&DuplicateKeyError{key: key})
 }
 
@@ -172,11 +172,11 @@ func (e *DuplicateKeyError) Error() string {
 
 // KeyNotFoundError is returned when the key not found in the dictionary
 type KeyNotFoundError struct {
-	key interface{}
+	key any
 }
 
 // NewKeyNotFoundError constructs a KeyNotFoundError
-func NewKeyNotFoundError(key interface{}) error {
+func NewKeyNotFoundError(key any) error {
 	return NewUserError(&KeyNotFoundError{key: key})
 }
 
@@ -221,7 +221,7 @@ func NewSlabIDError(msg string) error {
 }
 
 // NewSlabIDErrorf constructs a fatal error of SlabIDError.
-func NewSlabIDErrorf(msg string, args ...interface{}) error {
+func NewSlabIDErrorf(msg string, args ...any) error {
 	return NewSlabIDError(fmt.Sprintf(msg, args...))
 }
 
@@ -241,7 +241,7 @@ func NewSlabNotFoundError(slabID SlabID, err error) error {
 }
 
 // NewSlabNotFoundErrorf constructs a new SlabNotFoundError with error formating
-func NewSlabNotFoundErrorf(slabID SlabID, msg string, args ...interface{}) error {
+func NewSlabNotFoundErrorf(slabID SlabID, msg string, args ...any) error {
 	return NewSlabNotFoundError(slabID, fmt.Errorf(msg, args...))
 }
 
@@ -260,7 +260,7 @@ func NewSlabSplitError(err error) error {
 }
 
 // NewSlabSplitErrorf constructs a new SlabSplitError with error formating
-func NewSlabSplitErrorf(msg string, args ...interface{}) error {
+func NewSlabSplitErrorf(msg string, args ...any) error {
 	return NewSlabSplitError(fmt.Errorf(msg, args...))
 }
 
@@ -279,7 +279,7 @@ func NewSlabMergeError(err error) error {
 }
 
 // NewSlabMergeErrorf constructs a new SlabMergeError with error formating
-func NewSlabMergeErrorf(msg string, args ...interface{}) error {
+func NewSlabMergeErrorf(msg string, args ...any) error {
 	return NewSlabMergeError(fmt.Errorf(msg, args...))
 }
 
@@ -298,7 +298,7 @@ func NewSlabRebalanceError(err error) error {
 }
 
 // NewSlabErrorf constructs a new SlabError with error formating
-func NewSlabRebalanceErrorf(msg string, args ...interface{}) error {
+func NewSlabRebalanceErrorf(msg string, args ...any) error {
 	return NewSlabRebalanceError(fmt.Errorf(msg, args...))
 }
 
@@ -318,7 +318,7 @@ func NewSlabDataError(err error) error {
 }
 
 // NewSlabDataErrorf constructs a new SlabError with error formating
-func NewSlabDataErrorf(msg string, args ...interface{}) error {
+func NewSlabDataErrorf(msg string, args ...any) error {
 	return NewSlabDataError(fmt.Errorf(msg, args...))
 }
 
@@ -337,7 +337,7 @@ func NewEncodingError(err error) error {
 }
 
 // NewEncodingErrorf constructs a new EncodingError with error formating
-func NewEncodingErrorf(msg string, args ...interface{}) error {
+func NewEncodingErrorf(msg string, args ...any) error {
 	return NewEncodingError(fmt.Errorf(msg, args...))
 }
 
@@ -356,7 +356,7 @@ func NewDecodingError(err error) error {
 }
 
 // NewDecodingErrorf constructs a new DecodingError with error formating
-func NewDecodingErrorf(msg string, args ...interface{}) error {
+func NewDecodingErrorf(msg string, args ...any) error {
 	return NewDecodingError(fmt.Errorf(msg, args...))
 }
 
@@ -385,7 +385,7 @@ type HashLevelError struct {
 }
 
 // NewHashLevelError constructs a HashLevelError
-func NewHashLevelErrorf(msg string, args ...interface{}) error {
+func NewHashLevelErrorf(msg string, args ...any) error {
 	return NewFatalError(&HashLevelError{msg: fmt.Sprintf(msg, args...)})
 }
 

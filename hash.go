@@ -63,7 +63,7 @@ type basicDigester struct {
 
 // basicDigesterPool caches unused basicDigester objects for later reuse.
 var basicDigesterPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &basicDigester{}
 	},
 }

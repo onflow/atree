@@ -387,7 +387,7 @@ func getEncodedTypeInfo(ti TypeInfo) (string, error) {
 const defaultTypeIDBufferSize = 256
 
 var typeIDBufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		e := new(bytes.Buffer)
 		e.Grow(defaultTypeIDBufferSize)
 		return e

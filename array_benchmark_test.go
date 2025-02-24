@@ -89,7 +89,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	var totalLookupTime time.Duration
 
 	// setup
-	for i := 0; i < initialArrayCount; i++ {
+	for range initialArrayCount {
 		v := RandomValue(r)
 		storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
 		require.NoError(b, err)
@@ -107,7 +107,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	start = time.Now()
 	array, err = atree.NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
-	for i := 0; i < numberOfElements; i++ {
+	for range numberOfElements {
 		v := RandomValue(r)
 
 		storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
@@ -127,7 +127,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	array, err = atree.NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
-	for i := 0; i < numberOfElements; i++ {
+	for range numberOfElements {
 		ind := r.Intn(int(array.Count()))
 		storable, err := array.Remove(uint64(ind))
 		require.NoError(b, err)
@@ -142,7 +142,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	array, err = atree.NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
-	for i := 0; i < numberOfElements; i++ {
+	for range numberOfElements {
 		ind := r.Intn(int(array.Count()))
 		v := RandomValue(r)
 
@@ -163,7 +163,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	array, err = atree.NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 
-	for i := 0; i < numberOfElements; i++ {
+	for range numberOfElements {
 		ind := r.Intn(int(array.Count()))
 		_, err := array.Get(uint64(ind))
 		require.NoError(b, err)
@@ -217,7 +217,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 	var totalRawDataSize uint32
 
 	// setup
-	for i := 0; i < initialArrayCount; i++ {
+	for range initialArrayCount {
 		v := RandomValue(r)
 
 		storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
@@ -231,7 +231,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 	require.NoError(b, storage.Commit())
 	b.ResetTimer()
 
-	for i := 0; i < numberOfOps; i++ {
+	for range numberOfOps {
 		ind := r.Intn(int(array.Count()))
 		// select opt
 		switch r.Intn(2) {

@@ -358,7 +358,7 @@ func (v *arrayVerifier) verifyMetaDataSlab(
 	// If we use range, then h would be a temporary object and we'd be passing address of
 	// temporary object to function, which can lead to bugs depending on usage. It's not a bug
 	// with the current usage but it's less fragile to future changes by not using range here.
-	for i := 0; i < len(metaSlab.childrenHeaders); i++ {
+	for i := range metaSlab.childrenHeaders {
 		h := metaSlab.childrenHeaders[i]
 
 		childSlab, err := getArraySlab(v.storage, h.slabID)

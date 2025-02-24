@@ -203,7 +203,7 @@ func (v *serializationVerifier) arrayDataSlabEqual(expected, actual *ArrayDataSl
 	}
 
 	// Compare element
-	for i := 0; i < len(expected.elements); i++ {
+	for i := range expected.elements {
 		ee := expected.elements[i]
 		ae := actual.elements[i]
 
@@ -408,7 +408,7 @@ func hasInlinedComposite(data []byte) (bool, error) {
 	if err != nil {
 		return false, NewDecodingError(err)
 	}
-	for i := uint64(0); i < extraDataCount; i++ {
+	for range extraDataCount {
 		tagNum, err := dec.DecodeTagNumber()
 		if err != nil {
 			return false, NewDecodingError(err)

@@ -153,7 +153,7 @@ func newArrayDataSlabFromDataV0(
 	}
 
 	elements := make([]Storable, elemCount)
-	for i := 0; i < int(elemCount); i++ {
+	for i := range elements {
 		storable, err := decodeStorable(cborDec, id, nil)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
@@ -260,7 +260,7 @@ func newArrayDataSlabFromDataV1(
 	}
 
 	elements := make([]Storable, elemCount)
-	for i := 0; i < int(elemCount); i++ {
+	for i := range elements {
 		storable, err := decodeStorable(cborDec, id, inlinedExtraData)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
@@ -372,7 +372,7 @@ func DecodeInlinedArrayStorable(
 	size := uint32(inlinedArrayDataSlabPrefixSize)
 
 	elements := make([]Storable, elemCount)
-	for i := 0; i < int(elemCount); i++ {
+	for i := range elements {
 		storable, err := decodeStorable(dec, slabID, inlinedExtraData)
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.

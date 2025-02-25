@@ -625,7 +625,7 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 	var wg sync.WaitGroup
 	wg.Add(numWorkers)
 
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		go encoder(&wg, done, jobs, results)
 	}
 
@@ -643,7 +643,7 @@ func (s *PersistentSlabStorage) FastCommit(numWorkers int) error {
 	// we need to capture them inside a map
 	// again so we can apply them in order of keys
 	encSlabByID := make(map[SlabID][]byte, len(keysWithOwners))
-	for i := 0; i < len(keysWithOwners); i++ {
+	for range len(keysWithOwners) {
 		result := <-results
 		// if any error return
 		if result.err != nil {
@@ -825,7 +825,7 @@ func (s *PersistentSlabStorage) NondeterministicFastCommit(numWorkers int) error
 
 	// Launch workers to encode slabs
 	wg.Add(numWorkers)
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		go encoder(&wg, done, jobs, results)
 	}
 
@@ -854,7 +854,7 @@ func (s *PersistentSlabStorage) NondeterministicFastCommit(numWorkers int) error
 	}
 
 	// Process encoded slabs
-	for i := 0; i < modifiedSlabCount; i++ {
+	for range modifiedSlabCount {
 		result := <-results
 
 		if result.err != nil {
@@ -1410,7 +1410,7 @@ func (s *PersistentSlabStorage) BatchPreload(ids []SlabID, numWorkers int) error
 
 	// Launch workers
 	wg.Add(numWorkers)
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		go decoder(&wg, done, jobs, results)
 	}
 
@@ -1441,7 +1441,7 @@ func (s *PersistentSlabStorage) BatchPreload(ids []SlabID, numWorkers int) error
 	}
 
 	// Process results
-	for i := 0; i < jobCount; i++ {
+	for range jobCount {
 		result := <-results
 
 		if result.err != nil {

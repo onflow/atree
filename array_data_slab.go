@@ -325,7 +325,7 @@ func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 	// Update right slab
 	// TODO: copy elements to front instead?
 	// NOTE: prevent memory leak
-	for i := uint32(0); i < rightStartIndex; i++ {
+	for i := range rightStartIndex {
 		rightSlab.elements[i] = nil
 	}
 	rightSlab.elements = rightSlab.elements[rightStartIndex:]
@@ -359,7 +359,7 @@ func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 		return false
 	}
 	lendSize := uint32(0)
-	for i := 0; i < len(a.elements); i++ {
+	for i := range a.elements {
 		lendSize += a.elements[i].ByteSize()
 		if a.header.size-lendSize < uint32(minThreshold) {
 			return false

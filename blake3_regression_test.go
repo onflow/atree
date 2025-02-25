@@ -91,7 +91,7 @@ func TestBLAKE3Vectors(t *testing.T) {
 
 func makeBLAKE3InputData(length int) []byte {
 	b := make([]byte, length)
-	for i := 0; i < len(b); i++ {
+	for i := range b {
 		b[i] = byte(i % 251)
 	}
 	return b
@@ -162,7 +162,7 @@ func TestBLAKE3Regression(t *testing.T) {
 func checksumVaryingStartPosNoSeed(t *testing.T, cryptoHash512 hash.Hash, data []byte) {
 
 	// vary the starting position and keep the ending position
-	for i := uint64(0); i < uint64(len(data)); i++ {
+	for i := range data {
 
 		digest := countedAndComparedBLAKE3(t, data[i:])
 
@@ -200,7 +200,7 @@ func nonUniformBytes64KiB() []byte {
 	// The next input to SHA-512 is the 64-byte output of SHA-512.
 	// Each output of SHA-512 is appended to the returned byte slice.
 	d := make([]byte, 64)
-	for i := 0; i < 1024; i++ {
+	for range 1024 {
 		a := sha512.Sum512(d)
 		d = a[:]
 		b = append(b, d...)

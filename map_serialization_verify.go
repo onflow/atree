@@ -278,7 +278,7 @@ func (v *serializationVerifier) mapHkeyElementsEqual(expected, actual *hkeyEleme
 			}
 		}
 	} else {
-		for i := 0; i < len(expected.elems); i++ {
+		for i := range expected.elems {
 			expectedEle := expected.elems[i]
 			actualEle := actual.elems[i]
 
@@ -307,7 +307,7 @@ func (v *serializationVerifier) mapSingleElementsEqual(expected, actual *singleE
 		return NewFatalError(fmt.Errorf("singleElements elems len %d is wrong, want %d", len(actual.elems), len(expected.elems)))
 	}
 
-	for i := 0; i < len(expected.elems); i++ {
+	for i := range expected.elems {
 		expectedElem := expected.elems[i]
 		actualElem := actual.elems[i]
 

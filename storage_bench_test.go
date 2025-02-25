@@ -42,7 +42,7 @@ func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
 	require.NoError(b, err)
 
 	slabs := make([]atree.Slab, numberOfSlabs)
-	for i := 0; i < numberOfSlabs; i++ {
+	for i := range slabs {
 		addr := generateRandomAddress(r)
 
 		var index atree.SlabIndex
@@ -54,7 +54,7 @@ func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			b.StopTimer()
 
 			baseStorage := test_utils.NewInMemBaseStorage()
@@ -83,7 +83,7 @@ func benchmarkNondeterministicFastCommit(b *testing.B, seed int64, numberOfSlabs
 	require.NoError(b, err)
 
 	slabs := make([]atree.Slab, numberOfSlabs)
-	for i := 0; i < numberOfSlabs; i++ {
+	for i := range slabs {
 		addr := generateRandomAddress(r)
 
 		var index atree.SlabIndex
@@ -95,7 +95,7 @@ func benchmarkNondeterministicFastCommit(b *testing.B, seed int64, numberOfSlabs
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			b.StopTimer()
 
 			baseStorage := test_utils.NewInMemBaseStorage()
@@ -147,8 +147,8 @@ func benchmarkRetrieve(b *testing.B, seed int64, numberOfSlabs int) {
 	require.NoError(b, err)
 
 	encodedSlabs := make(map[atree.SlabID][]byte)
-	ids := make([]atree.SlabID, 0, numberOfSlabs)
-	for i := 0; i < numberOfSlabs; i++ {
+	ids := make([]atree.SlabID, numberOfSlabs)
+	for i := range ids {
 		addr := generateRandomAddress(r)
 
 		var index atree.SlabIndex
@@ -162,11 +162,11 @@ func benchmarkRetrieve(b *testing.B, seed int64, numberOfSlabs int) {
 		require.NoError(b, err)
 
 		encodedSlabs[id] = data
-		ids = append(ids, id)
+		ids[i] = id
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			b.StopTimer()
 
 			baseStorage := test_utils.NewInMemBaseStorageFromMap(encodedSlabs)
@@ -194,8 +194,8 @@ func benchmarkBatchPreload(b *testing.B, seed int64, numberOfSlabs int) {
 	require.NoError(b, err)
 
 	encodedSlabs := make(map[atree.SlabID][]byte)
-	ids := make([]atree.SlabID, 0, numberOfSlabs)
-	for i := 0; i < numberOfSlabs; i++ {
+	ids := make([]atree.SlabID, numberOfSlabs)
+	for i := range ids {
 		addr := generateRandomAddress(r)
 
 		var index atree.SlabIndex
@@ -209,11 +209,11 @@ func benchmarkBatchPreload(b *testing.B, seed int64, numberOfSlabs int) {
 		require.NoError(b, err)
 
 		encodedSlabs[id] = data
-		ids = append(ids, id)
+		ids[i] = id
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			b.StopTimer()
 
 			baseStorage := test_utils.NewInMemBaseStorageFromMap(encodedSlabs)

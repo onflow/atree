@@ -749,8 +749,10 @@ func TestPersistentStorage(t *testing.T) {
 	})
 
 	t.Run("commit", func(t *testing.T) {
-		numberOfAccounts := 100
-		numberOfSlabsPerAccount := 10
+		const (
+			numberOfAccounts        = 100
+			numberOfSlabsPerAccount = 10
+		)
 
 		r := newRand(t)
 
@@ -763,8 +765,8 @@ func TestPersistentStorage(t *testing.T) {
 		simpleMap := make(map[atree.SlabID][]byte)
 		slabSize := uint64(0)
 		// test random updates apply commit and check the order of committed values
-		for i := 0; i < numberOfAccounts; i++ {
-			for j := 0; j < numberOfSlabsPerAccount; j++ {
+		for range numberOfAccounts {
+			for range numberOfSlabsPerAccount {
 				addr := generateRandomAddress(r)
 
 				slabID, err := storage.GenerateSlabID(addr)
@@ -878,7 +880,7 @@ func TestPersistentStorage(t *testing.T) {
 		err = storage.Store(id, slabWithNonStorable)
 		require.NoError(t, err)
 
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			id, err := storage.GenerateSlabID(address)
 			require.NoError(t, err)
 
@@ -1222,7 +1224,7 @@ func generateLargeSlab(id atree.SlabID) atree.Slab {
 	const elementCount = 100
 
 	storables := make([]atree.Storable, elementCount)
-	for i := 0; i < elementCount; i++ {
+	for i := range storables {
 		storable := test_utils.Uint64Value(uint64(i))
 		storables[i] = storable
 	}
@@ -1407,7 +1409,7 @@ func newSlowStorable(i uint8) slowStorable {
 func (s slowStorable) Encode(encoder *atree.Encoder) error {
 	// Use division in a loop to slow down this function
 	n := 1.0
-	for i := 0; i < 2000; i++ {
+	for i := range 2000 {
 		n = (n + float64(i)) / 3.14
 	}
 	runtime.KeepAlive(n)
@@ -4965,11 +4967,11 @@ func testStorageNondeterministicFastCommit(t *testing.T, numberOfAccounts int, n
 	slabSize := uint64(0)
 
 	// Storage slabs
-	for i := 0; i < numberOfAccounts; i++ {
+	for range numberOfAccounts {
 
 		addr := generateRandomAddress(r)
 
-		for j := 0; j < numberOfSlabsPerAccount; j++ {
+		for range numberOfSlabsPerAccount {
 
 			slabID, err := storage.GenerateSlabID(addr)
 			require.NoError(t, err)
@@ -5086,11 +5088,11 @@ func testStorageBatchPreload(t *testing.T, numberOfAccounts int, numberOfSlabsPe
 	encodedSlabs := make(map[atree.SlabID][]byte)
 
 	// Generate and encode slabs
-	for i := 0; i < numberOfAccounts; i++ {
+	for range numberOfAccounts {
 
 		addr := generateRandomAddress(r)
 
-		for j := 0; j < numberOfSlabsPerAccount; j++ {
+		for range numberOfSlabsPerAccount {
 
 			slabID := generateSlabID(addr)
 
@@ -5138,7 +5140,7 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 		const numberOfSlabs = 10
 
 		ids := make([]atree.SlabID, numberOfSlabs)
-		for i := 0; i < numberOfSlabs; i++ {
+		for i := range ids {
 			var index atree.SlabIndex
 			binary.BigEndian.PutUint64(index[:], uint64(i))
 
@@ -5161,7 +5163,7 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 		ids := make([]atree.SlabID, numberOfSlabs)
 		encodedSlabs := make(map[atree.SlabID][]byte)
 
-		for i := 0; i < numberOfSlabs; i++ {
+		for i := range ids {
 			var index atree.SlabIndex
 			binary.BigEndian.PutUint64(index[:], uint64(i))
 

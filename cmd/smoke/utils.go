@@ -228,7 +228,7 @@ func newArray(
 
 	expectedValues := make(test_utils.ExpectedArrayValue, length)
 
-	for i := 0; i < length; i++ {
+	for i := range expectedValues {
 		expectedValue, value, err := randomValue(storage, address, nestedLevel-1)
 		if err != nil {
 			return nil, nil, err

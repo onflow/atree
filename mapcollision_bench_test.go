@@ -133,7 +133,7 @@ func BenchmarkCollisionPerDigest(b *testing.B) {
 
 			digesterBuilder := NewCollisionDigesterBuilder(collisionPerDigest)
 			keyValues := make(map[atree.Value]atree.Value, mapCount)
-			for i := uint64(0); i < mapCount; i++ {
+			for i := range mapCount {
 				k := test_utils.Uint64Value(i)
 				v := test_utils.Uint64Value(i)
 				keyValues[k] = v
@@ -148,7 +148,7 @@ func BenchmarkCollisionPerDigest(b *testing.B) {
 
 			b.StartTimer()
 
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				for k, v := range keyValues {
 					_, _ = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 				}

@@ -55,7 +55,7 @@ func newRand(tb testing.TB) *rand.Rand {
 // randStr returns random UTF-8 string of given length.
 func randStr(r *rand.Rand, length int) string {
 	b := make([]rune, length)
-	for i := 0; i < length; i++ {
+	for i := range b {
 		b[i] = runes[r.Intn(len(runes))]
 	}
 	return string(b)

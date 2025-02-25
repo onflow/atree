@@ -62,7 +62,7 @@ var newMapValueFunc = func(
 
 		keyValues := make(map[atree.Value]atree.Value)
 
-		for i := 0; i < mapCount; i++ {
+		for range mapCount {
 			k, expectedK := newKey(storage)
 			v, expectedV := newValue(storage)
 
@@ -725,7 +725,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 						}
 
 						// Remove random elements
-						for i := 0; i < removeCount; i++ {
+						for range removeCount {
 
 							removeKeyIndex := r.Intn(len(keys))
 							removeKey := keys[removeKeyIndex]
@@ -1077,7 +1077,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 	// Wrapped child map is expected to be unlined at the end of loop.
 
 	const childMapCount = 8
-	for i := 0; i <= childMapCount; i++ {
+	for i := range childMapCount + 1 {
 		// Get element
 		element, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 		require.NoError(t, err)
@@ -1123,7 +1123,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 	childMapCountAfterRemoval := 2
 	removeCount := childMapCount - childMapCountAfterRemoval
 
-	for i := 0; i < removeCount; i++ {
+	for i := range removeCount {
 		// Get element
 		element, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 		require.NoError(t, err)
@@ -1275,7 +1275,7 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 	// Wrapped gchild map is expected to be unlined at the end of loop.
 
 	const gchildMapCount = 8
-	for i := 0; i < gchildMapCount; i++ {
+	for i := range gchildMapCount {
 		// Get element at level 1
 
 		elementAtLevel1, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
@@ -1342,7 +1342,7 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 	gchildMapCountAfterRemoval := 2
 	removeCount := gchildMapCount - gchildMapCountAfterRemoval
 
-	for i := 0; i < removeCount; i++ {
+	for i := range removeCount {
 		// Get elementAtLevel1
 		elementAtLevel1, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
 		require.NoError(t, err)
@@ -1478,7 +1478,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 
 		actualMapCount += setCount
 
-		for i := 0; i < setCount; i++ {
+		for i := range setCount {
 			k := test_utils.Uint64Value(i)
 
 			newValue := newElementFuncs[r.Intn(len(newElementFuncs))]
@@ -1513,7 +1513,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 			keys = append(keys, k)
 		}
 
-		for i := 0; i < removeCount; i++ {
+		for range removeCount {
 			index := r.Intn(len(keys))
 			key := keys[index]
 
@@ -1613,7 +1613,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 
 		actualMapCount += setCount
 
-		for i := 0; i < setCount; i++ {
+		for i := range setCount {
 			k := test_utils.Uint64Value(i)
 			v, expected := newValue(storage)
 
@@ -1646,7 +1646,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			keys = append(keys, k)
 		}
 
-		for i := 0; i < removeCount; i++ {
+		for range removeCount {
 			index := r.Intn(len(keys))
 			key := keys[index]
 
@@ -1678,7 +1678,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			keys = append(keys, k)
 		}
 
-		for i := 0; i < setCount; i++ {
+		for range setCount {
 			index := r.Intn(len(keys))
 			setKey := keys[index]
 
@@ -1714,7 +1714,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 
 		// Remove more elements
 
-		for i := 0; i < removeCount; i++ {
+		for range removeCount {
 			index := r.Intn(len(keys))
 			key := keys[index]
 
@@ -1828,7 +1828,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 
 		actualMapCount += setCount
 
-		for i := 0; i < setCount; i++ {
+		for i := range setCount {
 			k := test_utils.Uint64Value(i)
 			v, expected := newValue(storage)
 
@@ -1859,7 +1859,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		for i := 0; i < removeCount; i++ {
+		for range removeCount {
 			index := r.Intn(len(keys))
 			key := keys[index]
 
@@ -1893,7 +1893,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		for i := 0; i < setCount; i++ {
+		for range setCount {
 			index := r.Intn(len(keys))
 			key := keys[index]
 
@@ -1925,7 +1925,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 
 		actualMapCount -= removeCount
 
-		for i := 0; i < removeCount; i++ {
+		for range removeCount {
 			index := r.Intn(len(keys))
 			key := keys[index]
 

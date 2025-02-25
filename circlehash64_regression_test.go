@@ -158,7 +158,7 @@ func TestCircleHash64Regression(t *testing.T) {
 func checksumVaryingStartPos(t *testing.T, cryptoHash512 hash.Hash, seed uint64, data []byte) {
 
 	// vary the starting position and keep the ending position
-	for i := uint64(0); i < uint64(len(data)); i++ {
+	for i := range data {
 
 		digest := countedCircleHash64(t, data[i:], seed)
 
@@ -205,7 +205,7 @@ func nonUniformBytes16KiB() []byte {
 	// The next input to SHA-512 is the 64-byte output of SHA-512.
 	// Each output of SHA-512 is appended to the returned byte slice.
 	d := make([]byte, 64)
-	for i := 0; i < 256; i++ {
+	for range 256 {
 		a := sha512.Sum512(d)
 		d = a[:]
 		b = append(b, d...)

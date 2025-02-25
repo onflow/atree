@@ -199,7 +199,7 @@ func setupArray(b *testing.B, r *rand.Rand, storage *atree.PersistentSlabStorage
 	require.NoError(b, err)
 
 	for range initialArrayCount {
-		v := RandomValue(r)
+		v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
 		err := array.Append(v)
 		require.NoError(b, err)
 	}
@@ -259,7 +259,7 @@ func benchmarkArrayInsert(b *testing.B, initialArrayCount, numberOfOps int) {
 
 		for range numberOfOps {
 			index := r.Intn(int(array.Count()))
-			v := RandomValue(r)
+			v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
 			_ = array.Insert(uint64(index), v)
 		}
 	}

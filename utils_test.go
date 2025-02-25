@@ -32,6 +32,16 @@ import (
 	"github.com/onflow/atree/test_utils"
 )
 
+const (
+	uint8Type int = iota
+	uint16Type
+	uint32Type
+	uint64Type
+	smallStringType
+	largeStringType
+	maxSimpleValueType
+)
+
 var (
 	runes = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
 )
@@ -62,25 +72,25 @@ func randStr(r *rand.Rand, length int) string {
 }
 
 func randomValue(r *rand.Rand, maxInlineSize int) atree.Value {
-	switch r.Intn(6) {
+	switch r.Intn(maxSimpleValueType) {
 
-	case 0:
-		return test_utils.Uint8Value(r.Intn(255))
+	case uint8Type:
+		return test_utils.Uint8Value(r.Intn(255)) //nolint:gosec
 
-	case 1:
-		return test_utils.Uint16Value(r.Intn(6535))
+	case uint16Type:
+		return test_utils.Uint16Value(r.Intn(6535)) //nolint:gosec
 
-	case 2:
-		return test_utils.Uint32Value(r.Intn(4294967295))
+	case uint32Type:
+		return test_utils.Uint32Value(r.Intn(4294967295)) //nolint:gosec
 
-	case 3:
-		return test_utils.Uint64Value(r.Intn(1844674407370955161))
+	case uint64Type:
+		return test_utils.Uint64Value(r.Intn(1844674407370955161)) //nolint:gosec
 
-	case 4: // small string (inlinable)
+	case smallStringType: // small string (inlinable)
 		slen := r.Intn(maxInlineSize)
 		return test_utils.NewStringValue(randStr(r, slen))
 
-	case 5: // large string (external)
+	case largeStringType: // large string (external)
 		slen := r.Intn(1024) + maxInlineSize
 		return test_utils.NewStringValue(randStr(r, slen))
 

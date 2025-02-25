@@ -74,7 +74,7 @@ func newInlinedExtraDataFromData(
 	}
 
 	inlinedTypeInfo := make([]TypeInfo, int(typeInfoCount))
-	for i := uint64(0); i < typeInfoCount; i++ {
+	for i := range inlinedTypeInfo {
 		inlinedTypeInfo[i], err = defaultDecodeTypeInfo(dec)
 		if err != nil {
 			return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode typeInfo")
@@ -94,7 +94,7 @@ func newInlinedExtraDataFromData(
 	}
 
 	inlinedExtraData := make([]ExtraData, extraDataCount)
-	for i := uint64(0); i < extraDataCount; i++ {
+	for i := range inlinedExtraData {
 		tagNum, err := dec.DecodeTagNumber()
 		if err != nil {
 			return nil, nil, NewDecodingError(err)

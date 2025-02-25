@@ -141,12 +141,12 @@ func elementsStorables(elems elements, childStorables []Storable) []Storable {
 	switch v := elems.(type) {
 
 	case *hkeyElements:
-		for i := 0; i < len(v.elems); i++ {
+		for i := range v.elems {
 			childStorables = elementStorables(v.elems[i], childStorables)
 		}
 
 	case *singleElements:
-		for i := 0; i < len(v.elems); i++ {
+		for i := range v.elems {
 			childStorables = elementStorables(v.elems[i], childStorables)
 		}
 

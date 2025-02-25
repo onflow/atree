@@ -294,7 +294,7 @@ func (d keysByDigest) Less(i, j int) bool {
 		panic(err)
 	}
 
-	for z := 0; z < len(digest1); z++ {
+	for z := range digest1 {
 		if digest1[z] != digest2[z] {
 			return digest1[z] < digest2[z] // sort by hkey
 		}
@@ -557,7 +557,7 @@ func TestMapGetKeyNotFound(t *testing.T) {
 		require.NoError(t, err)
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
@@ -593,7 +593,7 @@ func TestMapGetKeyNotFound(t *testing.T) {
 		require.NoError(t, err)
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
@@ -636,7 +636,7 @@ func TestMapGetKeyNotFound(t *testing.T) {
 		require.NoError(t, err)
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
@@ -878,7 +878,7 @@ func TestMapRemove(t *testing.T) {
 		nextDigest := atree.Digest(0)
 
 		nonCollisionKeyValues := make(map[atree.Value]atree.Value)
-		for i := 0; i < numOfElementsBeforeCollision; i++ {
+		for i := range numOfElementsBeforeCollision {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			nonCollisionKeyValues[k] = v
@@ -988,7 +988,7 @@ func TestMapRemove(t *testing.T) {
 		}
 
 		nonCollisionKeyValues := make(map[atree.Value]atree.Value)
-		for i := 0; i < numOfElementsWithoutCollision; i++ {
+		for i := range numOfElementsWithoutCollision {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			nonCollisionKeyValues[k] = v
@@ -1042,7 +1042,7 @@ func TestMapRemove(t *testing.T) {
 		require.NoError(t, err)
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
@@ -1079,7 +1079,7 @@ func TestMapRemove(t *testing.T) {
 		require.NoError(t, err)
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
@@ -1500,8 +1500,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		require.False(t, childMapKey.Inlined())
 
 		// Inserting elements into childMapKey so it can't be inlined
-		const size = 20
-		for i := 0; i < size; i++ {
+		const count = 20
+		for i := range count {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			existingStorable, err := childMapKey.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
@@ -1609,8 +1609,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		require.False(t, childMapKey.Inlined())
 
 		// Inserting elements into childMap so it can't be inlined.
-		const size = 20
-		for i := 0; i < size; i++ {
+		const count = 20
+		for i := range count {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			existingStorable, err := childMapKey.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
@@ -1925,8 +1925,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		childMapKey1, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		const size = 20
-		for i := 0; i < size; i++ {
+		const count = 20
+		for i := range count {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -1939,7 +1939,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		childMapKey2, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		for i := 0; i < size; i++ {
+		for i := range count {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -2077,8 +2077,8 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		childMapKey1, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		size := 20
-		for i := 0; i < size; i++ {
+		count := 20
+		for i := range count {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -2091,7 +2091,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		childMapKey2, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		for i := 0; i < size; i++ {
+		for i := range count {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -2255,7 +2255,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -2315,7 +2315,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -2375,7 +2375,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -2437,7 +2437,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -2500,7 +2500,7 @@ func TestMutableMapIterate(t *testing.T) {
 		r := 'a'
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
@@ -2563,7 +2563,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -2625,7 +2625,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -2688,7 +2688,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			ck := test_utils.Uint64Value(0)
 			cv := test_utils.Uint64Value(i)
 
@@ -2772,7 +2772,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			ck := test_utils.Uint64Value(0)
 			cv := test_utils.Uint64Value(i)
 
@@ -2858,13 +2858,13 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -2953,13 +2953,13 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -3048,13 +3048,13 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -3143,7 +3143,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
@@ -3226,7 +3226,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
@@ -3314,7 +3314,7 @@ func TestMutableMapIterate(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		i := uint64(0)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			ck := test_utils.Uint64Value(0)
 			cv := test_utils.NewStringValue(randStr(r, valueStringSize))
 
@@ -3433,13 +3433,13 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -3527,13 +3527,13 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -3621,13 +3621,13 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -3715,13 +3715,13 @@ func TestMutableMapIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -3832,7 +3832,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -3892,7 +3892,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -3952,7 +3952,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -4014,7 +4014,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -4077,7 +4077,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		r := 'a'
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
@@ -4140,7 +4140,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -4201,7 +4201,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -4263,7 +4263,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			ck := test_utils.Uint64Value(0)
 			cv := test_utils.Uint64Value(i)
 
@@ -4349,7 +4349,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			ck := test_utils.Uint64Value(0)
 			cv := test_utils.Uint64Value(i)
 
@@ -4437,13 +4437,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -4534,13 +4534,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -4631,13 +4631,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -4728,7 +4728,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
@@ -4813,7 +4813,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
@@ -4902,7 +4902,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		i := uint64(0)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			ck := test_utils.Uint64Value(0)
 			cv := test_utils.NewStringValue(randStr(r, valueStringSize))
 
@@ -5025,13 +5025,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -5121,13 +5121,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -5217,13 +5217,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -5313,13 +5313,13 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -5432,7 +5432,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -5493,7 +5493,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -5554,7 +5554,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -5618,7 +5618,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 
@@ -5682,7 +5682,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		r := 'a'
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.NewStringValue(strings.Repeat(string(r), 25))
 
@@ -5746,7 +5746,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -5809,7 +5809,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -5873,7 +5873,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			ck := test_utils.Uint64Value(0)
 			cv := test_utils.Uint64Value(i)
 
@@ -5958,7 +5958,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			ck := test_utils.Uint64Value(0)
 			cv := test_utils.Uint64Value(i)
 
@@ -6045,13 +6045,13 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -6141,13 +6141,13 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -6237,13 +6237,13 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -6333,7 +6333,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
@@ -6417,7 +6417,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
@@ -6506,7 +6506,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		i := uint64(0)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			ck := test_utils.Uint64Value(0)
 			cv := test_utils.NewStringValue(randStr(r, valueStringSize))
 
@@ -6627,13 +6627,13 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -6722,13 +6722,13 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -6817,13 +6817,13 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -6912,13 +6912,13 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
 
 			childMapValues := make(test_utils.ExpectedMapValue)
-			for j := 0; j < childMapCount; j++ {
+			for j := range childMapCount {
 				ck := test_utils.Uint64Value(j)
 				cv := test_utils.Uint64Value(j)
 
@@ -7014,7 +7014,7 @@ func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLeve
 	}
 
 	digestsGroup := make([][]atree.Digest, mockDigestCount)
-	for i := 0; i < mockDigestCount; i++ {
+	for i := range digestsGroup {
 		digests := make([]atree.Digest, maxDigestLevel)
 		digests[0] = firstLevelDigests[i]
 		for j := 1; j < maxDigestLevel; j++ {
@@ -7103,9 +7103,9 @@ func testMapRandomHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) 
 		if _, found := keyValues[k]; !found {
 			keyValues[k] = test_utils.NewStringValue(randStr(r, valueStringMaxSize))
 
-			var digests []atree.Digest
-			for i := 0; i < maxDigestLevel; i++ {
-				digests = append(digests, atree.Digest(r.Intn(256)))
+			digests := make([]atree.Digest, maxDigestLevel)
+			for i := range digests {
+				digests[i] = atree.Digest(r.Intn(256))
 			}
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -7205,7 +7205,7 @@ func testMapSetRemoveRandomValues(
 
 	keyValues := make(map[atree.Value]atree.Value)
 	var keys []atree.Value
-	for i := uint64(0); i < opCount; i++ {
+	for range opCount {
 
 		nextOp := r.Intn(MapMaxOp)
 
@@ -7220,9 +7220,9 @@ func testMapSetRemoveRandomValues(
 			k := randomValue(r, int(atree.MaxInlineMapElementSize()))
 			v := randomValue(r, int(atree.MaxInlineMapElementSize()))
 
-			var digests []atree.Digest
-			for i := 0; i < digestMaxLevels; i++ {
-				digests = append(digests, atree.Digest(r.Intn(digestMaxValue)))
+			digests := make([]atree.Digest, digestMaxLevels)
+			for i := range digests {
+				digests[i] = atree.Digest(r.Intn(digestMaxValue))
 			}
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -7368,7 +7368,7 @@ func TestMapDecodeV0(t *testing.T) {
 
 		const mapCount = 1
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 			keyValues[k] = v
@@ -7443,7 +7443,7 @@ func TestMapDecodeV0(t *testing.T) {
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
-		for i := uint64(0); i < mapCount-1; i++ {
+		for i := range mapCount - 1 {
 			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			keyValues[k] = v
@@ -7643,7 +7643,7 @@ func TestMapDecodeV0(t *testing.T) {
 
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -7817,7 +7817,7 @@ func TestMapDecodeV0(t *testing.T) {
 
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -8041,7 +8041,7 @@ func TestMapDecodeV0(t *testing.T) {
 
 		const mapCount = 20
 		keyValues := make(map[atree.Value]atree.Value)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -8333,7 +8333,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		const mapCount = 1
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 			keyValues[k] = v
@@ -8424,7 +8424,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
-		for i := uint64(0); i < mapCount-1; i++ {
+		for i := range mapCount - 1 {
 			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			keyValues[k] = v
@@ -8659,7 +8659,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 
 			// Create child map
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
@@ -8847,7 +8847,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 
 			var ti atree.TypeInfo
 			if i%2 == 0 {
@@ -9037,7 +9037,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			// Create grand child map
 			gchildMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
 			require.NoError(t, err)
@@ -9302,7 +9302,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			var gti atree.TypeInfo
 			if i%2 == 0 {
 				gti = gchildMapTypeInfo2
@@ -9571,7 +9571,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 
 			// Create child map
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
@@ -10058,7 +10058,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 
 			var ti atree.TypeInfo
 			switch i % 4 {
@@ -10534,7 +10534,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -10721,7 +10721,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -10958,7 +10958,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		const mapCount = 20
 		keyValues := make(map[atree.Value]atree.Value)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
@@ -11188,7 +11188,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
-		for i := uint64(0); i < mapCount-1; i++ {
+		for i := range mapCount - 1 {
 			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			keyValues[k] = v
@@ -11210,7 +11210,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedChildMapValues := test_utils.ExpectedMapValue{}
-		for i := 0; i < 2; i++ {
+		for i := range 2 {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.NewStringValue(strings.Repeat("b", 22))
 
@@ -11366,7 +11366,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount-1; i++ {
+		for i := range mapCount - 1 {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 			keyValues[k] = v
@@ -11393,7 +11393,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		expectedGChildMapValues := test_utils.ExpectedMapValue{}
 		r := 'a'
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 
@@ -11597,7 +11597,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 8
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
-		for i := uint64(0); i < mapCount-1; i++ {
+		for i := range mapCount - 1 {
 			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			keyValues[k] = v
@@ -11621,7 +11621,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedChildValues := make([]atree.Value, childArrayCount)
-		for i := 0; i < childArrayCount; i++ {
+		for i := range expectedChildValues {
 			v := test_utils.NewStringValue(strings.Repeat("b", 22))
 			err = childArray.Append(v)
 			require.NoError(t, err)
@@ -11849,7 +11849,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		r := 'a'
-		for i := uint64(0); i < mapCount-1; i++ {
+		for i := range mapCount - 1 {
 			k := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			v := test_utils.NewStringValue(strings.Repeat(string(r), 22))
 			keyValues[k] = v
@@ -11879,7 +11879,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedGChildValues := make([]atree.Value, gchildArrayCount)
-		for i := 0; i < gchildArrayCount; i++ {
+		for i := range expectedGChildValues {
 			v := test_utils.NewStringValue(strings.Repeat("b", 22))
 			err = gchildArray.Append(v)
 			require.NoError(t, err)
@@ -12181,7 +12181,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 
 			// Create child map, composite with one field "uuid"
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childMapTypeInfo)
@@ -12340,7 +12340,7 @@ func TestMapEncodeDecode(t *testing.T) {
 
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			expectedChildMapVaues := test_utils.ExpectedMapValue{}
 
 			// Create child map, composite with one field "uuid"
@@ -12519,7 +12519,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		// fields are ordered differently because of different seed.
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			expectedChildMapValues := test_utils.ExpectedMapValue{}
 
 			// Create child map, composite with one field "uuid"
@@ -12700,7 +12700,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 3
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			expectedChildMapValues := test_utils.ExpectedMapValue{}
 
 			// Create child map
@@ -12955,7 +12955,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 2
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		// fields are ordered differently because of different seed.
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			expectedChildMapValues := test_utils.ExpectedMapValue{}
 
 			// Create child map, composite with one field "uuid"
@@ -13155,7 +13155,7 @@ func TestMapEncodeDecode(t *testing.T) {
 		const mapCount = 4
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		// fields are ordered differently because of different seed.
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			expectedChildMapValues := test_utils.ExpectedMapValue{}
 
 			var ti atree.TypeInfo
@@ -13507,7 +13507,7 @@ func TestMapPopIterate(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			key, value := test_utils.Uint64Value(i), test_utils.Uint64Value(i*10)
 			sortedKeys[i] = key
 			keyValues[key] = value
@@ -13794,7 +13794,7 @@ func TestMapFromBatchData(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(i), test_utils.Uint64Value(i*10))
 			require.NoError(t, err)
 			require.Nil(t, storable)
@@ -13856,7 +13856,7 @@ func TestMapFromBatchData(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(i), test_utils.Uint64Value(i*10))
 			require.NoError(t, err)
 			require.Nil(t, storable)
@@ -13915,7 +13915,7 @@ func TestMapFromBatchData(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(i), test_utils.Uint64Value(i*10))
 			require.NoError(t, err)
 			require.Nil(t, storable)
@@ -13980,7 +13980,7 @@ func TestMapFromBatchData(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(i), test_utils.Uint64Value(i*10))
 			require.NoError(t, err)
 			require.Nil(t, storable)
@@ -14121,7 +14121,7 @@ func TestMapFromBatchData(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 
 			k, v := test_utils.Uint64Value(i), test_utils.Uint64Value(i*10)
 
@@ -14275,12 +14275,12 @@ func TestMapNestedStorables(t *testing.T) {
 		require.NoError(t, err)
 
 		keyValues := make(map[atree.Value]atree.Value)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 
-			ks := strings.Repeat("a", int(i))
+			ks := strings.Repeat("a", i)
 			k := test_utils.NewSomeValue(test_utils.NewStringValue(ks))
 
-			vs := strings.Repeat("b", int(i))
+			vs := strings.Repeat("b", i)
 			v := test_utils.NewSomeValue(test_utils.NewStringValue(vs))
 
 			keyValues[k] = test_utils.NewExpectedWrapperValue(test_utils.NewStringValue(vs))
@@ -14305,20 +14305,20 @@ func TestMapNestedStorables(t *testing.T) {
 		require.NoError(t, err)
 
 		keyValues := make(map[atree.Value]atree.Value)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 
 			// Create a child array with one element
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			vs := strings.Repeat("b", int(i))
+			vs := strings.Repeat("b", i)
 			v := test_utils.NewSomeValue(test_utils.NewStringValue(vs))
 
 			err = childArray.Append(v)
 			require.NoError(t, err)
 
 			// Insert nested array into map
-			ks := strings.Repeat("a", int(i))
+			ks := strings.Repeat("a", i)
 			k := test_utils.NewSomeValue(test_utils.NewStringValue(ks))
 
 			keyValues[k] = test_utils.ExpectedArrayValue{test_utils.NewExpectedWrapperValue(test_utils.NewStringValue(vs))}
@@ -14381,7 +14381,7 @@ func TestMapString(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
@@ -14406,7 +14406,7 @@ func TestMapString(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
@@ -14437,7 +14437,7 @@ func TestMapSlabDump(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
@@ -14466,7 +14466,7 @@ func TestMapSlabDump(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i)}})
@@ -14497,7 +14497,7 @@ func TestMapSlabDump(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i % 10)}})
@@ -14528,7 +14528,7 @@ func TestMapSlabDump(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(i % 2)}})
@@ -14621,7 +14621,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		digesterBuilder := &mockDigesterBuilder{}
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
@@ -14648,7 +14648,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		// Insert elements exceeding collision limits
 		collisionKeyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(mapCount + i)
 			v := test_utils.Uint64Value(mapCount + i)
 			collisionKeyValues[k] = v
@@ -14695,7 +14695,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		digesterBuilder := &mockDigesterBuilder{}
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i)
 			keyValues[k] = v
@@ -14722,7 +14722,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		// Insert elements exceeding collision limits
 		collisionKeyValues := make(map[atree.Value]atree.Value, mapCount)
-		for i := uint64(0); i < mapCount; i++ {
+		for i := range mapCount {
 			k := test_utils.Uint64Value(mapCount + i)
 			v := test_utils.Uint64Value(mapCount + i)
 			collisionKeyValues[k] = v
@@ -14911,12 +14911,11 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			testMapLoadedElements(t, m, values)
 
 			// Unload composite element from front to back.
-			for i := 0; i < len(values); i++ {
-				err := storage.Remove(childSlabIDs[i])
+			for i, slabID := range childSlabIDs {
+				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
-				expectedValues := values[i+1:]
-				testMapLoadedElements(t, m, expectedValues)
+				testMapLoadedElements(t, m, values[i+1:])
 			}
 		}
 	})
@@ -14936,7 +14935,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			testMapLoadedElements(t, m, values)
 
 			// Unload external key from front to back.
-			for i := 0; i < len(values); i++ {
+			for i := range values {
 				k := values[i][0]
 
 				s, ok := k.(test_utils.StringValue)
@@ -14961,8 +14960,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(keyID)
 				require.NoError(t, err)
 
-				expectedValues := values[i+1:]
-				testMapLoadedElements(t, m, expectedValues)
+				testMapLoadedElements(t, m, values[i+1:])
 			}
 		}
 	})
@@ -14991,12 +14989,11 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			testMapLoadedElements(t, m, values)
 
 			// Unload composite element from front to back.
-			for i := 0; i < len(values); i++ {
-				err := storage.Remove(childSlabIDs[i])
+			for i, childSlabID := range childSlabIDs {
+				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				expectedValues := values[i+1:]
-				testMapLoadedElements(t, m, expectedValues)
+				testMapLoadedElements(t, m, values[i+1:])
 			}
 		}
 	})
@@ -15025,12 +15022,11 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			testMapLoadedElements(t, m, values)
 
 			// Unload composite element from front to back
-			for i := 0; i < len(values); i++ {
-				err := storage.Remove(childSlabIDs[i])
+			for i, childSlabID := range childSlabIDs {
+				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				expectedValues := values[i+1:]
-				testMapLoadedElements(t, m, expectedValues)
+				testMapLoadedElements(t, m, values[i+1:])
 			}
 		}
 	})
@@ -15557,7 +15553,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			const mapCount = 3
 
 			// Create a map with nested composite value at specified index
-			for childArrayIndex := 0; childArrayIndex < mapCount; childArrayIndex++ {
+			for childArrayIndex := range mapCount {
 				storage := newTestPersistentStorage(t)
 
 				m, values, childSlabID := createMapWithSimpleAndChildArrayValues(
@@ -15660,12 +15656,11 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			testMapLoadedElements(t, m, values)
 
 			// Unload composite element from front to back
-			for i := 0; i < len(values); i++ {
-				err := storage.Remove(childSlabIDs[i])
+			for i, childSlabID := range childSlabIDs {
+				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				expectedValues := values[i+1:]
-				testMapLoadedElements(t, m, expectedValues)
+				testMapLoadedElements(t, m, values[i+1:])
 			}
 		}
 	})
@@ -15746,7 +15741,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			const mapCount = 20
 
 			// Create a map with nested composite value at specified index
-			for childArrayIndex := 0; childArrayIndex < mapCount; childArrayIndex++ {
+			for childArrayIndex := range mapCount {
 				storage := newTestPersistentStorage(t)
 
 				m, values, childSlabID := createMapWithSimpleAndChildArrayValues(
@@ -15956,11 +15951,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			childSlabIDs, _, childFirstKeys := atree.GetMapMetaDataSlabChildInfo(rootMetaDataSlab)
 
 			// Unload non-root metadata slabs from front to back.
-			for i := 0; i < len(childSlabIDs); i++ {
-
-				slabID := childSlabIDs[i]
-
-				err := storage.Remove(slabID)
+			for i, childSlabID := range childSlabIDs {
+				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
 				// Use firstKey to deduce number of elements in slab.
@@ -16101,7 +16093,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 				nonrootSlabIDs, _, nonrootFirstKeys := atree.GetMapMetaDataSlabChildInfo(nonRootMetaDataSlab)
 
-				for i := 0; i < len(nonrootSlabIDs); i++ {
+				for i := range nonrootSlabIDs {
 
 					slabID := nonrootSlabIDs[i]
 					firstKey := nonrootFirstKeys[i]
@@ -16251,11 +16243,11 @@ func TestMapLoadedValueIterator(t *testing.T) {
 					count := slabInfoToBeRemoved.count
 
 					// Update startIndex for subsequence metadata slabs
-					for i := metadataSlabIndex + 1; i < len(metadataSlabInfos); i++ {
-						metadataSlabInfos[i].startIndex -= count
+					for _, slabInfo := range metadataSlabInfos[metadataSlabIndex+1:] {
+						slabInfo.startIndex -= count
 
-						for j := 0; j < len(metadataSlabInfos[i].children); j++ {
-							metadataSlabInfos[i].children[j].startIndex -= count
+						for _, childSlabInfo := range slabInfo.children {
+							childSlabInfo.startIndex -= count
 						}
 					}
 
@@ -16278,8 +16270,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 					count := slabInfoToBeRemoved.count
 
 					// Update startIndex for all subsequence data slabs in this metadata slab info
-					for i := dataSlabIndex + 1; i < len(metadataSlabInfo.children); i++ {
-						metadataSlabInfo.children[i].startIndex -= count
+					for _, childSlabInfo := range metadataSlabInfo.children[dataSlabIndex+1:] {
+						childSlabInfo.startIndex -= count
 					}
 
 					copy(metadataSlabInfo.children[dataSlabIndex:], metadataSlabInfo.children[dataSlabIndex+1:])
@@ -16288,11 +16280,11 @@ func TestMapLoadedValueIterator(t *testing.T) {
 					metadataSlabInfo.count -= count
 
 					// Update startIndex for all subsequence metadata slabs.
-					for i := metadataSlabIndex + 1; i < len(metadataSlabInfos); i++ {
-						metadataSlabInfos[i].startIndex -= count
+					for _, slabInfo := range metadataSlabInfos[metadataSlabIndex+1:] {
+						slabInfo.startIndex -= count
 
-						for j := 0; j < len(metadataSlabInfos[i].children); j++ {
-							metadataSlabInfos[i].children[j].startIndex -= count
+						for _, childSlabInfo := range slabInfo.children {
+							childSlabInfo.startIndex -= count
 						}
 					}
 
@@ -16325,7 +16317,7 @@ func createMapWithLongStringKey(
 	storage atree.SlabStorage,
 	address atree.Address,
 	typeInfo atree.TypeInfo,
-	size int,
+	count int,
 	useWrapperValue bool,
 ) (*atree.OrderedMap, [][2]atree.Value) {
 
@@ -16335,9 +16327,9 @@ func createMapWithLongStringKey(
 	m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([][2]atree.Value, size)
+	expectedValues := make([][2]atree.Value, count)
 	r := 'a'
-	for i := 0; i < size; i++ {
+	for i := range expectedValues {
 		s := strings.Repeat(string(r), int(atree.MaxInlineMapElementSize()))
 
 		k := test_utils.NewStringValue(s)
@@ -16371,7 +16363,7 @@ func createMapWithSimpleValues(
 	storage atree.SlabStorage,
 	address atree.Address,
 	typeInfo atree.TypeInfo,
-	size int,
+	count int,
 	newDigests func(i int) []atree.Digest,
 	useWrapperValue bool,
 ) (*atree.OrderedMap, [][2]atree.Value) {
@@ -16381,9 +16373,9 @@ func createMapWithSimpleValues(
 	m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([][2]atree.Value, size)
+	expectedValues := make([][2]atree.Value, count)
 	r := rune('a')
-	for i := 0; i < size; i++ {
+	for i := range expectedValues {
 		k := test_utils.Uint64Value(i)
 		v := test_utils.NewStringValue(strings.Repeat(string(r), 20))
 
@@ -16413,7 +16405,7 @@ func createMapWithChildArrayValues(
 	storage atree.SlabStorage,
 	address atree.Address,
 	typeInfo atree.TypeInfo,
-	size int,
+	count int,
 	newDigests func(i int) []atree.Digest,
 	useWrapperValue bool,
 ) (*atree.OrderedMap, [][2]atree.Value, []atree.SlabID) {
@@ -16426,15 +16418,15 @@ func createMapWithChildArrayValues(
 	m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 	require.NoError(t, err)
 
-	slabIDs := make([]atree.SlabID, size)
-	expectedValues := make([][2]atree.Value, size)
-	for i := 0; i < size; i++ {
+	slabIDs := make([]atree.SlabID, count)
+	expectedValues := make([][2]atree.Value, count)
+	for i := range expectedValues {
 		// Create child array
 		childArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		expectedChildValues := make([]atree.Value, childArrayCount)
-		for j := 0; j < childArrayCount; j++ {
+		for j := range expectedChildValues {
 			v := test_utils.Uint64Value(j)
 
 			err = childArray.Append(v)
@@ -16475,7 +16467,7 @@ func createMapWithSimpleAndChildArrayValues(
 	storage atree.SlabStorage,
 	address atree.Address,
 	typeInfo atree.TypeInfo,
-	size int,
+	count int,
 	compositeValueIndex int,
 	newDigests func(i int) []atree.Digest,
 	useWrapperValue bool,
@@ -16489,9 +16481,9 @@ func createMapWithSimpleAndChildArrayValues(
 	require.NoError(t, err)
 
 	var slabID atree.SlabID
-	values := make([][2]atree.Value, size)
+	values := make([][2]atree.Value, count)
 	r := 'a'
-	for i := 0; i < size; i++ {
+	for i := range values {
 
 		k := test_utils.Uint64Value(i)
 
@@ -16504,7 +16496,7 @@ func createMapWithSimpleAndChildArrayValues(
 			require.NoError(t, err)
 
 			expectedChildValues := make([]atree.Value, childArrayCount)
-			for j := 0; j < childArrayCount; j++ {
+			for j := range expectedChildValues {
 				v := test_utils.Uint64Value(j)
 				err = childArray.Append(v)
 				require.NoError(t, err)
@@ -16708,7 +16700,7 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 
 	keyValues := make(map[atree.Value]*test_utils.MutableValue, mapCount)
 	elementByteSizes := make([][2]uint32, mapCount)
-	for i := 0; i < mapCount; i++ {
+	for i := range mapCount {
 		k := test_utils.Uint64Value(i)
 		v := test_utils.NewMutableValue(initialStorableSize)
 		keyValues[k] = v
@@ -16794,7 +16786,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		children := getInlinedChildMapsFromParentMap(t, address, parentMap)
 
 		// Appending 3 elements to child map so that inlined child map reaches max inlined size as map element.
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			for childKey, child := range children {
 				childMap := child.m
 				valueID := child.valueID
@@ -16967,7 +16959,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		children := getInlinedChildMapsFromParentMap(t, address, parentMap)
 
 		// Appending 3 elements to child map so that inlined child map reaches max inlined size as map element.
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			for childKey, child := range children {
 				childMap := child.m
 				valueID := child.valueID
@@ -17202,7 +17194,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 		children := getInlinedChildMapsFromParentMap(t, address, parentMap)
 
 		// Appending 3 elements to child map so that inlined child map reaches max inlined size as map element.
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			for childKey, child := range children {
 				childMap := child.m
 				valueID := child.valueID
@@ -18737,7 +18729,7 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 	expectedKeyValues := make(map[atree.Value]atree.Value)
 
 	// Insert 2 child map with digest values of 1 and 3.
-	for i := 0; i < mapCount; i++ {
+	for i := range mapCount {
 		// Create child map
 		childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
@@ -18910,7 +18902,7 @@ func createMapWithEmptyChildMap(
 
 	elementByteSizesByKey := make(map[atree.Value][2]uint32)
 
-	for i := 0; i < mapCount; i++ {
+	for i := range mapCount {
 		// Create child map
 		childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
@@ -18964,7 +18956,7 @@ func createMapWithEmpty2LevelChildMap(
 
 	elementByteSizesByKey := make(map[atree.Value][2]uint32)
 
-	for i := 0; i < mapCount; i++ {
+	for i := range mapCount {
 		// Create child map
 		childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
@@ -19080,7 +19072,7 @@ func TestMapSetReturnedValue(t *testing.T) {
 
 		expectedKeyValues := make(map[atree.Value]atree.Value)
 
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			// Create child array
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -19144,7 +19136,7 @@ func TestMapSetReturnedValue(t *testing.T) {
 
 		expectedKeyValues := make(map[atree.Value]atree.Value)
 
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			// Create child array
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -19201,7 +19193,7 @@ func TestMapSetReturnedValue(t *testing.T) {
 
 		expectedKeyValues := make(map[atree.Value]atree.Value)
 
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			// Create child map
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
@@ -19270,7 +19262,7 @@ func TestMapSetReturnedValue(t *testing.T) {
 
 		expectedKeyValues := make(map[atree.Value]atree.Value)
 
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			// Create child map
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
@@ -19335,7 +19327,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 
 		expectedKeyValues := make(map[atree.Value]atree.Value)
 
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			// Create child array
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -19399,7 +19391,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 
 		expectedKeyValues := make(map[atree.Value]atree.Value)
 
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			// Create child array
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -19456,7 +19448,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 
 		expectedKeyValues := make(map[atree.Value]atree.Value)
 
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			// Create child map
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
@@ -19525,7 +19517,7 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 
 		expectedKeyValues := make(map[atree.Value]atree.Value)
 
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			// Create child map
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 			require.NoError(t, err)
@@ -19733,7 +19725,7 @@ func TestMapSetType(t *testing.T) {
 		require.NoError(t, err)
 
 		mapCount := 10
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			v := test_utils.Uint64Value(i)
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, v, v)
 			require.NoError(t, err)
@@ -19766,7 +19758,7 @@ func TestMapSetType(t *testing.T) {
 		require.NoError(t, err)
 
 		mapCount := 10_000
-		for i := 0; i < mapCount; i++ {
+		for i := range mapCount {
 			v := test_utils.Uint64Value(i)
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, v, v)
 			require.NoError(t, err)
@@ -19850,7 +19842,7 @@ func TestMapSetType(t *testing.T) {
 		childMapSeed := childMap.Seed()
 
 		mapCount := 10_000
-		for i := 0; i < mapCount-1; i++ {
+		for i := range mapCount - 1 {
 			v := test_utils.Uint64Value(i)
 			existingStorable, err := parentMap.Set(test_utils.CompareValue, test_utils.GetHashInput, v, v)
 			require.NoError(t, err)

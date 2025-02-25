@@ -35,7 +35,7 @@ func TestFlagIsRoot(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			for i := 0; i <= 255; i++ {
+			for i := range 256 {
 				tc.h[1] = byte(i)
 				if i >= 1<<7 {
 					require.True(t, tc.h.isRoot())
@@ -51,7 +51,7 @@ func TestFlagSetRootV1(t *testing.T) {
 	var h head
 	h[0] = 1 << 4 // version 1
 
-	for i := 0; i <= 255; i++ {
+	for i := range 256 {
 		h[1] = byte(i)
 		h.setRoot()
 		require.True(t, h.isRoot())
@@ -69,7 +69,7 @@ func TestFlagHasPointers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			for i := 0; i <= 255; i++ {
+			for i := range 256 {
 				tc.h[1] = byte(i)
 
 				if byte(i)&maskSlabHasPointers != 0 {
@@ -86,7 +86,7 @@ func TestFlagSetHasPointersV1(t *testing.T) {
 	var h head
 	h[0] = 1 << 4 // version 1
 
-	for i := 0; i <= 255; i++ {
+	for i := range 256 {
 		h[1] = byte(i)
 		h.setHasPointers()
 
@@ -105,7 +105,7 @@ func TestFlagHasSizeLimit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			for i := 0; i <= 255; i++ {
+			for i := range 256 {
 				tc.h[1] = byte(i)
 
 				if byte(i)&maskSlabAnySize == 0 {
@@ -122,7 +122,7 @@ func TestFlagSetNoSizeLimitV1(t *testing.T) {
 	var h head
 	h[0] = 1 << 4 // version 1
 
-	for i := 0; i <= 255; i++ {
+	for i := range 256 {
 		h[1] = byte(i)
 
 		h.setNoSizeLimit()
@@ -136,12 +136,12 @@ func TestFlagHasNextSlabID(t *testing.T) {
 
 	t.Run("has", func(t *testing.T) {
 		// Flags in the first byte
-		for i := 0; i < 32; i++ {
+		for i := range 32 {
 			h[0] |= byte(i)
 			h[0] |= maskHasNextSlabID
 
 			// Flags in the second byte
-			for j := 0; j <= 255; j++ {
+			for j := range 256 {
 				h[1] = byte(j)
 				require.True(t, h.hasNextSlabID())
 			}
@@ -150,12 +150,12 @@ func TestFlagHasNextSlabID(t *testing.T) {
 
 	t.Run("doesn't have", func(t *testing.T) {
 		// Flags in the first byte
-		for i := 0; i < 32; i++ {
+		for i := range 32 {
 			h[0] |= byte(i)
 			h[0] &= ^maskHasNextSlabID
 
 			// Flags in the second byte
-			for j := 0; j <= 255; j++ {
+			for j := range 256 {
 				h[1] = byte(j)
 				require.False(t, h.hasNextSlabID())
 			}
@@ -168,11 +168,11 @@ func TestFlagSetHasNextSlabIDV1(t *testing.T) {
 	h[0] = 1 << 4 // version 1
 
 	// Flags in the first byte
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		h[0] |= byte(i)
 
 		// Flags in the second byte
-		for i := 0; i <= 255; i++ {
+		for i := range 256 {
 			h[1] = byte(i)
 
 			h.setHasNextSlabID()
@@ -187,12 +187,12 @@ func TestFlagHasInlinedSlabs(t *testing.T) {
 
 	t.Run("has", func(t *testing.T) {
 		// Flags in the first byte
-		for i := 0; i < 32; i++ {
+		for i := range 32 {
 			h[0] |= byte(i)
 			h[0] |= maskHasInlinedSlabs
 
 			// Flags in the second byte
-			for j := 0; j <= 255; j++ {
+			for j := range 256 {
 				h[1] = byte(j)
 				require.True(t, h.hasInlinedSlabs())
 			}
@@ -201,12 +201,12 @@ func TestFlagHasInlinedSlabs(t *testing.T) {
 
 	t.Run("doesn't have", func(t *testing.T) {
 		// Flags in the first byte
-		for i := 0; i < 32; i++ {
+		for i := range 32 {
 			h[0] |= byte(i)
 			h[0] &= ^maskHasInlinedSlabs
 
 			// Flags in the second byte
-			for j := 0; j <= 255; j++ {
+			for j := range 256 {
 				h[1] = byte(j)
 				require.False(t, h.hasInlinedSlabs())
 			}
@@ -219,11 +219,11 @@ func TestFlagSetHasInlinedSlabsV1(t *testing.T) {
 	h[0] = 1 << 4 // version 1
 
 	// Flags in the first byte
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		h[0] |= byte(i)
 
 		// Flags in the second byte
-		for i := 0; i <= 255; i++ {
+		for i := range 256 {
 			h[1] = byte(i)
 
 			h.setHasInlinedSlabs()
@@ -243,7 +243,7 @@ func TestFlagGetSlabType(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			for i := 0; i <= 255; i++ {
+			for i := range 256 {
 				arrayFlag := byte(i) & 0b111_00111
 				tc.h[1] = arrayFlag
 				require.Equal(t, slabArray, tc.h.getSlabType())
@@ -271,7 +271,7 @@ func TestFlagGetSlabArrayType(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			for i := 0; i <= 255; i++ {
+			for i := range 256 {
 				arrayDataFlag := byte(i) & 0b111_00000
 				tc.h[1] = arrayDataFlag
 				require.Equal(t, slabArrayData, tc.h.getSlabArrayType())
@@ -299,7 +299,7 @@ func TestFlagGetSlabMapType(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			for i := 0; i <= 255; i++ {
+			for i := range 256 {
 				b := byte(i)
 				b |= 0b000_01000 // turn on map flag
 				b &= 0b111_01111 // turn off storable flag
@@ -330,7 +330,7 @@ func TestVersion(t *testing.T) {
 
 		var h head
 		// Flags in the second byte
-		for i := 0; i <= 255; i++ {
+		for i := range 256 {
 			h[1] = byte(i)
 			require.Equal(t, expectedVersion, h.version())
 		}
@@ -343,11 +343,11 @@ func TestVersion(t *testing.T) {
 		h[0] = 0x10
 
 		// Flags in the first byte
-		for i := 0; i < 32; i++ {
+		for i := range 32 {
 			h[0] |= byte(i)
 
 			// Flags in the second byte
-			for j := 0; j <= 255; j++ {
+			for j := range 256 {
 				h[1] = byte(j)
 				require.Equal(t, expectedVersion, h.version())
 			}

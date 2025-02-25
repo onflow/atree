@@ -351,7 +351,7 @@ func (v *mapVerifier) verifyMetaDataSlab(
 	}
 
 	elementCount = 0
-	for i := 0; i < len(metaSlab.childrenHeaders); i++ {
+	for i := range metaSlab.childrenHeaders {
 		h := metaSlab.childrenHeaders[i]
 
 		childSlab, err := getMapSlab(v.storage, h.slabID)
@@ -479,8 +479,7 @@ func (v *mapVerifier) verifyHkeyElements(
 
 	elementSize = uint32(hkeyElementsPrefixSize)
 
-	for i := 0; i < len(elements.elems); i++ {
-		e := elements.elems[i]
+	for i, e := range elements.elems {
 
 		hkeys := make([]Digest, len(hkeyPrefixes)+1)
 		copy(hkeys, hkeyPrefixes)

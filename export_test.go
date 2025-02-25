@@ -18,7 +18,9 @@
 
 package atree
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Exported functions of PersistentSlabStorage for testing.
 var (
@@ -126,7 +128,7 @@ func GetMutableValueNotifierValueID(v Value) (ValueID, error) {
 
 func ComputeArrayRootDataSlabByteSizeWithFixSizedElement(storableByteSize uint32, count int) uint32 {
 	storableByteSizes := make([]uint32, count)
-	for i := 0; i < count; i++ {
+	for i := range storableByteSizes {
 		storableByteSizes[i] = storableByteSize
 	}
 	return ComputeArrayRootDataSlabByteSize(storableByteSizes)
@@ -142,7 +144,7 @@ func ComputeArrayRootDataSlabByteSize(storableByteSizes []uint32) uint32 {
 
 func ComputeInlinedArraySlabByteSizeWithFixSizedElement(storableByteSize uint32, count int) uint32 {
 	storableByteSizes := make([]uint32, count)
-	for i := 0; i < count; i++ {
+	for i := range storableByteSizes {
 		storableByteSizes[i] = storableByteSize
 	}
 	return ComputeInlinedArraySlabByteSize(storableByteSizes)
@@ -158,7 +160,7 @@ func ComputeInlinedArraySlabByteSize(storableByteSizes []uint32) uint32 {
 
 func ComputeMapRootDataSlabByteSizeWithFixSizedElement(keyStorableByteSize, valueStorableByteSize uint32, count int) uint32 {
 	elementStorableByteSizes := make([][2]uint32, count)
-	for i := 0; i < count; i++ {
+	for i := range elementStorableByteSizes {
 		elementStorableByteSizes[i] = [2]uint32{keyStorableByteSize, valueStorableByteSize}
 	}
 	return ComputeMapRootDataSlabByteSize(elementStorableByteSizes)
@@ -183,7 +185,7 @@ func ComputeMapRootDataSlabByteSize(elementStorableByteSizes [][2]uint32) uint32
 
 func ComputeInlinedMapSlabByteSizeWithFixSizedElement(keyStorableByteSize, valueStorableByteSize uint32, count int) uint32 {
 	elementStorableByteSizes := make([][2]uint32, count)
-	for i := 0; i < count; i++ {
+	for i := range elementStorableByteSizes {
 		elementStorableByteSizes[i] = [2]uint32{keyStorableByteSize, valueStorableByteSize}
 	}
 	return ComputeInlinedMapSlabByteSize(elementStorableByteSizes)

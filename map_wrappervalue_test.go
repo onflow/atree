@@ -497,7 +497,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 
 	mapCountTestCases := []struct {
 		name     string
-		mapCount int
+		mapCount uint64
 	}{
 		{name: "small map", mapCount: smallMapCount},
 		{name: "large map", mapCount: largeMapCount},
@@ -527,7 +527,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 
 				// Set WrapperValue
 				expectedValues := make(map[atree.Value]atree.Value)
-				for len(expectedValues) < mapCount {
+				for uint64(len(expectedValues)) < mapCount {
 					k, expectedK := tc.newKey(storage)
 
 					if _, exists := expectedValues[expectedK]; exists {
@@ -543,7 +543,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 					expectedValues[expectedK] = expectedV
 				}
 
-				require.Equal(t, uint64(mapCount), m.Count())
+				require.Equal(t, mapCount, m.Count())
 
 				testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -568,7 +568,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 					expectedValues[key] = newExpectedV
 				}
 
-				require.Equal(t, uint64(mapCount), m.Count())
+				require.Equal(t, mapCount, m.Count())
 
 				testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -581,7 +581,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 
 				m2, err := atree.NewMapWithRootID(storage2, rootSlabID, atree.NewDefaultDigesterBuilder())
 				require.NoError(t, err)
-				require.Equal(t, uint64(mapCount), m2.Count())
+				require.Equal(t, mapCount, m2.Count())
 
 				// Test loaded map
 				testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
@@ -609,7 +609,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 
 	mapCountTestCases := []struct {
 		name     string
-		mapCount int
+		mapCount uint64
 	}{
 		{name: "small map", mapCount: smallMapCount},
 		{name: "large map", mapCount: largeMapCount},
@@ -626,7 +626,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 	removeTestCases := []struct {
 		name               string
 		removeAllElements  bool
-		removeElementCount int
+		removeElementCount uint64
 	}{
 		{name: "remove all elements", removeAllElements: true},
 		{name: "remove 1 element", removeElementCount: 1},
@@ -672,7 +672,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 						expectedValues := make(map[atree.Value]atree.Value)
 
 						// Set WrapperValue in map
-						for len(expectedValues) < mapCount {
+						for uint64(len(expectedValues)) < mapCount {
 							k, expectedK := tc.newKey(storage)
 
 							if _, exists := expectedValues[expectedK]; exists {
@@ -688,7 +688,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 							expectedValues[expectedK] = expectedV
 						}
 
-						require.Equal(t, uint64(mapCount), m.Count())
+						require.Equal(t, mapCount, m.Count())
 
 						testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -714,7 +714,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 								expectedValues[key] = newExpectedV
 							}
 
-							require.Equal(t, uint64(mapCount), m.Count())
+							require.Equal(t, mapCount, m.Count())
 
 							testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 						}
@@ -737,8 +737,8 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 							keys = append(keys[:removeKeyIndex], keys[removeKeyIndex+1:]...)
 						}
 
-						require.Equal(t, uint64(mapCount-removeCount), m.Count())
-						require.Equal(t, mapCount-removeCount, len(expectedValues))
+						require.Equal(t, mapCount-removeCount, m.Count())
+						require.Equal(t, mapCount-removeCount, uint64(len(expectedValues)))
 
 						testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -751,7 +751,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 
 						m2, err := atree.NewMapWithRootID(storage2, rootSlabID, atree.NewDefaultDigesterBuilder())
 						require.NoError(t, err)
-						require.Equal(t, uint64(mapCount-removeCount), m2.Count())
+						require.Equal(t, mapCount-removeCount, m2.Count())
 
 						// Test loaded map
 						testMap(t, storage2, typeInfo, address, m2, expectedValues, nil, true)
@@ -778,7 +778,7 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 
 	mapCountTestCases := []struct {
 		name     string
-		mapCount int
+		mapCount uint64
 	}{
 		{name: "small map", mapCount: smallMapCount},
 		{name: "large map", mapCount: largeMapCount},
@@ -824,7 +824,7 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 					expectedValues := make(map[atree.Value]atree.Value)
 
 					// Set WrapperValue to map
-					for len(expectedValues) < mapCount {
+					for uint64(len(expectedValues)) < mapCount {
 						k, expectedK := tc.newKey(storage)
 
 						if _, exists := expectedValues[expectedK]; exists {
@@ -840,7 +840,7 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 						expectedValues[expectedK] = expectedV
 					}
 
-					require.Equal(t, uint64(mapCount), m.Count())
+					require.Equal(t, mapCount, m.Count())
 
 					testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -893,7 +893,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 
 	mapCountTestCases := []struct {
 		name     string
-		mapCount int
+		mapCount uint64
 	}{
 		{name: "small map", mapCount: smallMapCount},
 		{name: "large map", mapCount: largeMapCount},
@@ -941,7 +941,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 					expectedValues := make(map[atree.Value]atree.Value)
 
 					// Set WrapperValue in map
-					for len(expectedValues) < mapCount {
+					for uint64(len(expectedValues)) < mapCount {
 						k, expectedK := tc.newKey(storage)
 
 						if _, exists := expectedValues[expectedK]; exists {
@@ -957,7 +957,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 						expectedValues[expectedK] = expectedV
 					}
 
-					require.Equal(t, uint64(mapCount), m.Count())
+					require.Equal(t, mapCount, m.Count())
 
 					testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
@@ -990,7 +990,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 						count++
 					}
 
-					require.Equal(t, uint64(mapCount), m.Count())
+					require.Equal(t, mapCount, m.Count())
 
 					testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 				})
@@ -1076,7 +1076,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 	// Retrieve wrapped child map, and then insert new elements to child map.
 	// Wrapped child map is expected to be unlined at the end of loop.
 
-	const childMapCount = 8
+	const childMapCount = uint64(8)
 	for i := range childMapCount + 1 {
 		// Get element
 		element, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
@@ -1099,7 +1099,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 		// Insert new elements to wrapped child map
 
 		k := test_utils.Uint64Value(i)
-		v := test_utils.Uint64Value(r.Intn(256))
+		v := test_utils.Uint64Value(r.Intn(256)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 		existingStorable, err := wrappedMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.NewSomeValue(v))
 		require.NoError(t, err)
@@ -1109,8 +1109,8 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 
 		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(expectedWrappedMap)
 
-		require.Equal(t, uint64(i+1), wrappedMap.Count())
-		require.Equal(t, i+1, len(expectedWrappedMap))
+		require.Equal(t, i+1, wrappedMap.Count())
+		require.Equal(t, i+1, uint64(len(expectedWrappedMap)))
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	}
@@ -1120,7 +1120,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 	// Retrieve wrapped child map, and then remove elements from child map.
 	// Wrapped child map is expected to be inlined at the end of loop.
 
-	childMapCountAfterRemoval := 2
+	childMapCountAfterRemoval := uint64(2)
 	removeCount := childMapCount - childMapCountAfterRemoval
 
 	for i := range removeCount {
@@ -1144,7 +1144,9 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 
 		// Remove element from wrapped child map
 
-		existingKeyStorable, existingValueStorable, err := wrappedMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(i))
+		key := test_utils.Uint64Value(i)
+
+		existingKeyStorable, existingValueStorable, err := wrappedMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, key)
 		require.NoError(t, err)
 		require.NotNil(t, existingKeyStorable)
 		require.NotNil(t, existingValueStorable)
@@ -1153,9 +1155,9 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 
 		existingValue, err := existingValueStorable.StoredValue(storage)
 		require.NoError(t, err)
-		testValueEqual(t, expectedWrappedMap[test_utils.Uint64Value(i)], existingValue)
+		testValueEqual(t, expectedWrappedMap[key], existingValue)
 
-		delete(expectedWrappedMap, test_utils.Uint64Value(i))
+		delete(expectedWrappedMap, key)
 
 		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(expectedWrappedMap)
 
@@ -1274,7 +1276,7 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 	// Retrieve wrapped gchild map, and then insert new elements to gchild map.
 	// Wrapped gchild map is expected to be unlined at the end of loop.
 
-	const gchildMapCount = 8
+	const gchildMapCount = uint64(8)
 	for i := range gchildMapCount {
 		// Get element at level 1
 
@@ -1316,7 +1318,7 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		// Insert new elements to wrapped gchild map
 
 		k := test_utils.Uint64Value(i)
-		v := test_utils.Uint64Value(r.Intn(256))
+		v := test_utils.Uint64Value(r.Intn(256)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 		existingStorable, err := wrappedMapAtLevel2.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.NewSomeValue(v))
 		require.NoError(t, err)
@@ -1328,8 +1330,8 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 			test_utils.ExpectedMapValue{
 				test_utils.Uint64Value(0): test_utils.NewExpectedWrapperValue(expectedWrappedMapAtLevel2)})
 
-		require.Equal(t, uint64(i+1), wrappedMapAtLevel2.Count())
-		require.Equal(t, i+1, len(expectedWrappedMapAtLevel2))
+		require.Equal(t, i+1, wrappedMapAtLevel2.Count())
+		require.Equal(t, i+1, uint64(len(expectedWrappedMapAtLevel2)))
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	}
@@ -1339,7 +1341,7 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 	// Retrieve wrapped gchild map, and then remove elements from gchild map.
 	// Wrapped gchild map is expected to be inlined at the end of loop.
 
-	gchildMapCountAfterRemoval := 2
+	gchildMapCountAfterRemoval := uint64(2)
 	removeCount := gchildMapCount - gchildMapCountAfterRemoval
 
 	for i := range removeCount {
@@ -1380,7 +1382,9 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 
 		// Remove first element from wrapped gchild map
 
-		existingKeyStorable, existingValueStorable, err := wrappedMapAtLevel2.Remove(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(i))
+		key := test_utils.Uint64Value(i)
+
+		existingKeyStorable, existingValueStorable, err := wrappedMapAtLevel2.Remove(test_utils.CompareValue, test_utils.GetHashInput, key)
 		require.NoError(t, err)
 		require.NotNil(t, existingKeyStorable)
 		require.NotNil(t, existingValueStorable)
@@ -1389,9 +1393,9 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 
 		existingValue, err := existingValueStorable.StoredValue(storage)
 		require.NoError(t, err)
-		testValueEqual(t, expectedWrappedMapAtLevel2[test_utils.Uint64Value(i)], existingValue)
+		testValueEqual(t, expectedWrappedMapAtLevel2[key], existingValue)
 
-		delete(expectedWrappedMapAtLevel2, test_utils.Uint64Value(i))
+		delete(expectedWrappedMapAtLevel2, key)
 
 		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(
 			test_utils.ExpectedMapValue{
@@ -1466,14 +1470,14 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	actualMapCount := 0
+	actualMapCount := uint64(0)
 
 	t.Run("set and remove", func(t *testing.T) {
 		// Insert elements
 
-		var setCount int
+		var setCount uint64
 		for setCount < minWriteOperationCount {
-			setCount = r.Intn(maxWriteOperationCount + 1)
+			setCount = uint64(r.Intn(maxWriteOperationCount + 1)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		}
 
 		actualMapCount += setCount
@@ -1491,17 +1495,18 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 			expectedValues[k] = expected
 		}
 
-		require.Equal(t, uint64(actualMapCount), m.Count())
+		require.Equal(t, actualMapCount, m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
 		// Remove some elements
+		mapCount := m.Count()
 
-		var removeCount int
-		minRemoveCount := int(m.Count()) / 2
-		maxRemoveCount := int(m.Count()) / 4 * 3
+		var removeCount uint64
+		minRemoveCount := mapCount / 2
+		maxRemoveCount := mapCount / 4 * 3
 		for removeCount < minRemoveCount || removeCount > maxRemoveCount {
-			removeCount = r.Intn(int(m.Count()) + 1)
+			removeCount = uint64(r.Intn(int(mapCount))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		}
 
 		actualMapCount -= removeCount
@@ -1523,7 +1528,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 			keys = append(keys[:index], keys[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualMapCount), m.Count())
+		require.Equal(t, actualMapCount, m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	})
@@ -1601,14 +1606,14 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	actualMapCount := 0
+	actualMapCount := uint64(0)
 
 	t.Run("set and remove", func(t *testing.T) {
 		// Set elements
 
-		var setCount int
+		var setCount uint64
 		for setCount < minWriteOperationCount {
-			setCount = r.Intn(maxWriteOperationCount + 1)
+			setCount = uint64(r.Intn(maxWriteOperationCount + 1)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		}
 
 		actualMapCount += setCount
@@ -1624,17 +1629,19 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			expectedValues[k] = expected
 		}
 
-		require.Equal(t, uint64(actualMapCount), m.Count())
+		require.Equal(t, actualMapCount, m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
 		// Remove some elements (including one previously inserted element)
 
-		var removeCount int
-		minRemoveCount := int(m.Count()) / 2
-		maxRemoveCount := int(m.Count()) / 4 * 3
+		mapCount := m.Count()
+
+		var removeCount uint64
+		minRemoveCount := mapCount / 2
+		maxRemoveCount := mapCount / 4 * 3
 		for removeCount < minRemoveCount || removeCount > maxRemoveCount {
-			removeCount = r.Intn(int(m.Count()) + 1)
+			removeCount = uint64(r.Intn(int(mapCount))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		}
 
 		actualMapCount -= removeCount
@@ -1656,7 +1663,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			keys = append(keys[:index], keys[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualMapCount), m.Count())
+		require.Equal(t, actualMapCount, m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	})
@@ -1664,12 +1671,14 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 	t.Run("modify retrieved nested container and remove", func(t *testing.T) {
 		// Set elements
 
-		var setCount int
+		mapCount := m.Count()
+
+		var setCount uint64
 		if m.Count() <= 10 {
-			setCount = int(m.Count())
+			setCount = mapCount
 		} else {
-			for setCount < int(m.Count())/2 {
-				setCount = r.Intn(int(m.Count()) + 1)
+			for setCount < mapCount/2 {
+				setCount = uint64(r.Intn(int(mapCount + 1))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 			}
 		}
 
@@ -1697,17 +1706,19 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			expectedValues[setKey] = modifiedExpectedValue
 		}
 
-		require.Equal(t, uint64(actualMapCount), m.Count())
+		require.Equal(t, actualMapCount, m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
 		// Remove some elements (including some previously set elements)
 
-		var removeCount int
-		minRemoveCount := int(m.Count()) / 2
-		maxRemoveCount := int(m.Count()) / 4 * 3
+		mapCount = m.Count()
+
+		var removeCount uint64
+		minRemoveCount := mapCount / 2
+		maxRemoveCount := mapCount / 4 * 3
 		for removeCount < minRemoveCount || removeCount > maxRemoveCount {
-			removeCount = r.Intn(int(m.Count()))
+			removeCount = uint64(r.Intn(int(mapCount))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		}
 
 		actualMapCount -= removeCount
@@ -1724,7 +1735,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			keys = append(keys[:index], keys[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualMapCount), m.Count())
+		require.Equal(t, actualMapCount, m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	})
@@ -1816,14 +1827,14 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	actualMapCount := 0
+	actualMapCount := uint64(0)
 
 	t.Run("set and remove", func(t *testing.T) {
 		// Insert elements
 
-		var setCount int
+		var setCount uint64
 		for setCount < minWriteOperationCount {
-			setCount = r.Intn(maxWriteOperationCount + 1)
+			setCount = uint64(r.Intn(maxWriteOperationCount + 1)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		}
 
 		actualMapCount += setCount
@@ -1839,15 +1850,17 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			expectedValues[k] = expected
 		}
 
-		require.Equal(t, uint64(actualMapCount), m.Count())
+		require.Equal(t, actualMapCount, m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
 		// Remove some elements
 
-		var removeCount int
-		for removeCount < int(m.Count())/2 {
-			removeCount = r.Intn(int(m.Count()) + 1)
+		mapCount := m.Count()
+
+		var removeCount uint64
+		for removeCount < mapCount/2 {
+			removeCount = uint64(r.Intn(int(mapCount))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		}
 
 		actualMapCount -= removeCount
@@ -1869,7 +1882,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			keys = append(keys[:index], keys[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualMapCount), m.Count())
+		require.Equal(t, actualMapCount, m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	})
@@ -1877,12 +1890,14 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 	t.Run("modify retrieved nested container and remove", func(t *testing.T) {
 		// Set elements
 
-		var setCount int
+		mapCount := m.Count()
+
+		var setCount uint64
 		if m.Count() <= 10 {
-			setCount = int(m.Count())
+			setCount = mapCount
 		} else {
-			for setCount < int(m.Count())/2 {
-				setCount = r.Intn(int(m.Count()) + 1)
+			for setCount < mapCount/2 {
+				setCount = uint64(r.Intn(int(mapCount + 1))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 			}
 		}
 
@@ -1912,15 +1927,17 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			expectedValues[key] = modifiedExpectedValue
 		}
 
-		require.Equal(t, uint64(actualMapCount), m.Count())
+		require.Equal(t, actualMapCount, m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
 		// Remove some elements
 
-		var removeCount int
-		for removeCount < int(m.Count())/2 {
-			removeCount = r.Intn(int(m.Count()))
+		mapCount = m.Count()
+
+		var removeCount uint64
+		for removeCount < mapCount/2 {
+			removeCount = uint64(r.Intn(int(mapCount))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		}
 
 		actualMapCount -= removeCount
@@ -1935,7 +1952,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			keys = append(keys[:index], keys[index+1:]...)
 		}
 
-		require.Equal(t, uint64(actualMapCount), m.Count())
+		require.Equal(t, actualMapCount, m.Count())
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	})

@@ -1248,6 +1248,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 4
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, 0, mapCount)
 		for len(keyValues) < mapCount {
@@ -1258,12 +1259,7 @@ func TestReadOnlyMapIterate(t *testing.T) {
 				sortedKeys = append(sortedKeys, k)
 				keyValues[k] = v
 
-				digests := []atree.Digest{
-					atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-					atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-					atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-					atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				}
+				digests := newRandomDigests(r, digestLevels)
 				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 				existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
@@ -2561,15 +2557,14 @@ func TestMutableMapIterate(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 1
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
@@ -2623,18 +2618,14 @@ func TestMutableMapIterate(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 4
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
@@ -3141,6 +3132,7 @@ func TestMutableMapIterate(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 1
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
@@ -3156,9 +3148,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 			k := test_utils.Uint64Value(i)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
@@ -3224,6 +3214,7 @@ func TestMutableMapIterate(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 4
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
@@ -3239,12 +3230,7 @@ func TestMutableMapIterate(t *testing.T) {
 
 			k := test_utils.Uint64Value(i)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
@@ -4137,15 +4123,14 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 1
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
@@ -4198,18 +4183,14 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 4
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
@@ -4725,6 +4706,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 1
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
@@ -4740,9 +4722,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 			k := test_utils.Uint64Value(i)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
@@ -4810,6 +4790,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 4
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
@@ -4825,12 +4806,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 
 			k := test_utils.Uint64Value(i)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
@@ -5742,15 +5718,14 @@ func TestMutableMapIterateValues(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 1
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
@@ -5805,18 +5780,14 @@ func TestMutableMapIterateValues(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 4
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
 			k := test_utils.Uint64Value(i)
 			v := test_utils.Uint64Value(i * 2)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
@@ -6329,6 +6300,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 1
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
@@ -6344,9 +6316,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 			k := test_utils.Uint64Value(i)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
@@ -6413,6 +6383,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
+		const digestLevels = 4
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		sortedKeys := make([]atree.Value, mapCount)
 		for i := range mapCount {
@@ -6428,12 +6399,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 			k := test_utils.Uint64Value(i)
 
-			digests := []atree.Digest{
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				atree.Digest(r.Intn(256)), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+			digests := newRandomDigests(r, digestLevels)
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 			existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childMap)
@@ -7003,7 +6969,7 @@ func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLeve
 	uniqueFirstLevelDigests := make(map[atree.Digest]bool, mockDigestCount)
 	firstLevelDigests := make([]atree.Digest, 0, mockDigestCount)
 	for len(firstLevelDigests) < mockDigestCount {
-		d := atree.Digest(uint64(r.Intn(256))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		d := newRandomDigest(r)
 		if !uniqueFirstLevelDigests[d] {
 			uniqueFirstLevelDigests[d] = true
 			firstLevelDigests = append(firstLevelDigests, d)
@@ -7015,7 +6981,7 @@ func testMapDeterministicHashCollision(t *testing.T, r *rand.Rand, maxDigestLeve
 		digests := make([]atree.Digest, maxDigestLevel)
 		digests[0] = firstLevelDigests[i]
 		for j := 1; j < maxDigestLevel; j++ {
-			digests[j] = atree.Digest(uint64(r.Intn(256))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			digests[j] = newRandomDigest(r)
 		}
 		digestsGroup[i] = digests
 	}
@@ -7102,7 +7068,7 @@ func testMapRandomHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) 
 
 			digests := make([]atree.Digest, maxDigestLevel)
 			for i := range digests {
-				digests[i] = atree.Digest(r.Intn(256)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				digests[i] = newRandomDigest(r)
 			}
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -19984,4 +19950,16 @@ func testExistingInlinedMapSetType(
 	require.Equal(t, expectedCount, childMap2.Count())
 	require.Equal(t, newTypeInfo, childMap2.Type())
 	require.Equal(t, expectedSeed, childMap.Seed())
+}
+
+func newRandomDigests(r *rand.Rand, level int) []atree.Digest {
+	digest := make([]atree.Digest, level)
+	for i := range digest {
+		digest[i] = newRandomDigest(r)
+	}
+	return digest
+}
+
+func newRandomDigest(r *rand.Rand) atree.Digest {
+	return atree.Digest(r.Intn(256)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 }

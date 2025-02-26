@@ -1225,7 +1225,7 @@ func generateLargeSlab(id atree.SlabID) atree.Slab {
 
 	storables := make([]atree.Storable, elementCount)
 	for i := range storables {
-		storable := test_utils.Uint64Value(uint64(i))
+		storable := test_utils.Uint64Value(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		storables[i] = storable
 	}
 
@@ -5142,7 +5142,7 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 		ids := make([]atree.SlabID, numberOfSlabs)
 		for i := range ids {
 			var index atree.SlabIndex
-			binary.BigEndian.PutUint64(index[:], uint64(i))
+			binary.BigEndian.PutUint64(index[:], uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 			ids[i] = atree.NewSlabID(generateRandomAddress(r), index)
 		}
@@ -5165,7 +5165,7 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 
 		for i := range ids {
 			var index atree.SlabIndex
-			binary.BigEndian.PutUint64(index[:], uint64(i))
+			binary.BigEndian.PutUint64(index[:], uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 			id := atree.NewSlabID(generateRandomAddress(r), index)
 

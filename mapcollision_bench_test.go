@@ -66,7 +66,7 @@ func (db *collisionDigesterBuilder) Digest(hip atree.HashInputProvider, value at
 	}, nil
 }
 
-func (db *collisionDigesterBuilder) SetSeed(k1 uint64, k2 uint64) {
+func (db *collisionDigesterBuilder) SetSeed(uint64, uint64) {
 }
 
 type collisionDigester struct {
@@ -134,8 +134,8 @@ func BenchmarkCollisionPerDigest(b *testing.B) {
 			digesterBuilder := NewCollisionDigesterBuilder(collisionPerDigest)
 			keyValues := make(map[atree.Value]atree.Value, mapCount)
 			for i := range mapCount {
-				k := test_utils.Uint64Value(i)
-				v := test_utils.Uint64Value(i)
+				k := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				v := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 				keyValues[k] = v
 			}
 

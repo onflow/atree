@@ -46,7 +46,7 @@ func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
 		addr := generateRandomAddress(r)
 
 		var index atree.SlabIndex
-		binary.BigEndian.PutUint64(index[:], uint64(i))
+		binary.BigEndian.PutUint64(index[:], uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 		id := atree.NewSlabID(addr, index)
 
@@ -87,7 +87,7 @@ func benchmarkNondeterministicFastCommit(b *testing.B, seed int64, numberOfSlabs
 		addr := generateRandomAddress(r)
 
 		var index atree.SlabIndex
-		binary.BigEndian.PutUint64(index[:], uint64(i))
+		binary.BigEndian.PutUint64(index[:], uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 		id := atree.NewSlabID(addr, index)
 
@@ -152,7 +152,7 @@ func benchmarkRetrieve(b *testing.B, seed int64, numberOfSlabs int) {
 		addr := generateRandomAddress(r)
 
 		var index atree.SlabIndex
-		binary.BigEndian.PutUint64(index[:], uint64(i))
+		binary.BigEndian.PutUint64(index[:], uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 		id := atree.NewSlabID(addr, index)
 
@@ -199,7 +199,7 @@ func benchmarkBatchPreload(b *testing.B, seed int64, numberOfSlabs int) {
 		addr := generateRandomAddress(r)
 
 		var index atree.SlabIndex
-		binary.BigEndian.PutUint64(index[:], uint64(i))
+		binary.BigEndian.PutUint64(index[:], uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 		id := atree.NewSlabID(addr, index)
 

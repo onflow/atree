@@ -119,11 +119,11 @@ func testMapV0(
 	typeInfo atree.TypeInfo,
 	address atree.Address,
 	m *atree.OrderedMap,
-	keyValues map[atree.Value]atree.Value,
+	expectedValues test_utils.ExpectedMapValue,
 	sortedKeys []atree.Value,
 	hasNestedArrayMapElement bool,
 ) {
-	_testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, hasNestedArrayMapElement, false)
+	_testMap(t, storage, typeInfo, address, m, expectedValues, sortedKeys, hasNestedArrayMapElement, false)
 }
 
 func testMap(
@@ -132,11 +132,11 @@ func testMap(
 	typeInfo atree.TypeInfo,
 	address atree.Address,
 	m *atree.OrderedMap,
-	keyValues test_utils.ExpectedMapValue,
+	expectedValues test_utils.ExpectedMapValue,
 	sortedKeys []atree.Value,
 	hasNestedArrayMapElement bool,
 ) {
-	_testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, hasNestedArrayMapElement, true)
+	_testMap(t, storage, typeInfo, address, m, expectedValues, sortedKeys, hasNestedArrayMapElement, true)
 }
 
 // _testMap verifies map elements and validates serialization and in-memory slab tree.
@@ -147,19 +147,19 @@ func _testMap(
 	typeInfo atree.TypeInfo,
 	address atree.Address,
 	m *atree.OrderedMap,
-	expectedKeyValues map[atree.Value]atree.Value,
+	expectedValues test_utils.ExpectedMapValue,
 	sortedKeys []atree.Value,
 	hasNestedArrayMapElement bool,
 	inlineEnabled bool,
 ) {
 	require.True(t, test_utils.CompareTypeInfo(typeInfo, m.Type()))
 	require.Equal(t, address, m.Address())
-	require.Equal(t, uint64(len(expectedKeyValues)), m.Count())
+	require.Equal(t, uint64(len(expectedValues)), m.Count())
 
 	var err error
 
 	// Verify map elements
-	for k, expected := range expectedKeyValues {
+	for k, expected := range expectedValues {
 		actual, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.NoError(t, err)
 
@@ -168,12 +168,12 @@ func _testMap(
 
 	// Verify map elements ordering
 	if len(sortedKeys) > 0 {
-		require.Equal(t, len(expectedKeyValues), len(sortedKeys))
+		require.Equal(t, len(expectedValues), len(sortedKeys))
 
 		i := 0
 		err = m.IterateReadOnly(func(k, v atree.Value) (bool, error) {
 			expectedKey := sortedKeys[i]
-			expectedValue := expectedKeyValues[expectedKey]
+			expectedValue := expectedValues[expectedKey]
 
 			testValueEqual(t, expectedKey, k)
 			testValueEqual(t, expectedValue, v)
@@ -182,7 +182,7 @@ func _testMap(
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, len(expectedKeyValues), i)
+		require.Equal(t, len(expectedValues), i)
 	}
 
 	// Verify in-memory slabs
@@ -238,7 +238,7 @@ func _testMap(
 	require.NoError(t, err)
 
 	// Verify decoded map elements
-	for k, expected := range expectedKeyValues {
+	for k, expected := range expectedValues {
 		actual, err := decodedMap.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
 		require.NoError(t, err)
 
@@ -254,7 +254,7 @@ func _testMap(
 		require.NoError(t, err)
 		require.Equal(t, stats.SlabCount(), uint64(storage.Count()))
 
-		if len(expectedKeyValues) == 0 {
+		if len(expectedValues) == 0 {
 			// Verify slab count for empty map
 			require.Equal(t, uint64(1), stats.DataSlabCount)
 			require.Equal(t, uint64(0), stats.MetaDataSlabCount)
@@ -742,7 +742,7 @@ func TestMapHas(t *testing.T) {
 	})
 }
 
-func testMapRemoveElement(t *testing.T, m *atree.OrderedMap, k atree.Value, expectedV atree.Value) {
+func testMapRemoveElement(t *testing.T, m *atree.OrderedMap, k atree.Value, expectedValue atree.Value) {
 
 	removedKeyStorable, removedValueStorable, err := m.Remove(test_utils.CompareValue, test_utils.GetHashInput, k)
 	require.NoError(t, err)
@@ -753,7 +753,7 @@ func testMapRemoveElement(t *testing.T, m *atree.OrderedMap, k atree.Value, expe
 
 	removedValue, err := removedValueStorable.StoredValue(m.Storage)
 	require.NoError(t, err)
-	testValueEqual(t, expectedV, removedValue)
+	testValueEqual(t, expectedValue, removedValue)
 
 	if id, ok := removedKeyStorable.(atree.SlabIDStorable); ok {
 		err = m.Storage.Remove(atree.SlabID(id))
@@ -14796,7 +14796,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
-			m, values := createMapWithSimpleValues(
+			m, expectedValues := createMapWithSimpleValues(
 				t,
 				storage,
 				address,
@@ -14810,7 +14810,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 		}
 	})
 
@@ -14819,7 +14819,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
-			m, values, _ := createMapWithChildArrayValues(
+			m, expectedValues, _ := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -14834,7 +14834,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 		}
 	})
 
@@ -14844,7 +14844,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Create parent map with 3 collision groups, 2 elements in each group.
 			const mapCount = 6
-			m, values, _ := createMapWithChildArrayValues(
+			m, expectedValues, _ := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -14859,7 +14859,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 		}
 	})
 
@@ -14869,7 +14869,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Create parent map with 3 external collision group, 4 elements in the group.
 			const mapCount = 12
-			m, values, _ := createMapWithChildArrayValues(
+			m, expectedValues, _ := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -14884,7 +14884,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+3+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 		}
 	})
 
@@ -14893,7 +14893,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -14908,14 +14908,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite element from front to back.
 			for i, slabID := range childSlabIDs {
 				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
-				testMapLoadedElements(t, m, values[i+1:])
+				testMapLoadedElements(t, m, expectedValues[i+1:])
 			}
 		}
 	})
@@ -14925,18 +14925,18 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
-			m, values := createMapWithLongStringKey(t, storage, address, typeInfo, mapCount, useWrapperValue)
+			m, expectedValues := createMapWithLongStringKey(t, storage, address, typeInfo, mapCount, useWrapperValue)
 
 			// parent map: 1 root data slab
 			// long string keys: 1 storable slab for each
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload external key from front to back.
-			for i := range values {
-				k := values[i][0]
+			for i := range expectedValues {
+				k := expectedValues[i][0]
 
 				s, ok := k.(test_utils.StringValue)
 				require.True(t, ok)
@@ -14960,7 +14960,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(keyID)
 				require.NoError(t, err)
 
-				testMapLoadedElements(t, m, values[i+1:])
+				testMapLoadedElements(t, m, expectedValues[i+1:])
 			}
 		}
 	})
@@ -14971,7 +14971,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Create parent map with 3 collision groups, 2 elements in each group.
 			const mapCount = 6
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -14986,14 +14986,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite element from front to back.
 			for i, childSlabID := range childSlabIDs {
 				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				testMapLoadedElements(t, m, values[i+1:])
+				testMapLoadedElements(t, m, expectedValues[i+1:])
 			}
 		}
 	})
@@ -15004,7 +15004,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
 			const mapCount = 12
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15019,14 +15019,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+3+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite element from front to back
 			for i, childSlabID := range childSlabIDs {
 				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				testMapLoadedElements(t, m, values[i+1:])
+				testMapLoadedElements(t, m, expectedValues[i+1:])
 			}
 		}
 	})
@@ -15037,7 +15037,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
 			const mapCount = 12
-			m, values, _ := createMapWithChildArrayValues(
+			m, expectedValues, _ := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15052,7 +15052,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+3+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload external collision group slab from front to back
 
@@ -15080,7 +15080,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(id)
 				require.NoError(t, err)
 
-				expectedValues := values[i*4+4:]
+				expectedValues := expectedValues[i*4+4:]
 				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
@@ -15091,7 +15091,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15106,14 +15106,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite element from back to front.
-			for i := len(values) - 1; i >= 0; i-- {
+			for i := len(expectedValues) - 1; i >= 0; i-- {
 				err := storage.Remove(childSlabIDs[i])
 				require.NoError(t, err)
 
-				expectedValues := values[:i]
+				expectedValues := expectedValues[:i]
 				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
@@ -15124,18 +15124,18 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
-			m, values := createMapWithLongStringKey(t, storage, address, typeInfo, mapCount, useWrapperValue)
+			m, expectedValues := createMapWithLongStringKey(t, storage, address, typeInfo, mapCount, useWrapperValue)
 
 			// parent map: 1 root data slab
 			// long string keys: 1 storable slab for each
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite element from front to back.
-			for i := len(values) - 1; i >= 0; i-- {
-				k := values[i][0]
+			for i := len(expectedValues) - 1; i >= 0; i-- {
+				k := expectedValues[i][0]
 
 				s, ok := k.(test_utils.StringValue)
 				require.True(t, ok)
@@ -15159,7 +15159,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(keyID)
 				require.NoError(t, err)
 
-				expectedValues := values[:i]
+				expectedValues := expectedValues[:i]
 				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
@@ -15171,7 +15171,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Create parent map with 3 collision groups, 2 elements in each group.
 			const mapCount = 6
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15186,14 +15186,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite element from back to front
-			for i := len(values) - 1; i >= 0; i-- {
+			for i := len(expectedValues) - 1; i >= 0; i-- {
 				err := storage.Remove(childSlabIDs[i])
 				require.NoError(t, err)
 
-				expectedValues := values[:i]
+				expectedValues := expectedValues[:i]
 				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
@@ -15205,7 +15205,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
 			const mapCount = 12
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15220,14 +15220,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+3+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite element from back to front
-			for i := len(values) - 1; i >= 0; i-- {
+			for i := len(expectedValues) - 1; i >= 0; i-- {
 				err := storage.Remove(childSlabIDs[i])
 				require.NoError(t, err)
 
-				expectedValues := values[:i]
+				expectedValues := expectedValues[:i]
 				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
@@ -15239,7 +15239,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
 			const mapCount = 12
-			m, values, _ := createMapWithChildArrayValues(
+			m, expectedValues, _ := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15254,7 +15254,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+3+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload external slabs from back to front
 			var externalCollisionSlabIDs []atree.SlabID
@@ -15281,7 +15281,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(externalCollisionSlabIDs[i])
 				require.NoError(t, err)
 
-				expectedValues := values[:i*4]
+				expectedValues := expectedValues[:i*4]
 				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
@@ -15292,7 +15292,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15307,7 +15307,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload value in the middle
 			unloadValueIndex := 1
@@ -15315,10 +15315,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			err := storage.Remove(childSlabIDs[unloadValueIndex])
 			require.NoError(t, err)
 
-			copy(values[unloadValueIndex:], values[unloadValueIndex+1:])
-			values = values[:len(values)-1]
+			copy(expectedValues[unloadValueIndex:], expectedValues[unloadValueIndex+1:])
+			expectedValues = expectedValues[:len(expectedValues)-1]
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 		}
 	})
 
@@ -15327,19 +15327,19 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
-			m, values := createMapWithLongStringKey(t, storage, address, typeInfo, mapCount, useWrapperValue)
+			m, expectedValues := createMapWithLongStringKey(t, storage, address, typeInfo, mapCount, useWrapperValue)
 
 			// parent map: 1 root data slab
 			// nested composite elements: 1 root data slab for each
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload key in the middle.
 			unloadValueIndex := 1
 
-			k := values[unloadValueIndex][0]
+			k := expectedValues[unloadValueIndex][0]
 
 			s, ok := k.(test_utils.StringValue)
 			require.True(t, ok)
@@ -15363,10 +15363,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			err := storage.Remove(keyID)
 			require.NoError(t, err)
 
-			copy(values[unloadValueIndex:], values[unloadValueIndex+1:])
-			values = values[:len(values)-1]
+			copy(expectedValues[unloadValueIndex:], expectedValues[unloadValueIndex+1:])
+			expectedValues = expectedValues[:len(expectedValues)-1]
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 		}
 	})
 
@@ -15376,7 +15376,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Create parent map with 3 collision groups, 2 elements in each group.
 			const mapCount = 6
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15391,7 +15391,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite element in the middle
 			for _, unloadValueIndex := range []int{1, 3, 5} {
@@ -15399,12 +15399,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			expectedValues := [][2]atree.Value{
-				values[0],
-				values[2],
-				values[4],
-			}
-			testMapLoadedElements(t, m, expectedValues)
+			testMapLoadedElements(
+				t,
+				m,
+				[][2]atree.Value{
+					expectedValues[0],
+					expectedValues[2],
+					expectedValues[4],
+				})
 		}
 	})
 
@@ -15414,7 +15416,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
 			const mapCount = 12
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15429,7 +15431,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+3+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite value in the middle.
 			for _, unloadValueIndex := range []int{1, 3, 5, 7, 9, 11} {
@@ -15437,15 +15439,17 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			expectedValues := [][2]atree.Value{
-				values[0],
-				values[2],
-				values[4],
-				values[6],
-				values[8],
-				values[10],
-			}
-			testMapLoadedElements(t, m, expectedValues)
+			testMapLoadedElements(
+				t,
+				m,
+				[][2]atree.Value{
+					expectedValues[0],
+					expectedValues[2],
+					expectedValues[4],
+					expectedValues[6],
+					expectedValues[8],
+					expectedValues[10],
+				})
 		}
 	})
 
@@ -15455,7 +15459,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
 			const mapCount = 12
-			m, values, _ := createMapWithChildArrayValues(
+			m, expectedValues, _ := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15470,7 +15474,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+3+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload external slabs in the middle.
 			var externalCollisionSlabIDs []atree.SlabID
@@ -15497,10 +15501,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			err := storage.Remove(id)
 			require.NoError(t, err)
 
-			copy(values[4:], values[8:])
-			values = values[:8]
+			copy(expectedValues[4:], expectedValues[8:])
+			expectedValues = expectedValues[:8]
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 		}
 	})
 
@@ -15509,7 +15513,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15524,7 +15528,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 1+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			i := 0
 			err := m.IterateReadOnlyLoadedValues(func(k atree.Value, v atree.Value) (bool, error) {
@@ -15537,8 +15541,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				}
 
 				require.Equal(t, 0, i)
-				testValueEqual(t, values[0][0], k)
-				testValueEqual(t, values[0][1], v)
+				testValueEqual(t, expectedValues[0][0], k)
+				testValueEqual(t, expectedValues[0][1], v)
 				i++
 				return true, nil
 			})
@@ -15556,7 +15560,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			for childArrayIndex := range mapCount {
 				storage := newTestPersistentStorage(t)
 
-				m, values, childSlabID := createMapWithSimpleAndChildArrayValues(
+				m, expectedValues, childSlabID := createMapWithSimpleAndChildArrayValues(
 					t,
 					storage,
 					address,
@@ -15572,16 +15576,16 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				require.Equal(t, 2, GetDeltasCount(storage))
 				require.Equal(t, 0, getMapMetaDataSlabCount(storage))
 
-				testMapLoadedElements(t, m, values)
+				testMapLoadedElements(t, m, expectedValues)
 
 				// Unload composite value
 				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				copy(values[childArrayIndex:], values[childArrayIndex+1:])
-				values = values[:len(values)-1]
+				copy(expectedValues[childArrayIndex:], expectedValues[childArrayIndex+1:])
+				expectedValues = expectedValues[:len(expectedValues)-1]
 
-				testMapLoadedElements(t, m, values)
+				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
 	})
@@ -15591,7 +15595,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
-			m, values := createMapWithSimpleValues(
+			m, expectedValues := createMapWithSimpleValues(
 				t,
 				storage,
 				address,
@@ -15605,7 +15609,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 4, GetDeltasCount(storage))
 			require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 		}
 	})
 
@@ -15614,7 +15618,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
-			m, values, _ := createMapWithChildArrayValues(
+			m, expectedValues, _ := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15629,7 +15633,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 4+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 		}
 	})
 
@@ -15638,7 +15642,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15653,14 +15657,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 4+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite element from front to back
 			for i, childSlabID := range childSlabIDs {
 				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				testMapLoadedElements(t, m, values[i+1:])
+				testMapLoadedElements(t, m, expectedValues[i+1:])
 			}
 		}
 	})
@@ -15670,7 +15674,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15685,14 +15689,14 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 4+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite element from back to front
-			for i := len(values) - 1; i >= 0; i-- {
+			for i := len(expectedValues) - 1; i >= 0; i-- {
 				err := storage.Remove(childSlabIDs[i])
 				require.NoError(t, err)
 
-				expectedValues := values[:i]
+				expectedValues := expectedValues[:i]
 				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
@@ -15703,7 +15707,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -15718,20 +15722,20 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 4+mapCount, GetDeltasCount(storage))
 			require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			// Unload composite element in the middle
 			for _, index := range []int{4, 14} {
 				err := storage.Remove(childSlabIDs[index])
 				require.NoError(t, err)
 
-				copy(values[index:], values[index+1:])
-				values = values[:len(values)-1]
+				copy(expectedValues[index:], expectedValues[index+1:])
+				expectedValues = expectedValues[:len(expectedValues)-1]
 
 				copy(childSlabIDs[index:], childSlabIDs[index+1:])
 				childSlabIDs = childSlabIDs[:len(childSlabIDs)-1]
 
-				testMapLoadedElements(t, m, values)
+				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
 	})
@@ -15744,7 +15748,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			for childArrayIndex := range mapCount {
 				storage := newTestPersistentStorage(t)
 
-				m, values, childSlabID := createMapWithSimpleAndChildArrayValues(
+				m, expectedValues, childSlabID := createMapWithSimpleAndChildArrayValues(
 					t,
 					storage,
 					address,
@@ -15760,15 +15764,15 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				require.Equal(t, 5, GetDeltasCount(storage))
 				require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
-				testMapLoadedElements(t, m, values)
+				testMapLoadedElements(t, m, expectedValues)
 
 				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				copy(values[childArrayIndex:], values[childArrayIndex+1:])
-				values = values[:len(values)-1]
+				copy(expectedValues[childArrayIndex:], expectedValues[childArrayIndex+1:])
+				expectedValues = expectedValues[:len(expectedValues)-1]
 
-				testMapLoadedElements(t, m, values)
+				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
 	})
@@ -15779,7 +15783,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			const mapCount = 20
 
-			m, values := createMapWithSimpleValues(
+			m, expectedValues := createMapWithSimpleValues(
 				t,
 				storage,
 				address,
@@ -15793,7 +15797,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 4, GetDeltasCount(storage))
 			require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			rootMetaDataSlab, ok := atree.GetMapRootSlab(m).(*atree.MapMetaDataSlab)
 			require.True(t, ok)
@@ -15813,9 +15817,9 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
-				values = values[count:]
+				expectedValues = expectedValues[count:]
 
-				testMapLoadedElements(t, m, values)
+				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
 	})
@@ -15826,7 +15830,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			const mapCount = 20
 
-			m, values := createMapWithSimpleValues(
+			m, expectedValues := createMapWithSimpleValues(
 				t,
 				storage,
 				address,
@@ -15840,7 +15844,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 4, GetDeltasCount(storage))
 			require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			rootMetaDataSlab, ok := atree.GetMapRootSlab(m).(*atree.MapMetaDataSlab)
 			require.True(t, ok)
@@ -15862,9 +15866,9 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
-				values = values[:len(values)-int(count)]
+				expectedValues = expectedValues[:len(expectedValues)-int(count)]
 
-				testMapLoadedElements(t, m, values)
+				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
 	})
@@ -15875,7 +15879,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			const mapCount = 20
 
-			m, values := createMapWithSimpleValues(
+			m, expectedValues := createMapWithSimpleValues(
 				t,
 				storage,
 				address,
@@ -15889,7 +15893,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.Equal(t, 4, GetDeltasCount(storage))
 			require.Equal(t, 1, getMapMetaDataSlabCount(storage))
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			rootMetaDataSlab, ok := atree.GetMapRootSlab(m).(*atree.MapMetaDataSlab)
 			require.True(t, ok)
@@ -15919,10 +15923,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			err := storage.Remove(slabID)
 			require.NoError(t, err)
 
-			copy(values[countAtIndex0:], values[countAtIndex0+countAtIndex1:])
-			values = values[:m.Count()-uint64(countAtIndex1)]
+			copy(expectedValues[countAtIndex0:], expectedValues[countAtIndex0+countAtIndex1:])
+			expectedValues = expectedValues[:m.Count()-uint64(countAtIndex1)]
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 		}
 	})
 
@@ -15932,7 +15936,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			const mapCount = 200
 
-			m, values := createMapWithSimpleValues(
+			m, expectedValues := createMapWithSimpleValues(
 				t,
 				storage,
 				address,
@@ -15956,13 +15960,13 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				require.NoError(t, err)
 
 				// Use firstKey to deduce number of elements in slab.
-				var expectedValues [][2]atree.Value
+				var loadedExpectedValues [][2]atree.Value
 				if i < len(childSlabIDs)-1 {
 					nextFirstKey := childFirstKeys[i+1]
-					expectedValues = values[int(nextFirstKey):]
+					loadedExpectedValues = expectedValues[int(nextFirstKey):]
 				}
 
-				testMapLoadedElements(t, m, expectedValues)
+				testMapLoadedElements(t, m, loadedExpectedValues)
 			}
 		}
 	})
@@ -15973,7 +15977,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 			const mapCount = 200
 
-			m, values := createMapWithSimpleValues(
+			m, expectedValues := createMapWithSimpleValues(
 				t,
 				storage,
 				address,
@@ -16000,9 +16004,9 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				require.NoError(t, err)
 
 				// Use firstKey to deduce number of elements in slabs.
-				values = values[:firstKey]
+				expectedValues = expectedValues[:firstKey]
 
-				testMapLoadedElements(t, m, values)
+				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
 	})
@@ -16013,7 +16017,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 500
-			m, values, childSlabIDs := createMapWithChildArrayValues(
+			m, expectedValues, childSlabIDs := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -16028,25 +16032,25 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.True(t, GetDeltasCount(storage) > 1+mapCount)
 			require.True(t, getMapMetaDataSlabCount(storage) > 1)
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			r := newRand(t)
 
 			// Unload composite element in random position
-			for len(values) > 0 {
+			for len(expectedValues) > 0 {
 
-				i := r.Intn(len(values))
+				i := r.Intn(len(expectedValues))
 
 				err := storage.Remove(childSlabIDs[i])
 				require.NoError(t, err)
 
-				copy(values[i:], values[i+1:])
-				values = values[:len(values)-1]
+				copy(expectedValues[i:], expectedValues[i+1:])
+				expectedValues = expectedValues[:len(expectedValues)-1]
 
 				copy(childSlabIDs[i:], childSlabIDs[i+1:])
 				childSlabIDs = childSlabIDs[:len(childSlabIDs)-1]
 
-				testMapLoadedElements(t, m, values)
+				testMapLoadedElements(t, m, expectedValues)
 			}
 		}
 	})
@@ -16057,7 +16061,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 500
-			m, values, _ := createMapWithChildArrayValues(
+			m, expectedValues, _ := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -16072,7 +16076,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.True(t, GetDeltasCount(storage) > 1+mapCount)
 			require.True(t, getMapMetaDataSlabCount(storage) > 1)
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			rootMetaDataSlab, ok := atree.GetMapRootSlab(m).(*atree.MapMetaDataSlab)
 			require.True(t, ok)
@@ -16123,19 +16127,19 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				require.NoError(t, err)
 
 				if index == len(dataSlabInfos)-1 {
-					values = values[:slabToBeRemoved.startIndex]
+					expectedValues = expectedValues[:slabToBeRemoved.startIndex]
 				} else {
-					copy(values[slabToBeRemoved.startIndex:], values[slabToBeRemoved.startIndex+slabToBeRemoved.count:])
-					values = values[:len(values)-slabToBeRemoved.count]
+					copy(expectedValues[slabToBeRemoved.startIndex:], expectedValues[slabToBeRemoved.startIndex+slabToBeRemoved.count:])
+					expectedValues = expectedValues[:len(expectedValues)-slabToBeRemoved.count]
 				}
 
 				copy(dataSlabInfos[index:], dataSlabInfos[index+1:])
 				dataSlabInfos = dataSlabInfos[:len(dataSlabInfos)-1]
 
-				testMapLoadedElements(t, m, values)
+				testMapLoadedElements(t, m, expectedValues)
 			}
 
-			require.Equal(t, 0, len(values))
+			require.Equal(t, 0, len(expectedValues))
 		}
 	})
 
@@ -16145,7 +16149,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 500
-			m, values, _ := createMapWithChildArrayValues(
+			m, expectedValues, _ := createMapWithChildArrayValues(
 				t,
 				storage,
 				address,
@@ -16160,7 +16164,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			require.True(t, GetDeltasCount(storage) > 1+mapCount)
 			require.True(t, getMapMetaDataSlabCount(storage) > 1)
 
-			testMapLoadedElements(t, m, values)
+			testMapLoadedElements(t, m, expectedValues)
 
 			type slabInfo struct {
 				id         atree.SlabID
@@ -16298,16 +16302,16 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				require.NoError(t, err)
 
 				if isLastSlab {
-					values = values[:slabInfoToBeRemoved.startIndex]
+					expectedValues = expectedValues[:slabInfoToBeRemoved.startIndex]
 				} else {
-					copy(values[slabInfoToBeRemoved.startIndex:], values[slabInfoToBeRemoved.startIndex+slabInfoToBeRemoved.count:])
-					values = values[:len(values)-slabInfoToBeRemoved.count]
+					copy(expectedValues[slabInfoToBeRemoved.startIndex:], expectedValues[slabInfoToBeRemoved.startIndex+slabInfoToBeRemoved.count:])
+					expectedValues = expectedValues[:len(expectedValues)-slabInfoToBeRemoved.count]
 				}
 
-				testMapLoadedElements(t, m, values)
+				testMapLoadedElements(t, m, expectedValues)
 			}
 
-			require.Equal(t, 0, len(values))
+			require.Equal(t, 0, len(expectedValues))
 		}
 	})
 }
@@ -16481,9 +16485,9 @@ func createMapWithSimpleAndChildArrayValues(
 	require.NoError(t, err)
 
 	var slabID atree.SlabID
-	values := make([][2]atree.Value, count)
+	expectedValues := make([][2]atree.Value, count)
 	r := 'a'
-	for i := range values {
+	for i := range expectedValues {
 
 		k := test_utils.Uint64Value(i)
 
@@ -16509,20 +16513,20 @@ func createMapWithSimpleAndChildArrayValues(
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
-				values[i] = [2]atree.Value{k, test_utils.NewExpectedWrapperValue(test_utils.ExpectedArrayValue(expectedChildValues))}
+				expectedValues[i] = [2]atree.Value{k, test_utils.NewExpectedWrapperValue(test_utils.ExpectedArrayValue(expectedChildValues))}
 			} else {
 				existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, childArray)
 				require.NoError(t, err)
 				require.Nil(t, existingStorable)
 
-				values[i] = [2]atree.Value{k, test_utils.ExpectedArrayValue(expectedChildValues)}
+				expectedValues[i] = [2]atree.Value{k, test_utils.ExpectedArrayValue(expectedChildValues)}
 			}
 
 			slabID = childArray.SlabID()
 
 		} else {
 			v := test_utils.NewStringValue(strings.Repeat(string(r), 18))
-			values[i] = [2]atree.Value{k, v}
+			expectedValues[i] = [2]atree.Value{k, v}
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
@@ -16530,7 +16534,7 @@ func createMapWithSimpleAndChildArrayValues(
 		}
 	}
 
-	return m, values, slabID
+	return m, expectedValues, slabID
 }
 
 func testMapLoadedElements(t *testing.T, m *atree.OrderedMap, expectedValues [][2]atree.Value) {
@@ -18898,7 +18902,7 @@ func createMapWithEmptyChildMap(
 	parentMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	expectedKeyValues := make(map[atree.Value]atree.Value)
+	expectedValues := make(map[atree.Value]atree.Value)
 
 	elementByteSizesByKey := make(map[atree.Value][2]uint32)
 
@@ -18917,7 +18921,7 @@ func createMapWithEmptyChildMap(
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedKeyValues[k] = test_utils.ExpectedMapValue{}
+		expectedValues[k] = test_utils.ExpectedMapValue{}
 
 		require.True(t, childMap.Inlined())
 		testInlinedMapIDs(t, address, childMap)
@@ -18936,7 +18940,7 @@ func createMapWithEmptyChildMap(
 		elementByteSizesByKey[k] = [2]uint32{ks.ByteSize(), emptyInlinedMapByteSize}
 	}
 
-	return parentMap, expectedKeyValues, elementByteSizesByKey
+	return parentMap, expectedValues, elementByteSizesByKey
 }
 
 func createMapWithEmpty2LevelChildMap(
@@ -18952,7 +18956,7 @@ func createMapWithEmpty2LevelChildMap(
 	parentMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	expectedKeyValues := make(map[atree.Value]atree.Value)
+	expectedValues := make(map[atree.Value]atree.Value)
 
 	elementByteSizesByKey := make(map[atree.Value][2]uint32)
 
@@ -18983,7 +18987,7 @@ func createMapWithEmpty2LevelChildMap(
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedKeyValues[k] = test_utils.ExpectedMapValue{k: test_utils.ExpectedMapValue{}}
+		expectedValues[k] = test_utils.ExpectedMapValue{k: test_utils.ExpectedMapValue{}}
 
 		require.True(t, childMap.Inlined())
 		testInlinedMapIDs(t, address, childMap)
@@ -19012,7 +19016,7 @@ func createMapWithEmpty2LevelChildMap(
 
 	testNotInlinedMapIDs(t, address, parentMap)
 
-	return parentMap, expectedKeyValues, elementByteSizesByKey
+	return parentMap, expectedValues, elementByteSizesByKey
 }
 
 type mapInfo struct {

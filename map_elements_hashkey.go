@@ -444,7 +444,7 @@ func (e *hkeyElements) Merge(elems elements) error {
 	e.size += rElems.Size() - hkeyElementsPrefixSize
 
 	// Set merged elements to nil to prevent memory leak
-	for i := 0; i < len(rElems.elems); i++ {
+	for i := range rElems.elems {
 		rElems.elems[i] = nil
 	}
 
@@ -603,7 +603,7 @@ func (e *hkeyElements) BorrowFromRight(re elements) error {
 	// Update right slab
 	// TODO: copy elements to front instead?
 	// NOTE: prevent memory leak
-	for i := 0; i < rightStartIndex; i++ {
+	for i := range rightStartIndex {
 		rightElements.elems[i] = nil
 	}
 	rightElements.hkeys = rightElements.hkeys[rightStartIndex:]
@@ -628,7 +628,7 @@ func (e *hkeyElements) CanLendToLeft(size uint32) bool {
 	}
 
 	lendSize := uint32(0)
-	for i := 0; i < len(e.elems); i++ {
+	for i := range e.elems {
 		lendSize += e.elems[i].Size() + digestSize
 		if e.Size()-lendSize < uint32(minSize) {
 			return false
@@ -696,7 +696,7 @@ func (e *hkeyElements) hasPointer() bool {
 func (e *hkeyElements) String() string {
 	var s []string
 
-	for i := 0; i < len(e.elems); i++ {
+	for i := range e.elems {
 		s = append(s, fmt.Sprintf("%d:%s", e.hkeys[i], e.elems[i].String()))
 	}
 

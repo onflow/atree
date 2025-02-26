@@ -359,7 +359,7 @@ func DecodeInlinedCompactMapStorable(
 	// Decode values
 	elementsSize := uint32(hkeyElementsPrefixSize)
 	elems := make([]element, elemCount)
-	for i := 0; i < int(elemCount); i++ {
+	for i := range elems {
 		value, err := decodeStorable(dec, slabID, inlinedExtraData)
 		if err != nil {
 			return nil, err

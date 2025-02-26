@@ -725,11 +725,14 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		return nil, nil, NewSlabSplitErrorf("ArrayMetaDataSlab (%s) has less than 2 child headers", a.header.slabID)
 	}
 
-	leftChildrenCount := int(math.Ceil(float64(len(a.childrenHeaders)) / 2))
+	childrenCount := len(a.childrenHeaders)
+	leftChildrenCount := int(math.Ceil(float64(childrenCount) / 2))
+	rightChildrenCount := childrenCount - leftChildrenCount
+
 	leftSize := leftChildrenCount * arraySlabHeaderSize
 
 	leftCount := uint32(0)
-	for i := 0; i < leftChildrenCount; i++ {
+	for i := range leftChildrenCount {
 		leftCount += a.childrenHeaders[i].count
 	}
 
@@ -750,12 +753,12 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		},
 	}
 
-	rightSlab.childrenHeaders = make([]ArraySlabHeader, len(a.childrenHeaders)-leftChildrenCount)
+	rightSlab.childrenHeaders = make([]ArraySlabHeader, rightChildrenCount)
 	copy(rightSlab.childrenHeaders, a.childrenHeaders[leftChildrenCount:])
 
 	rightSlab.childrenCountSum = make([]uint32, len(rightSlab.childrenHeaders))
 	countSum := uint32(0)
-	for i := 0; i < len(rightSlab.childrenCountSum); i++ {
+	for i := range rightSlab.childrenCountSum {
 		countSum += rightSlab.childrenHeaders[i].count
 		rightSlab.childrenCountSum[i] = countSum
 	}
@@ -785,14 +788,14 @@ func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 	// Rebuild right slab childrenCountSum
 	rightSlab.childrenCountSum = make([]uint32, len(rightSlab.childrenHeaders))
 	countSum := uint32(0)
-	for i := 0; i < len(rightSlab.childrenCountSum); i++ {
+	for i := range rightSlab.childrenCountSum {
 		countSum += rightSlab.childrenHeaders[i].count
 		rightSlab.childrenCountSum[i] = countSum
 	}
 
 	// Update right slab header
 	rightSlab.header.count = 0
-	for i := 0; i < len(rightSlab.childrenHeaders); i++ {
+	for i := range rightSlab.childrenHeaders {
 		rightSlab.header.count += rightSlab.childrenHeaders[i].count
 	}
 	rightSlab.header.size = arrayMetaDataSlabPrefixSize + uint32(len(rightSlab.childrenHeaders))*arraySlabHeaderSize
@@ -802,7 +805,7 @@ func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 	a.childrenCountSum = a.childrenCountSum[:leftChildrenHeadersLen]
 
 	a.header.count = 0
-	for i := 0; i < len(a.childrenHeaders); i++ {
+	for i := range a.childrenHeaders {
 		a.header.count += a.childrenHeaders[i].count
 	}
 	a.header.size = arrayMetaDataSlabPrefixSize + uint32(leftChildrenHeadersLen)*arraySlabHeaderSize
@@ -836,7 +839,7 @@ func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab) error {
 	rightSlab.childrenCountSum = rightSlab.childrenCountSum[:len(rightSlab.childrenHeaders)]
 
 	countSum = uint32(0)
-	for i := 0; i < len(rightSlab.childrenHeaders); i++ {
+	for i := range rightSlab.childrenCountSum {
 		countSum += rightSlab.childrenHeaders[i].count
 		rightSlab.childrenCountSum[i] = countSum
 	}

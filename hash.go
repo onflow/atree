@@ -129,7 +129,7 @@ func (bd *basicDigester) DigestPrefix(level uint) ([]Digest, error) {
 		return nil, NewHashLevelErrorf("cannot get digest < level %d: level must be [0, %d]", level, bd.Levels())
 	}
 	var prefix []Digest
-	for i := uint(0); i < level; i++ {
+	for i := range level {
 		d, err := bd.Digest(i)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by basicDigester.Digest().

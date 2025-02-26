@@ -145,7 +145,7 @@ func newArrayMetaDataSlabFromDataV0(
 	totalCount := uint32(0)
 	offset := 0
 
-	for i := 0; i < int(childHeaderCount); i++ {
+	for i := range childrenHeaders {
 		slabID, err := NewSlabIDFromRawBytes(data[offset:])
 		if err != nil {
 			// Don't need to wrap because err is already categorized by NewSlabIDFromRawBytes().
@@ -259,7 +259,7 @@ func newArrayMetaDataSlabFromDataV1(
 	childrenCountSum := make([]uint32, childHeaderCount)
 	totalCount := uint32(0)
 
-	for i := 0; i < int(childHeaderCount); i++ {
+	for i := range childrenHeaders {
 		// Decode slab index
 		var index SlabIndex
 		copy(index[:], data[offset:])

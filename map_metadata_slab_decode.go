@@ -137,7 +137,7 @@ func newMapMetaDataSlabFromDataV0(
 	childrenHeaders := make([]MapSlabHeader, childHeaderCount)
 	offset := 0
 
-	for i := 0; i < int(childHeaderCount); i++ {
+	for i := range childrenHeaders {
 		slabID, err := NewSlabIDFromRawBytes(data[offset:])
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by NewSlabIDFromRawBytes().
@@ -249,7 +249,7 @@ func newMapMetaDataSlabFromDataV1(
 	// Decode child headers
 	childrenHeaders := make([]MapSlabHeader, childHeaderCount)
 
-	for i := 0; i < int(childHeaderCount); i++ {
+	for i := range childrenHeaders {
 		// Decode slab index
 		var index SlabIndex
 		copy(index[:], data[offset:])

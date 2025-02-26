@@ -61,7 +61,7 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 	}
 
 	// Encode hkeys
-	for i := 0; i < len(e.hkeys); i++ {
+	for i := range e.hkeys {
 		binary.BigEndian.PutUint64(enc.Scratch[:], uint64(e.hkeys[i]))
 		err = enc.CBOR.EncodeRawBytes(enc.Scratch[:digestSize])
 		if err != nil {

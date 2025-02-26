@@ -118,7 +118,7 @@ func (e *singleElements) Set(
 	}
 
 	// linear search key and update value
-	for i := 0; i < len(e.elems); i++ {
+	for i := range e.elems {
 		elem := e.elems[i]
 
 		equal, err := comparator(storage, key, elem.key)
@@ -277,7 +277,7 @@ func (e *singleElements) Size() uint32 {
 func (e *singleElements) String() string {
 	var s []string
 
-	for i := 0; i < len(e.elems); i++ {
+	for i := range e.elems {
 		s = append(s, fmt.Sprintf(":%s", e.elems[i].String()))
 	}
 

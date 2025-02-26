@@ -99,12 +99,12 @@ func newCompactMapExtraData(
 	}
 
 	hkeys := make([]Digest, digestCount)
-	for i := 0; i < digestCount; i++ {
+	for i := range hkeys {
 		hkeys[i] = Digest(binary.BigEndian.Uint64(digestBytes[i*digestSize:]))
 	}
 
 	keys := make([]ComparableStorable, keyCount)
-	for i := uint64(0); i < keyCount; i++ {
+	for i := range keys {
 		// Decode compact map key
 		key, err := decodeStorable(dec, SlabIDUndefined, nil)
 		if err != nil {
@@ -144,7 +144,7 @@ func (c *compactMapExtraData) Encode(enc *Encoder, encodeTypeInfo encodeTypeInfo
 		digests = make([]byte, totalDigestSize)
 	}
 
-	for i := 0; i < len(c.hkeys); i++ {
+	for i := range c.hkeys {
 		binary.BigEndian.PutUint64(digests[i*digestSize:], uint64(c.hkeys[i]))
 	}
 
@@ -210,7 +210,7 @@ type fieldNameSorter struct {
 
 func newFieldNameSorter(names []ComparableStorable) *fieldNameSorter {
 	index := make([]int, len(names))
-	for i := 0; i < len(names); i++ {
+	for i := range index {
 		index[i] = i
 	}
 	return &fieldNameSorter{

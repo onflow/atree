@@ -52,7 +52,7 @@ func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDec
 
 	digestCount := len(digestBytes) / digestSize
 	hkeys := make([]Digest, digestCount)
-	for i := 0; i < digestCount; i++ {
+	for i := range hkeys {
 		hkeys[i] = Digest(binary.BigEndian.Uint64(digestBytes[i*digestSize:]))
 	}
 
@@ -71,7 +71,7 @@ func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDec
 		// Decode elements
 		size := uint32(singleElementsPrefixSize)
 		elems := make([]*singleElement, elemCount)
-		for i := 0; i < int(elemCount); i++ {
+		for i := range elems {
 			elem, err := newSingleElementFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by newSingleElementFromData().
@@ -97,7 +97,7 @@ func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDec
 	// Decode elements
 	size := uint32(hkeyElementsPrefixSize)
 	elems := make([]element, elemCount)
-	for i := 0; i < int(elemCount); i++ {
+	for i := range elems {
 		elem, err := newElementFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by newElementFromData().

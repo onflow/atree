@@ -319,7 +319,7 @@ func encodeCompactMapValues(
 	}
 
 	keyIndexes := make([]int, len(keys))
-	for i := 0; i < len(keys); i++ {
+	for i := range keyIndexes {
 		keyIndexes[i] = i
 	}
 

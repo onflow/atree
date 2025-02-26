@@ -2463,7 +2463,7 @@ func TestArraySetRandomValues(t *testing.T) {
 
 	for i := range expectedValues {
 		oldValue := expectedValues[i]
-		newValue := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+		newValue := randomValue(r, atree.MaxInlineArrayElementSize())
 		expectedValues[i] = newValue
 
 		existingStorable, err := array.Set(uint64(i), newValue)
@@ -2497,7 +2497,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := len(expectedValues) - 1; i >= 0; i-- {
-			v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+			v := randomValue(r, atree.MaxInlineArrayElementSize())
 			expectedValues[i] = v
 
 			err := array.Insert(0, v)
@@ -2522,7 +2522,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := range expectedValues {
-			v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+			v := randomValue(r, atree.MaxInlineArrayElementSize())
 			expectedValues[i] = v
 
 			err := array.Insert(uint64(i), v)
@@ -2548,7 +2548,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := range arrayCount {
 			k := r.Intn(i + 1)
-			v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+			v := randomValue(r, atree.MaxInlineArrayElementSize())
 
 			copy(expectedValues[k+1:], expectedValues[k:])
 			expectedValues[k] = v
@@ -2580,7 +2580,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 	expectedValues := make([]atree.Value, arrayCount)
 	// Insert n random values into array
 	for i := range expectedValues {
-		v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+		v := randomValue(r, atree.MaxInlineArrayElementSize())
 		expectedValues[i] = v
 
 		err := array.Insert(uint64(i), v)
@@ -2647,7 +2647,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 		switch nextOp {
 
 		case ArrayAppendOp:
-			v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+			v := randomValue(r, atree.MaxInlineArrayElementSize())
 			expectedValues = append(expectedValues, v)
 
 			err := array.Append(v)
@@ -2655,7 +2655,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 
 		case ArraySetOp:
 			k := r.Intn(int(array.Count()))
-			v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+			v := randomValue(r, atree.MaxInlineArrayElementSize())
 
 			oldV := expectedValues[k]
 
@@ -2675,7 +2675,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 
 		case ArrayInsertOp:
 			k := r.Intn(int(array.Count() + 1))
-			v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+			v := randomValue(r, atree.MaxInlineArrayElementSize())
 
 			if k == int(array.Count()) {
 				expectedValues = append(expectedValues, v)
@@ -4896,7 +4896,7 @@ func TestArrayFromBatchData(t *testing.T) {
 
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := range expectedValues {
-			v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+			v := randomValue(r, atree.MaxInlineArrayElementSize())
 			expectedValues[i] = v
 
 			err := array.Append(v)

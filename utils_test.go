@@ -20,6 +20,7 @@ package atree_test
 
 import (
 	"flag"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -248,3 +249,37 @@ func testEqualValueIDAndSlabID(t *testing.T, slabID atree.SlabID, valueID atree.
 	require.Equal(t, sidAddress[:], valueID[:atree.SlabAddressLength])
 	require.Equal(t, sidIndex[:], valueID[atree.SlabAddressLength:])
 }
+
+func getRandomArrayIndex(r *rand.Rand, array *atree.Array) uint64 {
+	return uint64(r.Intn(int(array.Count()))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+}
+
+func getRandomArrayIndexes(r *rand.Rand, array *atree.Array, count int) []uint64 {
+	set := make(map[uint64]struct{})
+	for len(set) < count {
+		n := getRandomArrayIndex(r, array)
+		set[n] = struct{}{}
+	}
+
+	slice := make([]uint64, 0, count)
+	for n := range set {
+		slice = append(slice, n)
+	}
+
+	return slice
+}
+
+// getRandomUint64InRange returns a number in the range of [min, max)
+func getRandomUint64InRange(r *rand.Rand, minNum uint64, maxNum uint64) uint64 {
+	if minNum >= maxNum {
+		panic(fmt.Sprintf("min %d >= max %d", minNum, maxNum))
+	}
+	// since minNum < maxNum, maxNum - minNum >= 1
+	return minNum + uint64(r.Intn(int(maxNum-minNum))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+}
+
+type uint64Slice []uint64
+
+func (x uint64Slice) Len() int           { return len(x) }
+func (x uint64Slice) Less(i, j int) bool { return x[i] < x[j] }
+func (x uint64Slice) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }

@@ -233,8 +233,8 @@ func benchmarkArrayGet(b *testing.B, initialArrayCount, numberOfOps int) {
 
 	for range b.N {
 		for range numberOfOps {
-			index := r.Intn(int(array.Count()))
-			value, _ = array.Get(uint64(index))
+			index := getRandomArrayIndex(r, array)
+			value, _ = array.Get(index)
 		}
 	}
 
@@ -258,9 +258,9 @@ func benchmarkArrayInsert(b *testing.B, initialArrayCount, numberOfOps int) {
 		b.StartTimer()
 
 		for range numberOfOps {
-			index := r.Intn(int(array.Count()))
+			index := getRandomArrayIndex(r, array)
 			v := randomValue(r, atree.MaxInlineArrayElementSize())
-			_ = array.Insert(uint64(index), v)
+			_ = array.Insert(index, v)
 		}
 	}
 }
@@ -282,8 +282,8 @@ func benchmarkArrayRemove(b *testing.B, initialArrayCount, numberOfOps int) {
 		b.StartTimer()
 
 		for range numberOfOps {
-			index := r.Intn(int(array.Count()))
-			_, _ = array.Remove(uint64(index))
+			index := getRandomArrayIndex(r, array)
+			_, _ = array.Remove(index)
 		}
 	}
 }

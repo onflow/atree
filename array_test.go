@@ -2591,9 +2591,9 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 
 	// Remove n elements at random index
 	for range arrayCount {
-		k := r.Intn(int(array.Count()))
+		k := getRandomArrayIndex(r, array)
 
-		existingStorable, err := array.Remove(uint64(k))
+		existingStorable, err := array.Remove(k)
 		require.NoError(t, err)
 
 		existingValue, err := existingStorable.StoredValue(storage)
@@ -2654,14 +2654,14 @@ func testArrayAppendSetInsertRemoveRandomValues(
 			require.NoError(t, err)
 
 		case ArraySetOp:
-			k := r.Intn(int(array.Count()))
+			k := getRandomArrayIndex(r, array)
 			v := randomValue(r, atree.MaxInlineArrayElementSize())
 
 			oldV := expectedValues[k]
 
 			expectedValues[k] = v
 
-			existingStorable, err := array.Set(uint64(k), v)
+			existingStorable, err := array.Set(k, v)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -2689,9 +2689,9 @@ func testArrayAppendSetInsertRemoveRandomValues(
 			require.NoError(t, err)
 
 		case ArrayRemoveOp:
-			k := r.Intn(int(array.Count()))
+			k := getRandomArrayIndex(r, array)
 
-			existingStorable, err := array.Remove(uint64(k))
+			existingStorable, err := array.Remove(k)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)

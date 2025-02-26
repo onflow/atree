@@ -1475,10 +1475,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 	t.Run("set and remove", func(t *testing.T) {
 		// Insert elements
 
-		var setCount uint64
-		for setCount < minWriteOperationCount {
-			setCount = uint64(r.Intn(maxWriteOperationCount + 1)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		}
+		setCount := getRandomUint64InRange(r, minWriteOperationCount, maxWriteOperationCount+1)
 
 		actualMapCount += setCount
 
@@ -1502,12 +1499,9 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 		// Remove some elements
 		mapCount := m.Count()
 
-		var removeCount uint64
 		minRemoveCount := mapCount / 2
 		maxRemoveCount := mapCount / 4 * 3
-		for removeCount < minRemoveCount || removeCount > maxRemoveCount {
-			removeCount = uint64(r.Intn(int(mapCount))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		}
+		removeCount := getRandomUint64InRange(r, minRemoveCount, maxRemoveCount)
 
 		actualMapCount -= removeCount
 
@@ -1611,10 +1605,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 	t.Run("set and remove", func(t *testing.T) {
 		// Set elements
 
-		var setCount uint64
-		for setCount < minWriteOperationCount {
-			setCount = uint64(r.Intn(maxWriteOperationCount + 1)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		}
+		setCount := getRandomUint64InRange(r, minWriteOperationCount, maxWriteOperationCount+1)
 
 		actualMapCount += setCount
 
@@ -1637,12 +1628,9 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 
 		mapCount := m.Count()
 
-		var removeCount uint64
 		minRemoveCount := mapCount / 2
 		maxRemoveCount := mapCount / 4 * 3
-		for removeCount < minRemoveCount || removeCount > maxRemoveCount {
-			removeCount = uint64(r.Intn(int(mapCount))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		}
+		removeCount := getRandomUint64InRange(r, minRemoveCount, maxRemoveCount)
 
 		actualMapCount -= removeCount
 
@@ -1673,13 +1661,9 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 
 		mapCount := m.Count()
 
-		var setCount uint64
-		if m.Count() <= 10 {
-			setCount = mapCount
-		} else {
-			for setCount < mapCount/2 {
-				setCount = uint64(r.Intn(int(mapCount + 1))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+		setCount := mapCount
+		if m.Count() > 10 {
+			setCount = getRandomUint64InRange(r, mapCount/2, mapCount)
 		}
 
 		keys := make([]atree.Value, 0, len(expectedValues))
@@ -1714,12 +1698,9 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 
 		mapCount = m.Count()
 
-		var removeCount uint64
 		minRemoveCount := mapCount / 2
 		maxRemoveCount := mapCount / 4 * 3
-		for removeCount < minRemoveCount || removeCount > maxRemoveCount {
-			removeCount = uint64(r.Intn(int(mapCount))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		}
+		removeCount := getRandomUint64InRange(r, minRemoveCount, maxRemoveCount)
 
 		actualMapCount -= removeCount
 
@@ -1832,10 +1813,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 	t.Run("set and remove", func(t *testing.T) {
 		// Insert elements
 
-		var setCount uint64
-		for setCount < minWriteOperationCount {
-			setCount = uint64(r.Intn(maxWriteOperationCount + 1)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		}
+		setCount := getRandomUint64InRange(r, minWriteOperationCount, maxWriteOperationCount+1)
 
 		actualMapCount += setCount
 
@@ -1858,10 +1836,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 
 		mapCount := m.Count()
 
-		var removeCount uint64
-		for removeCount < mapCount/2 {
-			removeCount = uint64(r.Intn(int(mapCount))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		}
+		removeCount := getRandomUint64InRange(r, mapCount/2, mapCount)
 
 		actualMapCount -= removeCount
 
@@ -1892,13 +1867,9 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 
 		mapCount := m.Count()
 
-		var setCount uint64
-		if m.Count() <= 10 {
-			setCount = mapCount
-		} else {
-			for setCount < mapCount/2 {
-				setCount = uint64(r.Intn(int(mapCount + 1))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			}
+		setCount := mapCount
+		if m.Count() > 10 {
+			setCount = getRandomUint64InRange(r, mapCount/2, mapCount)
 		}
 
 		keys := make([]atree.Value, 0, m.Count())
@@ -1935,10 +1906,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 
 		mapCount = m.Count()
 
-		var removeCount uint64
-		for removeCount < mapCount/2 {
-			removeCount = uint64(r.Intn(int(mapCount))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		}
+		removeCount := getRandomUint64InRange(r, mapCount/2, mapCount)
 
 		actualMapCount -= removeCount
 

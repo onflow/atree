@@ -1886,7 +1886,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 		minRemoveCount := int(array.Count()) / 2
 		maxRemoveCount := int(array.Count()) / 4 * 3
 		for removeCount < minRemoveCount || removeCount > maxRemoveCount {
-			removeCount = r.Intn(int(array.Count()) + 1)
+			removeCount = r.Intn(int(array.Count()))
 		}
 
 		actualArrayCount -= removeCount
@@ -1954,7 +1954,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 		minRemoveCount := int(array.Count()) / 2
 		maxRemoveCount := int(array.Count()) / 4 * 3
 		for removeCount < minRemoveCount || removeCount > maxRemoveCount {
-			removeCount = r.Intn(int(array.Count()) + 1)
+			removeCount = r.Intn(int(array.Count()))
 		}
 
 		actualArrayCount -= removeCount
@@ -2175,7 +2175,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 		minRemoveCount := int(array.Count()) / 2
 		maxRemoveCount := int(array.Count()) / 4 * 3
 		for removeCount < minRemoveCount || removeCount > maxRemoveCount {
-			removeCount = r.Intn(int(array.Count()) + 1)
+			removeCount = r.Intn(int(array.Count()))
 		}
 
 		actualArrayCount -= removeCount
@@ -2242,7 +2242,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 		minRemoveCount := int(array.Count()) / 2
 		maxRemoveCount := int(array.Count()) / 4 * 3
 		for removeCount < minRemoveCount || removeCount > maxRemoveCount {
-			removeCount = r.Intn(int(array.Count()) + 1)
+			removeCount = r.Intn(int(array.Count()))
 		}
 
 		actualArrayCount -= removeCount
@@ -2482,7 +2482,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 		var removeCount int
 		for removeCount < int(array.Count())/2 {
-			removeCount = r.Intn(int(array.Count()) + 1)
+			removeCount = r.Intn(int(array.Count()))
 		}
 
 		actualArrayCount -= removeCount
@@ -2547,7 +2547,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 		var removeCount int
 		for removeCount < int(array.Count())/2 {
-			removeCount = r.Intn(int(array.Count()) + 1)
+			removeCount = r.Intn(int(array.Count()))
 		}
 
 		actualArrayCount -= removeCount

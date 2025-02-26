@@ -73,7 +73,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 
 	// setup
 	for range initialArrayCount {
-		v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+		v := randomValue(r, atree.MaxInlineArrayElementSize())
 		storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
 		require.NoError(b, err)
 		totalRawDataSize += storable.ByteSize()
@@ -91,7 +91,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 	array, err = atree.NewArrayWithRootID(storage, arrayID)
 	require.NoError(b, err)
 	for range numberOfElements {
-		v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+		v := randomValue(r, atree.MaxInlineArrayElementSize())
 
 		storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
 		require.NoError(b, err)
@@ -127,7 +127,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 
 	for range numberOfElements {
 		ind := r.Intn(int(array.Count()))
-		v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+		v := randomValue(r, atree.MaxInlineArrayElementSize())
 
 		storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
 		require.NoError(b, err)
@@ -201,7 +201,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 
 	// setup
 	for range initialArrayCount {
-		v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+		v := randomValue(r, atree.MaxInlineArrayElementSize())
 
 		storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
 		require.NoError(b, err)
@@ -223,7 +223,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 			require.NoError(b, err)
 			totalRawDataSize -= storable.ByteSize()
 		case 1: // insert
-			v := randomValue(r, int(atree.MaxInlineArrayElementSize()))
+			v := randomValue(r, atree.MaxInlineArrayElementSize())
 
 			storable, err := v.Storable(storage, array.Address(), atree.MaxInlineArrayElementSize())
 			require.NoError(b, err)

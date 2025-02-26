@@ -71,27 +71,27 @@ func randStr(r *rand.Rand, length int) string {
 	return string(b)
 }
 
-func randomValue(r *rand.Rand, maxInlineSize int) atree.Value {
+func randomValue(r *rand.Rand, maxInlineSize uint64) atree.Value {
 	switch r.Intn(maxSimpleValueType) {
 
 	case uint8Type:
-		return test_utils.Uint8Value(r.Intn(255)) //nolint:gosec
+		return test_utils.Uint8Value(r.Intn(255)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 	case uint16Type:
-		return test_utils.Uint16Value(r.Intn(6535)) //nolint:gosec
+		return test_utils.Uint16Value(r.Intn(6535)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 	case uint32Type:
-		return test_utils.Uint32Value(r.Intn(4294967295)) //nolint:gosec
+		return test_utils.Uint32Value(r.Intn(4294967295)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 	case uint64Type:
-		return test_utils.Uint64Value(r.Intn(1844674407370955161)) //nolint:gosec
+		return test_utils.Uint64Value(r.Intn(1844674407370955161)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 	case smallStringType: // small string (inlinable)
-		slen := r.Intn(maxInlineSize)
+		slen := r.Intn(int(maxInlineSize)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		return test_utils.NewStringValue(randStr(r, slen))
 
 	case largeStringType: // large string (external)
-		slen := r.Intn(1024) + maxInlineSize
+		slen := r.Intn(1024) + int(maxInlineSize) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		return test_utils.NewStringValue(randStr(r, slen))
 
 	default:

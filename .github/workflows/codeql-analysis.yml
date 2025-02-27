@@ -5,9 +5,15 @@ permissions: {}
 
 on:
   push:
-    # Run CodeQL on push in all branches.  
+    branches:
+      - main
+      - 'feature/**'
+      - 'release-**'
   pull_request:
-    # Run CodeQL on PR in all branches.
+    branches:
+      - main
+      - 'feature/**'
+      - 'release-**'
   schedule:
     - cron: '45 12 * * *' # Daily at 12:45 UTC / 7:45 AM Central
 

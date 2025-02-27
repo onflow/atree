@@ -21,6 +21,7 @@ package atree
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 )
 
@@ -533,168 +534,134 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 	// Child can't rebalance with any sibling.  It must merge with one sibling.
 
 	if leftSib == nil {
+		// Merge (left) child slab with rightSib
 
-		// Merge with right
-		err := child.Merge(rightSib)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ArraySlab.Merge().
-			return err
-		}
+		leftSlabIndex := childHeaderIndex
+		rightSlabIndex := childHeaderIndex + 1
 
-		a.childrenHeaders[childHeaderIndex] = child.Header()
-
-		// Update MetaDataSlab's childrenHeaders
-		copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
-		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
-
-		// Adjust childrenCountSum
-		copy(a.childrenCountSum[childHeaderIndex:], a.childrenCountSum[childHeaderIndex+1:])
-		a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
-
-		a.header.size -= arraySlabHeaderSize
-
-		// Store modified slabs in storage
-		err = storeSlab(storage, child)
-		if err != nil {
-			return err
-		}
-
-		err = storeSlab(storage, a)
-		if err != nil {
-			return err
-		}
-
-		// Remove right sib from storage
-		err = storage.Remove(rightSib.SlabID())
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", rightSib.SlabID()))
-		}
-
-		return nil
+		return a.mergeChildren(
+			storage,
+			child,
+			rightSib,
+			leftSlabIndex,
+			rightSlabIndex,
+		)
 	}
 
 	if rightSib == nil {
+		// Merge leftSib with (right) child slab
 
-		// Merge with left
-		err := leftSib.Merge(child)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ArraySlab.Merge().
-			return err
-		}
+		leftSlabIndex := childHeaderIndex - 1
+		rightSlabIndex := childHeaderIndex
 
-		a.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
-
-		// Update MetaDataSlab's childrenHeaders
-		copy(a.childrenHeaders[childHeaderIndex:], a.childrenHeaders[childHeaderIndex+1:])
-		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
-
-		// Adjust childrenCountSum
-		copy(a.childrenCountSum[childHeaderIndex-1:], a.childrenCountSum[childHeaderIndex:])
-		a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
-
-		a.header.size -= arraySlabHeaderSize
-
-		// Store modified slabs in storage
-		err = storeSlab(storage, leftSib)
-		if err != nil {
-			return err
-		}
-
-		err = storeSlab(storage, a)
-		if err != nil {
-			return err
-		}
-
-		// Remove child from storage
-		err = storage.Remove(child.SlabID())
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", child.SlabID()))
-		}
-
-		return nil
+		return a.mergeChildren(
+			storage,
+			leftSib,
+			child,
+			leftSlabIndex,
+			rightSlabIndex,
+		)
 	}
 
 	// Merge with smaller sib
+
 	if leftSib.ByteSize() < rightSib.ByteSize() {
-		err := leftSib.Merge(child)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ArraySlab.Merge().
-			return err
-		}
+		// Merge leftSib with (right) child slab
 
-		a.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
+		leftSlabIndex := childHeaderIndex - 1
+		rightSlabIndex := childHeaderIndex
 
-		// Update MetaDataSlab's childrenHeaders
-		copy(a.childrenHeaders[childHeaderIndex:], a.childrenHeaders[childHeaderIndex+1:])
-		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
-
-		// Adjust childrenCountSum
-		copy(a.childrenCountSum[childHeaderIndex-1:], a.childrenCountSum[childHeaderIndex:])
-		a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
-
-		a.header.size -= arraySlabHeaderSize
-
-		// Store modified slabs in storage
-		err = storeSlab(storage, leftSib)
-		if err != nil {
-			return err
-		}
-
-		err = storeSlab(storage, a)
-		if err != nil {
-			return err
-		}
-
-		// Remove child from storage
-		err = storage.Remove(child.SlabID())
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", child.SlabID()))
-		}
-		return nil
-
-	} else {
-		// leftSib.ByteSize > rightSib.ByteSize
-
-		err := child.Merge(rightSib)
-		if err != nil {
-			// Don't need to wrap error as external error because err is already categorized by ArraySlab.Merge().
-			return err
-		}
-
-		a.childrenHeaders[childHeaderIndex] = child.Header()
-
-		// Update MetaDataSlab's childrenHeaders
-		copy(a.childrenHeaders[childHeaderIndex+1:], a.childrenHeaders[childHeaderIndex+2:])
-		a.childrenHeaders = a.childrenHeaders[:len(a.childrenHeaders)-1]
-
-		// Adjust childrenCountSum
-		copy(a.childrenCountSum[childHeaderIndex:], a.childrenCountSum[childHeaderIndex+1:])
-		a.childrenCountSum = a.childrenCountSum[:len(a.childrenCountSum)-1]
-
-		a.header.size -= arraySlabHeaderSize
-
-		// Store modified slabs in storage
-		err = storeSlab(storage, child)
-		if err != nil {
-			return err
-		}
-		err = storeSlab(storage, a)
-		if err != nil {
-			return err
-		}
-
-		// Remove rightSib from storage
-		err = storage.Remove(rightSib.SlabID())
-		if err != nil {
-			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
-			return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", rightSib.SlabID()))
-		}
-
-		return nil
+		return a.mergeChildren(
+			storage,
+			leftSib,
+			child,
+			leftSlabIndex,
+			rightSlabIndex,
+		)
 	}
+
+	// leftSib.ByteSize > rightSib.ByteSize
+
+	// Merge (left) child slab with rightSib
+
+	leftSlabIndex := childHeaderIndex
+	rightSlabIndex := childHeaderIndex + 1
+
+	return a.mergeChildren(
+		storage,
+		child,
+		rightSib,
+		leftSlabIndex,
+		rightSlabIndex,
+	)
+}
+
+func (a *ArrayMetaDataSlab) mergeChildren(
+	storage SlabStorage,
+	leftChildSlab ArraySlab,
+	rightChildSlab ArraySlab,
+	leftChildSlabIndex int,
+	rightChildSlabIndex int,
+) error {
+
+	err := leftChildSlab.Merge(rightChildSlab)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Merge().
+		return err
+	}
+
+	mergedSlab := leftChildSlab
+	obseleteSlab := rightChildSlab
+
+	a.updateChildrenHeadersAfterMerge(mergedSlab.Header(), leftChildSlabIndex, rightChildSlabIndex)
+
+	a.header.size -= arraySlabHeaderSize
+
+	// Store merged child slab in storage
+	err = storeSlab(storage, mergedSlab)
+	if err != nil {
+		return err
+	}
+
+	// Store modified parent slab in storage
+	err = storeSlab(storage, a)
+	if err != nil {
+		return err
+	}
+
+	// Remove obselete slab from storage
+	err = storage.Remove(obseleteSlab.SlabID())
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", obseleteSlab.SlabID()))
+	}
+
+	return nil
+}
+
+func (a *ArrayMetaDataSlab) updateChildrenHeadersAfterMerge(
+	mergedSlabHeader ArraySlabHeader,
+	leftSlabIndex int,
+	rightSlabIndex int,
+) {
+	// Update right slab header
+	a.childrenHeaders[rightSlabIndex] = mergedSlabHeader
+
+	// Remove left slab header
+	a.childrenHeaders = slices.Delete[[]ArraySlabHeader](
+		a.childrenHeaders,
+		leftSlabIndex,
+		rightSlabIndex,
+	)
+
+	// NOTE: right slab count sum is unchanged
+
+	// Remove left slab count sum
+	a.childrenCountSum = slices.Delete[[]uint32](
+		a.childrenCountSum,
+		leftSlabIndex,
+		rightSlabIndex,
+	)
 }
 
 func (a *ArrayMetaDataSlab) Merge(slab Slab) error {

@@ -6,7 +6,17 @@ name: coverage
 # Remove permissions from top level and grant in jobs.
 permissions: {}
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+      - 'release-**'
+  pull_request:
+    branches:
+      - main
+      - 'feature/**'
+      - 'release-**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}

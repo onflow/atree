@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -465,9 +466,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 		for i := uint64(1); i < arrayCount; i += 2 {
 			v := test_utils.Uint64Value(i)
 
-			expectedValues = append(expectedValues, nil)
-			copy(expectedValues[i+1:], expectedValues[i:])
-			expectedValues[i] = v
+			expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, int(i), v)
 
 			err := array.Insert(i, v)
 			require.NoError(t, err)
@@ -653,8 +652,7 @@ func TestArrayRemove(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			copy(expectedValues[i:], expectedValues[i+1:])
-			expectedValues = expectedValues[:len(expectedValues)-1]
+			expectedValues = slices.Delete[[]atree.Value](expectedValues, int(i), int(i+1))
 
 			require.Equal(t, uint64(len(expectedValues)), array.Count())
 
@@ -2545,13 +2543,12 @@ func TestArrayInsertRandomValues(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make([]atree.Value, 0, arrayCount)
 		for i := range arrayCount {
 			k := r.Intn(int(i + 1)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 			v := randomValue(r, atree.MaxInlineArrayElementSize())
 
-			copy(expectedValues[k+1:], expectedValues[k:])
-			expectedValues[k] = v
+			expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, k, v)
 
 			err := array.Insert(uint64(k), v) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 			require.NoError(t, err)
@@ -2600,8 +2597,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 		require.NoError(t, err)
 		testValueEqual(t, expectedValues[k], existingValue)
 
-		copy(expectedValues[k:], expectedValues[k+1:])
-		expectedValues = expectedValues[:len(expectedValues)-1]
+		expectedValues = slices.Delete[[]atree.Value](expectedValues, int(k), int(k+1))
 
 		if id, ok := existingStorable.(atree.SlabIDStorable); ok {
 			err = storage.Remove(atree.SlabID(id))
@@ -2677,13 +2673,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 			k := getRandomUint64InRange(r, 0, array.Count()+1)
 			v := randomValue(r, atree.MaxInlineArrayElementSize())
 
-			if k == array.Count() {
-				expectedValues = append(expectedValues, v)
-			} else {
-				expectedValues = append(expectedValues, nil)
-				copy(expectedValues[k+1:], expectedValues[k:])
-				expectedValues[k] = v
-			}
+			expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, int(k), v)
 
 			err := array.Insert(k, v)
 			require.NoError(t, err)
@@ -2698,8 +2688,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 			require.NoError(t, err)
 			testValueEqual(t, expectedValues[k], existingValue)
 
-			copy(expectedValues[k:], expectedValues[k+1:])
-			expectedValues = expectedValues[:len(expectedValues)-1]
+			expectedValues = slices.Delete[[]atree.Value](expectedValues, int(k), int(k+1))
 
 			if id, ok := existingStorable.(atree.SlabIDStorable); ok {
 				err = storage.Remove(atree.SlabID(id))
@@ -4850,9 +4839,8 @@ func TestArrayFromBatchData(t *testing.T) {
 		}
 
 		v = test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()-2))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		expectedValues = append(expectedValues, nil)
-		copy(expectedValues[25+1:], expectedValues[25:])
-		expectedValues[25] = v
+
+		expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, 25, v)
 
 		err = array.Insert(25, v)
 		require.NoError(t, err)
@@ -5314,8 +5302,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			err := storage.Remove(slabID)
 			require.NoError(t, err)
 
-			copy(expectedValues[unloadValueIndex:], expectedValues[unloadValueIndex+1:])
-			expectedValues = expectedValues[:len(expectedValues)-1]
+			expectedValues = slices.Delete[[]atree.Value](expectedValues, unloadValueIndex, unloadValueIndex+1)
 
 			testArrayLoadedElements(t, array, expectedValues)
 		}
@@ -5377,8 +5364,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				copy(expectedValues[childArrayIndex:], expectedValues[childArrayIndex+1:])
-				expectedValues = expectedValues[:len(expectedValues)-1]
+				expectedValues = slices.Delete[[]atree.Value](expectedValues, int(childArrayIndex), int(childArrayIndex+1))
 
 				testArrayLoadedElements(t, array, expectedValues)
 			}
@@ -5489,8 +5475,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
-				copy(expectedValues[index:], expectedValues[index+1:])
-				expectedValues = expectedValues[:len(expectedValues)-1]
+				expectedValues = slices.Delete[[]atree.Value](expectedValues, index, index+1)
 
 				testArrayLoadedElements(t, array, expectedValues)
 			}
@@ -5518,8 +5503,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				copy(expectedValues[childArrayIndex:], expectedValues[childArrayIndex+1:])
-				expectedValues = expectedValues[:len(expectedValues)-1]
+				expectedValues = slices.Delete[[]atree.Value](expectedValues, int(childArrayIndex), int(childArrayIndex+1))
 
 				testArrayLoadedElements(t, array, expectedValues)
 			}
@@ -5626,8 +5610,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 			for _, childCount := range childCounts[:index] {
 				accumulativeCount += childCount
 			}
-			copy(expectedValues[accumulativeCount:], expectedValues[accumulativeCount+count:])
-			expectedValues = expectedValues[:array.Count()-uint64(count)]
+
+			expectedValues = slices.Delete[[]atree.Value](expectedValues, int(accumulativeCount), int(accumulativeCount+count))
 
 			testArrayLoadedElements(t, array, expectedValues)
 		}
@@ -5722,11 +5706,9 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(slabID)
 				require.NoError(t, err)
 
-				copy(expectedValues[i:], expectedValues[i+1:])
-				expectedValues = expectedValues[:len(expectedValues)-1]
+				expectedValues = slices.Delete[[]atree.Value](expectedValues, i, i+1)
 
-				copy(childSlabIDs[i:], childSlabIDs[i+1:])
-				childSlabIDs = childSlabIDs[:len(childSlabIDs)-1]
+				childSlabIDs = slices.Delete[[]atree.SlabID](childSlabIDs, i, i+1)
 
 				testArrayLoadedElements(t, array, expectedValues)
 			}
@@ -5792,14 +5774,16 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 				}
 
 				// Remove slabInfo to be unloaded from dataSlabInfos.
-				copy(dataSlabInfos[indexToUnload:], dataSlabInfos[indexToUnload+1:])
-				dataSlabInfos = dataSlabInfos[:len(dataSlabInfos)-1]
+
+				dataSlabInfos = slices.Delete[[]*slabInfo](dataSlabInfos, indexToUnload, indexToUnload+1)
 
 				err := storage.Remove(slabInfoToUnload.id)
 				require.NoError(t, err)
 
-				copy(expectedValues[slabInfoToUnload.startIndex:], expectedValues[slabInfoToUnload.startIndex+slabInfoToUnload.count:])
-				expectedValues = expectedValues[:len(expectedValues)-slabInfoToUnload.count]
+				expectedValues = slices.Delete[[]atree.Value](
+					expectedValues,
+					slabInfoToUnload.startIndex,
+					slabInfoToUnload.startIndex+slabInfoToUnload.count)
 
 				testArrayLoadedElements(t, array, expectedValues)
 			}
@@ -5907,8 +5891,10 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 						}
 					}
 
-					copy(nonrootMetadataSlabInfos[metadataSlabIndex:], nonrootMetadataSlabInfos[metadataSlabIndex+1:])
-					nonrootMetadataSlabInfos = nonrootMetadataSlabInfos[:len(nonrootMetadataSlabInfos)-1]
+					nonrootMetadataSlabInfos = slices.Delete[[]*slabInfo](
+						nonrootMetadataSlabInfos,
+						metadataSlabIndex,
+						metadataSlabIndex+1)
 
 				case dataSlabType:
 					// Unload data slab at randome index.
@@ -5930,8 +5916,10 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 						slabInfo.startIndex -= count
 					}
 
-					copy(metaSlabInfo.children[dataSlabIndex:], metaSlabInfo.children[dataSlabIndex+1:])
-					metaSlabInfo.children = metaSlabInfo.children[:len(metaSlabInfo.children)-1]
+					metaSlabInfo.children = slices.Delete[[]*slabInfo](
+						metaSlabInfo.children,
+						dataSlabIndex,
+						dataSlabIndex+1)
 
 					metaSlabInfo.count -= count
 
@@ -5945,8 +5933,10 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 					}
 
 					if len(metaSlabInfo.children) == 0 {
-						copy(nonrootMetadataSlabInfos[metadataSlabIndex:], nonrootMetadataSlabInfos[metadataSlabIndex+1:])
-						nonrootMetadataSlabInfos = nonrootMetadataSlabInfos[:len(nonrootMetadataSlabInfos)-1]
+						nonrootMetadataSlabInfos = slices.Delete[[]*slabInfo](
+							nonrootMetadataSlabInfos,
+							metadataSlabIndex,
+							metadataSlabIndex+1)
 					}
 				}
 
@@ -5956,8 +5946,11 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 				if isLastSlab {
 					expectedValues = expectedValues[:slabInfoToBeRemoved.startIndex]
 				} else {
-					copy(expectedValues[slabInfoToBeRemoved.startIndex:], expectedValues[slabInfoToBeRemoved.startIndex+slabInfoToBeRemoved.count:])
-					expectedValues = expectedValues[:len(expectedValues)-slabInfoToBeRemoved.count]
+					expectedValues = slices.Delete[[]atree.Value](
+						expectedValues,
+						slabInfoToBeRemoved.startIndex,
+						slabInfoToBeRemoved.startIndex+slabInfoToBeRemoved.count,
+					)
 				}
 
 				testArrayLoadedElements(t, array, expectedValues)
@@ -7891,9 +7884,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 		err := parentArray.Insert(0, v)
 		require.NoError(t, err)
 
-		expectedValues = append(expectedValues, nil)
-		copy(expectedValues[1:], expectedValues)
-		expectedValues[0] = v
+		expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, 0, v)
 
 		for i, child := range children {
 			childArray := child.array
@@ -7934,9 +7925,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 		err = parentArray.Insert(2, v)
 		require.NoError(t, err)
 
-		expectedValues = append(expectedValues, nil)
-		copy(expectedValues[3:], expectedValues[2:])
-		expectedValues[2] = v
+		expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, 2, v)
 
 		for i, child := range children {
 			childArray := child.array
@@ -8021,9 +8010,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, test_utils.Uint64Value(0), existingStorable)
 
-		copy(expectedValues, expectedValues[1:])
-		expectedValues[len(expectedValues)-1] = nil
-		expectedValues = expectedValues[:len(expectedValues)-1]
+		expectedValues = slices.Delete[[]atree.Value](expectedValues, 0, 1)
 
 		for i, child := range children {
 			childArray := child.array
@@ -8064,9 +8051,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, test_utils.Uint64Value(2), existingStorable)
 
-		copy(expectedValues[1:], expectedValues[2:])
-		expectedValues[len(expectedValues)-1] = nil
-		expectedValues = expectedValues[:len(expectedValues)-1]
+		expectedValues = slices.Delete[[]atree.Value](expectedValues, 1, 2)
 
 		for i, child := range children {
 			childArray := child.array

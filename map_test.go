@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"reflect"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -7238,8 +7239,8 @@ func testMapSetRemoveRandomValues(
 			}
 
 			delete(keyValues, k)
-			copy(keys[index:], keys[index+1:])
-			keys = keys[:len(keys)-1]
+
+			keys = slices.Delete[[]atree.Value](keys, index, index+1)
 		}
 
 		require.True(t, test_utils.CompareTypeInfo(typeInfo, m.Type()))
@@ -15281,8 +15282,11 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			err := storage.Remove(childSlabIDs[unloadValueIndex])
 			require.NoError(t, err)
 
-			copy(expectedValues[unloadValueIndex:], expectedValues[unloadValueIndex+1:])
-			expectedValues = expectedValues[:len(expectedValues)-1]
+			expectedValues = slices.Delete[[][2]atree.Value](
+				expectedValues,
+				unloadValueIndex,
+				unloadValueIndex+1,
+			)
 
 			testMapLoadedElements(t, m, expectedValues)
 		}
@@ -15329,8 +15333,11 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			err := storage.Remove(keyID)
 			require.NoError(t, err)
 
-			copy(expectedValues[unloadValueIndex:], expectedValues[unloadValueIndex+1:])
-			expectedValues = expectedValues[:len(expectedValues)-1]
+			expectedValues = slices.Delete[[][2]atree.Value](
+				expectedValues,
+				unloadValueIndex,
+				unloadValueIndex+1,
+			)
 
 			testMapLoadedElements(t, m, expectedValues)
 		}
@@ -15467,8 +15474,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			err := storage.Remove(id)
 			require.NoError(t, err)
 
-			copy(expectedValues[4:], expectedValues[8:])
-			expectedValues = expectedValues[:8]
+			expectedValues = slices.Delete[[][2]atree.Value](expectedValues, 4, 8)
 
 			testMapLoadedElements(t, m, expectedValues)
 		}
@@ -15548,8 +15554,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				copy(expectedValues[childArrayIndex:], expectedValues[childArrayIndex+1:])
-				expectedValues = expectedValues[:len(expectedValues)-1]
+				expectedValues = slices.Delete[[][2]atree.Value](expectedValues, childArrayIndex, childArrayIndex+1)
 
 				testMapLoadedElements(t, m, expectedValues)
 			}
@@ -15695,11 +15700,9 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(childSlabIDs[index])
 				require.NoError(t, err)
 
-				copy(expectedValues[index:], expectedValues[index+1:])
-				expectedValues = expectedValues[:len(expectedValues)-1]
+				expectedValues = slices.Delete[[][2]atree.Value](expectedValues, index, index+1)
 
-				copy(childSlabIDs[index:], childSlabIDs[index+1:])
-				childSlabIDs = childSlabIDs[:len(childSlabIDs)-1]
+				childSlabIDs = slices.Delete[[]atree.SlabID](childSlabIDs, index, index+1)
 
 				testMapLoadedElements(t, m, expectedValues)
 			}
@@ -15735,8 +15738,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(childSlabID)
 				require.NoError(t, err)
 
-				copy(expectedValues[childArrayIndex:], expectedValues[childArrayIndex+1:])
-				expectedValues = expectedValues[:len(expectedValues)-1]
+				expectedValues = slices.Delete[[][2]atree.Value](expectedValues, childArrayIndex, childArrayIndex+1)
 
 				testMapLoadedElements(t, m, expectedValues)
 			}
@@ -15889,8 +15891,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			err := storage.Remove(slabID)
 			require.NoError(t, err)
 
-			copy(expectedValues[countAtIndex0:], expectedValues[countAtIndex0+countAtIndex1:])
-			expectedValues = expectedValues[:m.Count()-uint64(countAtIndex1)]
+			expectedValues = slices.Delete[[][2]atree.Value](
+				expectedValues,
+				int(countAtIndex0),
+				int(countAtIndex0+countAtIndex1))
 
 			testMapLoadedElements(t, m, expectedValues)
 		}
@@ -16010,11 +16014,9 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				err := storage.Remove(childSlabIDs[i])
 				require.NoError(t, err)
 
-				copy(expectedValues[i:], expectedValues[i+1:])
-				expectedValues = expectedValues[:len(expectedValues)-1]
+				expectedValues = slices.Delete[[][2]atree.Value](expectedValues, i, i+1)
 
-				copy(childSlabIDs[i:], childSlabIDs[i+1:])
-				childSlabIDs = childSlabIDs[:len(childSlabIDs)-1]
+				childSlabIDs = slices.Delete[[]atree.SlabID](childSlabIDs, i, i+1)
 
 				testMapLoadedElements(t, m, expectedValues)
 			}
@@ -16095,12 +16097,13 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				if index == len(dataSlabInfos)-1 {
 					expectedValues = expectedValues[:slabToBeRemoved.startIndex]
 				} else {
-					copy(expectedValues[slabToBeRemoved.startIndex:], expectedValues[slabToBeRemoved.startIndex+slabToBeRemoved.count:])
-					expectedValues = expectedValues[:len(expectedValues)-slabToBeRemoved.count]
+					expectedValues = slices.Delete[[][2]atree.Value](
+						expectedValues,
+						slabToBeRemoved.startIndex,
+						slabToBeRemoved.startIndex+slabToBeRemoved.count)
 				}
 
-				copy(dataSlabInfos[index:], dataSlabInfos[index+1:])
-				dataSlabInfos = dataSlabInfos[:len(dataSlabInfos)-1]
+				dataSlabInfos = slices.Delete[[]*slabInfo](dataSlabInfos, index, index+1)
 
 				testMapLoadedElements(t, m, expectedValues)
 			}
@@ -16221,8 +16224,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 						}
 					}
 
-					copy(metadataSlabInfos[metadataSlabIndex:], metadataSlabInfos[metadataSlabIndex+1:])
-					metadataSlabInfos = metadataSlabInfos[:len(metadataSlabInfos)-1]
+					metadataSlabInfos = slices.Delete[[]*slabInfo](
+						metadataSlabInfos,
+						metadataSlabIndex,
+						metadataSlabIndex+1)
 
 				case dataSlabType:
 
@@ -16244,8 +16249,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 						childSlabInfo.startIndex -= count
 					}
 
-					copy(metadataSlabInfo.children[dataSlabIndex:], metadataSlabInfo.children[dataSlabIndex+1:])
-					metadataSlabInfo.children = metadataSlabInfo.children[:len(metadataSlabInfo.children)-1]
+					metadataSlabInfo.children = slices.Delete[[]*slabInfo](
+						metadataSlabInfo.children,
+						dataSlabIndex,
+						dataSlabIndex+1)
 
 					metadataSlabInfo.count -= count
 
@@ -16259,8 +16266,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 					}
 
 					if len(metadataSlabInfo.children) == 0 {
-						copy(metadataSlabInfos[metadataSlabIndex:], metadataSlabInfos[metadataSlabIndex+1:])
-						metadataSlabInfos = metadataSlabInfos[:len(metadataSlabInfos)-1]
+						metadataSlabInfos = slices.Delete[[]*slabInfo](
+							metadataSlabInfos,
+							metadataSlabIndex,
+							metadataSlabIndex+1)
 					}
 				}
 
@@ -16270,8 +16279,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				if isLastSlab {
 					expectedValues = expectedValues[:slabInfoToBeRemoved.startIndex]
 				} else {
-					copy(expectedValues[slabInfoToBeRemoved.startIndex:], expectedValues[slabInfoToBeRemoved.startIndex+slabInfoToBeRemoved.count:])
-					expectedValues = expectedValues[:len(expectedValues)-slabInfoToBeRemoved.count]
+					expectedValues = slices.Delete[[][2]atree.Value](
+						expectedValues,
+						slabInfoToBeRemoved.startIndex,
+						slabInfoToBeRemoved.startIndex+slabInfoToBeRemoved.count)
 				}
 
 				testMapLoadedElements(t, m, expectedValues)

@@ -9,14 +9,14 @@ on:
   workflow_dispatch:
   push:
     branches:
-    - main
-    - 'feature/**'
-    - 'v**'  
+      - main
+      - 'feature/**'
+      - 'release-**'
   pull_request:
     branches:
-    - main
-    - 'feature/**'
-    - 'v**'
+      - main
+      - 'feature/**'
+      - 'release-**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}

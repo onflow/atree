@@ -1713,7 +1713,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		// parentMap {{}:0, {}:1} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMapKey1, childMapKey2} {
 			k := test_utils.NewHashableMap(m)
-			v := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			v := test_utils.NewUint64ValueFromInteger(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -1770,7 +1770,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMap1, childMap2} {
-			k := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			k := test_utils.NewUint64ValueFromInteger(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -1826,7 +1826,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		// parentMap {{}: 0, {}: 1} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMapKey1, childMapKey2} {
 			k := test_utils.NewHashableMap(m)
-			v := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			v := test_utils.NewUint64ValueFromInteger(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -1879,7 +1879,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMap1, childMap2} {
-			k := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			k := test_utils.NewUint64ValueFromInteger(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -1950,7 +1950,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMapKey1, childMapKey2} {
 			k := test_utils.NewHashableMap(m)
-			v := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			v := test_utils.NewUint64ValueFromInteger(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -2008,7 +2008,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMap1, childMap2} {
-			k := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			k := test_utils.NewUint64ValueFromInteger(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -2102,7 +2102,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMapKey1, childMapKey2} {
 			k := test_utils.NewHashableMap(m)
-			v := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			v := test_utils.NewUint64ValueFromInteger(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -2156,7 +2156,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// parentMap {0: {}, 1:{}} with all elements in the same collision group
 		for i, m := range []*atree.OrderedMap{childMap1, childMap2} {
-			k := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			k := test_utils.NewUint64ValueFromInteger(i)
 
 			digests := []atree.Digest{atree.Digest(0)}
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -2519,7 +2519,7 @@ func TestMutableMapIterate(t *testing.T) {
 			testValueEqual(t, sortedKeys[i], k)
 			testValueEqual(t, keyValues[k], v)
 
-			newValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			newValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
@@ -2723,7 +2723,7 @@ func TestMutableMapIterate(t *testing.T) {
 			require.True(t, childMap.Inlined())
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -2807,7 +2807,7 @@ func TestMutableMapIterate(t *testing.T) {
 			require.True(t, childMap.Inlined())
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -3180,7 +3180,7 @@ func TestMutableMapIterate(t *testing.T) {
 			require.True(t, ok)
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -3262,7 +3262,7 @@ func TestMutableMapIterate(t *testing.T) {
 			require.True(t, ok)
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -4085,7 +4085,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			testValueEqual(t, sortedKeys[i], k)
 
 			v := keyValues[k]
-			newValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			newValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
@@ -4289,7 +4289,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.True(t, childMap.Inlined())
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -4375,7 +4375,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.True(t, childMap.Inlined())
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -4756,7 +4756,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.True(t, ok)
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -4839,7 +4839,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			require.True(t, ok)
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -5680,7 +5680,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 
 			testValueEqual(t, keyValues[k], v)
 
-			newValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			newValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, newValue)
 			require.NoError(t, err)
@@ -5887,7 +5887,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			require.True(t, childMap.Inlined())
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -5972,7 +5972,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			require.True(t, childMap.Inlined())
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -6349,7 +6349,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			require.True(t, ok)
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -6432,7 +6432,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			require.True(t, ok)
 
 			childKey := test_utils.Uint64Value(0)
-			childNewValue := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childNewValue := test_utils.NewUint64ValueFromInteger(i)
 
 			existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, childKey, childNewValue)
 			require.NoError(t, err)
@@ -16303,7 +16303,7 @@ func createMapWithLongStringKey(
 		s := strings.Repeat(string(r), int(atree.MaxInlineMapElementSize())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 
 		k := test_utils.NewStringValue(s)
-		v := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		v := test_utils.NewUint64ValueFromInteger(i)
 
 		digests := []atree.Digest{atree.Digest(i)} //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
 		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -16346,7 +16346,7 @@ func createMapWithSimpleValues(
 	expectedValues := make([][2]atree.Value, count)
 	r := rune('a')
 	for i := range expectedValues {
-		k := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		k := test_utils.NewUint64ValueFromInteger(i)
 		v := test_utils.NewStringValue(strings.Repeat(string(r), 20))
 
 		digests := newDigests(i)
@@ -16397,7 +16397,7 @@ func createMapWithChildArrayValues(
 
 		expectedChildValues := make([]atree.Value, childArrayCount)
 		for j := range expectedChildValues {
-			v := test_utils.Uint64Value(j) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			v := test_utils.NewUint64ValueFromInteger(j)
 
 			err = childArray.Append(v)
 			require.NoError(t, err)
@@ -16405,7 +16405,7 @@ func createMapWithChildArrayValues(
 			expectedChildValues[j] = v
 		}
 
-		k := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		k := test_utils.NewUint64ValueFromInteger(i)
 		v := childArray
 
 		slabIDs[i] = childArray.SlabID()
@@ -16455,7 +16455,7 @@ func createMapWithSimpleAndChildArrayValues(
 	r := 'a'
 	for i := range expectedValues {
 
-		k := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		k := test_utils.NewUint64ValueFromInteger(i)
 
 		digests := newDigests(i)
 		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -16467,7 +16467,7 @@ func createMapWithSimpleAndChildArrayValues(
 
 			expectedChildValues := make([]atree.Value, childArrayCount)
 			for j := range expectedChildValues {
-				v := test_utils.Uint64Value(j) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				v := test_utils.NewUint64ValueFromInteger(j)
 				err = childArray.Append(v)
 				require.NoError(t, err)
 

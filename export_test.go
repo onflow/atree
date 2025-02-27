@@ -126,7 +126,7 @@ func GetMutableValueNotifierValueID(v Value) (ValueID, error) {
 	return m.ValueID(), nil
 }
 
-func ComputeArrayRootDataSlabByteSizeWithFixSizedElement(storableByteSize uint32, count int) uint32 {
+func ComputeArrayRootDataSlabByteSizeWithFixSizedElement(storableByteSize uint32, count uint64) uint32 {
 	storableByteSizes := make([]uint32, count)
 	for i := range storableByteSizes {
 		storableByteSizes[i] = storableByteSize
@@ -142,7 +142,7 @@ func ComputeArrayRootDataSlabByteSize(storableByteSizes []uint32) uint32 {
 	return slabSize
 }
 
-func ComputeInlinedArraySlabByteSizeWithFixSizedElement(storableByteSize uint32, count int) uint32 {
+func ComputeInlinedArraySlabByteSizeWithFixSizedElement(storableByteSize uint32, count uint64) uint32 {
 	storableByteSizes := make([]uint32, count)
 	for i := range storableByteSizes {
 		storableByteSizes[i] = storableByteSize

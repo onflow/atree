@@ -257,6 +257,13 @@ var _ atree.Value = Uint64Value(0)
 var _ atree.Storable = Uint64Value(0)
 var _ HashableValue = Uint64Value(0)
 
+func NewUint64ValueFromInteger(i int) Uint64Value {
+	if i < 0 {
+		panic(fmt.Sprintf("expect positive int for Uint64Value, got %d", i))
+	}
+	return Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+}
+
 func (v Uint64Value) ChildStorables() []atree.Storable { return nil }
 
 func (v Uint64Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {

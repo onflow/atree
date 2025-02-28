@@ -5898,7 +5898,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 					count := slabInfoToBeRemoved.count
 
-					// Update startIndex for subsequence metadata and data slabs.
+					// Update startIndex for subsequent metadata and data slabs.
 					for _, slabInfo := range nonrootMetadataSlabInfos[metadataSlabIndex+1:] {
 						slabInfo.startIndex -= count
 
@@ -5911,7 +5911,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 					nonrootMetadataSlabInfos = nonrootMetadataSlabInfos[:len(nonrootMetadataSlabInfos)-1]
 
 				case dataSlabType:
-					// Unload data slab at randome index.
+					// Unload data slab at random index.
 					metadataSlabIndex := r.Intn(len(nonrootMetadataSlabInfos))
 
 					metaSlabInfo := nonrootMetadataSlabInfos[metadataSlabIndex]
@@ -5925,7 +5925,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 					count := slabInfoToBeRemoved.count
 
-					// Update startIndex for subsequence data slabs.
+					// Update startIndex for subsequent data slabs.
 					for _, slabInfo := range metaSlabInfo.children[dataSlabIndex+1:] {
 						slabInfo.startIndex -= count
 					}
@@ -5935,7 +5935,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 					metaSlabInfo.count -= count
 
-					// Update startIndex for all subsequence metadata slabs.
+					// Update startIndex for all subsequent metadata slabs.
 					for _, slabInfo := range nonrootMetadataSlabInfos[metadataSlabIndex+1:] {
 						slabInfo.startIndex -= count
 
@@ -7634,7 +7634,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 			require.True(t, gchildArray.Inlined())
 			require.True(t, childArray.Inlined())
-			require.Equal(t, 3, getStoredDeltas(storage)) // There are 3 stored slab because parent root slab is metdata.
+			require.Equal(t, 3, getStoredDeltas(storage)) // There are 3 stored slab because parent root slab is metadata.
 
 			require.Equal(t, atree.SlabIDUndefined, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
 			require.Equal(t, valueID, childArray.ValueID())              // atree.Value ID is unchanged

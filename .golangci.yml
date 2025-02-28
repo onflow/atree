@@ -7,7 +7,7 @@ linters:
     - bidichk
     - copyloopvar
     - errcheck
-    - forbidigo
+    # - forbidigo # TODO: enable forbidigo after adding non-default settings
     - gocritic
     - gofmt
     - goimports

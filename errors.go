@@ -442,7 +442,7 @@ func (e *CollisionLimitError) Error() string {
 }
 
 // MapElementCountError is a fatal error returned when element count is unexpected.
-// It is an implemtation error.
+// It is an implementation error.
 type MapElementCountError struct {
 	msg string
 }

@@ -411,124 +411,52 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 	leftCanLend := leftSib != nil && leftSib.CanLendToRight(underflowSize)
 	rightCanLend := rightSib != nil && rightSib.CanLendToLeft(underflowSize)
 
+	canRebalance := leftCanLend || rightCanLend
+
 	// Child can rebalance elements with at least one sibling.
-	if leftCanLend || rightCanLend {
+	if canRebalance {
 
-		// Rebalance with right sib
+		var leftSlab, rightSlab ArraySlab
+		var leftSlabIndex, rightSlabIndex int
+		var leftBorrowFromRight bool
+
 		if !leftCanLend {
-			baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
+			// Rebalance with right sib
 
-			err := child.BorrowFromRight(rightSib)
-			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by ArraySlab.BorrowFromRight().
-				return err
-			}
+			leftSlab, rightSlab = child, rightSib
+			leftSlabIndex, rightSlabIndex = childHeaderIndex, childHeaderIndex+1
+			leftBorrowFromRight = true
 
-			a.childrenHeaders[childHeaderIndex] = child.Header()
-			a.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
+		} else if !rightCanLend {
+			// Rebalance with left sib
 
-			// Adjust childrenCountSum
-			a.childrenCountSum[childHeaderIndex] = baseCountSum + child.Header().count
+			leftSlab, rightSlab = leftSib, child
+			leftSlabIndex, rightSlabIndex = childHeaderIndex-1, childHeaderIndex
+			leftBorrowFromRight = false
 
-			// Store modified slabs
-			err = storeSlab(storage, child)
-			if err != nil {
-				return err
-			}
-			err = storeSlab(storage, rightSib)
-			if err != nil {
-				return err
-			}
-			return storeSlab(storage, a)
+		} else if leftSib.ByteSize() > rightSib.ByteSize() { // Rebalance with bigger sib
+			// Rebalance with left sib
+
+			leftSlab, rightSlab = leftSib, child
+			leftSlabIndex, rightSlabIndex = childHeaderIndex-1, childHeaderIndex
+			leftBorrowFromRight = false
+
+		} else { // leftSib.ByteSize() <= rightSib.ByteSize
+			// Rebalance with right sib
+
+			leftSlab, rightSlab = child, rightSib
+			leftSlabIndex, rightSlabIndex = childHeaderIndex, childHeaderIndex+1
+			leftBorrowFromRight = true
 		}
 
-		// Rebalance with left sib
-		if !rightCanLend {
-			baseCountSum := a.childrenCountSum[childHeaderIndex-1] - leftSib.Header().count
-
-			err := leftSib.LendToRight(child)
-			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by ArraySlab.LendToRight().
-				return err
-			}
-
-			a.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
-			a.childrenHeaders[childHeaderIndex] = child.Header()
-
-			// Adjust childrenCountSum
-			a.childrenCountSum[childHeaderIndex-1] = baseCountSum + leftSib.Header().count
-
-			// Store modified slabs
-			err = storeSlab(storage, leftSib)
-			if err != nil {
-				return err
-			}
-			err = storeSlab(storage, child)
-			if err != nil {
-				return err
-			}
-			return storeSlab(storage, a)
-		}
-
-		// Rebalance with bigger sib
-		if leftSib.ByteSize() > rightSib.ByteSize() {
-			baseCountSum := a.childrenCountSum[childHeaderIndex-1] - leftSib.Header().count
-
-			err := leftSib.LendToRight(child)
-			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by ArraySlab.LendToRight().
-				return err
-			}
-
-			a.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
-			a.childrenHeaders[childHeaderIndex] = child.Header()
-
-			// Adjust childrenCountSum
-			a.childrenCountSum[childHeaderIndex-1] = baseCountSum + leftSib.Header().count
-
-			// Store modified slabs
-			err = storeSlab(storage, leftSib)
-			if err != nil {
-				return err
-			}
-
-			err = storeSlab(storage, child)
-			if err != nil {
-				return err
-			}
-
-			return storeSlab(storage, a)
-
-		} else {
-			// leftSib.ByteSize() <= rightSib.ByteSize
-
-			baseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
-
-			err := child.BorrowFromRight(rightSib)
-			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by ArraySlab.BorrowFromRight().
-				return err
-			}
-
-			a.childrenHeaders[childHeaderIndex] = child.Header()
-			a.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
-
-			// Adjust childrenCountSum
-			a.childrenCountSum[childHeaderIndex] = baseCountSum + child.Header().count
-
-			// Store modified slabs
-			err = storeSlab(storage, child)
-			if err != nil {
-				return err
-			}
-
-			err = storeSlab(storage, rightSib)
-			if err != nil {
-				return err
-			}
-
-			return storeSlab(storage, a)
-		}
+		return a.rebalanceChildren(
+			storage,
+			leftSlab,
+			rightSlab,
+			leftSlabIndex,
+			rightSlabIndex,
+			leftBorrowFromRight,
+		)
 	}
 
 	// Child can't rebalance with any sibling.  It must merge with one sibling.
@@ -568,6 +496,47 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 		leftSlabIndex,
 		rightSlabIndex,
 	)
+}
+
+func (a *ArrayMetaDataSlab) rebalanceChildren(
+	storage SlabStorage,
+	leftChildSlab ArraySlab,
+	rightChildSlab ArraySlab,
+	leftChildSlabIndex int,
+	rightChildSlabIndex int,
+	leftBorrowFromRight bool,
+) error {
+	leftChildSlabBaseCountSum := a.childrenCountSum[leftChildSlabIndex] - leftChildSlab.Header().count
+
+	var err error
+	if leftBorrowFromRight {
+		err = leftChildSlab.BorrowFromRight(rightChildSlab)
+	} else {
+		err = leftChildSlab.LendToRight(rightChildSlab)
+	}
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by ArraySlab.BorrowFromRight().
+		return err
+	}
+
+	a.childrenHeaders[leftChildSlabIndex] = leftChildSlab.Header()
+	a.childrenHeaders[rightChildSlabIndex] = rightChildSlab.Header()
+
+	// Adjust childrenCountSum
+	a.childrenCountSum[leftChildSlabIndex] = leftChildSlabBaseCountSum + leftChildSlab.Header().count
+
+	// Store modified slabs
+	err = storeSlab(storage, leftChildSlab)
+	if err != nil {
+		return err
+	}
+
+	err = storeSlab(storage, rightChildSlab)
+	if err != nil {
+		return err
+	}
+
+	return storeSlab(storage, a)
 }
 
 func (a *ArrayMetaDataSlab) mergeChildren(

@@ -467,7 +467,7 @@ func newArrayWrapperValueTestCases(
 
 // TestArrayWrapperValueAppendAndModify tests
 //   - appending WrapperValue to array
-//   - retrieveing WrapperValue from array
+//   - retrieving WrapperValue from array
 //   - modifing retrieved WrapperValue
 func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 

@@ -854,7 +854,7 @@ func TestMapRemove(t *testing.T) {
 		// Test:
 		// - data slab refers to an external slab containing elements with hash collision
 		// - last collision element is inlined after all other collision elements are removed
-		// - data slab overflows with inlined colllision element
+		// - data slab overflows with inlined collision element
 		// - data slab splits
 
 		atree.SetThreshold(512)
@@ -952,7 +952,7 @@ func TestMapRemove(t *testing.T) {
 		// Test:
 		// - data slab refers to an external slab containing elements with hash collision
 		// - last collision element is inlined after all other collision elements are removed
-		// - data slab overflows with inlined colllision element
+		// - data slab overflows with inlined collision element
 		// - data slab splits
 
 		atree.SetThreshold(512)
@@ -16084,7 +16084,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 				slabToBeRemoved := dataSlabInfos[index]
 
-				// Update startIndex for all subsequence data slabs
+				// Update startIndex for all subsequent data slabs
 				for i := index + 1; i < len(dataSlabInfos); i++ {
 					dataSlabInfos[i].startIndex -= slabToBeRemoved.count
 				}
@@ -16212,7 +16212,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 					count := slabInfoToBeRemoved.count
 
-					// Update startIndex for subsequence metadata slabs
+					// Update startIndex for subsequent metadata slabs
 					for _, slabInfo := range metadataSlabInfos[metadataSlabIndex+1:] {
 						slabInfo.startIndex -= count
 
@@ -16239,7 +16239,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 					count := slabInfoToBeRemoved.count
 
-					// Update startIndex for all subsequence data slabs in this metadata slab info
+					// Update startIndex for all subsequent data slabs in this metadata slab info
 					for _, childSlabInfo := range metadataSlabInfo.children[dataSlabIndex+1:] {
 						childSlabInfo.startIndex -= count
 					}
@@ -16249,7 +16249,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 					metadataSlabInfo.count -= count
 
-					// Update startIndex for all subsequence metadata slabs.
+					// Update startIndex for all subsequent metadata slabs.
 					for _, slabInfo := range metadataSlabInfos[metadataSlabIndex+1:] {
 						slabInfo.startIndex -= count
 

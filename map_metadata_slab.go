@@ -320,13 +320,17 @@ func (m *MapMetaDataSlab) SplitChildSlab(storage SlabStorage, child MapSlab, chi
 	left := leftSlab.(MapSlab)
 	right := rightSlab.(MapSlab)
 
-	// Add new child slab (right) to childrenHeaders
-	m.childrenHeaders = append(m.childrenHeaders, MapSlabHeader{})
-	if childHeaderIndex < len(m.childrenHeaders)-2 {
-		copy(m.childrenHeaders[childHeaderIndex+2:], m.childrenHeaders[childHeaderIndex+1:])
-	}
-	m.childrenHeaders[childHeaderIndex] = left.Header()
-	m.childrenHeaders[childHeaderIndex+1] = right.Header()
+	leftIndex, rightIndex := childHeaderIndex, childHeaderIndex+1
+
+	// Set left slab header
+	m.childrenHeaders[leftIndex] = left.Header()
+
+	// Insert right slab header
+	m.childrenHeaders = slices.Insert(
+		m.childrenHeaders,
+		rightIndex,
+		right.Header(),
+	)
 
 	// Increase header size
 	m.header.size += mapSlabHeaderSize
@@ -616,8 +620,7 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		},
 	}
 
-	rightSlab.childrenHeaders = make([]MapSlabHeader, len(m.childrenHeaders)-leftChildrenCount)
-	copy(rightSlab.childrenHeaders, m.childrenHeaders[leftChildrenCount:])
+	rightSlab.childrenHeaders = slices.Clone(m.childrenHeaders[leftChildrenCount:])
 
 	// Modify left (original) slab
 	m.childrenHeaders = m.childrenHeaders[:leftChildrenCount]
@@ -634,10 +637,10 @@ func (m *MapMetaDataSlab) LendToRight(slab Slab) error {
 	rightChildrenHeadersLen := childrenHeadersLen - leftChildrenHeadersLen
 
 	// Update right slab childrenHeaders by prepending borrowed children headers
-	rightChildrenHeaders := make([]MapSlabHeader, rightChildrenHeadersLen)
-	n := copy(rightChildrenHeaders, m.childrenHeaders[leftChildrenHeadersLen:])
-	copy(rightChildrenHeaders[n:], rightSlab.childrenHeaders)
-	rightSlab.childrenHeaders = rightChildrenHeaders
+	rightSlab.childrenHeaders = slices.Insert(
+		rightSlab.childrenHeaders,
+		0,
+		m.childrenHeaders[leftChildrenHeadersLen:]...)
 
 	// Update right slab header
 	rightSlab.header.size = mapMetaDataSlabPrefixSize + uint32(rightChildrenHeadersLen)*mapSlabHeaderSize

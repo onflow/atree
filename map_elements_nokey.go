@@ -20,6 +20,7 @@ package atree
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -182,11 +183,7 @@ func (e *singleElements) Remove(storage SlabStorage, digester Digester, level ui
 
 		if equal {
 			// Remove this element
-			copy(e.elems[i:], e.elems[i+1:])
-			// Zero out last element to prevent memory leak
-			e.elems[len(e.elems)-1] = nil
-			// Reslice elements
-			e.elems = e.elems[:len(e.elems)-1]
+			e.elems = slices.Delete(e.elems, i, i+1)
 
 			// Adjust size
 			e.size -= elem.Size()

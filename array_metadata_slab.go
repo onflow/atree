@@ -327,6 +327,9 @@ func (a *ArrayMetaDataSlab) PopIterate(storage SlabStorage, fn ArrayPopIteration
 // Slab operations (split, merge, and lend/borrow)
 
 func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab, childHeaderIndex int) error {
+
+	childSlabBaseCountSum := a.childrenCountSum[childHeaderIndex] - child.Header().count
+
 	leftSlab, rightSlab, err := child.Split(storage)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Split().
@@ -336,18 +339,30 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 	left := leftSlab.(ArraySlab)
 	right := rightSlab.(ArraySlab)
 
-	// Add new child slab (right) to childrenHeaders
-	a.childrenHeaders = append(a.childrenHeaders, ArraySlabHeader{})
-	if childHeaderIndex < len(a.childrenHeaders)-2 {
-		copy(a.childrenHeaders[childHeaderIndex+2:], a.childrenHeaders[childHeaderIndex+1:])
-	}
-	a.childrenHeaders[childHeaderIndex] = left.Header()
-	a.childrenHeaders[childHeaderIndex+1] = right.Header()
+	leftIndex, rightIndex := childHeaderIndex, childHeaderIndex+1
 
-	// Adjust childrenCountSum
-	a.childrenCountSum = append(a.childrenCountSum, uint32(0))
-	copy(a.childrenCountSum[childHeaderIndex+1:], a.childrenCountSum[childHeaderIndex:])
-	a.childrenCountSum[childHeaderIndex] -= right.Header().count
+	// Set left slab header
+	a.childrenHeaders[leftIndex] = left.Header()
+
+	// Insert right slab header
+	a.childrenHeaders = slices.Insert[[]ArraySlabHeader, ArraySlabHeader](
+		a.childrenHeaders,
+		rightIndex,
+		right.Header(),
+	)
+
+	leftSlabCountSum := childSlabBaseCountSum + left.Header().count
+	rightSlabCountSum := leftSlabCountSum + right.Header().count
+
+	// Set left count sum
+	a.childrenCountSum[leftIndex] = leftSlabCountSum
+
+	// Insert right count sum
+	a.childrenCountSum = slices.Insert[[]uint32, uint32](
+		a.childrenCountSum,
+		rightIndex,
+		rightSlabCountSum,
+	)
 
 	// Increase header size
 	a.header.size += arraySlabHeaderSize

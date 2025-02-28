@@ -533,64 +533,38 @@ func (a *ArrayMetaDataSlab) MergeOrRebalanceChildSlab(
 
 	// Child can't rebalance with any sibling.  It must merge with one sibling.
 
+	var leftSlab, rightSlab ArraySlab
+	var leftSlabIndex, rightSlabIndex int
+
 	if leftSib == nil {
 		// Merge (left) child slab with rightSib
 
-		leftSlabIndex := childHeaderIndex
-		rightSlabIndex := childHeaderIndex + 1
+		leftSlab, rightSlab = child, rightSib
+		leftSlabIndex, rightSlabIndex = childHeaderIndex, childHeaderIndex+1
 
-		return a.mergeChildren(
-			storage,
-			child,
-			rightSib,
-			leftSlabIndex,
-			rightSlabIndex,
-		)
-	}
-
-	if rightSib == nil {
+	} else if rightSib == nil {
 		// Merge leftSib with (right) child slab
 
-		leftSlabIndex := childHeaderIndex - 1
-		rightSlabIndex := childHeaderIndex
+		leftSlab, rightSlab = leftSib, child
+		leftSlabIndex, rightSlabIndex = childHeaderIndex-1, childHeaderIndex
 
-		return a.mergeChildren(
-			storage,
-			leftSib,
-			child,
-			leftSlabIndex,
-			rightSlabIndex,
-		)
-	}
-
-	// Merge with smaller sib
-
-	if leftSib.ByteSize() < rightSib.ByteSize() {
+	} else if leftSib.ByteSize() < rightSib.ByteSize() { // Merge with smaller sib
 		// Merge leftSib with (right) child slab
 
-		leftSlabIndex := childHeaderIndex - 1
-		rightSlabIndex := childHeaderIndex
+		leftSlab, rightSlab = leftSib, child
+		leftSlabIndex, rightSlabIndex = childHeaderIndex-1, childHeaderIndex
 
-		return a.mergeChildren(
-			storage,
-			leftSib,
-			child,
-			leftSlabIndex,
-			rightSlabIndex,
-		)
+	} else { // leftSib.ByteSize > rightSib.ByteSize
+		// Merge (left) child slab with rightSib
+
+		leftSlab, rightSlab = child, rightSib
+		leftSlabIndex, rightSlabIndex = childHeaderIndex, childHeaderIndex+1
 	}
-
-	// leftSib.ByteSize > rightSib.ByteSize
-
-	// Merge (left) child slab with rightSib
-
-	leftSlabIndex := childHeaderIndex
-	rightSlabIndex := childHeaderIndex + 1
 
 	return a.mergeChildren(
 		storage,
-		child,
-		rightSib,
+		leftSlab,
+		rightSlab,
 		leftSlabIndex,
 		rightSlabIndex,
 	)

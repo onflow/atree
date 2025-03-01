@@ -4838,7 +4838,6 @@ func TestArrayFromBatchData(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-
 		v = test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()-2)))
 
 		expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, 25, v)

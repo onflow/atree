@@ -66,7 +66,7 @@ func (db *collisionDigesterBuilder) Digest(hip atree.HashInputProvider, value at
 	}, nil
 }
 
-func (db *collisionDigesterBuilder) SetSeed(k1 uint64, k2 uint64) {
+func (db *collisionDigesterBuilder) SetSeed(uint64, uint64) {
 }
 
 type collisionDigester struct {

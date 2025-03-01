@@ -105,7 +105,7 @@ func generateSimpleValue(
 		return v, v, nil
 
 	default:
-		return nil, nil, fmt.Errorf("unexpected randome simple value type %d", valueType)
+		return nil, nil, fmt.Errorf("unexpected random simple value type %d", valueType)
 	}
 }
 
@@ -128,7 +128,7 @@ func generateContainerValue(
 		return newComposite(storage, address, nestedLevels)
 
 	default:
-		return nil, nil, fmt.Errorf("unexpected randome container value type %d", valueType)
+		return nil, nil, fmt.Errorf("unexpected random container value type %d", valueType)
 	}
 }
 

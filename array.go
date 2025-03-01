@@ -886,8 +886,8 @@ func (a *Array) hasParentUpdater() bool {
 	return a.parentUpdater != nil
 }
 
-func (a *Array) getMutableElementIndexCount() int {
-	return len(a.mutableElementIndex)
+func (a *Array) getMutableElementIndexCount() uint64 {
+	return uint64(len(a.mutableElementIndex))
 }
 
 func (a *Array) getMutableElementIndex() map[ValueID]uint64 {

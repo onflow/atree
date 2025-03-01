@@ -549,7 +549,7 @@ func TestBasicSlabStorageSlabIDs(t *testing.T) {
 
 	storage := atree.NewBasicSlabStorage(nil, nil, nil, nil)
 
-	// Get slab ids from empty storgae
+	// Get slab ids from empty storage
 	ids := storage.SlabIDs()
 	require.Equal(t, 0, len(ids))
 
@@ -559,7 +559,7 @@ func TestBasicSlabStorageSlabIDs(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Get slab ids from non-empty storgae
+	// Get slab ids from non-empty storage
 	ids = storage.SlabIDs()
 	require.Equal(t, len(wantIDs), len(ids))
 

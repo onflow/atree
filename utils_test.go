@@ -20,6 +20,7 @@ package atree_test
 
 import (
 	"flag"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -30,6 +31,16 @@ import (
 	"github.com/onflow/atree"
 
 	"github.com/onflow/atree/test_utils"
+)
+
+const (
+	uint8Type int = iota
+	uint16Type
+	uint32Type
+	uint64Type
+	smallStringType
+	largeStringType
+	maxSimpleValueType
 )
 
 var (
@@ -61,27 +72,27 @@ func randStr(r *rand.Rand, length int) string {
 	return string(b)
 }
 
-func randomValue(r *rand.Rand, maxInlineSize int) atree.Value {
-	switch r.Intn(6) {
+func randomValue(r *rand.Rand, maxInlineSize uint64) atree.Value {
+	switch r.Intn(maxSimpleValueType) {
 
-	case 0:
+	case uint8Type:
 		return test_utils.Uint8Value(r.Intn(255))
 
-	case 1:
+	case uint16Type:
 		return test_utils.Uint16Value(r.Intn(6535))
 
-	case 2:
+	case uint32Type:
 		return test_utils.Uint32Value(r.Intn(4294967295))
 
-	case 3:
+	case uint64Type:
 		return test_utils.Uint64Value(r.Intn(1844674407370955161))
 
-	case 4: // small string (inlinable)
-		slen := r.Intn(maxInlineSize)
+	case smallStringType: // small string (inlinable)
+		slen := r.Intn(int(maxInlineSize))
 		return test_utils.NewStringValue(randStr(r, slen))
 
-	case 5: // large string (external)
-		slen := r.Intn(1024) + maxInlineSize
+	case largeStringType: // large string (external)
+		slen := r.Intn(1024) + int(maxInlineSize)
 		return test_utils.NewStringValue(randStr(r, slen))
 
 	default:
@@ -238,3 +249,37 @@ func testEqualValueIDAndSlabID(t *testing.T, slabID atree.SlabID, valueID atree.
 	require.Equal(t, sidAddress[:], valueID[:atree.SlabAddressLength])
 	require.Equal(t, sidIndex[:], valueID[atree.SlabAddressLength:])
 }
+
+func getRandomArrayIndex(r *rand.Rand, array *atree.Array) uint64 {
+	return uint64(r.Intn(int(array.Count())))
+}
+
+func getRandomArrayIndexes(r *rand.Rand, array *atree.Array, count int) []uint64 {
+	set := make(map[uint64]struct{})
+	for len(set) < count {
+		n := getRandomArrayIndex(r, array)
+		set[n] = struct{}{}
+	}
+
+	slice := make([]uint64, 0, count)
+	for n := range set {
+		slice = append(slice, n)
+	}
+
+	return slice
+}
+
+// getRandomUint64InRange returns a number in the range of [min, max)
+func getRandomUint64InRange(r *rand.Rand, minNum uint64, maxNum uint64) uint64 {
+	if minNum >= maxNum {
+		panic(fmt.Sprintf("min %d >= max %d", minNum, maxNum))
+	}
+	// since minNum < maxNum, maxNum - minNum >= 1
+	return minNum + uint64(r.Intn(int(maxNum-minNum)))
+}
+
+type uint64Slice []uint64
+
+func (x uint64Slice) Len() int           { return len(x) }
+func (x uint64Slice) Less(i, j int) bool { return x[i] < x[j] }
+func (x uint64Slice) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }

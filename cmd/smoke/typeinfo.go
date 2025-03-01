@@ -125,7 +125,7 @@ func newCompositeTypeInfo() compositeTypeInfo {
 
 	endIndex := startIndex + count
 	if endIndex > len(compositeFieldNames) {
-		panic("not reachable")
+		panic(atree.NewUnreachableError())
 	}
 
 	return compositeTypeInfo{fieldStartIndex: startIndex, fieldEndIndex: endIndex}
@@ -197,7 +197,7 @@ func decodeTypeInfo(dec *cbor.StreamDecoder) (atree.TypeInfo, error) {
 		}
 		if count != 2 {
 			return nil, fmt.Errorf(
-				"failed to decode composite type info: expect 2 elemets, got %d elements",
+				"failed to decode composite type info: expect 2 elements, got %d elements",
 				count,
 			)
 		}

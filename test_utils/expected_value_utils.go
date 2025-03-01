@@ -32,7 +32,7 @@ type ExpectedArrayValue []atree.Value
 var _ atree.Value = &ExpectedArrayValue{}
 
 func (v ExpectedArrayValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
-	panic("not reachable")
+	panic(atree.NewUnreachableError())
 }
 
 // ExpectedMapValue
@@ -42,7 +42,7 @@ type ExpectedMapValue map[atree.Value]atree.Value
 var _ atree.Value = &ExpectedMapValue{}
 
 func (v ExpectedMapValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
-	panic("not reachable")
+	panic(atree.NewUnreachableError())
 }
 
 // ExpectedWrapperValue
@@ -58,7 +58,7 @@ func NewExpectedWrapperValue(value atree.Value) ExpectedWrapperValue {
 }
 
 func (v ExpectedWrapperValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
-	panic("not reachable")
+	panic(atree.NewUnreachableError())
 }
 
 func ValueEqual(expected atree.Value, actual atree.Value) (bool, error) {

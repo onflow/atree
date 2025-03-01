@@ -269,7 +269,7 @@ func NewMapFromBatchData(
 		if currentSlabSize >= uint32(targetThreshold) ||
 			currentSlabSize+newElementSize > uint32(maxThreshold) {
 
-			// Generate storge id for next data slab
+			// Generate storage id for next data slab
 			nextID, err := storage.GenerateSlabID(address)
 			if err != nil {
 				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
@@ -417,7 +417,7 @@ func nextLevelMapSlabs(storage SlabStorage, address Address, slabs []MapSlab) ([
 
 	nextLevelSlabsIndex := 0
 
-	// Generate storge id
+	// Generate storage id
 	id, err := storage.GenerateSlabID(address)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
@@ -451,7 +451,7 @@ func nextLevelMapSlabs(storage SlabStorage, address Address, slabs []MapSlab) ([
 				childrenCount = uint64(len(slabs) - i)
 			}
 
-			// Generate storge id for next meta data slab
+			// Generate storage id for next meta data slab
 			id, err = storage.GenerateSlabID(address)
 			if err != nil {
 				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
@@ -1137,7 +1137,7 @@ func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (S
 		return SlabIDStorable(m.SlabID()), nil
 
 	default:
-		panic("not reachable")
+		panic(NewUnreachableError())
 	}
 }
 

@@ -1099,7 +1099,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 		// Insert new elements to wrapped child map
 
 		k := test_utils.Uint64Value(i)
-		v := test_utils.Uint64Value(r.Intn(256)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		v := test_utils.Uint64Value(r.Intn(256))
 
 		existingStorable, err := wrappedMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.NewSomeValue(v))
 		require.NoError(t, err)
@@ -1318,7 +1318,7 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		// Insert new elements to wrapped gchild map
 
 		k := test_utils.Uint64Value(i)
-		v := test_utils.Uint64Value(r.Intn(256)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		v := test_utils.Uint64Value(r.Intn(256))
 
 		existingStorable, err := wrappedMapAtLevel2.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.NewSomeValue(v))
 		require.NoError(t, err)

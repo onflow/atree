@@ -337,7 +337,7 @@ func modifyMap(
 		case mapMutateChildContainerAfterSet:
 			nextNestedLevels = nestedLevels - 1
 		default:
-			panic("not reachable")
+			panic(atree.NewUnreachableError())
 		}
 
 		var expectedKey, key atree.Value
@@ -416,7 +416,7 @@ func modifyMap(
 
 	case mapRemoveOp:
 		if m.Type().IsComposite() {
-			panic("not reachable")
+			panic(atree.NewUnreachableError())
 		}
 
 		// Use for-range on Go map to get random key
@@ -462,7 +462,7 @@ func modifyMap(
 			return nil, 0, fmt.Errorf("Remove() returned wrong existing value %s, want %s", existingValueStorable, oldExpectedValue)
 		}
 		if !equal {
-			return nil, 0, fmt.Errorf("removed map elemnet isn't as expected: %s, %s", oldExpectedValue, existingValue)
+			return nil, 0, fmt.Errorf("removed map element isn't as expected: %s, %s", oldExpectedValue, existingValue)
 		}
 
 		// Delete removed element from storage
@@ -542,7 +542,7 @@ func checkMapDataLoss(expectedValues test_utils.ExpectedMapValue, m *atree.Order
 			return fmt.Errorf("failed to compare %s and %s: %w", v, convertedValue, err)
 		}
 		if !equal {
-			return fmt.Errorf("map elemnet isn't as expected: %s, %s", convertedValue, v)
+			return fmt.Errorf("map element isn't as expected: %s, %s", convertedValue, v)
 		}
 	}
 

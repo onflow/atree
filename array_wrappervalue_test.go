@@ -468,7 +468,7 @@ func newArrayWrapperValueTestCases(
 
 // TestArrayWrapperValueAppendAndModify tests
 //   - appending WrapperValue to array
-//   - retrieveing WrapperValue from array
+//   - retrieving WrapperValue from array
 //   - modifing retrieved WrapperValue
 func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 
@@ -534,7 +534,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 
 				// Retrieve and modify WrapperValue from array
 				for i := range expectedValues {
-					v, err := array.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					v, err := array.Get(uint64(i))
 					require.NoError(t, err)
 
 					expected := expectedValues[i]
@@ -646,7 +646,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 
 				// Retrieve and modify WrapperValue from array
 				for i := range expectedValues {
-					v, err := array.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					v, err := array.Get(uint64(i))
 					require.NoError(t, err)
 
 					expected := expectedValues[i]
@@ -773,7 +773,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 
 				// Retrieve and modify WrapperValue from array
 				for i := range expectedValues {
-					v, err := array.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					v, err := array.Get(uint64(i))
 					require.NoError(t, err)
 
 					expected := expectedValues[i]
@@ -917,7 +917,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 						// Retrieve and modify WrapperValue from array
 						if needToModifyElement {
 							for i := range expectedValues {
-								v, err := array.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+								v, err := array.Get(uint64(i))
 								require.NoError(t, err)
 
 								expected := expectedValues[i]
@@ -1097,7 +1097,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 						// Retrieve and modify WrapperValue from array
 						if needToModifyElement {
 							for i := range expectedValues {
-								v, err := array.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+								v, err := array.Get(uint64(i))
 								require.NoError(t, err)
 
 								expected := expectedValues[i]
@@ -1885,7 +1885,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 		actualArrayCount -= removeCount
 
-		removeIndex := getRandomArrayIndexes(r, array, int(removeCount)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		removeIndex := getRandomArrayIndexes(r, array, int(removeCount))
 
 		sort.Sort(sort.Reverse(uint64Slice(removeIndex)))
 
@@ -1984,7 +1984,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 			index := getRandomArrayIndex(r, array)
 
-			testSetElementInArray(t, storage, array, int(index), v, expectedValues[index]) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			testSetElementInArray(t, storage, array, int(index), v, expectedValues[index])
 
 			expectedValues[index] = expected
 
@@ -2149,7 +2149,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 
 		actualArrayCount -= removeCount
 
-		removeIndex := getRandomArrayIndexes(r, array, int(removeCount)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		removeIndex := getRandomArrayIndexes(r, array, int(removeCount))
 
 		sort.Sort(sort.Reverse(uint64Slice(removeIndex)))
 
@@ -2216,7 +2216,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 
 		// Remove more elements
 
-		for i := 1; i < int(removeCount); i++ { //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		for i := 1; i < int(removeCount); i++ {
 			index := getRandomArrayIndex(r, array)
 
 			testRemoveElementFromArray(t, storage, array, index, expectedValues[index])
@@ -2433,7 +2433,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 		actualArrayCount -= removeCount
 
-		removeIndex := getRandomArrayIndexes(r, array, int(removeCount)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		removeIndex := getRandomArrayIndexes(r, array, int(removeCount))
 
 		sort.Sort(sort.Reverse(uint64Slice(removeIndex)))
 
@@ -2928,7 +2928,7 @@ func testArrayMutableElementIndex(t *testing.T, v atree.Value) {
 }
 
 func testSetElementInArray(t *testing.T, storage atree.SlabStorage, array *atree.Array, index int, newValue atree.Value, expected atree.Value) {
-	existingStorable, err := array.Set(uint64(index), newValue) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+	existingStorable, err := array.Set(uint64(index), newValue)
 	require.NoError(t, err)
 	require.NotNil(t, existingStorable)
 

@@ -147,7 +147,7 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 		// Finalize current data slab without appending new element
 		if dataSlab.header.size >= uint32(targetThreshold) {
 
-			// Generate storge id for next data slab
+			// Generate storage id for next data slab
 			nextID, err := storage.GenerateSlabID(address)
 			if err != nil {
 				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
@@ -279,7 +279,7 @@ func nextLevelArraySlabs(storage SlabStorage, address Address, slabs []ArraySlab
 
 	nextLevelSlabsIndex := 0
 
-	// Generate storge id
+	// Generate storage id
 	id, err := storage.GenerateSlabID(address)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
@@ -302,7 +302,7 @@ func nextLevelArraySlabs(storage SlabStorage, address Address, slabs []ArraySlab
 			slabs[nextLevelSlabsIndex] = metaSlab
 			nextLevelSlabsIndex++
 
-			// Generate storge id for next meta data slab
+			// Generate storage id for next meta data slab
 			id, err = storage.GenerateSlabID(address)
 			if err != nil {
 				// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
@@ -939,7 +939,7 @@ func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storab
 		return SlabIDStorable(a.SlabID()), nil
 
 	default:
-		panic("not reachable")
+		panic(NewUnreachableError())
 	}
 }
 

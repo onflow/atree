@@ -97,7 +97,7 @@ func _testArray(
 
 	// Verify array elements
 	for i, expected := range expectedValues {
-		actual, err := array.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		actual, err := array.Get(uint64(i))
 		require.NoError(t, err)
 
 		testValueEqual(t, expected, actual)
@@ -166,7 +166,7 @@ func _testArray(
 
 	// Verify decoded array elements
 	for i, expected := range expectedValues {
-		actual, err := decodedArray.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		actual, err := decodedArray.Get(uint64(i))
 		require.NoError(t, err)
 
 		testValueEqual(t, expected, actual)
@@ -179,7 +179,7 @@ func _testArray(
 
 		stats, err := atree.GetArrayStats(array)
 		require.NoError(t, err)
-		require.Equal(t, stats.SlabCount(), uint64(storage.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, stats.SlabCount(), uint64(storage.Count()))
 
 		if len(expectedValues) == 0 {
 			// Verify slab count for empty array
@@ -255,7 +255,7 @@ func TestArraySetAndGet(t *testing.T) {
 			newValue := test_utils.NewUint64ValueFromInteger(i * 10)
 			expectedValues[i] = newValue
 
-			existingStorable, err := array.Set(uint64(i), newValue) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			existingStorable, err := array.Set(uint64(i), newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -298,10 +298,10 @@ func TestArraySetAndGet(t *testing.T) {
 
 		for i := range expectedValues {
 			oldValue := expectedValues[i]
-			newValue := test_utils.Uint64Value(math.MaxUint64 - arrayCount + uint64(i) + 1) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			newValue := test_utils.Uint64Value(math.MaxUint64 - arrayCount + uint64(i) + 1)
 			expectedValues[i] = newValue
 
-			existingStorable, err := array.Set(uint64(i), newValue) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			existingStorable, err := array.Set(uint64(i), newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -335,7 +335,7 @@ func TestArraySetAndGet(t *testing.T) {
 
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := range expectedValues {
-			v := test_utils.Uint64Value(math.MaxUint64 - arrayCount + uint64(i) + 1) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			v := test_utils.Uint64Value(math.MaxUint64 - arrayCount + uint64(i) + 1)
 			expectedValues[i] = v
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -348,7 +348,7 @@ func TestArraySetAndGet(t *testing.T) {
 			newValue := test_utils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = newValue
 
-			existingStorable, err := array.Set(uint64(i), newValue) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			existingStorable, err := array.Set(uint64(i), newValue)
 			require.NoError(t, err)
 
 			existingValue, err := existingStorable.StoredValue(storage)
@@ -602,7 +602,7 @@ func TestArrayRemove(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			require.Equal(t, uint64(i), array.Count()) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.Equal(t, uint64(i), array.Count())
 
 			if i%256 == 0 {
 				testArray(t, storage, typeInfo, address, array, expectedValues[:i], false)
@@ -1658,7 +1658,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 			expectedValue := make(test_utils.ExpectedArrayValue, childArrayCount)
 			for j := range expectedValue {
-				v := test_utils.Uint64Value(uint64(j) + i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				v := test_utils.Uint64Value(uint64(j) + i)
 				err = childArray.Append(v)
 				require.NoError(t, err)
 
@@ -2321,7 +2321,7 @@ func TestMutableArrayIterateRange(t *testing.T) {
 
 			i++
 
-			require.Equal(t, GetArrayRootSlabByteSize(array), sizeBeforeMutation+uint32(i)*newElement.ByteSize()) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.Equal(t, GetArrayRootSlabByteSize(array), sizeBeforeMutation+uint32(i)*newElement.ByteSize())
 
 			return true, nil
 		})
@@ -2464,7 +2464,7 @@ func TestArraySetRandomValues(t *testing.T) {
 		newValue := randomValue(r, atree.MaxInlineArrayElementSize())
 		expectedValues[i] = newValue
 
-		existingStorable, err := array.Set(uint64(i), newValue) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		existingStorable, err := array.Set(uint64(i), newValue)
 		require.NoError(t, err)
 
 		existingValue, err := existingStorable.StoredValue(storage)
@@ -2523,7 +2523,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 			v := randomValue(r, atree.MaxInlineArrayElementSize())
 			expectedValues[i] = v
 
-			err := array.Insert(uint64(i), v) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			err := array.Insert(uint64(i), v)
 			require.NoError(t, err)
 		}
 
@@ -2545,12 +2545,12 @@ func TestArrayInsertRandomValues(t *testing.T) {
 
 		expectedValues := make([]atree.Value, 0, arrayCount)
 		for i := range arrayCount {
-			k := r.Intn(int(i + 1)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			k := r.Intn(int(i + 1))
 			v := randomValue(r, atree.MaxInlineArrayElementSize())
 
 			expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, k, v)
 
-			err := array.Insert(uint64(k), v) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			err := array.Insert(uint64(k), v)
 			require.NoError(t, err)
 		}
 
@@ -2580,7 +2580,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 		v := randomValue(r, atree.MaxInlineArrayElementSize())
 		expectedValues[i] = v
 
-		err := array.Insert(uint64(i), v) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		err := array.Insert(uint64(i), v)
 		require.NoError(t, err)
 	}
 
@@ -4448,7 +4448,7 @@ func TestArrayStringElement(t *testing.T) {
 
 		r := newRand(t)
 
-		stringSize := int(atree.MaxInlineArrayElementSize() - 3) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		stringSize := int(atree.MaxInlineArrayElementSize() - 3)
 
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := range expectedValues {
@@ -4481,7 +4481,7 @@ func TestArrayStringElement(t *testing.T) {
 
 		r := newRand(t)
 
-		stringSize := int(atree.MaxInlineArrayElementSize() + 512) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		stringSize := int(atree.MaxInlineArrayElementSize() + 512)
 
 		expectedValues := make([]atree.Value, arrayCount)
 		for i := range expectedValues {
@@ -4780,7 +4780,7 @@ func TestArrayFromBatchData(t *testing.T) {
 		var expectedValues []atree.Value
 		var v atree.Value
 
-		v = test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()-2))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		v = test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()-2)))
 		expectedValues = append(expectedValues, v)
 
 		err = array.Insert(0, v)
@@ -4838,7 +4838,8 @@ func TestArrayFromBatchData(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		v = test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()-2))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+
+		v = test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()-2)))
 
 		expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, 25, v)
 
@@ -4933,17 +4934,17 @@ func TestArrayFromBatchData(t *testing.T) {
 		var expectedValues []atree.Value
 		var v atree.Value
 
-		v = test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		v = test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2)))
 		expectedValues = append(expectedValues, v)
 		err = array.Append(v)
 		require.NoError(t, err)
 
-		v = test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		v = test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2)))
 		expectedValues = append(expectedValues, v)
 		err = array.Append(v)
 		require.NoError(t, err)
 
-		v = test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		v = test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2)))
 		expectedValues = append(expectedValues, v)
 		err = array.Append(v)
 		require.NoError(t, err)
@@ -5012,7 +5013,7 @@ func TestArrayMaxInlineElement(t *testing.T) {
 	expectedValues := make([]atree.Value, arrayCount)
 	for i := range expectedValues {
 		// String length is atree.MaxInlineArrayElementSize - 3 to account for string encoding overhead.
-		v := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-3))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		v := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-3)))
 		expectedValues[i] = v
 
 		err = array.Append(v)
@@ -5135,7 +5136,7 @@ func TestArraySlabDump(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		err = array.Append(test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize())))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		err = array.Append(test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()))))
 		require.NoError(t, err)
 
 		want := []string{
@@ -5222,7 +5223,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array: 1 root data slab
 			// nested composite elements: 1 root data slab for each
-			require.Equal(t, 1+arrayCount, uint64(GetDeltasCount(storage))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.Equal(t, 1+arrayCount, uint64(GetDeltasCount(storage)))
 			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, expectedValues)
@@ -5238,7 +5239,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array: 1 root data slab
 			// nested composite elements: 1 root data slab for each
-			require.Equal(t, 1+arrayCount, uint64(GetDeltasCount(storage))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.Equal(t, 1+arrayCount, uint64(GetDeltasCount(storage)))
 			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 			require.True(t, len(expectedValues) == len(childSlabIDs))
 
@@ -5263,7 +5264,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array: 1 root data slab
 			// nested composite elements: 1 root data slab for each
-			require.Equal(t, 1+arrayCount, uint64(GetDeltasCount(storage))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.Equal(t, 1+arrayCount, uint64(GetDeltasCount(storage)))
 			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, expectedValues)
@@ -5289,7 +5290,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array: 1 root data slab
 			// nested composite elements: 1 root data slab for each
-			require.Equal(t, 1+arrayCount, uint64(GetDeltasCount(storage))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.Equal(t, 1+arrayCount, uint64(GetDeltasCount(storage)))
 			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, expectedValues)
@@ -5317,7 +5318,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array: 1 root data slab
 			// nested composite elements: 1 root data slab for each
-			require.Equal(t, 1+arrayCount, uint64(GetDeltasCount(storage))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.Equal(t, 1+arrayCount, uint64(GetDeltasCount(storage)))
 			require.Equal(t, 0, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, expectedValues)
@@ -5395,7 +5396,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array: 1 root metadata slab, 2 data slabs
 			// nested composite value element: 1 root data slab for each
-			require.Equal(t, 3+arrayCount, uint64(GetDeltasCount(storage))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.Equal(t, 3+arrayCount, uint64(GetDeltasCount(storage)))
 			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, expectedValues)
@@ -5411,7 +5412,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array: 1 root metadata slab, 2 data slabs
 			// nested composite value element: 1 root data slab for each
-			require.Equal(t, 3+arrayCount, uint64(GetDeltasCount(storage))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.Equal(t, 3+arrayCount, uint64(GetDeltasCount(storage)))
 			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 			require.True(t, len(expectedValues) == len(childSlabIDs))
 
@@ -5436,7 +5437,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array: 1 root metadata slab, 2 data slabs
 			// nested composite value element: 1 root data slab for each
-			require.Equal(t, 3+arrayCount, uint64(GetDeltasCount(storage))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.Equal(t, 3+arrayCount, uint64(GetDeltasCount(storage)))
 			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, expectedValues)
@@ -5462,7 +5463,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array: 1 root metadata slab, 2 data slabs
 			// nested composite value element: 1 root data slab for each
-			require.Equal(t, 3+arrayCount, uint64(GetDeltasCount(storage))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.Equal(t, 3+arrayCount, uint64(GetDeltasCount(storage)))
 			require.Equal(t, 1, getArrayMetaDataSlabCount(storage))
 
 			testArrayLoadedElements(t, array, expectedValues)
@@ -5689,7 +5690,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
 			// nested composite elements: 1 root data slab for each
-			require.True(t, uint64(GetDeltasCount(storage)) > 1+arrayCount) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.True(t, uint64(GetDeltasCount(storage)) > 1+arrayCount)
 			require.True(t, getArrayMetaDataSlabCount(storage) > 1)
 
 			testArrayLoadedElements(t, array, expectedValues)
@@ -5725,7 +5726,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
 			// nested composite elements: 1 root data slab for each
-			require.True(t, uint64(GetDeltasCount(storage)) > 1+arrayCount) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.True(t, uint64(GetDeltasCount(storage)) > 1+arrayCount)
 			require.True(t, getArrayMetaDataSlabCount(storage) > 1)
 
 			testArrayLoadedElements(t, array, expectedValues)
@@ -5802,7 +5803,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 			// parent array (3 levels): 1 root metadata slab, n non-root metadata slabs, n data slabs
 			// nested composite elements: 1 root data slab for each
-			require.True(t, uint64(GetDeltasCount(storage)) > 1+arrayCount) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			require.True(t, uint64(GetDeltasCount(storage)) > 1+arrayCount)
 			require.True(t, getArrayMetaDataSlabCount(storage) > 1)
 
 			testArrayLoadedElements(t, array, expectedValues)
@@ -5882,7 +5883,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 					count := slabInfoToBeRemoved.count
 
-					// Update startIndex for subsequence metadata and data slabs.
+					// Update startIndex for subsequent metadata and data slabs.
 					for _, slabInfo := range nonrootMetadataSlabInfos[metadataSlabIndex+1:] {
 						slabInfo.startIndex -= count
 
@@ -5897,7 +5898,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 						metadataSlabIndex+1)
 
 				case dataSlabType:
-					// Unload data slab at randome index.
+					// Unload data slab at random index.
 					metadataSlabIndex := r.Intn(len(nonrootMetadataSlabInfos))
 
 					metaSlabInfo := nonrootMetadataSlabInfos[metadataSlabIndex]
@@ -5911,7 +5912,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 					count := slabInfoToBeRemoved.count
 
-					// Update startIndex for subsequence data slabs.
+					// Update startIndex for subsequent data slabs.
 					for _, slabInfo := range metaSlabInfo.children[dataSlabIndex+1:] {
 						slabInfo.startIndex -= count
 					}
@@ -5923,7 +5924,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 					metaSlabInfo.count -= count
 
-					// Update startIndex for all subsequence metadata slabs.
+					// Update startIndex for all subsequent metadata slabs.
 					for _, slabInfo := range nonrootMetadataSlabInfos[metadataSlabIndex+1:] {
 						slabInfo.startIndex -= count
 
@@ -6066,7 +6067,7 @@ func createArrayWithSimpleAndChildArrayValues(
 	r := 'a'
 	for i := range expectedValues {
 
-		if compositeValueIndex == uint64(i) { //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		if compositeValueIndex == uint64(i) {
 			// Create child array with one element
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -6186,7 +6187,7 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 		mv := expectedValues[i]
 		mv.UpdateStorableSize(mutatedStorableSize)
 
-		existingStorable, err := array.Set(uint64(i), mv) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		existingStorable, err := array.Set(uint64(i), mv)
 		require.NoError(t, err)
 		require.NotNil(t, existingStorable)
 	}
@@ -6363,7 +6364,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		}, arrayCount)
 
 		for i := range children {
-			e, err := parentArray.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			e, err := parentArray.Get(uint64(i))
 			require.NoError(t, err)
 			require.Equal(t, 1, getStoredDeltas(storage))
 
@@ -6561,7 +6562,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		}, arrayCount)
 
 		for i := range children {
-			e, err := parentArray.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			e, err := parentArray.Get(uint64(i))
 			require.NoError(t, err)
 			require.Equal(t, 1, getStoredDeltas(storage))
 
@@ -6646,7 +6647,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		}
 
 		// Parent array has one data slab and all child arrays are not inlined.
-		require.Equal(t, 1+arrayCount, uint64(getStoredDeltas(storage))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, 1+arrayCount, uint64(getStoredDeltas(storage)))
 		require.True(t, IsArrayRootDataSlab(parentArray))
 
 		// Remove one element from child array which triggers standalone array slab becomes inlined slab again.
@@ -7060,7 +7061,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		require.Equal(t, gValueID, gchildArray.ValueID())      // atree.Value ID is unchanged
 
 		// Test inlined grand child slab size
-		storableByteSizes := make([]uint32, int(gchildArray.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		storableByteSizes := make([]uint32, int(gchildArray.Count()))
 		storableByteSizes[0] = largeValueSize
 		for i := 1; i < len(storableByteSizes); i++ {
 			storableByteSizes[i] = vSize
@@ -7194,7 +7195,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		children := make([]arrayInfo, arrayCount)
 
 		for i := range children {
-			e, err := parentArray.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			e, err := parentArray.Get(uint64(i))
 			require.NoError(t, err)
 			require.Equal(t, 1, getStoredDeltas(storage))
 
@@ -7263,7 +7264,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 				// Test inlined child slab size
 				gchildArraySize := atree.ComputeInlinedArraySlabByteSize([]uint32{vSize})
-				childStorableByteSizes := make([]uint32, int(childArray.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				childStorableByteSizes := make([]uint32, int(childArray.Count()))
 				for k := range childStorableByteSizes {
 					var size uint32
 					if k == 0 {
@@ -7321,7 +7322,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			expectedInlinedGrandChildSize := atree.ComputeInlinedArraySlabByteSizeWithFixSizedElement(vSize, gchildArray.Count())
 			require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
-			childStorableByteSizes := make([]uint32, int(childArray.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childStorableByteSizes := make([]uint32, int(childArray.Count()))
 			childStorableByteSizes[0] = expectedInlinedGrandChildSize
 			for i := 1; i < len(childStorableByteSizes); i++ {
 				childStorableByteSizes[i] = vSize
@@ -7377,7 +7378,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 			require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 			// Test inlined child slab size
-			childStorableByteSizes := make([]uint32, int(childArray.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			childStorableByteSizes := make([]uint32, int(childArray.Count()))
 			childStorableByteSizes[0] = expectedInlinedGrandChildSize
 			for i := 1; i < len(childStorableByteSizes); i++ {
 				childStorableByteSizes[i] = vSize
@@ -7434,7 +7435,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 				require.Equal(t, expectedInlinedGrandChildSize, GetArrayRootSlabByteSize(gchildArray))
 
 				// Test inlined child slab size
-				childStorableByteSizes := make([]uint32, int(childArray.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				childStorableByteSizes := make([]uint32, int(childArray.Count()))
 				childStorableByteSizes[0] = expectedInlinedGrandChildSize
 				for i := 1; i < len(childStorableByteSizes); i++ {
 					childStorableByteSizes[i] = vSize
@@ -7520,7 +7521,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		children := make([]arrayInfo, arrayCount)
 
 		for i := range children {
-			e, err := parentArray.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			e, err := parentArray.Get(uint64(i))
 			require.NoError(t, err)
 			require.Equal(t, 1, getStoredDeltas(storage))
 
@@ -7627,7 +7628,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 			require.True(t, gchildArray.Inlined())
 			require.True(t, childArray.Inlined())
-			require.Equal(t, 3, getStoredDeltas(storage)) // There are 3 stored slab because parent root slab is metdata.
+			require.Equal(t, 3, getStoredDeltas(storage)) // There are 3 stored slab because parent root slab is metadata.
 
 			require.Equal(t, atree.SlabIDUndefined, childArray.SlabID()) // Storage ID is the same bytewise as value ID.
 			require.Equal(t, valueID, childArray.ValueID())              // atree.Value ID is unchanged
@@ -7704,7 +7705,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		}
 
 		// Parent array has one root data slab, 4 grand child array with standalone root data slab.
-		require.Equal(t, 1+arrayCount, uint64(getStoredDeltas(storage))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, 1+arrayCount, uint64(getStoredDeltas(storage)))
 		require.True(t, IsArrayRootDataSlab(parentArray))
 
 		// Remove elements from grand child array to trigger child array inlined again.
@@ -7856,7 +7857,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 	}, arrayCount)
 
 	for i := range children {
-		e, err := parentArray.Get(uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		e, err := parentArray.Get(uint64(i))
 		require.NoError(t, err)
 		require.Equal(t, 1, getStoredDeltas(storage))
 
@@ -8253,7 +8254,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 
 		// Overwrite existing child array value
 		for i := range expectedValues {
-			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -8313,7 +8314,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 
 		// Overwrite existing child array value
 		for i := range expectedValues {
-			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -8383,7 +8384,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 
 		// Overwrite existing child map value
 		for i := range expectedValues {
-			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 
@@ -8448,7 +8449,7 @@ func TestArraySetReturnedValue(t *testing.T) {
 
 		// Overwrite existing child map value
 		for i := range expectedValues {
-			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			existingStorable, err := parentArray.Set(uint64(i), test_utils.Uint64Value(0))
 			require.NoError(t, err)
 			require.NotNil(t, existingStorable)
 

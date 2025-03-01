@@ -253,7 +253,7 @@ func _testMap(
 
 		stats, err := atree.GetMapStats(m)
 		require.NoError(t, err)
-		require.Equal(t, stats.SlabCount(), uint64(storage.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, stats.SlabCount(), uint64(storage.Count()))
 
 		if len(expectedValues) == 0 {
 			// Verify slab count for empty map
@@ -703,7 +703,7 @@ func TestMapHas(t *testing.T) {
 		require.NoError(t, err)
 
 		for i, k := range keysToInsert {
-			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.Uint64Value(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.Uint64Value(i))
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 		}
@@ -855,7 +855,7 @@ func TestMapRemove(t *testing.T) {
 		// Test:
 		// - data slab refers to an external slab containing elements with hash collision
 		// - last collision element is inlined after all other collision elements are removed
-		// - data slab overflows with inlined colllision element
+		// - data slab overflows with inlined collision element
 		// - data slab splits
 
 		atree.SetThreshold(512)
@@ -894,8 +894,8 @@ func TestMapRemove(t *testing.T) {
 
 		collisionKeyValues := make(map[atree.Value]atree.Value)
 		for uint64(len(collisionKeyValues)) < numOfElementsWithCollision {
-			k := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			v := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			k := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
+			v := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
 			collisionKeyValues[k] = v
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{nextDigest}})
@@ -918,7 +918,7 @@ func TestMapRemove(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		count := uint64(len(nonCollisionKeyValues) + len(collisionKeyValues)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		count := uint64(len(nonCollisionKeyValues) + len(collisionKeyValues))
 
 		// Remove all collision elements
 		for k, v := range collisionKeyValues {
@@ -953,7 +953,7 @@ func TestMapRemove(t *testing.T) {
 		// Test:
 		// - data slab refers to an external slab containing elements with hash collision
 		// - last collision element is inlined after all other collision elements are removed
-		// - data slab overflows with inlined colllision element
+		// - data slab overflows with inlined collision element
 		// - data slab splits
 
 		atree.SetThreshold(512)
@@ -975,8 +975,8 @@ func TestMapRemove(t *testing.T) {
 
 		collisionKeyValues := make(map[atree.Value]atree.Value)
 		for uint64(len(collisionKeyValues)) < numOfElementsWithCollision {
-			k := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			v := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			k := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
+			v := test_utils.NewStringValue(randStr(r, int(atree.MaxInlineMapKeySize())-2))
 			collisionKeyValues[k] = v
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{0}})
@@ -1001,7 +1001,7 @@ func TestMapRemove(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		count := uint64(len(nonCollisionKeyValues) + len(collisionKeyValues)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		count := uint64(len(nonCollisionKeyValues) + len(collisionKeyValues))
 
 		// Remove all collision elements
 		for k, v := range collisionKeyValues {
@@ -2290,7 +2290,7 @@ func TestMutableMapIterate(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -2350,7 +2350,7 @@ func TestMutableMapIterate(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -2412,7 +2412,7 @@ func TestMutableMapIterate(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -2474,7 +2474,7 @@ func TestMutableMapIterate(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -2537,7 +2537,7 @@ func TestMutableMapIterate(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -2599,7 +2599,7 @@ func TestMutableMapIterate(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -2660,7 +2660,7 @@ func TestMutableMapIterate(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -2743,7 +2743,7 @@ func TestMutableMapIterate(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -2827,7 +2827,7 @@ func TestMutableMapIterate(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -2922,7 +2922,7 @@ func TestMutableMapIterate(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -3017,7 +3017,7 @@ func TestMutableMapIterate(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -3112,7 +3112,7 @@ func TestMutableMapIterate(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -3195,7 +3195,7 @@ func TestMutableMapIterate(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -3277,7 +3277,7 @@ func TestMutableMapIterate(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -3361,7 +3361,7 @@ func TestMutableMapIterate(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 
@@ -3397,7 +3397,7 @@ func TestMutableMapIterate(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -3490,7 +3490,7 @@ func TestMutableMapIterate(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -3584,7 +3584,7 @@ func TestMutableMapIterate(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -3678,7 +3678,7 @@ func TestMutableMapIterate(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -3772,7 +3772,7 @@ func TestMutableMapIterate(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -3856,7 +3856,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -3916,7 +3916,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -3978,7 +3978,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -4040,7 +4040,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -4103,7 +4103,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -4164,7 +4164,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -4224,7 +4224,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -4309,7 +4309,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -4395,7 +4395,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -4492,7 +4492,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -4589,7 +4589,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -4686,7 +4686,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -4771,7 +4771,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -4854,7 +4854,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -4940,7 +4940,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 
@@ -4978,7 +4978,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -5073,7 +5073,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -5169,7 +5169,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -5265,7 +5265,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -5361,7 +5361,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -5446,7 +5446,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -5507,7 +5507,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -5571,7 +5571,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -5634,7 +5634,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -5698,7 +5698,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -5761,7 +5761,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -5823,7 +5823,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -5907,7 +5907,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -5992,7 +5992,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -6088,7 +6088,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -6184,7 +6184,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -6280,7 +6280,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -6364,7 +6364,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -6447,7 +6447,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, sortedKeys, false)
 	})
@@ -6532,7 +6532,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 			return true, nil
 		})
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 
@@ -6569,7 +6569,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
@@ -6663,7 +6663,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -6758,7 +6758,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -6853,7 +6853,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.True(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -6948,7 +6948,7 @@ func TestMutableMapIterateValues(t *testing.T) {
 		})
 
 		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, mapCount, uint64(i))
 		require.False(t, IsMapRootDataSlab(m))
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
@@ -7186,7 +7186,7 @@ func testMapSetRemoveRandomValues(
 
 			digests := make([]atree.Digest, digestMaxLevels)
 			for i := range digests {
-				digests[i] = atree.Digest(r.Intn(digestMaxValue)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				digests[i] = atree.Digest(r.Intn(digestMaxValue))
 			}
 
 			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -8590,10 +8590,10 @@ func TestMapEncodeDecode(t *testing.T) {
 		childSlabIDs, childSizes, _ := atree.GetMapMetaDataSlabChildInfo(meta)
 
 		require.Equal(t, 2, len(childSlabIDs))
-		require.Equal(t, uint32(len(stored[id2])), childSizes[0]) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, uint32(len(stored[id2])), childSizes[0])
 
 		const inlinedExtraDataSize = 8
-		require.Equal(t, uint32(len(stored[id3])-inlinedExtraDataSize+atree.SlabIDLength), childSizes[1]) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, uint32(len(stored[id3])-inlinedExtraDataSize+atree.SlabIDLength), childSizes[1])
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, stored)
@@ -11783,8 +11783,8 @@ func TestMapEncodeDecode(t *testing.T) {
 		childSlabIDs, childSizes, _ := atree.GetMapMetaDataSlabChildInfo(meta)
 
 		require.Equal(t, 2, len(childSlabIDs))
-		require.Equal(t, uint32(len(stored[id2])), childSizes[0])                    //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		require.Equal(t, uint32(len(stored[id3])+atree.SlabIDLength), childSizes[1]) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		require.Equal(t, uint32(len(stored[id2])), childSizes[0])
+		require.Equal(t, uint32(len(stored[id3])+atree.SlabIDLength), childSizes[1])
 
 		// Decode data to new storage
 		storage2 := newTestPersistentStorageWithData(t, stored)
@@ -13595,8 +13595,8 @@ func TestMapPopIterate(t *testing.T) {
 				keyValues[k] = test_utils.NewStringValue(randStr(r, 16))
 
 				digests := []atree.Digest{
-					atree.Digest(i % 100), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-					atree.Digest(i % 5),   //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					atree.Digest(i % 100),
+					atree.Digest(i % 5),
 				}
 
 				digesterBuilder.On("Digest", k).Return(mockDigester{digests})
@@ -13885,8 +13885,8 @@ func TestMapFromBatchData(t *testing.T) {
 			require.Nil(t, storable)
 		}
 
-		k := test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapElementSize()-2))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		v := test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		k := test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapElementSize()-2)))
+		v := test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2)))
 		storable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 		require.NoError(t, err)
 		require.Nil(t, storable)
@@ -13953,8 +13953,8 @@ func TestMapFromBatchData(t *testing.T) {
 		storable, err := m.Set(
 			test_utils.CompareValue,
 			test_utils.GetHashInput,
-			test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2))), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2))), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2))),
+			test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()-2))),
 		)
 		require.NoError(t, err)
 		require.Nil(t, storable)
@@ -14155,7 +14155,7 @@ func TestMapFromBatchData(t *testing.T) {
 
 		r := newRand(t)
 
-		maxStringSize := int(atree.MaxInlineMapKeySize() - 2) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		maxStringSize := int(atree.MaxInlineMapKeySize() - 2)
 
 		typeInfo := test_utils.NewSimpleTypeInfo(42)
 
@@ -14303,7 +14303,7 @@ func TestMapMaxInlineElement(t *testing.T) {
 	t.Parallel()
 
 	r := newRand(t)
-	maxStringSize := int(atree.MaxInlineMapKeySize() - 2) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+	maxStringSize := int(atree.MaxInlineMapKeySize() - 2)
 	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -14525,8 +14525,8 @@ func TestMapSlabDump(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		k := test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapKeySize()))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		v := test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapKeySize()))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		k := test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapKeySize())))
+		v := test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapKeySize())))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(0)}})
 
 		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
@@ -14552,8 +14552,8 @@ func TestMapSlabDump(t *testing.T) {
 		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
-		k := test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapKeySize()-2)))   //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-		v := test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize()))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		k := test_utils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineMapKeySize()-2)))
+		v := test_utils.NewStringValue(strings.Repeat("b", int(atree.MaxInlineMapElementSize())))
 		digesterBuilder.On("Digest", k).Return(mockDigester{d: []atree.Digest{atree.Digest(0)}})
 
 		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
@@ -14769,7 +14769,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -14792,7 +14792,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -14817,7 +14817,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 2), atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 2), atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -14842,7 +14842,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -14866,7 +14866,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -14944,7 +14944,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 2), atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 2), atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -14977,7 +14977,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15010,7 +15010,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15064,7 +15064,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15144,7 +15144,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 2), atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 2), atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15178,7 +15178,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15212,7 +15212,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15265,7 +15265,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15355,7 +15355,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 2), atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 2), atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15395,7 +15395,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15438,7 +15438,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i / 4), atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15491,7 +15491,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15539,7 +15539,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 					typeInfo,
 					mapCount,
 					childArrayIndex,
-					func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 					useWrapperValue,
 				)
 
@@ -15572,7 +15572,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15595,7 +15595,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15619,7 +15619,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15651,7 +15651,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15684,7 +15684,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15724,7 +15724,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 					typeInfo,
 					mapCount,
 					childArrayIndex,
-					func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 					useWrapperValue,
 				)
 
@@ -15757,7 +15757,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15804,7 +15804,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15853,7 +15853,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15912,7 +15912,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15933,7 +15933,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				var loadedExpectedValues [][2]atree.Value
 				if i < len(childSlabIDs)-1 {
 					nextFirstKey := childFirstKeys[i+1]
-					loadedExpectedValues = expectedValues[int(nextFirstKey):] //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					loadedExpectedValues = expectedValues[int(nextFirstKey):]
 				}
 
 				testMapLoadedElements(t, m, loadedExpectedValues)
@@ -15953,7 +15953,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -15993,7 +15993,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -16035,7 +16035,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -16072,10 +16072,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 					if len(dataSlabInfos) > 0 {
 						// Update previous slabInfo.count
-						dataSlabInfos[len(dataSlabInfos)-1].count = int(firstKey) - dataSlabInfos[len(dataSlabInfos)-1].startIndex //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+						dataSlabInfos[len(dataSlabInfos)-1].count = int(firstKey) - dataSlabInfos[len(dataSlabInfos)-1].startIndex
 					}
 
-					dataSlabInfos = append(dataSlabInfos, &slabInfo{id: slabID, startIndex: int(firstKey)}) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					dataSlabInfos = append(dataSlabInfos, &slabInfo{id: slabID, startIndex: int(firstKey)})
 				}
 			}
 
@@ -16086,7 +16086,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 				slabToBeRemoved := dataSlabInfos[index]
 
-				// Update startIndex for all subsequence data slabs
+				// Update startIndex for all subsequent data slabs
 				for i := index + 1; i < len(dataSlabInfos); i++ {
 					dataSlabInfos[i].startIndex -= slabToBeRemoved.count
 				}
@@ -16124,7 +16124,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				address,
 				typeInfo,
 				mapCount,
-				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} }, //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				func(i int) []atree.Digest { return []atree.Digest{atree.Digest(i)} },
 				useWrapperValue,
 			)
 
@@ -16157,15 +16157,15 @@ func TestMapLoadedValueIterator(t *testing.T) {
 					prevDataSlabInfo := prevMetaDataSlabInfo.children[len(prevMetaDataSlabInfo.children)-1]
 
 					// Update previous metadata slab count
-					prevMetaDataSlabInfo.count = int(firstKey) - prevMetaDataSlabInfo.startIndex //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					prevMetaDataSlabInfo.count = int(firstKey) - prevMetaDataSlabInfo.startIndex
 
 					// Update previous data slab count
-					prevDataSlabInfo.count = int(firstKey) - prevDataSlabInfo.startIndex //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					prevDataSlabInfo.count = int(firstKey) - prevDataSlabInfo.startIndex
 				}
 
 				metadataSlabInfo := &slabInfo{
 					id:         slabID,
-					startIndex: int(firstKey), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					startIndex: int(firstKey),
 				}
 
 				nonRootMetadataSlab, ok := atree.GetDeltas(storage)[slabID].(*atree.MapMetaDataSlab)
@@ -16179,10 +16179,10 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 					children[i] = &slabInfo{
 						id:         slabID,
-						startIndex: int(firstKey), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+						startIndex: int(firstKey),
 					}
 					if i > 0 {
-						children[i-1].count = int(firstKey) - children[i-1].startIndex //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+						children[i-1].count = int(firstKey) - children[i-1].startIndex
 					}
 				}
 
@@ -16215,7 +16215,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 					count := slabInfoToBeRemoved.count
 
-					// Update startIndex for subsequence metadata slabs
+					// Update startIndex for subsequent metadata slabs
 					for _, slabInfo := range metadataSlabInfos[metadataSlabIndex+1:] {
 						slabInfo.startIndex -= count
 
@@ -16244,7 +16244,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 					count := slabInfoToBeRemoved.count
 
-					// Update startIndex for all subsequence data slabs in this metadata slab info
+					// Update startIndex for all subsequent data slabs in this metadata slab info
 					for _, childSlabInfo := range metadataSlabInfo.children[dataSlabIndex+1:] {
 						childSlabInfo.startIndex -= count
 					}
@@ -16256,7 +16256,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 					metadataSlabInfo.count -= count
 
-					// Update startIndex for all subsequence metadata slabs.
+					// Update startIndex for all subsequent metadata slabs.
 					for _, slabInfo := range metadataSlabInfos[metadataSlabIndex+1:] {
 						slabInfo.startIndex -= count
 
@@ -16311,12 +16311,12 @@ func createMapWithLongStringKey(
 	expectedValues := make([][2]atree.Value, count)
 	r := 'a'
 	for i := range expectedValues {
-		s := strings.Repeat(string(r), int(atree.MaxInlineMapElementSize())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		s := strings.Repeat(string(r), int(atree.MaxInlineMapElementSize()))
 
 		k := test_utils.NewStringValue(s)
 		v := test_utils.NewUint64ValueFromInteger(i)
 
-		digests := []atree.Digest{atree.Digest(i)} //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		digests := []atree.Digest{atree.Digest(i)}
 		digesterBuilder.On("Digest", k).Return(mockDigester{digests})
 
 		if useWrapperValue {
@@ -16555,7 +16555,7 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for len(keyValues) < mapCount {
 			k := test_utils.NewStringValue(randStr(r, keyStringSize))
-			v := test_utils.NewStringValue(randStr(r, int(valueStringSize))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			v := test_utils.NewStringValue(randStr(r, int(valueStringSize)))
 			keyValues[k] = v
 		}
 
@@ -16592,8 +16592,8 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for len(keyValues) < mapCount {
-			k := test_utils.NewStringValue(randStr(r, int(keyStringSize)))   //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			v := test_utils.NewStringValue(randStr(r, int(valueStringSize))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			k := test_utils.NewStringValue(randStr(r, int(keyStringSize)))
+			v := test_utils.NewStringValue(randStr(r, int(valueStringSize)))
 			keyValues[k] = v
 		}
 
@@ -16632,8 +16632,8 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 
 		keyValues := make(map[atree.Value]atree.Value, mapCount)
 		for len(keyValues) < mapCount {
-			k := test_utils.NewStringValue(randStr(r, int(keyStringSize)))   //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-			v := test_utils.NewStringValue(randStr(r, int(valueStringSize))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			k := test_utils.NewStringValue(randStr(r, int(keyStringSize)))
+			v := test_utils.NewStringValue(randStr(r, int(valueStringSize)))
 			keyValues[k] = v
 		}
 
@@ -16794,7 +16794,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedInlinedMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					encodedValueSize,
-					int(childMap.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(childMap.Count()))
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
 				// Test parent slab size
@@ -16841,7 +16841,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedStandaloneSlabSize := atree.ComputeMapRootDataSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(childMap.Count()),
 			)
 			require.Equal(t, expectedStandaloneSlabSize, GetMapRootSlabByteSize(childMap))
 
@@ -16889,7 +16889,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedInlinedMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					encodedValueSize,
-					int(childMap.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(childMap.Count()))
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
 				elementByteSizesByKey[childKey] = [2]uint32{elementByteSizesByKey[childKey][0], expectedInlinedMapSize}
@@ -16967,7 +16967,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedInlinedMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					encodedValueSize,
-					int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(childMap.Count()),
 				)
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -17017,7 +17017,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedStandaloneSlabSize := atree.ComputeMapRootDataSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(childMap.Count()),
 			)
 			require.Equal(t, expectedStandaloneSlabSize, GetMapRootSlabByteSize(childMap))
 
@@ -17071,7 +17071,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedInlinedMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(childMap.Count()),
 			)
 			require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -17120,7 +17120,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedInlinedMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					encodedValueSize,
-					int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(childMap.Count()),
 				)
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -17201,7 +17201,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedInlinedMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					encodedValueSize,
-					int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(childMap.Count()),
 				)
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -17240,7 +17240,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedStandaloneSlabSize := atree.ComputeMapRootDataSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(childMap.Count()),
 			)
 			require.Equal(t, expectedStandaloneSlabSize, GetMapRootSlabByteSize(childMap))
 
@@ -17280,7 +17280,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedInlinedMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(childMap.Count()),
 			)
 			require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -17319,7 +17319,7 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedInlinedMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					encodedValueSize,
-					int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(childMap.Count()),
 				)
 				require.Equal(t, expectedInlinedMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -17434,7 +17434,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(gchildMap.Count()),
 			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
@@ -17442,7 +17442,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				expectedGrandChildMapSize,
-				int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(childMap.Count()),
 			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -17519,7 +17519,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(gchildMap.Count()),
 			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
@@ -17527,7 +17527,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedChildMapSize := atree.ComputeMapRootDataSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				expectedGrandChildMapSize,
-				int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(childMap.Count()),
 			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -17535,7 +17535,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedParentSize := atree.ComputeMapRootDataSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				slabIDStorableByteSize,
-				int(parentMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(parentMap.Count()),
 			)
 			require.Equal(t, expectedParentSize, GetMapRootSlabByteSize(parentMap))
 
@@ -17596,7 +17596,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					encodedValueSize,
-					int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(gchildMap.Count()),
 				)
 				require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
@@ -17604,7 +17604,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					expectedGrandChildMapSize,
-					int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(childMap.Count()),
 				)
 				require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -17612,7 +17612,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedParentMapSize := atree.ComputeMapRootDataSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					expectedChildMapSize,
-					int(parentMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(parentMap.Count()),
 				)
 				require.Equal(t, expectedParentMapSize, GetMapRootSlabByteSize(parentMap))
 
@@ -17716,7 +17716,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(gchildMap.Count()),
 			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
@@ -17724,7 +17724,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				expectedGrandChildMapSize,
-				int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(childMap.Count()),
 			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -17881,7 +17881,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					encodedValueSize,
-					int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(gchildMap.Count()),
 				)
 				require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
@@ -17889,14 +17889,14 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					expectedGrandChildMapSize,
-					int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(childMap.Count()),
 				)
 				require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
 				// Test parent child slab size
 				expectedParentMapSize := atree.ComputeMapRootDataSlabByteSizeWithFixSizedElement(
 					encodedKeySize, expectedChildMapSize,
-					int(parentMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(parentMap.Count()),
 				)
 				require.Equal(t, expectedParentMapSize, GetMapRootSlabByteSize(parentMap))
 
@@ -17997,7 +17997,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(gchildMap.Count()),
 			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
@@ -18005,7 +18005,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				expectedGrandChildMapSize,
-				int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(childMap.Count()),
 			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -18073,7 +18073,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(gchildMap.Count()),
 			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
@@ -18153,7 +18153,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(gchildMap.Count()),
 			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
@@ -18242,12 +18242,12 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(gchildMap.Count()),
 			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test inlined child slab size
-			elementByteSizes := make([][2]uint32, int(childMap.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			elementByteSizes := make([][2]uint32, int(childMap.Count()))
 			elementByteSizes[0] = [2]uint32{encodedKeySize, expectedGrandChildMapSize}
 			for i := 1; i < len(elementByteSizes); i++ {
 				elementByteSizes[i] = [2]uint32{encodedKeySize, encodedValueSize}
@@ -18323,12 +18323,12 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 				expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					encodedKeySize,
 					encodedValueSize,
-					int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(gchildMap.Count()),
 				)
 				require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 				// Test inlined child slab size
-				elementByteSizes := make([][2]uint32, int(childMap.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				elementByteSizes := make([][2]uint32, int(childMap.Count()))
 				elementByteSizes[0] = [2]uint32{encodedKeySize, expectedGrandChildMapSize}
 				for i := 1; i < len(elementByteSizes); i++ {
 					elementByteSizes[i] = [2]uint32{encodedKeySize, encodedValueSize}
@@ -18440,7 +18440,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(gchildMap.Count()),
 			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
@@ -18448,7 +18448,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				expectedGrandChildMapSize,
-				int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(childMap.Count()),
 			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -18509,7 +18509,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(gchildMap.Count()),
 			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
@@ -18517,7 +18517,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedChildMapSize := atree.ComputeMapRootDataSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				expectedGrandChildMapSize,
-				int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(childMap.Count()),
 			)
 			require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -18532,7 +18532,7 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 		expectedParentMapSize := atree.ComputeMapRootDataSlabByteSizeWithFixSizedElement(
 			encodedKeySize,
 			slabIDStorableSize,
-			int(parentMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			int(parentMap.Count()),
 		)
 		require.Equal(t, expectedParentMapSize, GetMapRootSlabByteSize(parentMap))
 
@@ -18590,12 +18590,12 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 			expectedGrandChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 				encodedKeySize,
 				encodedValueSize,
-				int(gchildMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				int(gchildMap.Count()),
 			)
 			require.Equal(t, expectedGrandChildMapSize, GetMapRootSlabByteSize(gchildMap))
 
 			// Test inlined child slab size
-			elementByteSizes := make([][2]uint32, int(childMap.Count())) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			elementByteSizes := make([][2]uint32, int(childMap.Count()))
 			elementByteSizes[0] = [2]uint32{encodedKeySize, expectedGrandChildMapSize}
 			for i := 1; i < len(elementByteSizes); i++ {
 				elementByteSizes[i] = [2]uint32{encodedKeySize, encodedValueSize}
@@ -18806,7 +18806,7 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 				expectedChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 					k.ByteSize(),
 					v.ByteSize(),
-					int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+					int(childMap.Count()),
 				)
 				require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -18855,7 +18855,7 @@ func TestChildMapWhenParentMapIsModified(t *testing.T) {
 					expectedChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 						k.ByteSize(),
 						v.ByteSize(),
-						int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+						int(childMap.Count()),
 					)
 					require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -18976,7 +18976,7 @@ func createMapWithEmpty2LevelChildMap(
 		expectedChildMapSize := atree.ComputeInlinedMapSlabByteSizeWithFixSizedElement(
 			ks.ByteSize(),
 			emptyInlinedMapByteSize,
-			int(childMap.Count()), //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+			int(childMap.Count()),
 		)
 		require.Equal(t, expectedChildMapSize, GetMapRootSlabByteSize(childMap))
 
@@ -19972,5 +19972,5 @@ func newRandomDigests(r *rand.Rand, level int) []atree.Digest {
 }
 
 func newRandomDigest(r *rand.Rand) atree.Digest {
-	return atree.Digest(r.Intn(256)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+	return atree.Digest(r.Intn(256))
 }

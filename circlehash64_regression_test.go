@@ -192,7 +192,7 @@ func checksumVaryingEndPos(t *testing.T, cryptoHash512 hash.Hash, seed uint64, d
 // produced from SHA-512 in a feedback loop. SHA-512 is used instead
 // of SHAKE-256 XOF or a stream cipher because SHA-512 is bundled with
 // Go and is available in most languages. One reason a simple PRNG
-// isn't used here is because different implementions in different
+// isn't used here is because different implementations in different
 // programming languages are sometimes incompatible due to errors
 // (like SplitMix64). SHA-512 will be compatible everywhere.
 // SHA-512 of the returned 16384-byte slice is:

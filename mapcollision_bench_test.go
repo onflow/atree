@@ -134,8 +134,8 @@ func BenchmarkCollisionPerDigest(b *testing.B) {
 			digesterBuilder := NewCollisionDigesterBuilder(collisionPerDigest)
 			keyValues := make(map[atree.Value]atree.Value, mapCount)
 			for i := range mapCount {
-				k := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
-				v := test_utils.Uint64Value(i) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+				k := test_utils.Uint64Value(i)
+				v := test_utils.Uint64Value(i)
 				keyValues[k] = v
 			}
 

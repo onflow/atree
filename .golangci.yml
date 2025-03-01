@@ -3,23 +3,23 @@
 linters:
   disable-all: true
   enable:
-    # enable default linters
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - typecheck
-    - unused
-
-    # enable extra linters
+    - asciicheck
+    - bidichk
     - copyloopvar
+    - errcheck
+    # - forbidigo # TODO: enable forbidigo after adding non-default settings
     - gocritic
     - gofmt
     - goimports
+    - gosimple
+    - govet
+    - ineffassign
     - misspell
     - nilerr
+    - staticcheck
+    - typecheck
     - unconvert
+    - unused
 
 issues:
   max-issues-per-linter: 0

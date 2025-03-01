@@ -76,23 +76,23 @@ func randomValue(r *rand.Rand, maxInlineSize uint64) atree.Value {
 	switch r.Intn(maxSimpleValueType) {
 
 	case uint8Type:
-		return test_utils.Uint8Value(r.Intn(255)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		return test_utils.Uint8Value(r.Intn(255))
 
 	case uint16Type:
-		return test_utils.Uint16Value(r.Intn(6535)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		return test_utils.Uint16Value(r.Intn(6535))
 
 	case uint32Type:
-		return test_utils.Uint32Value(r.Intn(4294967295)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		return test_utils.Uint32Value(r.Intn(4294967295))
 
 	case uint64Type:
-		return test_utils.Uint64Value(r.Intn(1844674407370955161)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		return test_utils.Uint64Value(r.Intn(1844674407370955161))
 
 	case smallStringType: // small string (inlinable)
-		slen := r.Intn(int(maxInlineSize)) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		slen := r.Intn(int(maxInlineSize))
 		return test_utils.NewStringValue(randStr(r, slen))
 
 	case largeStringType: // large string (external)
-		slen := r.Intn(1024) + int(maxInlineSize) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+		slen := r.Intn(1024) + int(maxInlineSize)
 		return test_utils.NewStringValue(randStr(r, slen))
 
 	default:
@@ -251,7 +251,7 @@ func testEqualValueIDAndSlabID(t *testing.T, slabID atree.SlabID, valueID atree.
 }
 
 func getRandomArrayIndex(r *rand.Rand, array *atree.Array) uint64 {
-	return uint64(r.Intn(int(array.Count()))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+	return uint64(r.Intn(int(array.Count())))
 }
 
 func getRandomArrayIndexes(r *rand.Rand, array *atree.Array, count int) []uint64 {
@@ -275,7 +275,7 @@ func getRandomUint64InRange(r *rand.Rand, minNum uint64, maxNum uint64) uint64 {
 		panic(fmt.Sprintf("min %d >= max %d", minNum, maxNum))
 	}
 	// since minNum < maxNum, maxNum - minNum >= 1
-	return minNum + uint64(r.Intn(int(maxNum-minNum))) //nolint:gosec // integer overflow conversions (e.g. uint64 -> int (G115), etc.) are OK for tests
+	return minNum + uint64(r.Intn(int(maxNum-minNum)))
 }
 
 type uint64Slice []uint64

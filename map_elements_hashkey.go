@@ -431,10 +431,8 @@ func (e *hkeyElements) Merge(elems elements) error {
 	e.elems = append(e.elems, rElems.elems...)
 	e.size += rElems.Size() - hkeyElementsPrefixSize
 
-	// Set merged elements to nil to prevent memory leak
-	for i := range rElems.elems {
-		rElems.elems[i] = nil
-	}
+	// Set merged elements to nil to prevent memory leak.
+	clear(rElems.elems)
 
 	return nil
 }
@@ -473,13 +471,10 @@ func (e *hkeyElements) Split() (elements, elements, error) {
 	rightElements.size = dataSize - leftSize + hkeyElementsPrefixSize
 
 	e.hkeys = e.hkeys[:leftCount]
+	// NOTE: prevent memory leak
+	clear(e.elems[leftCount:])
 	e.elems = e.elems[:leftCount]
 	e.size = hkeyElementsPrefixSize + leftSize
-
-	// NOTE: prevent memory leak
-	for i := leftCount; i < len(e.hkeys); i++ {
-		e.elems[i] = nil
-	}
 
 	return e, rightElements, nil
 }
@@ -521,9 +516,7 @@ func (e *hkeyElements) LendToRight(re elements) error {
 
 	// Update left slab
 	// NOTE: prevent memory leak
-	for i := leftCount; i < len(e.elems); i++ {
-		e.elems[i] = nil
-	}
+	clear(e.elems[leftCount:])
 	e.hkeys = e.hkeys[:leftCount]
 	e.elems = e.elems[:leftCount]
 	e.size = hkeyElementsPrefixSize + leftSize

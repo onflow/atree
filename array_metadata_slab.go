@@ -631,7 +631,7 @@ func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
 	leftSlabChildrenCount := len(a.childrenHeaders)
 
 	rightSlab := slab.(*ArrayMetaDataSlab)
-	a.childrenHeaders = append(a.childrenHeaders, rightSlab.childrenHeaders...)
+	a.childrenHeaders = merge(a.childrenHeaders, rightSlab.childrenHeaders)
 	a.header.size += rightSlab.header.size - arrayMetaDataSlabPrefixSize
 	a.header.count += rightSlab.header.count
 
@@ -661,7 +661,11 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		leftCount += a.childrenHeaders[i].count
 	}
 
-	// Construct right slab
+	// Split childrenHeaders
+	var rightChildrenHeaders []ArraySlabHeader
+	a.childrenHeaders, rightChildrenHeaders = split(a.childrenHeaders, leftChildrenCount)
+
+	// Create right slab
 	sID, err := storage.GenerateSlabID(a.header.slabID.address)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
@@ -676,9 +680,8 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 			size:   a.header.size - uint32(leftSize),
 			count:  a.header.count - leftCount,
 		},
+		childrenHeaders: rightChildrenHeaders,
 	}
-
-	rightSlab.childrenHeaders = slices.Clone(a.childrenHeaders[leftChildrenCount:])
 
 	rightSlab.childrenCountSum = make([]uint32, len(rightSlab.childrenHeaders))
 	countSum := uint32(0)
@@ -688,7 +691,6 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	}
 
 	// Modify left (original)slab
-	a.childrenHeaders = a.childrenHeaders[:leftChildrenCount]
 	a.childrenCountSum = a.childrenCountSum[:leftChildrenCount]
 	a.header.count = leftCount
 	a.header.size = arrayMetaDataSlabPrefixSize + uint32(leftSize)
@@ -699,15 +701,13 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 	rightSlab := slab.(*ArrayMetaDataSlab)
 
-	childrenHeadersLen := len(a.childrenHeaders) + len(rightSlab.childrenHeaders)
-	leftChildrenHeadersLen := childrenHeadersLen / 2
+	oldLeftChildrenHeaderCount := len(a.childrenHeaders)
+	childrenHeaderCount := len(a.childrenHeaders) + len(rightSlab.childrenHeaders)
+	leftChildrenHeaderCount := childrenHeaderCount / 2
 
-	// Prepend child headers from the left slab to the right slab headers
-	rightSlab.childrenHeaders = slices.Insert(
-		rightSlab.childrenHeaders,
-		0,
-		a.childrenHeaders[leftChildrenHeadersLen:]...,
-	)
+	// Move elements
+	moveCount := oldLeftChildrenHeaderCount - leftChildrenHeaderCount
+	a.childrenHeaders, rightSlab.childrenHeaders = lendToRight(a.childrenHeaders, rightSlab.childrenHeaders, moveCount)
 
 	// Rebuild right slab childrenCountSum
 	rightSlab.childrenCountSum = make([]uint32, len(rightSlab.childrenHeaders))
@@ -725,41 +725,40 @@ func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 	rightSlab.header.size = arrayMetaDataSlabPrefixSize + uint32(len(rightSlab.childrenHeaders))*arraySlabHeaderSize
 
 	// Update left slab (original)
-	a.childrenHeaders = a.childrenHeaders[:leftChildrenHeadersLen]
-	a.childrenCountSum = a.childrenCountSum[:leftChildrenHeadersLen]
+	a.childrenCountSum = a.childrenCountSum[:leftChildrenHeaderCount]
 
 	a.header.count = 0
 	for i := range a.childrenHeaders {
 		a.header.count += a.childrenHeaders[i].count
 	}
-	a.header.size = arrayMetaDataSlabPrefixSize + uint32(leftChildrenHeadersLen)*arraySlabHeaderSize
+	a.header.size = arrayMetaDataSlabPrefixSize + uint32(leftChildrenHeaderCount)*arraySlabHeaderSize
 
 	return nil
 }
 
 func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab) error {
-	originalLeftSlabCountSum := a.header.count
-	originalLeftSlabHeaderLen := len(a.childrenHeaders)
+	oldLeftSlabCountSum := a.header.count
+	oldLeftChildrenHeaderCount := len(a.childrenHeaders)
 
 	rightSlab := slab.(*ArrayMetaDataSlab)
 
-	childrenHeadersLen := len(a.childrenHeaders) + len(rightSlab.childrenHeaders)
-	leftSlabHeaderLen := childrenHeadersLen / 2
-	rightSlabHeaderLen := childrenHeadersLen - leftSlabHeaderLen
+	childrenHeaderCount := len(a.childrenHeaders) + len(rightSlab.childrenHeaders)
+	leftChildrenHeaderCount := childrenHeaderCount / 2
+
+	// Move elements
+	moveCount := leftChildrenHeaderCount - oldLeftChildrenHeaderCount
+	a.childrenHeaders, rightSlab.childrenHeaders = borrowFromRight(a.childrenHeaders, rightSlab.childrenHeaders, moveCount)
 
 	// Update left slab (original)
-	a.childrenHeaders = append(a.childrenHeaders, rightSlab.childrenHeaders[:leftSlabHeaderLen-len(a.childrenHeaders)]...)
-
-	countSum := originalLeftSlabCountSum
-	for i := originalLeftSlabHeaderLen; i < len(a.childrenHeaders); i++ {
+	countSum := oldLeftSlabCountSum
+	for i := oldLeftChildrenHeaderCount; i < len(a.childrenHeaders); i++ {
 		countSum += a.childrenHeaders[i].count
 		a.childrenCountSum = append(a.childrenCountSum, countSum)
 	}
 	a.header.count = countSum
-	a.header.size = arrayMetaDataSlabPrefixSize + uint32(leftSlabHeaderLen)*arraySlabHeaderSize
+	a.header.size = arrayMetaDataSlabPrefixSize + uint32(leftChildrenHeaderCount)*arraySlabHeaderSize
 
 	// Update right slab
-	rightSlab.childrenHeaders = rightSlab.childrenHeaders[len(rightSlab.childrenHeaders)-rightSlabHeaderLen:]
 	rightSlab.childrenCountSum = rightSlab.childrenCountSum[:len(rightSlab.childrenHeaders)]
 
 	countSum = uint32(0)
@@ -768,7 +767,7 @@ func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab) error {
 		rightSlab.childrenCountSum[i] = countSum
 	}
 	rightSlab.header.count = countSum
-	rightSlab.header.size = arrayMetaDataSlabPrefixSize + uint32(rightSlabHeaderLen)*arraySlabHeaderSize
+	rightSlab.header.size = arrayMetaDataSlabPrefixSize + uint32(len(rightSlab.childrenHeaders))*arraySlabHeaderSize
 
 	return nil
 }

@@ -590,7 +590,7 @@ func (m *MapMetaDataSlab) updateChildrenHeadersAfterMerge(
 func (m *MapMetaDataSlab) Merge(slab Slab) error {
 	rightSlab := slab.(*MapMetaDataSlab)
 
-	m.childrenHeaders = append(m.childrenHeaders, rightSlab.childrenHeaders...)
+	m.childrenHeaders = merge(m.childrenHeaders, rightSlab.childrenHeaders)
 	m.header.size += rightSlab.header.size - mapMetaDataSlabPrefixSize
 
 	return nil
@@ -611,19 +611,21 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", m.SlabID().address))
 	}
 
-	// Construct right slab
+	// Split children headers
+	var rightChildrenHeaders []MapSlabHeader
+	m.childrenHeaders, rightChildrenHeaders = split(m.childrenHeaders, leftChildrenCount)
+
+	// Create right slab
 	rightSlab := &MapMetaDataSlab{
 		header: MapSlabHeader{
 			slabID:   sID,
 			size:     m.header.size - uint32(leftSize),
-			firstKey: m.childrenHeaders[leftChildrenCount].firstKey,
+			firstKey: rightChildrenHeaders[0].firstKey,
 		},
+		childrenHeaders: rightChildrenHeaders,
 	}
 
-	rightSlab.childrenHeaders = slices.Clone(m.childrenHeaders[leftChildrenCount:])
-
 	// Modify left (original) slab
-	m.childrenHeaders = m.childrenHeaders[:leftChildrenCount]
 	m.header.size = mapMetaDataSlabPrefixSize + uint32(leftSize)
 
 	return m, rightSlab, nil
@@ -632,24 +634,21 @@ func (m *MapMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 func (m *MapMetaDataSlab) LendToRight(slab Slab) error {
 	rightSlab := slab.(*MapMetaDataSlab)
 
-	childrenHeadersLen := len(m.childrenHeaders) + len(rightSlab.childrenHeaders)
-	leftChildrenHeadersLen := childrenHeadersLen / 2
-	rightChildrenHeadersLen := childrenHeadersLen - leftChildrenHeadersLen
+	oldLeftChildrenHeaderCount := len(m.childrenHeaders)
+	childrenHeaderCount := len(m.childrenHeaders) + len(rightSlab.childrenHeaders)
+	leftChildrenHeaderCount := childrenHeaderCount / 2
+	rightChildrenHeaderCount := childrenHeaderCount - leftChildrenHeaderCount
 
-	// Update right slab childrenHeaders by prepending borrowed children headers
-	rightSlab.childrenHeaders = slices.Insert(
-		rightSlab.childrenHeaders,
-		0,
-		m.childrenHeaders[leftChildrenHeadersLen:]...)
+	// Move children headers
+	moveCount := oldLeftChildrenHeaderCount - leftChildrenHeaderCount
+	m.childrenHeaders, rightSlab.childrenHeaders = lendToRight(m.childrenHeaders, rightSlab.childrenHeaders, moveCount)
 
-	// Update right slab header
-	rightSlab.header.size = mapMetaDataSlabPrefixSize + uint32(rightChildrenHeadersLen)*mapSlabHeaderSize
+	// Update right slab
+	rightSlab.header.size = mapMetaDataSlabPrefixSize + uint32(rightChildrenHeaderCount)*mapSlabHeaderSize
 	rightSlab.header.firstKey = rightSlab.childrenHeaders[0].firstKey
 
 	// Update left slab (original)
-	m.childrenHeaders = m.childrenHeaders[:leftChildrenHeadersLen]
-
-	m.header.size = mapMetaDataSlabPrefixSize + uint32(leftChildrenHeadersLen)*mapSlabHeaderSize
+	m.header.size = mapMetaDataSlabPrefixSize + uint32(leftChildrenHeaderCount)*mapSlabHeaderSize
 
 	return nil
 }
@@ -658,19 +657,20 @@ func (m *MapMetaDataSlab) BorrowFromRight(slab Slab) error {
 
 	rightSlab := slab.(*MapMetaDataSlab)
 
-	childrenHeadersLen := len(m.childrenHeaders) + len(rightSlab.childrenHeaders)
-	leftSlabHeaderLen := childrenHeadersLen / 2
-	rightSlabHeaderLen := childrenHeadersLen - leftSlabHeaderLen
+	oldLeftChildrenHeaderCount := len(m.childrenHeaders)
+	childrenHeaderCount := len(m.childrenHeaders) + len(rightSlab.childrenHeaders)
+	leftChildrenHeaderCount := childrenHeaderCount / 2
+	rightChildrenHeaderCount := childrenHeaderCount - leftChildrenHeaderCount
+
+	// Move children headers
+	moveCount := leftChildrenHeaderCount - oldLeftChildrenHeaderCount
+	m.childrenHeaders, rightSlab.childrenHeaders = borrowFromRight(m.childrenHeaders, rightSlab.childrenHeaders, moveCount)
 
 	// Update left slab (original)
-	m.childrenHeaders = append(m.childrenHeaders, rightSlab.childrenHeaders[:leftSlabHeaderLen-len(m.childrenHeaders)]...)
-
-	m.header.size = mapMetaDataSlabPrefixSize + uint32(leftSlabHeaderLen)*mapSlabHeaderSize
+	m.header.size = mapMetaDataSlabPrefixSize + uint32(leftChildrenHeaderCount)*mapSlabHeaderSize
 
 	// Update right slab
-	rightSlab.childrenHeaders = rightSlab.childrenHeaders[len(rightSlab.childrenHeaders)-rightSlabHeaderLen:]
-
-	rightSlab.header.size = mapMetaDataSlabPrefixSize + uint32(rightSlabHeaderLen)*mapSlabHeaderSize
+	rightSlab.header.size = mapMetaDataSlabPrefixSize + uint32(rightChildrenHeaderCount)*mapSlabHeaderSize
 	rightSlab.header.firstKey = rightSlab.childrenHeaders[0].firstKey
 
 	return nil

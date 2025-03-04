@@ -187,7 +187,12 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		leftSize += elemSize
 	}
 
-	// Construct right slab
+	// Split elements
+	var rightElements []Storable
+	a.elements, rightElements = split(a.elements, leftCount)
+
+	// Create right slab
+
 	sID, err := storage.GenerateSlabID(a.header.slabID.address)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
@@ -199,20 +204,18 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 			),
 		)
 	}
-	rightSlabCount := len(a.elements) - leftCount
+
 	rightSlab := &ArrayDataSlab{
 		header: ArraySlabHeader{
 			slabID: sID,
 			size:   arrayDataSlabPrefixSize + dataSize - leftSize,
-			count:  uint32(rightSlabCount),
+			count:  uint32(len(rightElements)),
 		},
-		next: a.next,
+		next:     a.next,
+		elements: rightElements,
 	}
 
-	rightSlab.elements = slices.Clone(a.elements[leftCount:])
-
 	// Modify left (original) slab
-	a.elements = slices.Delete(a.elements, leftCount, len(a.elements))
 	a.header.size = arrayDataSlabPrefixSize + leftSize
 	a.header.count = uint32(leftCount)
 	a.next = rightSlab.header.slabID
@@ -222,7 +225,7 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 
 func (a *ArrayDataSlab) Merge(slab Slab) error {
 	rightSlab := slab.(*ArrayDataSlab)
-	a.elements = append(a.elements, rightSlab.elements...)
+	a.elements = merge(a.elements, rightSlab.elements)
 	a.header.size = a.header.size + rightSlab.header.size - arrayDataSlabPrefixSize
 	a.header.count += rightSlab.header.count
 	a.next = rightSlab.next
@@ -237,6 +240,7 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 	count := a.header.count + rightSlab.header.count
 	size := a.header.size + rightSlab.header.size
 
+	oldLeftCount := a.header.count
 	leftCount := a.header.count
 	leftSize := a.header.size
 
@@ -252,22 +256,15 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 		leftCount--
 	}
 
-	// Update the right slab
+	// Move elements
+	moveCount := oldLeftCount - leftCount
+	a.elements, rightSlab.elements = lendToRight(a.elements, rightSlab.elements, int(moveCount))
 
-	// Prepend elements from the left slab to the right slab
-	rightSlab.elements = slices.Insert(
-		rightSlab.elements,
-		0,
-		a.elements[leftCount:]...,
-	)
-
+	// Update right slab
 	rightSlab.header.size = size - leftSize
 	rightSlab.header.count = count - leftCount
 
 	// Update left slab
-	// NOTE: clear to prevent memory leak
-	clear(a.elements[leftCount:])
-	a.elements = a.elements[:leftCount]
 	a.header.size = leftSize
 	a.header.count = leftCount
 
@@ -281,6 +278,7 @@ func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 	count := a.header.count + rightSlab.header.count
 	size := a.header.size + rightSlab.header.size
 
+	oldLeftCount := a.header.count
 	leftCount := a.header.count
 	leftSize := a.header.size
 
@@ -300,20 +298,15 @@ func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 		leftCount++
 	}
 
-	rightStartIndex := leftCount - a.header.count
+	// Move elements
+	moveCount := leftCount - oldLeftCount
+	a.elements, rightSlab.elements = borrowFromRight(a.elements, rightSlab.elements, int(moveCount))
 
 	// Update left slab
-	a.elements = append(a.elements, rightSlab.elements[:rightStartIndex]...)
 	a.header.size = leftSize
 	a.header.count = leftCount
 
 	// Update right slab
-	// TODO: copy elements to front instead?
-	// NOTE: prevent memory leak
-	for i := range rightStartIndex {
-		rightSlab.elements[i] = nil
-	}
-	rightSlab.elements = rightSlab.elements[rightStartIndex:]
 	rightSlab.header.size = size - leftSize
 	rightSlab.header.count = count - leftCount
 

@@ -622,7 +622,7 @@ func (a *ArrayMetaDataSlab) updateChildrenHeadersAfterMerge(
 	a.childrenHeaders[leftSlabIndex] = mergedSlabHeader
 
 	// Remove right slab header
-	a.childrenHeaders = slices.Delete[[]ArraySlabHeader](
+	a.childrenHeaders = slices.Delete(
 		a.childrenHeaders,
 		rightSlabIndex,
 		rightSlabIndex+1,
@@ -632,7 +632,7 @@ func (a *ArrayMetaDataSlab) updateChildrenHeadersAfterMerge(
 	a.childrenCountSum[leftSlabIndex] = a.childrenCountSum[rightSlabIndex]
 
 	// Remove right slab count sum
-	a.childrenCountSum = slices.Delete[[]uint32](
+	a.childrenCountSum = slices.Delete(
 		a.childrenCountSum,
 		rightSlabIndex,
 		rightSlabIndex+1,

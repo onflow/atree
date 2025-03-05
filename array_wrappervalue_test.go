@@ -1924,7 +1924,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			err = array.Insert(index, v)
 			require.NoError(t, err)
 
-			expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, int(index), expected)
+			expectedValues = slices.Insert(expectedValues, int(index), expected)
 		}
 
 		require.Equal(t, actualArrayCount, array.Count())
@@ -2187,7 +2187,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			err = array.Insert(index, v)
 			require.NoError(t, err)
 
-			expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, int(index), expected)
+			expectedValues = slices.Insert(expectedValues, int(index), expected)
 		}
 
 		require.Equal(t, actualArrayCount, array.Count())
@@ -2471,7 +2471,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			err = array.Insert(index, v)
 			require.NoError(t, err)
 
-			expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, int(index), expected)
+			expectedValues = slices.Insert(expectedValues, int(index), expected)
 		}
 
 		require.Equal(t, actualArrayCount, array.Count())

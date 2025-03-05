@@ -441,7 +441,7 @@ func modifyArray(
 		if index == int(array.Count()) {
 			expectedValues = append(expectedValues, expectedChildValue)
 		} else {
-			expectedValues = slices.Insert[[]atree.Value, atree.Value](expectedValues, index, expectedChildValue)
+			expectedValues = slices.Insert(expectedValues, index, expectedChildValue)
 		}
 
 		// Update array
@@ -463,7 +463,7 @@ func modifyArray(
 		oldExpectedValue := expectedValues[index]
 
 		// Update expectedValues
-		expectedValues = slices.Delete[[]atree.Value](expectedValues, index, index+1)
+		expectedValues = slices.Delete(expectedValues, index, index+1)
 
 		// Update array
 		existingStorable, err := array.Remove(uint64(index))

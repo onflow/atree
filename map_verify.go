@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 )
 
@@ -481,8 +482,7 @@ func (v *mapVerifier) verifyHkeyElements(
 
 	for i, e := range elements.elems {
 
-		hkeys := make([]Digest, 0, len(hkeyPrefixes)+1)
-		hkeys = append(hkeys, hkeyPrefixes...)
+		hkeys := slices.Clone(hkeyPrefixes)
 		hkeys = append(hkeys, elements.hkeys[i])
 
 		elementSize += digestSize

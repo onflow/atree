@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
+	"slices"
 	"sort"
 	"testing"
 
@@ -1923,13 +1924,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			err = array.Insert(index, v)
 			require.NoError(t, err)
 
-			newExpectedValue := make([]atree.Value, len(expectedValues)+1)
-
-			copy(newExpectedValue, expectedValues[:index])
-			newExpectedValue[index] = expected
-			copy(newExpectedValue[index+1:], expectedValues[index:])
-
-			expectedValues = newExpectedValue
+			expectedValues = slices.Insert(expectedValues, int(index), expected)
 		}
 
 		require.Equal(t, actualArrayCount, array.Count())
@@ -2192,13 +2187,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			err = array.Insert(index, v)
 			require.NoError(t, err)
 
-			newExpectedValue := make([]atree.Value, len(expectedValues)+1)
-
-			copy(newExpectedValue, expectedValues[:index])
-			newExpectedValue[index] = expected
-			copy(newExpectedValue[index+1:], expectedValues[index:])
-
-			expectedValues = newExpectedValue
+			expectedValues = slices.Insert(expectedValues, int(index), expected)
 		}
 
 		require.Equal(t, actualArrayCount, array.Count())
@@ -2482,13 +2471,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			err = array.Insert(index, v)
 			require.NoError(t, err)
 
-			newExpectedValue := make([]atree.Value, len(expectedValues)+1)
-
-			copy(newExpectedValue, expectedValues[:index])
-			newExpectedValue[index] = expected
-			copy(newExpectedValue[index+1:], expectedValues[index:])
-
-			expectedValues = newExpectedValue
+			expectedValues = slices.Insert(expectedValues, int(index), expected)
 		}
 
 		require.Equal(t, actualArrayCount, array.Count())

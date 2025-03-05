@@ -23,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"slices"
 	"sync"
 	"time"
 
@@ -440,9 +441,7 @@ func modifyArray(
 		if index == int(array.Count()) {
 			expectedValues = append(expectedValues, expectedChildValue)
 		} else {
-			expectedValues = append(expectedValues, nil)
-			copy(expectedValues[index+1:], expectedValues[index:])
-			expectedValues[index] = expectedChildValue
+			expectedValues = slices.Insert(expectedValues, index, expectedChildValue)
 		}
 
 		// Update array
@@ -464,9 +463,7 @@ func modifyArray(
 		oldExpectedValue := expectedValues[index]
 
 		// Update expectedValues
-		copy(expectedValues[index:], expectedValues[index+1:])
-		expectedValues[len(expectedValues)-1] = nil
-		expectedValues = expectedValues[:len(expectedValues)-1]
+		expectedValues = slices.Delete(expectedValues, index, index+1)
 
 		// Update array
 		existingStorable, err := array.Remove(uint64(index))

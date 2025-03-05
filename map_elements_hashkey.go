@@ -204,7 +204,7 @@ func (e *hkeyElements) Set(
 
 		e.hkeys = slices.Insert(e.hkeys, 0, hkey)
 
-		e.elems = slices.Insert[[]element, element](e.elems, 0, newElem)
+		e.elems = slices.Insert(e.elems, 0, element(newElem))
 
 		e.size += digestSize + newElem.Size()
 
@@ -320,7 +320,7 @@ func (e *hkeyElements) Set(
 	e.hkeys = slices.Insert(e.hkeys, lessThanIndex, hkey)
 
 	// insert into sorted elements
-	e.elems = slices.Insert[[]element, element](e.elems, lessThanIndex, newElem)
+	e.elems = slices.Insert(e.elems, lessThanIndex, element(newElem))
 
 	e.size += digestSize + newElem.Size()
 
@@ -372,7 +372,7 @@ func (e *hkeyElements) Remove(storage SlabStorage, digester Digester, level uint
 
 	if elem == nil {
 		// Remove element at equalIndex
-		e.elems = slices.Delete[[]element, element](e.elems, equalIndex, equalIndex+1)
+		e.elems = slices.Delete(e.elems, equalIndex, equalIndex+1)
 
 		// Remove hkey at equalIndex
 		e.hkeys = slices.Delete(e.hkeys, equalIndex, equalIndex+1)

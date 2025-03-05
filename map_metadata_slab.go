@@ -580,7 +580,7 @@ func (m *MapMetaDataSlab) updateChildrenHeadersAfterMerge(
 	m.childrenHeaders[leftSlabIndex] = mergedSlabHeader
 
 	// Remove right slab header
-	m.childrenHeaders = slices.Delete[[]MapSlabHeader](
+	m.childrenHeaders = slices.Delete(
 		m.childrenHeaders,
 		rightSlabIndex,
 		rightSlabIndex+1,

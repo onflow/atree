@@ -394,121 +394,52 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 	leftCanLend := leftSib != nil && leftSib.CanLendToRight(underflowSize)
 	rightCanLend := rightSib != nil && rightSib.CanLendToLeft(underflowSize)
 
+	canRebalance := leftCanLend || rightCanLend
+
 	// Child can rebalance elements with at least one sibling.
-	if leftCanLend || rightCanLend {
+	if canRebalance {
 
-		// Rebalance with right sib
+		var leftSlab, rightSlab MapSlab
+		var leftSlabIndex, rightSlabIndex int
+		var leftBorrowFromRight bool
+
 		if !leftCanLend {
+			// Rebalance with right sib
 
-			err := child.BorrowFromRight(rightSib)
-			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by MapSlab.BorrowFromRight().
-				return err
-			}
+			leftSlab, rightSlab = child, rightSib
+			leftSlabIndex, rightSlabIndex = childHeaderIndex, childHeaderIndex+1
+			leftBorrowFromRight = true
 
-			m.childrenHeaders[childHeaderIndex] = child.Header()
-			m.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
+		} else if !rightCanLend {
+			// Rebalance with left sib
 
-			// This is needed when child is at index 0 and it is empty.
-			if childHeaderIndex == 0 {
-				m.header.firstKey = child.Header().firstKey
-			}
+			leftSlab, rightSlab = leftSib, child
+			leftSlabIndex, rightSlabIndex = childHeaderIndex-1, childHeaderIndex
+			leftBorrowFromRight = false
 
-			// Store modified slabs
-			err = storeSlab(storage, child)
-			if err != nil {
-				return err
-			}
+		} else if leftSib.ByteSize() > rightSib.ByteSize() { // Rebalance with bigger sib
+			// Rebalance with left sib
 
-			err = storeSlab(storage, rightSib)
-			if err != nil {
-				return err
-			}
+			leftSlab, rightSlab = leftSib, child
+			leftSlabIndex, rightSlabIndex = childHeaderIndex-1, childHeaderIndex
+			leftBorrowFromRight = false
 
-			return storeSlab(storage, m)
+		} else { // leftSib.ByteSize() <= rightSib.ByteSize
+			// Rebalance with right sib
+
+			leftSlab, rightSlab = child, rightSib
+			leftSlabIndex, rightSlabIndex = childHeaderIndex, childHeaderIndex+1
+			leftBorrowFromRight = true
 		}
 
-		// Rebalance with left sib
-		if !rightCanLend {
-
-			err := leftSib.LendToRight(child)
-			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by MapSlab.LendToRight().
-				return err
-			}
-
-			m.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
-			m.childrenHeaders[childHeaderIndex] = child.Header()
-
-			// Store modified slabs
-			err = storeSlab(storage, leftSib)
-			if err != nil {
-				return err
-			}
-
-			err = storeSlab(storage, child)
-			if err != nil {
-				return err
-			}
-
-			return storeSlab(storage, m)
-		}
-
-		// Rebalance with bigger sib
-		if leftSib.ByteSize() > rightSib.ByteSize() {
-
-			err := leftSib.LendToRight(child)
-			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by MapSlab.LendToRight().
-				return err
-			}
-
-			m.childrenHeaders[childHeaderIndex-1] = leftSib.Header()
-			m.childrenHeaders[childHeaderIndex] = child.Header()
-
-			// Store modified slabs
-			err = storeSlab(storage, leftSib)
-			if err != nil {
-				return err
-			}
-
-			err = storeSlab(storage, child)
-			if err != nil {
-				return err
-			}
-
-			return storeSlab(storage, m)
-
-		} else {
-			// leftSib.ByteSize() <= rightSib.ByteSize
-
-			err := child.BorrowFromRight(rightSib)
-			if err != nil {
-				// Don't need to wrap error as external error because err is already categorized by MapSlab.BorrowFromRight().
-				return err
-			}
-
-			m.childrenHeaders[childHeaderIndex] = child.Header()
-			m.childrenHeaders[childHeaderIndex+1] = rightSib.Header()
-
-			// This is needed when child is at index 0 and it is empty.
-			if childHeaderIndex == 0 {
-				m.header.firstKey = child.Header().firstKey
-			}
-
-			// Store modified slabs
-			err = storeSlab(storage, child)
-			if err != nil {
-				return err
-			}
-
-			err = storeSlab(storage, rightSib)
-			if err != nil {
-				return err
-			}
-
-			return storeSlab(storage, m)
-		}
+		return m.rebalanceChildren(
+			storage,
+			leftSlab,
+			rightSlab,
+			leftSlabIndex,
+			rightSlabIndex,
+			leftBorrowFromRight,
+		)
 	}
 
 	// Child can't rebalance with any sibling.  It must merge with one sibling.
@@ -534,7 +465,7 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		leftSlab, rightSlab = leftSib, child
 		leftSlabIndex, rightSlabIndex = childHeaderIndex-1, childHeaderIndex
 
-	} else { // leftSib.ByteSize() > rightSib.ByteSize
+	} else { // leftSib.ByteSize() >= rightSib.ByteSize
 		// Merge (left) child slab with rightSib
 
 		leftSlab, rightSlab = child, rightSib
@@ -548,6 +479,47 @@ func (m *MapMetaDataSlab) MergeOrRebalanceChildSlab(
 		leftSlabIndex,
 		rightSlabIndex,
 	)
+}
+
+func (m *MapMetaDataSlab) rebalanceChildren(
+	storage SlabStorage,
+	leftSlab MapSlab,
+	rightSlab MapSlab,
+	leftSlabIndex int,
+	rightSlabIndex int,
+	leftBorrowFromRight bool,
+) error {
+	var err error
+
+	if leftBorrowFromRight {
+		err = leftSlab.BorrowFromRight(rightSlab)
+	} else {
+		err = leftSlab.LendToRight(rightSlab)
+	}
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by MapSlab.BorrowFromRight().
+		return err
+	}
+
+	m.childrenHeaders[leftSlabIndex] = leftSlab.Header()
+	m.childrenHeaders[rightSlabIndex] = rightSlab.Header()
+
+	if leftSlabIndex == 0 {
+		m.header.firstKey = leftSlab.Header().firstKey
+	}
+
+	// Store modified slabs
+	err = storeSlab(storage, leftSlab)
+	if err != nil {
+		return err
+	}
+
+	err = storeSlab(storage, rightSlab)
+	if err != nil {
+		return err
+	}
+
+	return storeSlab(storage, m)
 }
 
 func (m *MapMetaDataSlab) mergeChildren(

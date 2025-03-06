@@ -20,6 +20,7 @@ package atree
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -98,13 +99,8 @@ func (a *ArrayDataSlab) Insert(storage SlabStorage, address Address, index uint6
 		return wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
 	}
 
-	if index == uint64(len(a.elements)) {
-		a.elements = append(a.elements, storable)
-	} else {
-		a.elements = append(a.elements, nil)
-		copy(a.elements[index+1:], a.elements[index:])
-		a.elements[index] = storable
-	}
+	// Insert new value at index in a.elements
+	a.elements = slices.Insert(a.elements, int(index), storable)
 
 	a.header.count++
 	a.header.size += storable.ByteSize()
@@ -126,16 +122,12 @@ func (a *ArrayDataSlab) Remove(storage SlabStorage, index uint64) (Storable, err
 
 	v := a.elements[index]
 
-	lastIndex := len(a.elements) - 1
-
-	if index != uint64(lastIndex) {
-		copy(a.elements[index:], a.elements[index+1:])
-	}
-
-	// NOTE: prevent memory leak
-	a.elements[lastIndex] = nil
-
-	a.elements = a.elements[:lastIndex]
+	// Delete element at index from a.elements
+	a.elements = slices.Delete(
+		a.elements,
+		int(index),
+		int(index+1),
+	)
 
 	a.header.count--
 	a.header.size -= v.ByteSize()
@@ -217,15 +209,10 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		next: a.next,
 	}
 
-	rightSlab.elements = make([]Storable, rightSlabCount)
-	copy(rightSlab.elements, a.elements[leftCount:])
+	rightSlab.elements = slices.Clone(a.elements[leftCount:])
 
 	// Modify left (original) slab
-	// NOTE: prevent memory leak
-	for i := leftCount; i < len(a.elements); i++ {
-		a.elements[i] = nil
-	}
-	a.elements = a.elements[:leftCount]
+	a.elements = slices.Delete(a.elements, leftCount, len(a.elements))
 	a.header.size = arrayDataSlabPrefixSize + leftSize
 	a.header.count = uint32(leftCount)
 	a.next = rightSlab.header.slabID
@@ -266,14 +253,14 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 	}
 
 	// Update the right slab
-	//
-	// It is easier and less error-prone to realloc elements for the right slab.
 
-	elements := make([]Storable, count-leftCount)
-	n := copy(elements, a.elements[leftCount:])
-	copy(elements[n:], rightSlab.elements)
+	// Prepend elements from the left slab to the right slab
+	rightSlab.elements = slices.Insert(
+		rightSlab.elements,
+		0,
+		a.elements[leftCount:]...,
+	)
 
-	rightSlab.elements = elements
 	rightSlab.header.size = size - leftSize
 	rightSlab.header.count = count - leftCount
 
@@ -538,9 +525,7 @@ func (a *ArrayDataSlab) HasPointer() bool {
 }
 
 func (a *ArrayDataSlab) ChildStorables() []Storable {
-	s := make([]Storable, len(a.elements))
-	copy(s, a.elements)
-	return s
+	return slices.Clone(a.elements)
 }
 
 func (a *ArrayDataSlab) getPrefixSize() uint32 {

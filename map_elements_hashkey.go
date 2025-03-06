@@ -427,12 +427,9 @@ func (e *hkeyElements) Merge(elems elements) error {
 		return NewSlabMergeError(fmt.Errorf("cannot merge elements of different types (%T, %T)", e, elems))
 	}
 
-	e.hkeys = append(e.hkeys, rElems.hkeys...)
-	e.elems = append(e.elems, rElems.elems...)
+	e.hkeys = merge(e.hkeys, rElems.hkeys)
+	e.elems = merge(e.elems, rElems.elems)
 	e.size += rElems.Size() - hkeyElementsPrefixSize
-
-	// Set merged elements to nil to prevent memory leak.
-	clear(rElems.elems)
 
 	return nil
 }
@@ -461,19 +458,22 @@ func (e *hkeyElements) Split() (elements, elements, error) {
 		leftSize += elemSize
 	}
 
-	// Create right slab elements
-	rightElements := &hkeyElements{level: e.level}
+	// Split elements
+	var rightKeys []Digest
+	e.hkeys, rightKeys = split(e.hkeys, leftCount)
 
-	rightElements.hkeys = slices.Clone(e.hkeys[leftCount:])
+	var rightElems []element
+	e.elems, rightElems = split(e.elems, leftCount)
 
-	rightElements.elems = slices.Clone(e.elems[leftCount:])
+	// Create right slab
+	rightElements := &hkeyElements{
+		level: e.level,
+		hkeys: rightKeys,
+		elems: rightElems,
+		size:  dataSize - leftSize + hkeyElementsPrefixSize,
+	}
 
-	rightElements.size = dataSize - leftSize + hkeyElementsPrefixSize
-
-	e.hkeys = e.hkeys[:leftCount]
-	// NOTE: prevent memory leak
-	clear(e.elems[leftCount:])
-	e.elems = e.elems[:leftCount]
+	// Update left slab
 	e.size = hkeyElementsPrefixSize + leftSize
 
 	return e, rightElements, nil
@@ -494,6 +494,7 @@ func (e *hkeyElements) LendToRight(re elements) error {
 
 	size := e.Size() + rightElements.Size() - hkeyElementsPrefixSize*2
 
+	oldLeftCount := len(e.elems)
 	leftCount := len(e.elems)
 	leftSize := e.Size() - hkeyElementsPrefixSize
 
@@ -509,16 +510,15 @@ func (e *hkeyElements) LendToRight(re elements) error {
 		leftCount--
 	}
 
-	// Update the right elements
-	rightElements.hkeys = slices.Insert(rightElements.hkeys, 0, e.hkeys[leftCount:]...)
-	rightElements.elems = slices.Insert(rightElements.elems, 0, e.elems[leftCount:]...)
+	// Move elements
+	moveCount := oldLeftCount - leftCount
+	e.hkeys, rightElements.hkeys = lendToRight(e.hkeys, rightElements.hkeys, moveCount)
+	e.elems, rightElements.elems = lendToRight(e.elems, rightElements.elems, moveCount)
+
+	// Update right slab
 	rightElements.size = size - leftSize + hkeyElementsPrefixSize
 
 	// Update left slab
-	// NOTE: prevent memory leak
-	clear(e.elems[leftCount:])
-	e.hkeys = e.hkeys[:leftCount]
-	e.elems = e.elems[:leftCount]
 	e.size = hkeyElementsPrefixSize + leftSize
 
 	return nil
@@ -539,6 +539,7 @@ func (e *hkeyElements) BorrowFromRight(re elements) error {
 
 	size := e.Size() + rightElements.Size() - hkeyElementsPrefixSize*2
 
+	oldLeftCount := len(e.elems)
 	leftCount := len(e.elems)
 	leftSize := e.Size() - hkeyElementsPrefixSize
 
@@ -558,21 +559,15 @@ func (e *hkeyElements) BorrowFromRight(re elements) error {
 		leftCount++
 	}
 
-	rightStartIndex := leftCount - len(e.elems)
+	// Move elements
+	moveCount := leftCount - oldLeftCount
+	e.hkeys, rightElements.hkeys = borrowFromRight(e.hkeys, rightElements.hkeys, moveCount)
+	e.elems, rightElements.elems = borrowFromRight(e.elems, rightElements.elems, moveCount)
 
-	// Update left elements
-	e.hkeys = append(e.hkeys, rightElements.hkeys[:rightStartIndex]...)
-	e.elems = append(e.elems, rightElements.elems[:rightStartIndex]...)
+	// Update left slab
 	e.size = leftSize + hkeyElementsPrefixSize
 
 	// Update right slab
-	// TODO: copy elements to front instead?
-	// NOTE: prevent memory leak
-	for i := range rightStartIndex {
-		rightElements.elems[i] = nil
-	}
-	rightElements.hkeys = rightElements.hkeys[rightStartIndex:]
-	rightElements.elems = rightElements.elems[rightStartIndex:]
 	rightElements.size = size - leftSize + hkeyElementsPrefixSize
 
 	return nil

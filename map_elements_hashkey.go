@@ -21,6 +21,7 @@ package atree
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -201,13 +202,9 @@ func (e *hkeyElements) Set(
 			return nil, nil, err
 		}
 
-		e.hkeys = append(e.hkeys, Digest(0))
-		copy(e.hkeys[1:], e.hkeys)
-		e.hkeys[0] = hkey
+		e.hkeys = slices.Insert(e.hkeys, 0, hkey)
 
-		e.elems = append(e.elems, nil)
-		copy(e.elems[1:], e.elems)
-		e.elems[0] = newElem
+		e.elems = slices.Insert(e.elems, 0, element(newElem))
 
 		e.size += digestSize + newElem.Size()
 
@@ -320,14 +317,10 @@ func (e *hkeyElements) Set(
 	}
 
 	// insert into sorted hkeys
-	e.hkeys = append(e.hkeys, Digest(0))
-	copy(e.hkeys[lessThanIndex+1:], e.hkeys[lessThanIndex:])
-	e.hkeys[lessThanIndex] = hkey
+	e.hkeys = slices.Insert(e.hkeys, lessThanIndex, hkey)
 
 	// insert into sorted elements
-	e.elems = append(e.elems, nil)
-	copy(e.elems[lessThanIndex+1:], e.elems[lessThanIndex:])
-	e.elems[lessThanIndex] = newElem
+	e.elems = slices.Insert(e.elems, lessThanIndex, element(newElem))
 
 	e.size += digestSize + newElem.Size()
 
@@ -378,16 +371,11 @@ func (e *hkeyElements) Remove(storage SlabStorage, digester Digester, level uint
 	}
 
 	if elem == nil {
-		// Remove this element
-		copy(e.elems[equalIndex:], e.elems[equalIndex+1:])
-		// Zero out last element to prevent memory leak
-		e.elems[len(e.elems)-1] = nil
-		// Reslice elements
-		e.elems = e.elems[:len(e.elems)-1]
+		// Remove element at equalIndex
+		e.elems = slices.Delete(e.elems, equalIndex, equalIndex+1)
 
-		// Remove hkey for this element
-		copy(e.hkeys[equalIndex:], e.hkeys[equalIndex+1:])
-		e.hkeys = e.hkeys[:len(e.hkeys)-1]
+		// Remove hkey at equalIndex
+		e.hkeys = slices.Delete(e.hkeys, equalIndex, equalIndex+1)
 
 		// Adjust size
 		e.size -= digestSize + oldElemSize
@@ -475,16 +463,12 @@ func (e *hkeyElements) Split() (elements, elements, error) {
 		leftSize += elemSize
 	}
 
-	rightCount := len(e.elems) - leftCount
-
 	// Create right slab elements
 	rightElements := &hkeyElements{level: e.level}
 
-	rightElements.hkeys = make([]Digest, rightCount)
-	copy(rightElements.hkeys, e.hkeys[leftCount:])
+	rightElements.hkeys = slices.Clone(e.hkeys[leftCount:])
 
-	rightElements.elems = make([]element, rightCount)
-	copy(rightElements.elems, e.elems[leftCount:])
+	rightElements.elems = slices.Clone(e.elems[leftCount:])
 
 	rightElements.size = dataSize - leftSize + hkeyElementsPrefixSize
 
@@ -513,7 +497,6 @@ func (e *hkeyElements) LendToRight(re elements) error {
 		)
 	}
 
-	count := len(e.elems) + len(rightElements.elems)
 	size := e.Size() + rightElements.Size() - hkeyElementsPrefixSize*2
 
 	leftCount := len(e.elems)
@@ -532,19 +515,8 @@ func (e *hkeyElements) LendToRight(re elements) error {
 	}
 
 	// Update the right elements
-	//
-	// It is easier and less error-prone to realloc elements for the right elements.
-
-	hkeys := make([]Digest, count-leftCount)
-	n := copy(hkeys, e.hkeys[leftCount:])
-	copy(hkeys[n:], rightElements.hkeys)
-
-	elements := make([]element, count-leftCount)
-	n = copy(elements, e.elems[leftCount:])
-	copy(elements[n:], rightElements.elems)
-
-	rightElements.hkeys = hkeys
-	rightElements.elems = elements
+	rightElements.hkeys = slices.Insert(rightElements.hkeys, 0, e.hkeys[leftCount:]...)
+	rightElements.elems = slices.Insert(rightElements.elems, 0, e.elems[leftCount:]...)
 	rightElements.size = size - leftSize + hkeyElementsPrefixSize
 
 	// Update left slab

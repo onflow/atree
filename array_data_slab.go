@@ -265,10 +265,8 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 	rightSlab.header.count = count - leftCount
 
 	// Update left slab
-	// NOTE: prevent memory leak
-	for i := leftCount; i < uint32(len(a.elements)); i++ {
-		a.elements[i] = nil
-	}
+	// NOTE: clear to prevent memory leak
+	clear(a.elements[leftCount:])
 	a.elements = a.elements[:leftCount]
 	a.header.size = leftSize
 	a.header.count = leftCount

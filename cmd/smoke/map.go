@@ -112,6 +112,7 @@ func testMap(
 	storage *atree.PersistentSlabStorage,
 	address atree.Address,
 	status *mapStatus,
+	clearStorage func(),
 ) {
 	typeInfo := newMapTypeInfo()
 
@@ -155,8 +156,7 @@ func testMap(
 				return
 			}
 
-			storage.DropDeltas()
-			storage.DropCache()
+			clearStorage()
 
 			expectedValues = make(map[atree.Value]atree.Value, flagMaxLength)
 

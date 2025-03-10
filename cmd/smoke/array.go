@@ -133,6 +133,7 @@ func testArray(
 	storage *atree.PersistentSlabStorage,
 	address atree.Address,
 	status *arrayStatus,
+	clearStorage func(),
 ) {
 
 	typeInfo := newArrayTypeInfo()
@@ -178,8 +179,7 @@ func testArray(
 				return
 			}
 
-			storage.DropDeltas()
-			storage.DropCache()
+			clearStorage()
 
 			// Load root slab from storage and cache it in read cache
 			rootID := array.SlabID()

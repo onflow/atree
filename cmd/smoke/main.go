@@ -144,6 +144,15 @@ func main() {
 		decodeTypeInfo,
 	)
 
+	clearStorage := func() {
+		// Clear storage deltas and cache
+		storage.DropDeltas()
+		storage.DropCache()
+
+		// Clear base storage reports
+		baseStorage.ResetReporter()
+	}
+
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	switch flagType {
@@ -161,7 +170,7 @@ func main() {
 
 		go updateStatus(sigc, status)
 
-		testArray(storage, address, status)
+		testArray(storage, address, status, clearStorage)
 
 	case "map":
 		var msg string
@@ -176,7 +185,7 @@ func main() {
 
 		go updateStatus(sigc, status)
 
-		testMap(storage, address, status)
+		testMap(storage, address, status, clearStorage)
 	}
 
 }

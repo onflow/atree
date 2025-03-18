@@ -24,7 +24,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/fxamacker/cbor/v2"
+	cbor "github.com/fxamacker/cbor/v2/cborstream"
 )
 
 // compactMapExtraData is used for inlining compact values.

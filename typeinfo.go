@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/fxamacker/cbor/v2"
+	cbor "github.com/fxamacker/cbor/v2/cborstream"
 )
 
 type TypeInfo interface {

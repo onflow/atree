@@ -22,7 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/fxamacker/cbor/v2"
+	cbor "github.com/fxamacker/cbor/v2/cborstream"
 )
 
 func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDecoder, slabID SlabID, inlinedExtraData []ExtraData) (elements, error) {

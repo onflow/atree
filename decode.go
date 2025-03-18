@@ -18,7 +18,9 @@
 
 package atree
 
-import "github.com/fxamacker/cbor/v2"
+import (
+	cbor "github.com/fxamacker/cbor/v2/cborstream"
+)
 
 type StorableDecoder func(
 	decoder *cbor.StreamDecoder,

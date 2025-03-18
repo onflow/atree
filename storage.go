@@ -26,7 +26,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/fxamacker/cbor/v2"
+	cbor "github.com/fxamacker/cbor/v2/cborstream"
 )
 
 const LedgerBaseStorageSlabPrefix = "$"

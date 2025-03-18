@@ -19,118 +19,73 @@
 package atree
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/SophisticaSean/cbor/v2"
 )
 
-func newElementFromData(
-	cborDec *cbor.StreamDecoder,
-	decodeStorable StorableDecoder,
-	slabID SlabID,
-	inlinedExtraData []ExtraData,
-) (element, error) {
-	nt, err := cborDec.NextType()
-	if err != nil {
-		return nil, NewDecodingError(err)
+type TypeInfo interface {
+	Encode(*cbor.StreamEncoder) error
+	IsComposite() bool
+	Copy() TypeInfo
+}
+
+type TypeInfoDecoder func(
+	decoder *cbor.StreamDecoder,
+) (
+	TypeInfo,
+	error,
+)
+
+// encodeTypeInfo encodes TypeInfo either:
+// - as is (for TypeInfo in root slab extra data section), or
+// - as index of inlined TypeInfos (for TypeInfo in inlined slab extra data section)
+type encodeTypeInfo func(*Encoder, TypeInfo) error
+
+// defaultEncodeTypeInfo encodes TypeInfo as is.
+func defaultEncodeTypeInfo(enc *Encoder, typeInfo TypeInfo) error {
+	return typeInfo.Encode(enc.CBOR)
+}
+
+func decodeTypeInfoRefIfNeeded(inlinedTypeInfo []TypeInfo, defaultTypeInfoDecoder TypeInfoDecoder) TypeInfoDecoder {
+	if len(inlinedTypeInfo) == 0 {
+		return defaultTypeInfoDecoder
 	}
 
-	switch nt {
-	case cbor.ArrayType:
-		// Don't need to wrap error as external error because err is already categorized by newSingleElementFromData().
-		return newSingleElementFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
-
-	case cbor.TagType:
-		tagNum, err := cborDec.DecodeTagNumber()
+	return func(decoder *cbor.StreamDecoder) (TypeInfo, error) {
+		rawTypeInfo, err := decoder.DecodeRawBytes()
 		if err != nil {
-			return nil, NewDecodingError(err)
-		}
-		switch tagNum {
-		case CBORTagInlineCollisionGroup:
-			// Don't need to wrap error as external error because err is already categorized by newInlineCollisionGroupFromData().
-			return newInlineCollisionGroupFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
-		case CBORTagExternalCollisionGroup:
-			// Don't need to wrap error as external error because err is already categorized by newExternalCollisionGroupFromData().
-			return newExternalCollisionGroupFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
-		default:
-			return nil, NewDecodingError(fmt.Errorf("failed to decode element: unrecognized tag number %d", tagNum))
+			return nil, NewDecodingError(fmt.Errorf("failed to decode raw type info: %w", err))
 		}
 
-	default:
-		return nil, NewDecodingError(fmt.Errorf("failed to decode element: unrecognized CBOR type %s", nt))
+		if len(rawTypeInfo) > len(typeInfoRefTagHeadAndTagNumber) &&
+			bytes.Equal(
+				rawTypeInfo[:len(typeInfoRefTagHeadAndTagNumber)],
+				typeInfoRefTagHeadAndTagNumber) {
+
+			// Type info is encoded as type info ref.
+
+			var index uint64
+
+			err = cbor.Unmarshal(rawTypeInfo[len(typeInfoRefTagHeadAndTagNumber):], &index)
+			if err != nil {
+				return nil, NewDecodingError(err)
+			}
+
+			if index >= uint64(len(inlinedTypeInfo)) {
+				return nil, NewDecodingError(
+					fmt.Errorf("failed to decode type info ref: expect index < %d, got %d", len(inlinedTypeInfo), index),
+				)
+			}
+
+			return inlinedTypeInfo[int(index)], nil
+		}
+
+		// Decode type info as is.
+
+		dec := cbor.NewByteStreamDecoder(rawTypeInfo)
+
+		return defaultTypeInfoDecoder(dec)
 	}
-}
-
-func newSingleElementFromData(
-	cborDec *cbor.StreamDecoder,
-	decodeStorable StorableDecoder,
-	slabID SlabID,
-	inlinedExtraData []ExtraData,
-) (*singleElement, error) {
-	elemCount, err := cborDec.DecodeArrayHead()
-	if err != nil {
-		return nil, NewDecodingError(err)
-	}
-
-	if elemCount != 2 {
-		return nil, NewDecodingError(
-			fmt.Errorf("failed to decode single element: expect array of 2 elements, got %d elements", elemCount),
-		)
-	}
-
-	key, err := decodeStorable(cborDec, slabID, inlinedExtraData)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode key's storable")
-	}
-
-	value, err := decodeStorable(cborDec, slabID, inlinedExtraData)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode value's storable")
-	}
-
-	return &singleElement{
-		key:   key,
-		value: value,
-		size:  singleElementPrefixSize + key.ByteSize() + value.ByteSize(),
-	}, nil
-}
-
-func newInlineCollisionGroupFromData(
-	cborDec *cbor.StreamDecoder,
-	decodeStorable StorableDecoder,
-	slabID SlabID,
-	inlinedExtraData []ExtraData,
-) (*inlineCollisionGroup, error) {
-	elements, err := newElementsFromData(cborDec, decodeStorable, slabID, inlinedExtraData)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by newElementsFromData().
-		return nil, err
-	}
-
-	return &inlineCollisionGroup{elements}, nil
-}
-
-func newExternalCollisionGroupFromData(
-	cborDec *cbor.StreamDecoder,
-	decodeStorable StorableDecoder,
-	slabID SlabID,
-	inlinedExtraData []ExtraData,
-) (*externalCollisionGroup, error) {
-	storable, err := decodeStorable(cborDec, slabID, inlinedExtraData)
-	if err != nil {
-		// Wrap err as external error (if needed) because err is returned by StorableDecoder callback.
-		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode Storable")
-	}
-
-	idStorable, ok := storable.(SlabIDStorable)
-	if !ok {
-		return nil, NewDecodingError(fmt.Errorf("failed to decode external collision group: expect slab ID, got %T", storable))
-	}
-
-	return &externalCollisionGroup{
-		slabID: SlabID(idStorable),
-		size:   externalCollisionGroupPrefixSize + idStorable.ByteSize(),
-	}, nil
 }

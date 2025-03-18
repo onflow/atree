@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	cbor "github.com/fxamacker/cbor/v2/cborstream"
+	"github.com/SophisticaSean/cbor/v2"
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/atree"

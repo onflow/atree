@@ -25,7 +25,7 @@ import (
 
 	"github.com/onflow/atree"
 
-	cbor "github.com/fxamacker/cbor/v2/cborstream"
+	"github.com/SophisticaSean/cbor/v2"
 )
 
 const (

@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"reflect"
 
-	cbor "github.com/fxamacker/cbor/v2/cborstream"
+	"github.com/SophisticaSean/cbor/v2"
 )
 
 // VerifyMapSerialization traverses ordered map tree and verifies serialization

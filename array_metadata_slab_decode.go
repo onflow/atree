@@ -21,7 +21,7 @@ package atree
 import (
 	"encoding/binary"
 
-	cbor "github.com/fxamacker/cbor/v2/cborstream"
+	"github.com/SophisticaSean/cbor/v2"
 )
 
 func newArrayMetaDataSlabFromData(

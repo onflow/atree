@@ -24,7 +24,7 @@ import (
 	"sort"
 	"sync"
 
-	cbor "github.com/fxamacker/cbor/v2/cborstream"
+	"github.com/SophisticaSean/cbor/v2"
 )
 
 type ExtraData interface {
@@ -55,7 +55,6 @@ func newInlinedExtraDataFromData(
 	decodeStorable StorableDecoder,
 	defaultDecodeTypeInfo TypeInfoDecoder,
 ) ([]ExtraData, []byte, error) {
-
 	dec := decMode.NewByteStreamDecoder(data)
 
 	count, err := dec.DecodeArrayHead()
@@ -64,7 +63,13 @@ func newInlinedExtraDataFromData(
 	}
 
 	if count != inlinedExtraDataArrayCount {
-		return nil, nil, NewDecodingError(fmt.Errorf("failed to decode inlined extra data: expect %d elements, got %d elements", inlinedExtraDataArrayCount, count))
+		return nil, nil, NewDecodingError(
+			fmt.Errorf(
+				"failed to decode inlined extra data: expect %d elements, got %d elements",
+				inlinedExtraDataArrayCount,
+				count,
+			),
+		)
 	}
 
 	// element 0: array of duplicate type info
@@ -90,7 +95,9 @@ func newInlinedExtraDataFromData(
 	}
 
 	if extraDataCount == 0 {
-		return nil, nil, NewDecodingError(fmt.Errorf("failed to decode inlined extra data: expect at least one inlined extra data"))
+		return nil, nil, NewDecodingError(
+			fmt.Errorf("failed to decode inlined extra data: expect at least one inlined extra data"),
+		)
 	}
 
 	inlinedExtraData := make([]ExtraData, extraDataCount)
@@ -123,7 +130,9 @@ func newInlinedExtraDataFromData(
 			}
 
 		default:
-			return nil, nil, NewDecodingError(fmt.Errorf("failed to decode inlined extra data: unsupported tag number %d", tagNum))
+			return nil, nil, NewDecodingError(
+				fmt.Errorf("failed to decode inlined extra data: unsupported tag number %d", tagNum),
+			)
 		}
 	}
 
@@ -145,7 +154,6 @@ var typeInfoRefTagHeadAndTagNumber = []byte{0xd8, CBORTagTypeInfoRef}
 //	| [+ inlined type info] | [+ inlined extra data] |
 //	+-----------------------+------------------------+
 func (ied *InlinedExtraData) Encode(enc *Encoder) error {
-
 	typeInfos, typeInfoIndexes := ied.findDuplicateTypeInfo()
 
 	var err error
@@ -331,7 +339,6 @@ func (ied *InlinedExtraData) addCompactMapExtraData(
 	digests []Digest,
 	keys []ComparableStorable,
 ) (int, []ComparableStorable, error) {
-
 	encodedTypeInfo, err := getEncodedTypeInfo(data.TypeInfo)
 	if err != nil {
 		// err is already categorized by getEncodedTypeInfo().

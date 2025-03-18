@@ -32,7 +32,7 @@ import (
 	"github.com/onflow/atree"
 	"github.com/onflow/atree/test_utils"
 
-	cbor "github.com/fxamacker/cbor/v2/cborstream"
+	"github.com/SophisticaSean/cbor/v2"
 )
 
 const maxStatusLength = 128

@@ -19,7 +19,7 @@
 package atree
 
 import (
-	cbor "github.com/fxamacker/cbor/v2/cborstream"
+	"github.com/SophisticaSean/cbor/v2"
 )
 
 type StorableDecoder func(

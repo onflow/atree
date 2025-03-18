@@ -23,7 +23,7 @@ import (
 	"io"
 	"math"
 
-	cbor "github.com/fxamacker/cbor/v2/cborstream"
+	"github.com/SophisticaSean/cbor/v2"
 )
 
 // Encoder writes atree slabs to io.Writer.

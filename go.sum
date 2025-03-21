@@ -1,7 +1,7 @@
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/fxamacker/cbor/v2 v2.7.1-0.20250319155730-379167c29d12 h1:6vdtsOwDPaDihHIbtNg1OwK9M6EDXyk6j+qBbWN1vdI=
-github.com/fxamacker/cbor/v2 v2.7.1-0.20250319155730-379167c29d12/go.mod h1:pxXPTn3joSm21Gbwsv0w9OSA2y1HFR9qXEeXQVeNoDQ=
+github.com/fxamacker/cbor/v2 v2.7.1-0.20250321215404-00478930d2f8 h1:LqXKCYr0aEtroUzj8uG0cWtEe+u/P269KvaL6jYLors=
+github.com/fxamacker/cbor/v2 v2.7.1-0.20250321215404-00478930d2f8/go.mod h1:pxXPTn3joSm21Gbwsv0w9OSA2y1HFR9qXEeXQVeNoDQ=
 github.com/fxamacker/circlehash v0.3.0 h1:XKdvTtIJV9t7DDUtsf0RIpC1OcxZtPbmgIH7ekx28WA=
 github.com/fxamacker/circlehash v0.3.0/go.mod h1:3aq3OfVvsWtkWMb6A1owjOQFA+TLsD5FgJflnaQwtMM=
 github.com/klauspost/cpuid/v2 v2.0.12 h1:p9dKCg8i4gmOxtv35DvrYoWqYzQrvEVdjQ762Y0OqZE=

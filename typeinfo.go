@@ -22,7 +22,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/fxamacker/cbor/v2"
+	"github.com/SophisticaSean/cbor/v2"
 )
 
 type TypeInfo interface {
@@ -74,7 +74,9 @@ func decodeTypeInfoRefIfNeeded(inlinedTypeInfo []TypeInfo, defaultTypeInfoDecode
 			}
 
 			if index >= uint64(len(inlinedTypeInfo)) {
-				return nil, NewDecodingError(fmt.Errorf("failed to decode type info ref: expect index < %d, got %d", len(inlinedTypeInfo), index))
+				return nil, NewDecodingError(
+					fmt.Errorf("failed to decode type info ref: expect index < %d, got %d", len(inlinedTypeInfo), index),
+				)
 			}
 
 			return inlinedTypeInfo[int(index)], nil

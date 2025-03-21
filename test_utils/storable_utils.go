@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/fxamacker/cbor/v2"
+	"github.com/SophisticaSean/cbor/v2"
 
 	"github.com/onflow/atree"
 )

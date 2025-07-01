@@ -21,6 +21,7 @@ package atree
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -103,14 +104,7 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 
 	// overflowIDs include collisionSlabIDs
 	for _, id := range overflowIDs {
-		found := false
-		for _, cid := range collisionSlabIDs {
-			if id == cid {
-				found = true
-				break
-			}
-		}
-		if found {
+		if slices.Contains(collisionSlabIDs, id) {
 			continue
 		}
 		slab, found, err := m.Storage.Retrieve(id)

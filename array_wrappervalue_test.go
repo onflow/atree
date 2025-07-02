@@ -20,6 +20,7 @@ package atree_test
 
 import (
 	"fmt"
+	"maps"
 	"math/rand"
 	"runtime"
 	"slices"
@@ -2022,10 +2023,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			}
 		}
 
-		removeSetCount := removeCount / 2
-		if uint64(len(setIndex)) < removeSetCount {
-			removeSetCount = uint64(len(setIndex))
-		}
+		removeSetCount := min(uint64(len(setIndex)), removeCount/2)
 
 		for _, index := range setIndex[:removeSetCount] {
 			testRemoveElementFromArray(t, storage, array, index, expectedValues[index])
@@ -2293,10 +2291,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			}
 		}
 
-		removeSetCount := removeCount / 2
-		if uint64(len(setIndex)) < removeSetCount {
-			removeSetCount = uint64(len(setIndex))
-		}
+		removeSetCount := min(uint64(len(setIndex)), removeCount/2)
 
 		for _, index := range setIndex[:removeSetCount] {
 			testRemoveElementFromArray(t, storage, array, index, expectedValues[index])
@@ -2577,10 +2572,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			}
 		}
 
-		removeSetCount := removeCount / 2
-		if uint64(len(setIndex)) < removeSetCount {
-			removeSetCount = uint64(len(setIndex))
-		}
+		removeSetCount := min(uint64(len(setIndex)), removeCount/2)
 
 		for _, index := range setIndex[:removeSetCount] {
 			testRemoveElementFromArray(t, storage, array, index, expectedValues[index])
@@ -2895,9 +2887,7 @@ func testArrayMutableElementIndex(t *testing.T, v atree.Value) {
 
 	originalMutableIndex := make(map[atree.ValueID]uint64)
 
-	for vid, index := range atree.GetArrayMutableElementIndex(array) {
-		originalMutableIndex[vid] = index
-	}
+	maps.Copy(originalMutableIndex, atree.GetArrayMutableElementIndex(array))
 
 	for i := range array.Count() {
 		element, err := array.Get(i)

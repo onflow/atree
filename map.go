@@ -424,10 +424,7 @@ func nextLevelMapSlabs(storage SlabStorage, address Address, slabs []MapSlab) ([
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", address))
 	}
 
-	childrenCount := maxNumberOfHeadersInMetaSlab
-	if uint64(len(slabs)) < maxNumberOfHeadersInMetaSlab {
-		childrenCount = uint64(len(slabs))
-	}
+	childrenCount := min(uint64(len(slabs)), maxNumberOfHeadersInMetaSlab)
 
 	metaSlab := &MapMetaDataSlab{
 		header: MapSlabHeader{
@@ -446,10 +443,7 @@ func nextLevelMapSlabs(storage SlabStorage, address Address, slabs []MapSlab) ([
 			nextLevelSlabsIndex++
 
 			// compute number of children for next meta data slab
-			childrenCount = maxNumberOfHeadersInMetaSlab
-			if uint64(len(slabs)-i) < maxNumberOfHeadersInMetaSlab {
-				childrenCount = uint64(len(slabs) - i)
-			}
+			childrenCount = min(uint64(len(slabs)-i), maxNumberOfHeadersInMetaSlab)
 
 			// Generate storage id for next meta data slab
 			id, err = storage.GenerateSlabID(address)

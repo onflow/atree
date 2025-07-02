@@ -507,12 +507,7 @@ func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 }
 
 func (a *ArrayDataSlab) HasPointer() bool {
-	for _, e := range a.elements {
-		if hasPointer(e) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(a.elements, hasPointer)
 }
 
 func (a *ArrayDataSlab) ChildStorables() []Storable {

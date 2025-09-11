@@ -188,7 +188,7 @@ func checksumVaryingEndPos(t *testing.T, cryptoHash512 hash.Hash, seed uint64, d
 	}
 }
 
-// nonUniformBytes16Kib returns 16384 bytes of non-uniform bytes
+// nonUniformBytes16KiB returns 16384 bytes of non-uniform bytes
 // produced from SHA-512 in a feedback loop. SHA-512 is used instead
 // of SHAKE-256 XOF or a stream cipher because SHA-512 is bundled with
 // Go and is available in most languages. One reason a simple PRNG

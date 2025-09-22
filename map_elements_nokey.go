@@ -222,6 +222,20 @@ func (e *singleElements) PopIterate(storage SlabStorage, fn MapPopIterationFunc)
 	return nil
 }
 
+func (e *singleElements) Iterate(storage SlabStorage, fn func(MapKey, MapValue) error) error {
+
+	for i := range e.elems {
+		elem := e.elems[i]
+
+		err := elem.Iterate(storage, fn)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Slab operations (split, merge, and lend/borrow)
 
 func (e *singleElements) Merge(_ elements) error {

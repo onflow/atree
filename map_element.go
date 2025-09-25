@@ -270,7 +270,12 @@ func (e *singleElement) PopIterate(_ SlabStorage, fn MapPopIterationFunc) error 
 }
 
 func (e *singleElement) Iterate(_ SlabStorage, fn func(key MapKey, value MapValue) error) error {
-	return fn(e.key, e.value)
+	err := fn(e.key, e.value)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by fn callback.
+		return wrapErrorAsExternalErrorIfNeeded(err)
+	}
+	return nil
 }
 
 func (e *singleElement) String() string {
@@ -446,6 +451,7 @@ func (e *inlineCollisionGroup) PopIterate(storage SlabStorage, fn MapPopIteratio
 }
 
 func (e *inlineCollisionGroup) Iterate(storage SlabStorage, fn func(key MapKey, value MapValue) error) error {
+	// Don't need to wrap error as external error because err is already categorized by elements.Iterate().
 	return e.elements.Iterate(storage, fn)
 }
 
@@ -653,11 +659,13 @@ func (e *externalCollisionGroup) PopIterate(storage SlabStorage, fn MapPopIterat
 func (e *externalCollisionGroup) Iterate(storage SlabStorage, fn func(key MapKey, value MapValue) error) error {
 	elements, err := e.Elements(storage)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by externalCollisionGroup.Elements().
 		return err
 	}
 
 	err = elements.Iterate(storage, fn)
 	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by elements.Iterate().
 		return err
 	}
 

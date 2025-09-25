@@ -422,6 +422,7 @@ func (e *hkeyElements) Iterate(storage SlabStorage, fn func(key MapKey, value Ma
 	for _, elem := range e.elems {
 		err := elem.Iterate(storage, fn)
 		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by element.Iterate().
 			return err
 		}
 	}

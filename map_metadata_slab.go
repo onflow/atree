@@ -790,13 +790,13 @@ func (m *MapMetaDataSlab) String() string {
 			m.header.firstKey,
 			strings.Join(elemsStr, " "),
 		)
-	} else {
-		return fmt.Sprintf("MapMetaDataSlab id:%s seed:%d size:%d firstKey:%d children: [%s]",
-			m.header.slabID,
-			m.extraData.Seed,
-			m.header.size,
-			m.header.firstKey,
-			strings.Join(elemsStr, " "),
-		)
 	}
+
+	return fmt.Sprintf("MapMetaDataSlab id:%s seed:%d size:%d firstKey:%d children: [%s]",
+		m.header.slabID,
+		m.extraData.Seed,
+		m.header.size,
+		m.header.firstKey,
+		strings.Join(elemsStr, " "),
+	)
 }

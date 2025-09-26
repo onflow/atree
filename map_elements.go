@@ -88,6 +88,8 @@ type elements interface {
 	Size() uint32
 
 	PopIterate(SlabStorage, MapPopIterationFunc) error
+
+	Iterate(SlabStorage, func(MapKey, MapValue) error) error
 }
 
 func firstKeyInMapSlab(storage SlabStorage, slab MapSlab) (MapKey, error) {

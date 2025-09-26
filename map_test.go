@@ -30,6 +30,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -19973,4 +19974,225 @@ func newRandomDigests(r *rand.Rand, level int) []atree.Digest {
 
 func newRandomDigest(r *rand.Rand) atree.Digest {
 	return atree.Digest(r.Intn(256))
+}
+
+func TestMapDataSlabIterate(t *testing.T) {
+
+	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	decMode, err := cbor.DecOptions{}.DecMode()
+	require.NoError(t, err)
+
+	t.Run("empty", func(t *testing.T) {
+
+		baseStorage := test_utils.NewInMemBaseStorage()
+		storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
+
+		m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		slabID := m.SlabID()
+
+		encodedSlab, exists, err := baseStorage.Retrieve(slabID)
+		require.NoError(t, err)
+		require.True(t, exists)
+
+		slab, err := atree.DecodeSlab(slabID, encodedSlab, decMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		require.NoError(t, err)
+
+		mapDataSlab, ok := slab.(*atree.MapDataSlab)
+		require.True(t, ok)
+
+		testMapDataSlabIterate(t, storage, mapDataSlab, nil)
+	})
+
+	t.Run("no collision", func(t *testing.T) {
+		const (
+			mapCount        = 10
+			valueStringSize = 10
+		)
+
+		baseStorage := test_utils.NewInMemBaseStorage()
+		storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
+
+		r := newRand(t)
+
+		keyValues := make([]atree.Value, 0, mapCount*2)
+		keyValueStorables := make([]atree.Storable, 0, mapCount*2)
+
+		for i := range mapCount {
+			k := test_utils.Uint64Value(uint64(i))
+			v := test_utils.NewStringValue(randStr(r, valueStringSize))
+
+			keyValues = append(keyValues, k, v)
+
+			ks, err := k.Storable(storage, address, atree.MaxInlineMapKeySize())
+			require.NoError(t, err)
+
+			vs, err := v.Storable(storage, address, atree.MaxInlineMapValueSize(uint64(ks.ByteSize())))
+			require.NoError(t, err)
+
+			keyValueStorables = append(keyValueStorables, ks, vs)
+		}
+
+		digesterBuilder := &mockDigesterBuilder{}
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for i := 0; i < len(keyValues); i += 2 {
+			k := keyValues[i]
+			v := keyValues[i+1]
+
+			digesterBuilder.On("Digest", k).Return(
+				mockDigester{[]atree.Digest{atree.Digest(i)}},
+			)
+
+			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		err = storage.FastCommit(runtime.NumCPU())
+		require.NoError(t, err)
+
+		slabID := m.SlabID()
+
+		encodedSlab, exists, err := baseStorage.Retrieve(slabID)
+		require.NoError(t, err)
+		require.True(t, exists)
+
+		slab, err := atree.DecodeSlab(slabID, encodedSlab, decMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+		require.NoError(t, err)
+
+		mapDataSlab, ok := slab.(*atree.MapDataSlab)
+		require.True(t, ok)
+
+		testMapDataSlabIterate(t, storage, mapDataSlab, keyValueStorables)
+	})
+
+	testCases := []struct {
+		name                   string
+		mapCount               int
+		maxCollisionGroupCount int
+		expectedSegmentCount   int
+	}{
+		{
+			name:                   "inline collision",
+			mapCount:               10,
+			maxCollisionGroupCount: 2,
+			expectedSegmentCount:   1,
+		},
+		{
+			name:                   "external collision",
+			mapCount:               50,
+			maxCollisionGroupCount: 50,
+			expectedSegmentCount:   2,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			const (
+				valueStringSize = 10
+			)
+
+			baseStorage := test_utils.NewInMemBaseStorage()
+			storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
+
+			r := newRand(t)
+
+			keyValues := make([]atree.Value, 0, tc.mapCount*2)
+			keyValueStorables := make([]atree.Storable, 0, tc.mapCount*2)
+
+			for i := range tc.mapCount {
+				k := test_utils.Uint64Value(uint64(i))
+				v := test_utils.NewStringValue(randStr(r, valueStringSize))
+
+				keyValues = append(keyValues, k, v)
+
+				ks, err := k.Storable(storage, address, atree.MaxInlineMapKeySize())
+				require.NoError(t, err)
+
+				vs, err := v.Storable(storage, address, atree.MaxInlineMapValueSize(uint64(ks.ByteSize())))
+				require.NoError(t, err)
+
+				keyValueStorables = append(keyValueStorables, ks, vs)
+			}
+
+			digesterBuilder := &mockDigesterBuilder{}
+
+			m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+			require.NoError(t, err)
+
+			collisionGroupCount := 0
+			collisionDigest := uint64(0)
+			for i := 0; i < len(keyValues); i += 2 {
+				k := keyValues[i]
+				v := keyValues[i+1]
+
+				if collisionGroupCount == tc.maxCollisionGroupCount {
+					collisionGroupCount = 0
+					collisionDigest++
+				} else {
+					collisionGroupCount++
+				}
+
+				digesterBuilder.On("Digest", k).Return(
+					mockDigester{[]atree.Digest{atree.Digest(collisionDigest)}},
+				)
+
+				existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
+				require.NoError(t, err)
+				require.Nil(t, existingStorable)
+			}
+
+			err = storage.FastCommit(runtime.NumCPU())
+			require.NoError(t, err)
+
+			require.Equal(t, tc.expectedSegmentCount, baseStorage.SegmentCounts())
+
+			slabID := m.SlabID()
+
+			encodedSlab, exists, err := baseStorage.Retrieve(slabID)
+			require.NoError(t, err)
+			require.True(t, exists)
+
+			slab, err := atree.DecodeSlab(slabID, encodedSlab, decMode, storage.DecodeStorable, storage.DecodeTypeInfo)
+			require.NoError(t, err)
+
+			mapDataSlab, ok := slab.(*atree.MapDataSlab)
+			require.True(t, ok)
+
+			testMapDataSlabIterate(t, storage, mapDataSlab, keyValueStorables)
+		})
+	}
+}
+
+func testMapDataSlabIterate(
+	t *testing.T,
+	storage atree.SlabStorage,
+	mapDataSlab *atree.MapDataSlab,
+	expectedKeyAndValues []atree.Storable,
+) {
+	require.True(t, len(expectedKeyAndValues)%2 == 0, "length of expectedKeyAndValues must be even number")
+
+	i := 0
+	err := mapDataSlab.Iterate(storage, func(mk atree.MapKey, mv atree.MapValue) error {
+		if i < len(expectedKeyAndValues) {
+			require.Equal(t, atree.MapKey(expectedKeyAndValues[i]), mk)
+			require.Equal(t, atree.MapValue(expectedKeyAndValues[i+1]), mv)
+			i += 2
+		} else {
+			require.Fail(t, "unexpected MapDataSlab.Iterate callback for %v, %v", mk, mv)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, i, len(expectedKeyAndValues))
 }

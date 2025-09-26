@@ -411,7 +411,7 @@ func (m *MapDataSlab) String() string {
 			m.elements.String(),
 		)
 	} else {
-		return fmt.Sprintf("MapDataSlab id:%s seed: %d, size:%d firstkey:%d elements: [%s]",
+		return fmt.Sprintf("MapDataSlab id:%s seed:%d size:%d firstkey:%d elements: [%s]",
 			m.header.slabID,
 			m.extraData.Seed,
 			m.header.size,

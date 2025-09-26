@@ -297,7 +297,7 @@ func NewSlabRebalanceError(err error) error {
 	return NewFatalError(&SlabRebalanceError{err: err})
 }
 
-// NewSlabErrorf constructs a new SlabError with error formating
+// NewSlabRebalanceErrorf constructs a new SlabError with error formating
 func NewSlabRebalanceErrorf(msg string, args ...any) error {
 	return NewSlabRebalanceError(fmt.Errorf(msg, args...))
 }
@@ -384,7 +384,7 @@ type HashLevelError struct {
 	msg string
 }
 
-// NewHashLevelError constructs a HashLevelError
+// NewHashLevelErrorf constructs a HashLevelError
 func NewHashLevelErrorf(msg string, args ...any) error {
 	return NewFatalError(&HashLevelError{msg: fmt.Sprintf(msg, args...)})
 }

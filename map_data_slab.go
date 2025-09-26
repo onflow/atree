@@ -284,7 +284,7 @@ func (m *MapDataSlab) Inlinable(maxInlineSize uint64) bool {
 	return uint64(inlinedSize) <= maxInlineSize
 }
 
-// inline converts not-inlined MapDataSlab to inlined MapDataSlab and removes it from storage.
+// Inline converts not-inlined MapDataSlab to inlined MapDataSlab and removes it from storage.
 func (m *MapDataSlab) Inline(storage SlabStorage) error {
 	if m.inlined {
 		return NewFatalError(fmt.Errorf("failed to inline MapDataSlab %s: it is inlined already", m.header.slabID))
@@ -308,7 +308,7 @@ func (m *MapDataSlab) Inline(storage SlabStorage) error {
 	return nil
 }
 
-// uninline converts an inlined MapDataSlab to uninlined MapDataSlab and stores it in storage.
+// Uninline converts an inlined MapDataSlab to uninlined MapDataSlab and stores it in storage.
 func (m *MapDataSlab) Uninline(storage SlabStorage) error {
 	if !m.inlined {
 		return NewFatalError(fmt.Errorf("failed to uninline MapDataSlab %s: it is not inlined", m.header.slabID))

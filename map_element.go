@@ -80,6 +80,8 @@ type element interface {
 	Count(storage SlabStorage) (uint32, error)
 
 	PopIterate(SlabStorage, MapPopIterationFunc) error
+
+	Iterate(SlabStorage, func(key MapKey, value MapValue) error) error
 }
 
 // elementGroup is a group of elements that must stay together during splitting or rebalancing.
@@ -267,6 +269,15 @@ func (e *singleElement) PopIterate(_ SlabStorage, fn MapPopIterationFunc) error 
 	return nil
 }
 
+func (e *singleElement) Iterate(_ SlabStorage, fn func(key MapKey, value MapValue) error) error {
+	err := fn(e.key, e.value)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by fn callback.
+		return wrapErrorAsExternalErrorIfNeeded(err)
+	}
+	return nil
+}
+
 func (e *singleElement) String() string {
 	return fmt.Sprintf("%s:%s", e.key, e.value)
 }
@@ -437,6 +448,11 @@ func (e *inlineCollisionGroup) Count(_ SlabStorage) (uint32, error) {
 func (e *inlineCollisionGroup) PopIterate(storage SlabStorage, fn MapPopIterationFunc) error {
 	// Don't need to wrap error as external error because err is already categorized by elements.PopIterate().
 	return e.elements.PopIterate(storage, fn)
+}
+
+func (e *inlineCollisionGroup) Iterate(storage SlabStorage, fn func(key MapKey, value MapValue) error) error {
+	// Don't need to wrap error as external error because err is already categorized by elements.Iterate().
+	return e.elements.Iterate(storage, fn)
 }
 
 func (e *inlineCollisionGroup) String() string {
@@ -637,6 +653,22 @@ func (e *externalCollisionGroup) PopIterate(storage SlabStorage, fn MapPopIterat
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
 		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", e.slabID))
 	}
+	return nil
+}
+
+func (e *externalCollisionGroup) Iterate(storage SlabStorage, fn func(key MapKey, value MapValue) error) error {
+	elements, err := e.Elements(storage)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by externalCollisionGroup.Elements().
+		return err
+	}
+
+	err = elements.Iterate(storage, fn)
+	if err != nil {
+		// Don't need to wrap error as external error because err is already categorized by elements.Iterate().
+		return err
+	}
+
 	return nil
 }
 

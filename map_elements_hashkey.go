@@ -418,6 +418,17 @@ func (e *hkeyElements) PopIterate(storage SlabStorage, fn MapPopIterationFunc) e
 	return nil
 }
 
+func (e *hkeyElements) Iterate(storage SlabStorage, fn func(key MapKey, value MapValue) error) error {
+	for _, elem := range e.elems {
+		err := elem.Iterate(storage, fn)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by element.Iterate().
+			return err
+		}
+	}
+	return nil
+}
+
 // Slab operations (split, merge, and lend/borrow)
 
 func (e *hkeyElements) Merge(elems elements) error {

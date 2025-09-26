@@ -14416,7 +14416,7 @@ func TestMapSlabDump(t *testing.T) {
 		}
 
 		want := []string{
-			"level 1, MapDataSlab id:0x102030405060708.1 size:55 firstkey:0 elements: [0:0:0 1:1:1 2:2:2]",
+			"level 1, MapDataSlab id:0x102030405060708.1 seed:5956142463712012873 size:55 firstkey:0 elements: [0:0:0 1:1:1 2:2:2]",
 		}
 		dumps, err := atree.DumpMapSlabs(m)
 		require.NoError(t, err)
@@ -14445,7 +14445,7 @@ func TestMapSlabDump(t *testing.T) {
 		}
 
 		want := []string{
-			"level 1, MapMetaDataSlab id:0x102030405060708.1 size:48 firstKey:0 children: [{id:0x102030405060708.2 size:221 firstKey:0} {id:0x102030405060708.3 size:293 firstKey:13}]",
+			"level 1, MapMetaDataSlab id:0x102030405060708.1 seed:5956142463712012873 size:48 firstKey:0 children: [{id:0x102030405060708.2 size:221 firstKey:0} {id:0x102030405060708.3 size:293 firstKey:13}]",
 			"level 2, MapDataSlab id:0x102030405060708.2 size:221 firstkey:0 elements: [0:0:0 1:1:1 2:2:2 3:3:3 4:4:4 5:5:5 6:6:6 7:7:7 8:8:8 9:9:9 10:10:10 11:11:11 12:12:12]",
 			"level 2, MapDataSlab id:0x102030405060708.3 size:293 firstkey:13 elements: [13:13:13 14:14:14 15:15:15 16:16:16 17:17:17 18:18:18 19:19:19 20:20:20 21:21:21 22:22:22 23:23:23 24:24:24 25:25:25 26:26:26 27:27:27 28:28:28 29:29:29]",
 		}
@@ -14476,7 +14476,7 @@ func TestMapSlabDump(t *testing.T) {
 		}
 
 		want := []string{
-			"level 1, MapMetaDataSlab id:0x102030405060708.1 size:48 firstKey:0 children: [{id:0x102030405060708.2 size:213 firstKey:0} {id:0x102030405060708.3 size:221 firstKey:5}]",
+			"level 1, MapMetaDataSlab id:0x102030405060708.1 seed:5956142463712012873 size:48 firstKey:0 children: [{id:0x102030405060708.2 size:213 firstKey:0} {id:0x102030405060708.3 size:221 firstKey:5}]",
 			"level 2, MapDataSlab id:0x102030405060708.2 size:213 firstkey:0 elements: [0:inline[:0:0 :10:10 :20:20] 1:inline[:1:1 :11:11 :21:21] 2:inline[:2:2 :12:12 :22:22] 3:inline[:3:3 :13:13 :23:23] 4:inline[:4:4 :14:14 :24:24]]",
 			"level 2, MapDataSlab id:0x102030405060708.3 size:221 firstkey:5 elements: [5:inline[:5:5 :15:15 :25:25] 6:inline[:6:6 :16:16 :26:26] 7:inline[:7:7 :17:17 :27:27] 8:inline[:8:8 :18:18 :28:28] 9:inline[:9:9 :19:19 :29:29]]",
 		}
@@ -14507,7 +14507,7 @@ func TestMapSlabDump(t *testing.T) {
 		}
 
 		want := []string{
-			"level 1, MapDataSlab id:0x102030405060708.1 size:68 firstkey:0 elements: [0:external(0x102030405060708.2) 1:external(0x102030405060708.3)]",
+			"level 1, MapDataSlab id:0x102030405060708.1 seed:5956142463712012873 size:68 firstkey:0 elements: [0:external(0x102030405060708.2) 1:external(0x102030405060708.3)]",
 			"collision: MapDataSlab id:0x102030405060708.2 size:135 firstkey:0 elements: [:0:0 :2:2 :4:4 :6:6 :8:8 :10:10 :12:12 :14:14 :16:16 :18:18 :20:20 :22:22 :24:24 :26:26 :28:28]",
 			"collision: MapDataSlab id:0x102030405060708.3 size:135 firstkey:0 elements: [:1:1 :3:3 :5:5 :7:7 :9:9 :11:11 :13:13 :15:15 :17:17 :19:19 :21:21 :23:23 :25:25 :27:27 :29:29]",
 		}
@@ -14535,7 +14535,7 @@ func TestMapSlabDump(t *testing.T) {
 		require.Nil(t, existingStorable)
 
 		want := []string{
-			"level 1, MapDataSlab id:0x102030405060708.1 size:93 firstkey:0 elements: [0:SlabIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]}):bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]",
+			"level 1, MapDataSlab id:0x102030405060708.1 seed:5956142463712012873 size:93 firstkey:0 elements: [0:SlabIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]}):bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb]",
 			"StorableSlab id:0x102030405060708.2 storable:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		}
 		dumps, err := atree.DumpMapSlabs(m)
@@ -14562,7 +14562,7 @@ func TestMapSlabDump(t *testing.T) {
 		require.Nil(t, existingStorable)
 
 		want := []string{
-			"level 1, MapDataSlab id:0x102030405060708.1 size:91 firstkey:0 elements: [0:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:SlabIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]})]",
+			"level 1, MapDataSlab id:0x102030405060708.1 seed:5956142463712012873 size:91 firstkey:0 elements: [0:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:SlabIDStorable({[1 2 3 4 5 6 7 8] [0 0 0 0 0 0 0 2]})]",
 			"StorableSlab id:0x102030405060708.2 storable:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		}
 		dumps, err := atree.DumpMapSlabs(m)

@@ -403,8 +403,18 @@ func (m *MapDataSlab) SetExtraData(extraData *MapExtraData) {
 }
 
 func (m *MapDataSlab) String() string {
-	return fmt.Sprintf("MapDataSlab id:%s size:%d firstkey:%d elements: [%s]",
+	if m.extraData == nil {
+		return fmt.Sprintf("MapDataSlab id:%s size:%d firstkey:%d elements: [%s]",
+			m.header.slabID,
+			m.header.size,
+			m.header.firstKey,
+			m.elements.String(),
+		)
+	}
+
+	return fmt.Sprintf("MapDataSlab id:%s seed:%d size:%d firstkey:%d elements: [%s]",
 		m.header.slabID,
+		m.extraData.Seed,
 		m.header.size,
 		m.header.firstKey,
 		m.elements.String(),

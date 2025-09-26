@@ -783,8 +783,18 @@ func (m *MapMetaDataSlab) String() string {
 		elemsStr[i] = fmt.Sprintf("{id:%s size:%d firstKey:%d}", h.slabID, h.size, h.firstKey)
 	}
 
-	return fmt.Sprintf("MapMetaDataSlab id:%s size:%d firstKey:%d children: [%s]",
+	if m.extraData == nil {
+		return fmt.Sprintf("MapMetaDataSlab id:%s size:%d firstKey:%d children: [%s]",
+			m.header.slabID,
+			m.header.size,
+			m.header.firstKey,
+			strings.Join(elemsStr, " "),
+		)
+	}
+
+	return fmt.Sprintf("MapMetaDataSlab id:%s seed:%d size:%d firstKey:%d children: [%s]",
 		m.header.slabID,
+		m.extraData.Seed,
 		m.header.size,
 		m.header.firstKey,
 		strings.Join(elemsStr, " "),

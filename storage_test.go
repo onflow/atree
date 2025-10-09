@@ -34,12 +34,14 @@ import (
 )
 
 func TestStorageIndexNext(t *testing.T) {
+	t.Parallel()
 	index := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}
 	want := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 2}
 	require.Equal(t, want, index.Next())
 }
 
 func TestNewSlabID(t *testing.T) {
+	t.Parallel()
 	t.Run("temp address", func(t *testing.T) {
 		require.True(t, atree.NewSlabID(atree.Address{}, atree.SlabIndex{1}).HasTempAddress())
 	})
@@ -49,6 +51,7 @@ func TestNewSlabID(t *testing.T) {
 }
 
 func TestNewSlabIDFromRawBytes(t *testing.T) {
+	t.Parallel()
 	t.Run("data length < slab id size", func(t *testing.T) {
 		var fatalError *atree.FatalError
 		var slabIDError *atree.SlabIDError
@@ -91,6 +94,7 @@ func TestNewSlabIDFromRawBytes(t *testing.T) {
 }
 
 func TestSlabIDToRawBytes(t *testing.T) {
+	t.Parallel()
 	t.Run("buffer nil", func(t *testing.T) {
 		var fatalError *atree.FatalError
 		var slabIDError *atree.SlabIDError
@@ -161,6 +165,7 @@ func TestSlabIDToRawBytes(t *testing.T) {
 }
 
 func TestSlabIDAddressAsUint64(t *testing.T) {
+	t.Parallel()
 	t.Run("temp", func(t *testing.T) {
 		id := atree.NewSlabID(atree.Address{}, atree.SlabIndex{1})
 		require.Equal(t, uint64(0), id.AddressAsUint64())
@@ -172,6 +177,7 @@ func TestSlabIDAddressAsUint64(t *testing.T) {
 }
 
 func TestSlabIDAddress(t *testing.T) {
+	t.Parallel()
 	t.Run("temp", func(t *testing.T) {
 		id := atree.NewSlabID(atree.Address{}, atree.SlabIndex{1})
 		require.Equal(t, atree.Address{}, id.Address())
@@ -183,6 +189,7 @@ func TestSlabIDAddress(t *testing.T) {
 }
 
 func TestSlabIDIndexAsUint64(t *testing.T) {
+	t.Parallel()
 	t.Run("temp", func(t *testing.T) {
 		id := atree.NewSlabID(atree.Address{}, atree.SlabIndex{})
 		require.Equal(t, uint64(0), id.IndexAsUint64())
@@ -194,6 +201,7 @@ func TestSlabIDIndexAsUint64(t *testing.T) {
 }
 
 func TestSlabIDValid(t *testing.T) {
+	t.Parallel()
 	t.Run("undefined", func(t *testing.T) {
 		id := atree.SlabIDUndefined
 		err := id.Valid()
@@ -230,6 +238,7 @@ func TestSlabIDValid(t *testing.T) {
 }
 
 func TestSlabIDCompare(t *testing.T) {
+	t.Parallel()
 	t.Run("same", func(t *testing.T) {
 		id1 := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1})
 		id2 := atree.NewSlabID(atree.Address{1}, atree.SlabIndex{1})
@@ -260,6 +269,7 @@ func TestSlabIDCompare(t *testing.T) {
 }
 
 func TestLedgerBaseStorageStore(t *testing.T) {
+	t.Parallel()
 	ledger := newTestLedger()
 	baseStorage := atree.NewLedgerBaseStorage(ledger)
 
@@ -307,6 +317,7 @@ func TestLedgerBaseStorageStore(t *testing.T) {
 }
 
 func TestLedgerBaseStorageRetrieve(t *testing.T) {
+	t.Parallel()
 	ledger := newTestLedger()
 	baseStorage := atree.NewLedgerBaseStorage(ledger)
 
@@ -344,6 +355,7 @@ func TestLedgerBaseStorageRetrieve(t *testing.T) {
 }
 
 func TestLedgerBaseStorageRemove(t *testing.T) {
+	t.Parallel()
 	ledger := newTestLedger()
 	baseStorage := atree.NewLedgerBaseStorage(ledger)
 
@@ -393,6 +405,7 @@ func TestLedgerBaseStorageRemove(t *testing.T) {
 }
 
 func TestLedgerBaseStorageGenerateSlabID(t *testing.T) {
+	t.Parallel()
 	ledger := newTestLedger()
 	baseStorage := atree.NewLedgerBaseStorage(ledger)
 
@@ -416,6 +429,7 @@ func TestLedgerBaseStorageGenerateSlabID(t *testing.T) {
 }
 
 func TestBasicSlabStorageStore(t *testing.T) {
+	t.Parallel()
 	storage := atree.NewBasicSlabStorage(nil, nil, nil, nil)
 
 	r := newRand(t)
@@ -451,6 +465,7 @@ func TestBasicSlabStorageStore(t *testing.T) {
 }
 
 func TestBasicSlabStorageRetrieve(t *testing.T) {
+	t.Parallel()
 	storage := atree.NewBasicSlabStorage(nil, nil, nil, nil)
 
 	r := newRand(t)
@@ -481,6 +496,7 @@ func TestBasicSlabStorageRetrieve(t *testing.T) {
 }
 
 func TestBasicSlabStorageRemove(t *testing.T) {
+	t.Parallel()
 	storage := atree.NewBasicSlabStorage(nil, nil, nil, nil)
 
 	r := newRand(t)
@@ -516,6 +532,7 @@ func TestBasicSlabStorageRemove(t *testing.T) {
 }
 
 func TestBasicSlabStorageGenerateSlabID(t *testing.T) {
+	t.Parallel()
 	storage := atree.NewBasicSlabStorage(nil, nil, nil, nil)
 
 	address1 := atree.Address{1}
@@ -538,6 +555,7 @@ func TestBasicSlabStorageGenerateSlabID(t *testing.T) {
 }
 
 func TestBasicSlabStorageSlabIDs(t *testing.T) {
+	t.Parallel()
 	r := newRand(t)
 	address := atree.Address{1}
 	index := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 0}
@@ -569,6 +587,7 @@ func TestBasicSlabStorageSlabIDs(t *testing.T) {
 }
 
 func TestBasicSlabStorageSlabIterat(t *testing.T) {
+	t.Parallel()
 	r := newRand(t)
 	address := atree.Address{1}
 	index := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 0}
@@ -608,6 +627,7 @@ func TestBasicSlabStorageSlabIterat(t *testing.T) {
 }
 
 func TestPersistentStorage(t *testing.T) {
+	t.Parallel()
 
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
@@ -903,6 +923,7 @@ func TestPersistentStorage(t *testing.T) {
 }
 
 func TestPersistentStorageSlabIterator(t *testing.T) {
+	t.Parallel()
 	t.Run("empty storage", func(t *testing.T) {
 		storage := newTestPersistentStorage(t)
 
@@ -1183,6 +1204,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 }
 
 func TestPersistentStorageGenerateSlabID(t *testing.T) {
+	t.Parallel()
 	baseStorage := test_utils.NewInMemBaseStorage()
 	storage := atree.NewPersistentSlabStorage(baseStorage, nil, nil, nil, nil)
 
@@ -1417,6 +1439,8 @@ func (s slowStorable) Encode(encoder *atree.Encoder) error {
 }
 
 func TestFixLoadedBrokenReferences(t *testing.T) {
+	t.Parallel()
+
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("healthy", func(t *testing.T) {
@@ -3303,6 +3327,8 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 }
 
 func TestGetAllChildReferencesFromArray(t *testing.T) {
+	t.Parallel()
+
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
@@ -3933,6 +3959,8 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 }
 
 func TestGetAllChildReferencesFromMap(t *testing.T) {
+	t.Parallel()
+
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
@@ -4920,6 +4948,8 @@ func testGetAllChildReferences(
 }
 
 func TestStorageNondeterministicFastCommit(t *testing.T) {
+	t.Parallel()
+
 	t.Run("0 slabs", func(t *testing.T) {
 		numberOfAccounts := 0
 		numberOfSlabsPerAccount := 0
@@ -5031,6 +5061,8 @@ func testStorageNondeterministicFastCommit(t *testing.T, numberOfAccounts int, n
 }
 
 func TestStorageBatchPreload(t *testing.T) {
+	t.Parallel()
+
 	t.Run("0 slab", func(t *testing.T) {
 		numberOfAccounts := 0
 		numberOfSlabsPerAccount := 0
@@ -5127,6 +5159,7 @@ func testStorageBatchPreload(t *testing.T, numberOfAccounts int, numberOfSlabsPe
 }
 
 func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
+	t.Parallel()
 
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)

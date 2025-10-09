@@ -30,10 +30,10 @@ import (
 	"github.com/onflow/atree/test_utils"
 )
 
-type newKeyFunc func(atree.SlabStorage) (key atree.Value, expected atree.Value)
+type newKeyFunc func(*rand.Rand, atree.SlabStorage) (key atree.Value, expected atree.Value)
 
-var newRandomUint64KeyFunc = func(r *rand.Rand) newKeyFunc {
-	return func(atree.SlabStorage) (key atree.Value, expected atree.Value) {
+var newRandomUint64KeyFunc = func() newKeyFunc {
+	return func(r *rand.Rand, _ atree.SlabStorage) (key atree.Value, expected atree.Value) {
 		v := test_utils.Uint64Value(r.Intn(1844674407370955161))
 		return v, v
 	}
@@ -41,7 +41,7 @@ var newRandomUint64KeyFunc = func(r *rand.Rand) newKeyFunc {
 
 var newUint64KeyFunc = func() newKeyFunc {
 	i := 0
-	return func(atree.SlabStorage) (key atree.Value, expected atree.Value) {
+	return func(*rand.Rand, atree.SlabStorage) (key atree.Value, expected atree.Value) {
 		v := test_utils.Uint64Value(i)
 		i++
 		return v, v
@@ -56,15 +56,15 @@ var newMapValueFunc = func(
 	newKey newKeyFunc,
 	newValue newValueFunc,
 ) newValueFunc {
-	return func(storage atree.SlabStorage) (value atree.Value, expected atree.Value) {
+	return func(r *rand.Rand, storage atree.SlabStorage) (value atree.Value, expected atree.Value) {
 		m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
 		keyValues := make(map[atree.Value]atree.Value)
 
 		for range mapCount {
-			k, expectedK := newKey(storage)
-			v, expectedV := newValue(storage)
+			k, expectedK := newKey(r, storage)
+			v, expectedV := newValue(r, storage)
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
@@ -83,6 +83,7 @@ var modifyMapValueFunc = func(
 	modifyValueFunc modifyValueFunc,
 ) modifyValueFunc {
 	return func(
+		r *rand.Rand,
 		storage atree.SlabStorage,
 		originalValue atree.Value,
 		expectedOrigianlValue atree.Value,
@@ -112,7 +113,7 @@ var modifyMapValueFunc = func(
 		v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, firstKey)
 		require.NoError(t, err)
 
-		modifiedV, expectedModifiedV, err := modifyValueFunc(storage, v, expectedValues[firstKey])
+		modifiedV, expectedModifiedV, err := modifyValueFunc(r, storage, v, expectedValues[firstKey])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -212,7 +213,6 @@ type mapWrapperValueTestCase struct {
 
 func newMapWrapperValueTestCases(
 	t *testing.T,
-	r *rand.Rand,
 	address atree.Address,
 	typeInfo atree.TypeInfo,
 ) []mapWrapperValueTestCase {
@@ -225,9 +225,9 @@ func newMapWrapperValueTestCases(
 			modifyName:                  "modify wrapped primitive",
 			wrapperValueNestedLevels:    1,
 			mustSetModifiedElementInMap: true,
-			newKey:                      newRandomUint64KeyFunc(r),
-			newValue:                    newWrapperValueFunc(1, newRandomUint64ValueFunc(r)),
-			modifyValue:                 modifyWrapperValueFunc(t, 1, modifyRandomUint64ValueFunc(r)),
+			newKey:                      newRandomUint64KeyFunc(),
+			newValue:                    newWrapperValueFunc(1, newRandomUint64ValueFunc()),
+			modifyValue:                 modifyWrapperValueFunc(t, 1, modifyRandomUint64ValueFunc()),
 		},
 
 		// Test maps {uint64: SomeValue(SomeValue(uint64))}
@@ -236,9 +236,9 @@ func newMapWrapperValueTestCases(
 			modifyName:                  "modify wrapped primitive",
 			wrapperValueNestedLevels:    2,
 			mustSetModifiedElementInMap: true,
-			newKey:                      newRandomUint64KeyFunc(r),
-			newValue:                    newWrapperValueFunc(2, newRandomUint64ValueFunc(r)),
-			modifyValue:                 modifyWrapperValueFunc(t, 2, modifyRandomUint64ValueFunc(r)),
+			newKey:                      newRandomUint64KeyFunc(),
+			newValue:                    newWrapperValueFunc(2, newRandomUint64ValueFunc()),
+			modifyValue:                 modifyWrapperValueFunc(t, 2, modifyRandomUint64ValueFunc()),
 		},
 
 		// Test maps {uint64: SomeValue({uint64: uint64}))}
@@ -247,7 +247,7 @@ func newMapWrapperValueTestCases(
 			modifyName:                  "modify wrapped map",
 			wrapperValueNestedLevels:    1,
 			mustSetModifiedElementInMap: false,
-			newKey:                      newRandomUint64KeyFunc(r),
+			newKey:                      newRandomUint64KeyFunc(),
 			newValue: newWrapperValueFunc(
 				1,
 				newMapValueFunc(
@@ -255,15 +255,15 @@ func newMapWrapperValueTestCases(
 					address,
 					typeInfo,
 					2,
-					newRandomUint64KeyFunc(r),
-					newRandomUint64ValueFunc(r))),
+					newRandomUint64KeyFunc(),
+					newRandomUint64ValueFunc())),
 			modifyValue: modifyWrapperValueFunc(
 				t,
 				1,
 				modifyMapValueFunc(
 					t,
 					true,
-					modifyRandomUint64ValueFunc(r))),
+					modifyRandomUint64ValueFunc())),
 		},
 
 		// Test maps {uint64: SomeValue(SomeValue({uint64: uint64})))}
@@ -272,7 +272,7 @@ func newMapWrapperValueTestCases(
 			modifyName:                  "modify wrapped map",
 			wrapperValueNestedLevels:    2,
 			mustSetModifiedElementInMap: false,
-			newKey:                      newRandomUint64KeyFunc(r),
+			newKey:                      newRandomUint64KeyFunc(),
 			newValue: newWrapperValueFunc(
 				2,
 				newMapValueFunc(
@@ -280,15 +280,15 @@ func newMapWrapperValueTestCases(
 					address,
 					typeInfo,
 					2,
-					newRandomUint64KeyFunc(r),
-					newRandomUint64ValueFunc(r))),
+					newRandomUint64KeyFunc(),
+					newRandomUint64ValueFunc())),
 			modifyValue: modifyWrapperValueFunc(
 				t,
 				2,
 				modifyMapValueFunc(
 					t,
 					true,
-					modifyRandomUint64ValueFunc(r))),
+					modifyRandomUint64ValueFunc())),
 		},
 
 		// Test maps {uint64: SomeValue({uint64: SomeValue(uint64)}))}
@@ -297,7 +297,7 @@ func newMapWrapperValueTestCases(
 			modifyName:                  "modify wrapped map",
 			wrapperValueNestedLevels:    1,
 			mustSetModifiedElementInMap: false,
-			newKey:                      newRandomUint64KeyFunc(r),
+			newKey:                      newRandomUint64KeyFunc(),
 			newValue: newWrapperValueFunc(
 				1,
 				newMapValueFunc(
@@ -305,8 +305,8 @@ func newMapWrapperValueTestCases(
 					address,
 					typeInfo,
 					2,
-					newRandomUint64KeyFunc(r),
-					newWrapperValueFunc(1, newRandomUint64ValueFunc(r)))),
+					newRandomUint64KeyFunc(),
+					newWrapperValueFunc(1, newRandomUint64ValueFunc()))),
 			modifyValue: modifyWrapperValueFunc(
 				t,
 				1,
@@ -316,7 +316,7 @@ func newMapWrapperValueTestCases(
 					modifyWrapperValueFunc(
 						t,
 						1,
-						modifyRandomUint64ValueFunc(r)))),
+						modifyRandomUint64ValueFunc()))),
 		},
 
 		// Test maps {uint64: SomeValue(SomeValue({uint64: SomeValue(SomeValue(uint64))})))}
@@ -325,7 +325,7 @@ func newMapWrapperValueTestCases(
 			modifyName:                  "modify wrapped map",
 			wrapperValueNestedLevels:    2,
 			mustSetModifiedElementInMap: false,
-			newKey:                      newRandomUint64KeyFunc(r),
+			newKey:                      newRandomUint64KeyFunc(),
 			newValue: newWrapperValueFunc(
 				2,
 				newMapValueFunc(
@@ -333,10 +333,10 @@ func newMapWrapperValueTestCases(
 					address,
 					typeInfo,
 					2,
-					newRandomUint64KeyFunc(r),
+					newRandomUint64KeyFunc(),
 					newWrapperValueFunc(
 						2,
-						newRandomUint64ValueFunc(r)))),
+						newRandomUint64ValueFunc()))),
 			modifyValue: modifyWrapperValueFunc(
 				t,
 				2,
@@ -346,7 +346,7 @@ func newMapWrapperValueTestCases(
 					modifyWrapperValueFunc(
 						t,
 						2,
-						modifyRandomUint64ValueFunc(r)))),
+						modifyRandomUint64ValueFunc()))),
 		},
 
 		// Test maps {uint64: SomeValue({uint64: SomeValue({uint64: SomeValue(uint64)})}))} and modify innermost map
@@ -355,7 +355,7 @@ func newMapWrapperValueTestCases(
 			modifyName:                  "modify wrapped level-2 map",
 			wrapperValueNestedLevels:    1,
 			mustSetModifiedElementInMap: false,
-			newKey:                      newRandomUint64KeyFunc(r),
+			newKey:                      newRandomUint64KeyFunc(),
 			newValue: newWrapperValueFunc(
 				1,
 				newMapValueFunc(
@@ -363,7 +363,7 @@ func newMapWrapperValueTestCases(
 					address,
 					typeInfo,
 					2,
-					newRandomUint64KeyFunc(r),
+					newRandomUint64KeyFunc(),
 					newWrapperValueFunc(
 						1,
 						newMapValueFunc(
@@ -371,10 +371,10 @@ func newMapWrapperValueTestCases(
 							address,
 							typeInfo,
 							2,
-							newRandomUint64KeyFunc(r),
+							newRandomUint64KeyFunc(),
 							newWrapperValueFunc(
 								1,
-								newRandomUint64ValueFunc(r)))))),
+								newRandomUint64ValueFunc()))))),
 			modifyValue: modifyWrapperValueFunc(
 				t,
 				1,
@@ -390,7 +390,7 @@ func newMapWrapperValueTestCases(
 							modifyWrapperValueFunc(
 								t,
 								1,
-								modifyRandomUint64ValueFunc(r)))))),
+								modifyRandomUint64ValueFunc()))))),
 		},
 
 		// Test maps {uint64: SomeValue({uint64: SomeValue({uint64: SomeValue(uint64)})})) and remove element from middle map
@@ -399,7 +399,7 @@ func newMapWrapperValueTestCases(
 			modifyName:                  "remove element from wrapped level-1 map",
 			wrapperValueNestedLevels:    1,
 			mustSetModifiedElementInMap: false,
-			newKey:                      newRandomUint64KeyFunc(r),
+			newKey:                      newRandomUint64KeyFunc(),
 			newValue: newWrapperValueFunc(
 				1,
 				newMapValueFunc(
@@ -407,7 +407,7 @@ func newMapWrapperValueTestCases(
 					address,
 					typeInfo,
 					2,
-					newRandomUint64KeyFunc(r),
+					newRandomUint64KeyFunc(),
 					newWrapperValueFunc(
 						1,
 						newMapValueFunc(
@@ -415,10 +415,10 @@ func newMapWrapperValueTestCases(
 							address,
 							typeInfo,
 							2,
-							newRandomUint64KeyFunc(r),
+							newRandomUint64KeyFunc(),
 							newWrapperValueFunc(
 								1,
-								newRandomUint64ValueFunc(r)))))),
+								newRandomUint64ValueFunc()))))),
 			modifyValue: modifyWrapperValueFunc(
 				t,
 				1,
@@ -434,7 +434,7 @@ func newMapWrapperValueTestCases(
 			modifyName:                  "modify element in wrapped level-1 map",
 			wrapperValueNestedLevels:    1,
 			mustSetModifiedElementInMap: false,
-			newKey:                      newRandomUint64KeyFunc(r),
+			newKey:                      newRandomUint64KeyFunc(),
 			newValue: newWrapperValueFunc(
 				1,
 				newMapValueFunc(
@@ -442,7 +442,7 @@ func newMapWrapperValueTestCases(
 					address,
 					typeInfo,
 					2,
-					newRandomUint64KeyFunc(r),
+					newRandomUint64KeyFunc(),
 					newWrapperValueFunc(
 						1,
 						newMapValueFunc(
@@ -450,10 +450,10 @@ func newMapWrapperValueTestCases(
 							address,
 							typeInfo,
 							2,
-							newRandomUint64KeyFunc(r),
+							newRandomUint64KeyFunc(),
 							newWrapperValueFunc(
 								1,
-								newRandomUint64ValueFunc(r)))))),
+								newRandomUint64ValueFunc()))))),
 			modifyValue: modifyWrapperValueFunc(
 				t,
 				1,
@@ -468,10 +468,10 @@ func newMapWrapperValueTestCases(
 								address,
 								typeInfo,
 								2,
-								newRandomUint64KeyFunc(r),
+								newRandomUint64KeyFunc(),
 								newWrapperValueFunc(
 									1,
-									newRandomUint64ValueFunc(r))))))),
+									newRandomUint64ValueFunc())))))),
 		},
 	}
 }
@@ -483,9 +483,9 @@ func newMapWrapperValueTestCases(
 // - setting modified WrapperValue
 func TestMapWrapperValueSetAndModify(t *testing.T) {
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
-
-	r := newRand(t)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -503,7 +503,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 		{name: "large map", mapCount: largeMapCount},
 	}
 
-	testCases := newMapWrapperValueTestCases(t, r, address, typeInfo)
+	testCases := newMapWrapperValueTestCases(t, address, typeInfo)
 
 	for _, tc := range testCases {
 
@@ -517,6 +517,9 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 			}
 
 			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+
+				r := newRand(t)
 
 				storage := newTestPersistentStorage(t)
 
@@ -528,13 +531,13 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 				// Set WrapperValue
 				expectedValues := make(map[atree.Value]atree.Value)
 				for uint64(len(expectedValues)) < mapCount {
-					k, expectedK := tc.newKey(storage)
+					k, expectedK := tc.newKey(r, storage)
 
 					if _, exists := expectedValues[expectedK]; exists {
 						continue
 					}
 
-					v, expectedV := tc.newValue(storage)
+					v, expectedV := tc.newValue(r, storage)
 
 					existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 					require.NoError(t, err)
@@ -558,7 +561,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 					testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
 
 					// Modify element
-					newV, newExpectedV, err := tc.modifyValue(storage, v, expectedValue)
+					newV, newExpectedV, err := tc.modifyValue(r, storage, v, expectedValue)
 					require.NoError(t, err)
 
 					if tc.mustSetModifiedElementInMap {
@@ -595,9 +598,9 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 // - remove all elements
 func TestMapWrapperValueSetAndRemove(t *testing.T) {
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
-
-	r := newRand(t)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -633,7 +636,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 		{name: fmt.Sprintf("remove %d element", smallMapCount/2), removeElementCount: smallMapCount / 2},
 	}
 
-	testCases := newMapWrapperValueTestCases(t, r, address, typeInfo)
+	testCases := newMapWrapperValueTestCases(t, address, typeInfo)
 
 	for _, tc := range testCases {
 
@@ -661,6 +664,9 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 					}
 
 					t.Run(name, func(t *testing.T) {
+						t.Parallel()
+
+						r := newRand(t)
 
 						storage := newTestPersistentStorage(t)
 
@@ -673,13 +679,13 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 
 						// Set WrapperValue in map
 						for uint64(len(expectedValues)) < mapCount {
-							k, expectedK := tc.newKey(storage)
+							k, expectedK := tc.newKey(r, storage)
 
 							if _, exists := expectedValues[expectedK]; exists {
 								continue
 							}
 
-							v, expectedV := tc.newValue(storage)
+							v, expectedV := tc.newValue(r, storage)
 
 							existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 							require.NoError(t, err)
@@ -704,7 +710,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 								testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
 
 								// Modify element
-								newV, newExpectedV, err := tc.modifyValue(storage, v, expected)
+								newV, newExpectedV, err := tc.modifyValue(r, storage, v, expected)
 								require.NoError(t, err)
 
 								if tc.mustSetModifiedElementInMap {
@@ -764,9 +770,9 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 
 func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
-
-	r := newRand(t)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -792,7 +798,7 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 		{name: "", testModifyElement: false},
 	}
 
-	testCases := newMapWrapperValueTestCases(t, r, address, typeInfo)
+	testCases := newMapWrapperValueTestCases(t, address, typeInfo)
 
 	for _, tc := range testCases {
 
@@ -815,6 +821,9 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 				}
 
 				t.Run(name, func(t *testing.T) {
+					t.Parallel()
+
+					r := newRand(t)
 
 					storage := newTestPersistentStorage(t)
 
@@ -825,13 +834,13 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 
 					// Set WrapperValue to map
 					for uint64(len(expectedValues)) < mapCount {
-						k, expectedK := tc.newKey(storage)
+						k, expectedK := tc.newKey(r, storage)
 
 						if _, exists := expectedValues[expectedK]; exists {
 							continue
 						}
 
-						v, expectedV := tc.newValue(storage)
+						v, expectedV := tc.newValue(r, storage)
 
 						existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 						require.NoError(t, err)
@@ -864,7 +873,7 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 
 						// Test modifying elements that don't need to reset in parent container.
 						if testModifyElement {
-							_, _, err := tc.modifyValue(storage, nextValue, expected)
+							_, _, err := tc.modifyValue(r, storage, nextValue, expected)
 							var targetErr *atree.ReadOnlyIteratorElementMutationError
 							require.ErrorAs(t, err, &targetErr)
 						}
@@ -879,9 +888,9 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 
 func TestMapWrapperValueIterate(t *testing.T) {
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
-
-	r := newRand(t)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := test_utils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -907,7 +916,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 		{name: "", testModifyElement: false},
 	}
 
-	testCases := newMapWrapperValueTestCases(t, r, address, typeInfo)
+	testCases := newMapWrapperValueTestCases(t, address, typeInfo)
 
 	for _, tc := range testCases {
 
@@ -932,6 +941,9 @@ func TestMapWrapperValueIterate(t *testing.T) {
 				}
 
 				t.Run(name, func(t *testing.T) {
+					t.Parallel()
+
+					r := newRand(t)
 
 					storage := newTestPersistentStorage(t)
 
@@ -942,13 +954,13 @@ func TestMapWrapperValueIterate(t *testing.T) {
 
 					// Set WrapperValue in map
 					for uint64(len(expectedValues)) < mapCount {
-						k, expectedK := tc.newKey(storage)
+						k, expectedK := tc.newKey(r, storage)
 
 						if _, exists := expectedValues[expectedK]; exists {
 							continue
 						}
 
-						v, expectedV := tc.newValue(storage)
+						v, expectedV := tc.newValue(r, storage)
 
 						existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 						require.NoError(t, err)
@@ -981,7 +993,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 
 						// Test modifying container elements.
 						if testModifyElement {
-							_, newExpectedV, err := tc.modifyValue(storage, nextValue, expected)
+							_, newExpectedV, err := tc.modifyValue(r, storage, nextValue, expected)
 							require.NoError(t, err)
 
 							expectedValues[nextKey] = newExpectedV
@@ -1033,7 +1045,9 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 	}
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	r := newRand(t)
 
@@ -1220,7 +1234,9 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 	}
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	typeInfo := test_utils.NewSimpleTypeInfo(42)
@@ -1419,14 +1435,16 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 	r := newRand(t)
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	typeInfo := test_utils.NewSimpleTypeInfo(42)
 
 	newElementFuncs := []newValueFunc{
 		// test_utils.SomeValue(uint64)
-		newWrapperValueFunc(1, newRandomUint64ValueFunc(r)),
+		newWrapperValueFunc(1, newRandomUint64ValueFunc()),
 
 		// test_utils.SomeValue({uint64: test_utils.SomeValue(uint64)})
 		newWrapperValueFunc(
@@ -1436,10 +1454,10 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 				address,
 				typeInfo,
 				r.Intn(4),
-				newRandomUint64KeyFunc(r),
+				newRandomUint64KeyFunc(),
 				newWrapperValueFunc(
 					1,
-					newRandomUint64ValueFunc(r)))),
+					newRandomUint64ValueFunc()))),
 
 		// test_utils.SomeValue({uint64: test_utils.SomeValue({uint64: test_utils.SomeValue(uint64)})})
 		newWrapperValueFunc(
@@ -1449,7 +1467,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 				address,
 				typeInfo,
 				r.Intn(4),
-				newRandomUint64KeyFunc(r),
+				newRandomUint64KeyFunc(),
 				newWrapperValueFunc(
 					1,
 					newMapValueFunc(
@@ -1457,10 +1475,10 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 						address,
 						typeInfo,
 						r.Intn(4),
-						newRandomUint64KeyFunc(r),
+						newRandomUint64KeyFunc(),
 						newWrapperValueFunc(
 							1,
-							newRandomUint64ValueFunc(r)))))),
+							newRandomUint64ValueFunc()))))),
 	}
 
 	storage := newTestPersistentStorage(t)
@@ -1483,7 +1501,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 			k := test_utils.Uint64Value(i)
 
 			newValue := newElementFuncs[r.Intn(len(newElementFuncs))]
-			v, expected := newValue(storage)
+			v, expected := newValue(r, storage)
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
@@ -1561,7 +1579,9 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 	r := newRand(t)
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	typeInfo := test_utils.NewSimpleTypeInfo(42)
@@ -1575,10 +1595,10 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 				address,
 				typeInfo,
 				r.Intn(4)+1, // at least one element
-				newRandomUint64KeyFunc(r),
+				newRandomUint64KeyFunc(),
 				newWrapperValueFunc(
 					1,
-					newRandomUint64ValueFunc(r))))
+					newRandomUint64ValueFunc())))
 
 	// modifyValue modifies nested map's first element.
 	modifyValue :=
@@ -1591,7 +1611,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 				modifyWrapperValueFunc(
 					t,
 					1,
-					modifyRandomUint64ValueFunc(r))))
+					modifyRandomUint64ValueFunc())))
 
 	storage := newTestPersistentStorage(t)
 
@@ -1611,7 +1631,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 
 		for i := range setCount {
 			k := test_utils.Uint64Value(i)
-			v, expected := newValue(storage)
+			v, expected := newValue(r, storage)
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
@@ -1684,7 +1704,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			require.True(t, isWrapperValue)
 
 			// Modify retrieved element without setting back explicitly.
-			_, modifiedExpectedValue, err := modifyValue(storage, originalValue, expectedValues[setKey])
+			_, modifiedExpectedValue, err := modifyValue(r, storage, originalValue, expectedValues[setKey])
 			require.NoError(t, err)
 
 			expectedValues[setKey] = modifiedExpectedValue
@@ -1755,7 +1775,9 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 	r := newRand(t)
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 	typeInfo := test_utils.NewSimpleTypeInfo(42)
@@ -1769,7 +1791,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 				address,
 				typeInfo,
 				2,
-				newRandomUint64KeyFunc(r),
+				newRandomUint64KeyFunc(),
 				newWrapperValueFunc(
 					1,
 					newMapValueFunc(
@@ -1777,10 +1799,10 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 						address,
 						typeInfo,
 						2,
-						newRandomUint64KeyFunc(r),
+						newRandomUint64KeyFunc(),
 						newWrapperValueFunc(
 							1,
-							newRandomUint64ValueFunc(r))))))
+							newRandomUint64ValueFunc())))))
 
 	// modifyValue modifies innermost nested map's first element.
 	modifyValue :=
@@ -1799,7 +1821,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 						modifyWrapperValueFunc(
 							t,
 							1,
-							modifyRandomUint64ValueFunc(r))))))
+							modifyRandomUint64ValueFunc())))))
 
 	storage := newTestPersistentStorage(t)
 
@@ -1819,7 +1841,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 
 		for i := range setCount {
 			k := test_utils.Uint64Value(i)
-			v, expected := newValue(storage)
+			v, expected := newValue(r, storage)
 
 			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
 			require.NoError(t, err)
@@ -1892,7 +1914,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			require.True(t, isWrapperValue)
 
 			// Modify retrieved element without setting back explicitly.
-			_, modifiedExpectedValue, err := modifyValue(storage, originalValue, expectedValues[key])
+			_, modifiedExpectedValue, err := modifyValue(r, storage, originalValue, expectedValues[key])
 			require.NoError(t, err)
 
 			expectedValues[key] = modifiedExpectedValue
@@ -1952,10 +1974,13 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 }
 
 func TestMapWrapperValueModifyExistingMap(t *testing.T) {
+	t.Parallel()
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("modify level-1 wrapper map in {uint64: test_utils.SomeValue({uint64: test_utils.SomeValue(uint64)})}", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount      = 3
 			childMapCount = 2
@@ -1989,9 +2014,9 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 							newUint64KeyFunc(),
 							newWrapperValueFunc(
 								1,
-								newRandomUint64ValueFunc(r)))))
+								newRandomUint64ValueFunc()))))
 
-			v, expected := createMapOfSomeValueOfMapOfSomeValueOfUint64(storage)
+			v, expected := createMapOfSomeValueOfMapOfSomeValueOfUint64(r, storage)
 
 			m := v.(*atree.OrderedMap)
 			expectedKeyValues = expected.(test_utils.ExpectedMapValue)
@@ -2072,6 +2097,8 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 	})
 
 	t.Run("get and modify 2-level wrapper map in {uint64: test_utils.SomeValue({uint64: test_utils.SomeValue({uint64: test_utils.SomeValue(uint64)})})}", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount       = 4
 			childMapCount  = 3
@@ -2114,9 +2141,9 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 									newUint64KeyFunc(),
 									newWrapperValueFunc(
 										1,
-										newRandomUint64ValueFunc(r)))))))
+										newRandomUint64ValueFunc()))))))
 
-			v, expected := createMapOfSomeValueOfMapOfSomeValueOfMapOfSomeValueOfUint64(storage)
+			v, expected := createMapOfSomeValueOfMapOfSomeValueOfMapOfSomeValueOfUint64(r, storage)
 
 			m := v.(*atree.OrderedMap)
 			expectedKeyValues = expected.(test_utils.ExpectedMapValue)

@@ -231,7 +231,7 @@ func benchmarkArrayGet(b *testing.B, initialArrayCount, numberOfOps int) {
 
 	b.StartTimer()
 
-	for range b.N {
+	for b.Loop() {
 		for range numberOfOps {
 			index := getRandomArrayIndex(r, array)
 			value, _ = array.Get(index)
@@ -249,7 +249,7 @@ func benchmarkArrayInsert(b *testing.B, initialArrayCount, numberOfOps int) {
 
 	storage := newTestPersistentStorage(b)
 
-	for range b.N {
+	for b.Loop() {
 
 		b.StopTimer()
 
@@ -273,7 +273,7 @@ func benchmarkArrayRemove(b *testing.B, initialArrayCount, numberOfOps int) {
 
 	storage := newTestPersistentStorage(b)
 
-	for range b.N {
+	for b.Loop() {
 
 		b.StopTimer()
 
@@ -298,7 +298,7 @@ func benchmarkArrayRemoveAll(b *testing.B, initialArrayCount int) {
 
 	var storable atree.Storable
 
-	for range b.N {
+	for b.Loop() {
 
 		b.StopTimer()
 
@@ -324,7 +324,7 @@ func benchmarkArrayPopIterate(b *testing.B, initialArrayCount int) {
 
 	var storable atree.Storable
 
-	for range b.N {
+	for b.Loop() {
 
 		b.StopTimer()
 
@@ -355,7 +355,7 @@ func benchmarkNewArrayFromAppend(b *testing.B, initialArrayCount int) {
 
 	b.StartTimer()
 
-	for range b.N {
+	for b.Loop() {
 		copied, _ := atree.NewArray(storage, array.Address(), array.Type())
 
 		_ = array.IterateReadOnly(func(value atree.Value) (bool, error) {
@@ -381,7 +381,7 @@ func benchmarkNewArrayFromBatchData(b *testing.B, initialArrayCount int) {
 
 	b.StartTimer()
 
-	for range b.N {
+	for b.Loop() {
 		iter, err := array.ReadOnlyIterator()
 		require.NoError(b, err)
 

@@ -54,7 +54,7 @@ func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			b.StopTimer()
 
 			baseStorage := testutils.NewInMemBaseStorage()
@@ -95,7 +95,7 @@ func benchmarkNondeterministicFastCommit(b *testing.B, seed int64, numberOfSlabs
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			b.StopTimer()
 
 			baseStorage := testutils.NewInMemBaseStorage()
@@ -166,7 +166,7 @@ func benchmarkRetrieve(b *testing.B, seed int64, numberOfSlabs int) {
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			b.StopTimer()
 
 			baseStorage := testutils.NewInMemBaseStorageFromMap(encodedSlabs)
@@ -213,7 +213,7 @@ func benchmarkBatchPreload(b *testing.B, seed int64, numberOfSlabs int) {
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			b.StopTimer()
 
 			baseStorage := testutils.NewInMemBaseStorageFromMap(encodedSlabs)

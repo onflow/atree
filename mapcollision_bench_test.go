@@ -148,7 +148,7 @@ func BenchmarkCollisionPerDigest(b *testing.B) {
 
 			b.StartTimer()
 
-			for range b.N {
+			for b.Loop() {
 				for k, v := range keyValues {
 					_, _ = m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
 				}

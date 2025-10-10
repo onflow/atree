@@ -1192,7 +1192,7 @@ func (s *PersistentSlabStorage) fixBrokenReferencesInMap(old MapSlab) error {
 	oldExtraData := old.ExtraData()
 
 	// Create an empty map with the same StorgeID, type, and seed as the old map.
-	new := &MapDataSlab{
+	newMap := &MapDataSlab{
 		header: MapSlabHeader{
 			slabID: id,
 			size:   mapRootDataSlabPrefixSize + hkeyElementsPrefixSize,
@@ -1205,7 +1205,7 @@ func (s *PersistentSlabStorage) fixBrokenReferencesInMap(old MapSlab) error {
 	}
 
 	// Store new empty map with the same SlabID.
-	err := s.Store(id, new)
+	err := s.Store(id, newMap)
 	if err != nil {
 		return err
 	}

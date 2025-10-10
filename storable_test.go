@@ -27,6 +27,8 @@ import (
 )
 
 func TestIsCBORTagNumberRangeAvailable(t *testing.T) {
+	t.Parallel()
+
 	minTagNum, maxTagNum := atree.ReservedCBORTagNumberRange()
 
 	t.Run("error", func(t *testing.T) {

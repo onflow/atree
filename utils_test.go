@@ -47,13 +47,9 @@ var (
 	runes = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
 )
 
-var seed = flag.Int64("seed", 0, "seed for pseudo-random source")
+var seed = flag.Int64("seed", time.Now().UnixNano(), "seed for pseudo-random source")
 
 func newRand(tb testing.TB) *rand.Rand {
-	if *seed == 0 {
-		*seed = time.Now().UnixNano()
-	}
-
 	// Benchmarks always log, so only log for tests which
 	// will only log with -v flag or on error.
 	if t, ok := tb.(*testing.T); ok {

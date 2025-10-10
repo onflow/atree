@@ -65,6 +65,7 @@ var countCircleHash64f uint64 // count calls to Hash64 (doesn't include calls to
 
 // TestCircleHash64Regression is renamed from TestCircleHash64NonUniformBitPatternInputs.
 func TestCircleHash64Regression(t *testing.T) {
+	t.Parallel()
 
 	// Create 16 KiB of test data from SHA-512 using the simplest
 	// form of SHA-512 feedback loop (nothing-up-my-sleeve).

@@ -15781,7 +15781,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				mapDataSlab, ok := atree.GetDeltas(storage)[slabID].(*atree.MapDataSlab)
 				require.True(t, ok)
 
-				count := atree.GetMapDataSlabElementCount(mapDataSlab)
+				count := mapDataSlab.Count()
 
 				err := storage.Remove(slabID)
 				require.NoError(t, err)
@@ -15830,7 +15830,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 				mapDataSlab, ok := atree.GetDeltas(storage)[slabID].(*atree.MapDataSlab)
 				require.True(t, ok)
 
-				count := atree.GetMapDataSlabElementCount(mapDataSlab)
+				count := mapDataSlab.Count()
 
 				err := storage.Remove(slabID)
 				require.NoError(t, err)
@@ -15881,13 +15881,13 @@ func TestMapLoadedValueIterator(t *testing.T) {
 			mapDataSlab, ok := atree.GetDeltas(storage)[prevSlabID].(*atree.MapDataSlab)
 			require.True(t, ok)
 
-			countAtIndex0 := atree.GetMapDataSlabElementCount(mapDataSlab)
+			countAtIndex0 := mapDataSlab.Count()
 
 			// Get element count from slab to be unloaded
 			mapDataSlab, ok = atree.GetDeltas(storage)[slabID].(*atree.MapDataSlab)
 			require.True(t, ok)
 
-			countAtIndex1 := atree.GetMapDataSlabElementCount(mapDataSlab)
+			countAtIndex1 := mapDataSlab.Count()
 
 			err := storage.Remove(slabID)
 			require.NoError(t, err)

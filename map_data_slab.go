@@ -344,10 +344,6 @@ func (m *MapDataSlab) isCollisionGroup() bool {
 	return m.collisionGroup
 }
 
-func (m *MapDataSlab) elementCount() uint32 {
-	return m.Count()
-}
-
 func (m *MapDataSlab) ChildStorables() []Storable {
 	return elementsStorables(m.elements, nil)
 }

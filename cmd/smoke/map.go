@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/onflow/atree"
-	"github.com/onflow/atree/test_utils"
+	testutils "github.com/onflow/atree/test_utils"
 )
 
 type mapOpType int
@@ -123,7 +123,7 @@ func testMap(
 	}
 
 	// expectedValues contains generated keys and values. It is used to check data loss.
-	expectedValues := make(test_utils.ExpectedMapValue, flagMaxLength)
+	expectedValues := make(testutils.ExpectedMapValue, flagMaxLength)
 
 	reduceHeapAllocs := false
 
@@ -238,7 +238,7 @@ func testMap(
 }
 
 func nextMapOp(
-	expectedValues test_utils.ExpectedMapValue,
+	expectedValues testutils.ExpectedMapValue,
 	m *atree.OrderedMap,
 	nestedLevels int,
 	forceRemove bool,
@@ -297,7 +297,7 @@ func nextMapOp(
 
 func getMapKeys(m *atree.OrderedMap) ([]atree.Value, error) {
 	keys := make([]atree.Value, 0, m.Count())
-	err := m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(key atree.Value) (resume bool, err error) {
+	err := m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(key atree.Value) (resume bool, err error) {
 		keys = append(keys, key)
 		return true, nil
 	})
@@ -308,11 +308,11 @@ func getMapKeys(m *atree.OrderedMap) ([]atree.Value, error) {
 }
 
 func modifyMap(
-	expectedValues test_utils.ExpectedMapValue,
+	expectedValues testutils.ExpectedMapValue,
 	m *atree.OrderedMap,
 	nestedLevels int,
 	forceRemove bool,
-) (test_utils.ExpectedMapValue, mapOpType, error) {
+) (testutils.ExpectedMapValue, mapOpType, error) {
 
 	storage := m.Storage
 	address := m.Address()
@@ -375,7 +375,7 @@ func modifyMap(
 		expectedValues[expectedKey] = expectedChildValue
 
 		// Update map
-		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, key, child)
+		existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, key, child)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to set %s at index %d: %s", child, key, err)
 		}
@@ -392,7 +392,7 @@ func modifyMap(
 				return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingStorable, err)
 			}
 
-			equal, err := test_utils.ValueEqual(oldExpectedValue, existingValue)
+			equal, err := testutils.ValueEqual(oldExpectedValue, existingValue)
 			if err != nil {
 				return nil, 0, fmt.Errorf("Set() returned wrong existing value %s, want %s", existingValue, oldExpectedValue)
 			}
@@ -432,7 +432,7 @@ func modifyMap(
 		delete(expectedValues, key)
 
 		// Update map
-		existingKeyStorable, existingValueStorable, err := m.Remove(test_utils.CompareValue, test_utils.GetHashInput, key)
+		existingKeyStorable, existingValueStorable, err := m.Remove(testutils.CompareValue, testutils.GetHashInput, key)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to remove element with key %s: %s", key, err)
 		}
@@ -443,7 +443,7 @@ func modifyMap(
 			return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingKeyStorable, err)
 		}
 
-		equal, err := test_utils.ValueEqual(key, existingKeyValue)
+		equal, err := testutils.ValueEqual(key, existingKeyValue)
 		if err != nil {
 			return nil, 0, fmt.Errorf("Remove() returned wrong existing key %s, want %s", existingKeyStorable, key)
 		}
@@ -457,7 +457,7 @@ func modifyMap(
 			return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingValueStorable, err)
 		}
 
-		equal, err = test_utils.ValueEqual(oldExpectedValue, existingValue)
+		equal, err = testutils.ValueEqual(oldExpectedValue, existingValue)
 		if err != nil {
 			return nil, 0, fmt.Errorf("Remove() returned wrong existing value %s, want %s", existingValueStorable, oldExpectedValue)
 		}
@@ -484,7 +484,7 @@ func modifyMap(
 			return modifyMap(expectedValues, m, nestedLevels, forceRemove)
 		}
 
-		child, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, key)
+		child, err := m.Get(testutils.CompareValue, testutils.GetHashInput, key)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to get element from map at key %s: %s", key, err)
 		}
@@ -498,23 +498,23 @@ func modifyMap(
 	return expectedValues, nextOp, nil
 }
 
-func hasChildContainerInMap(expectedValues test_utils.ExpectedMapValue) bool {
+func hasChildContainerInMap(expectedValues testutils.ExpectedMapValue) bool {
 	for _, v := range expectedValues {
 		v, _ = unwrapValue(v)
 		switch v.(type) {
-		case test_utils.ExpectedArrayValue, test_utils.ExpectedMapValue:
+		case testutils.ExpectedArrayValue, testutils.ExpectedMapValue:
 			return true
 		}
 	}
 	return false
 }
 
-func getRandomChildContainerKeyInMap(expectedValues test_utils.ExpectedMapValue) (key atree.Value, found bool) {
+func getRandomChildContainerKeyInMap(expectedValues testutils.ExpectedMapValue) (key atree.Value, found bool) {
 	keys := make([]atree.Value, 0, len(expectedValues))
 	for k, v := range expectedValues {
 		v, _ = unwrapValue(v)
 		switch v.(type) {
-		case test_utils.ExpectedArrayValue, test_utils.ExpectedMapValue:
+		case testutils.ExpectedArrayValue, testutils.ExpectedMapValue:
 			keys = append(keys, k)
 		}
 	}
@@ -524,7 +524,7 @@ func getRandomChildContainerKeyInMap(expectedValues test_utils.ExpectedMapValue)
 	return keys[r.Intn(len(keys))], true
 }
 
-func checkMapDataLoss(expectedValues test_utils.ExpectedMapValue, m *atree.OrderedMap) error {
+func checkMapDataLoss(expectedValues testutils.ExpectedMapValue, m *atree.OrderedMap) error {
 
 	// Check map has the same number of elements as elements
 	if m.Count() != uint64(len(expectedValues)) {
@@ -533,11 +533,11 @@ func checkMapDataLoss(expectedValues test_utils.ExpectedMapValue, m *atree.Order
 
 	// Check every element
 	for k, v := range expectedValues {
-		convertedValue, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, k)
+		convertedValue, err := m.Get(testutils.CompareValue, testutils.GetHashInput, k)
 		if err != nil {
 			return fmt.Errorf("failed to get element with key %s: %w", k, err)
 		}
-		equal, err := test_utils.ValueEqual(v, convertedValue)
+		equal, err := testutils.ValueEqual(v, convertedValue)
 		if err != nil {
 			return fmt.Errorf("failed to compare %s and %s: %w", v, convertedValue, err)
 		}
@@ -557,7 +557,7 @@ func checkMapDataLoss(expectedValues test_utils.ExpectedMapValue, m *atree.Order
 }
 
 func checkMapSlab(m *atree.OrderedMap) error {
-	err := atree.VerifyMap(m, m.Address(), m.Type(), compareTypeInfo, test_utils.GetHashInput, true)
+	err := atree.VerifyMap(m, m.Address(), m.Type(), compareTypeInfo, testutils.GetHashInput, true)
 	if err != nil {
 		return err
 	}
@@ -566,7 +566,7 @@ func checkMapSlab(m *atree.OrderedMap) error {
 		m,
 		cborDecMode,
 		cborEncMode,
-		test_utils.DecodeStorable,
+		testutils.DecodeStorable,
 		decodeTypeInfo,
 		func(a, b atree.Storable) bool {
 			return reflect.DeepEqual(a, b)

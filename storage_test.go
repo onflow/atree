@@ -30,7 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/atree"
-	"github.com/onflow/atree/test_utils"
+	testutils "github.com/onflow/atree/test_utils"
 )
 
 func TestStorageIndexNext(t *testing.T) {
@@ -619,7 +619,7 @@ func TestPersistentStorage(t *testing.T) {
 	permAddress := atree.Address{1, 0, 0, 0, 0, 0, 0, 0}
 
 	t.Run("empty storage", func(t *testing.T) {
-		baseStorage := test_utils.NewInMemBaseStorage()
+		baseStorage := testutils.NewInMemBaseStorage()
 		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 		slabIndex := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}
@@ -647,7 +647,7 @@ func TestPersistentStorage(t *testing.T) {
 
 		r := newRand(t)
 
-		baseStorage := test_utils.NewInMemBaseStorage()
+		baseStorage := testutils.NewInMemBaseStorage()
 		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 		slabIndex := atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1}
@@ -866,7 +866,7 @@ func TestPersistentStorage(t *testing.T) {
 
 	t.Run("commit with error", func(t *testing.T) {
 
-		baseStorage := test_utils.NewInMemBaseStorage()
+		baseStorage := testutils.NewInMemBaseStorage()
 		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 		address := atree.Address{1}
@@ -1158,7 +1158,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 		array, err := atree.NewArrayWithRootID(storage, id1)
 		require.NoError(t, err)
 
-		storable, err := array.Set(uint64(0), test_utils.NewStringValue("bbbbbbbbbbbbbbbbbbbbbb"))
+		storable, err := array.Set(uint64(0), testutils.NewStringValue("bbbbbbbbbbbbbbbbbbbbbb"))
 		require.NoError(t, err)
 		require.NotNil(t, storable)
 
@@ -1183,7 +1183,7 @@ func TestPersistentStorageSlabIterator(t *testing.T) {
 }
 
 func TestPersistentStorageGenerateSlabID(t *testing.T) {
-	baseStorage := test_utils.NewInMemBaseStorage()
+	baseStorage := testutils.NewInMemBaseStorage()
 	storage := atree.NewPersistentSlabStorage(baseStorage, nil, nil, nil, nil)
 
 	t.Run("temp address", func(t *testing.T) {
@@ -1215,7 +1215,7 @@ func TestPersistentStorageGenerateSlabID(t *testing.T) {
 }
 
 func generateRandomSlab(id atree.SlabID, r *rand.Rand) atree.Slab {
-	storable := test_utils.Uint64Value(r.Uint64())
+	storable := testutils.Uint64Value(r.Uint64())
 	return atree.NewArrayRootDataSlab(id, []atree.Storable{storable})
 }
 
@@ -1225,7 +1225,7 @@ func generateLargeSlab(id atree.SlabID) atree.Slab {
 
 	storables := make([]atree.Storable, elementCount)
 	for i := range storables {
-		storable := test_utils.Uint64Value(uint64(i))
+		storable := testutils.Uint64Value(uint64(i))
 		storables[i] = storable
 	}
 
@@ -1394,11 +1394,11 @@ func (v nonStorable) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (a
 }
 
 type slowStorable struct {
-	test_utils.Uint8Value
+	testutils.Uint8Value
 }
 
 func newSlowStorable(i uint8) slowStorable {
-	return slowStorable{test_utils.Uint8Value(i)}
+	return slowStorable{testutils.Uint8Value(i)}
 }
 
 // slowStorable.Encode is used to reproduce a
@@ -2017,7 +2017,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := atree.GetBaseStorage(storage).(*test_utils.InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*testutils.InMemBaseStorage)
 		require.Equal(t, 1, baseStorage.SegmentCounts())
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2074,7 +2074,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 				// element: [uint64(0):SomeValue(atree.SlabID(0x0.1))]
 				0x82,
 				0xd8, 0xa4, 0x00,
-				0xd8, test_utils.CBORTagSomeValue, 0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+				0xd8, testutils.CBORTagSomeValue, 0xd8, 0xff, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
 			},
 		}
 
@@ -2171,7 +2171,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := atree.GetBaseStorage(storage).(*test_utils.InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*testutils.InMemBaseStorage)
 		require.Equal(t, 1, baseStorage.SegmentCounts())
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2416,7 +2416,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := atree.GetBaseStorage(storage).(*test_utils.InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*testutils.InMemBaseStorage)
 		require.Equal(t, 1, baseStorage.SegmentCounts())
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2660,7 +2660,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := atree.GetBaseStorage(storage).(*test_utils.InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*testutils.InMemBaseStorage)
 		require.Equal(t, 1, baseStorage.SegmentCounts())
 
 		savedData, found, err := baseStorage.Retrieve(rootID)
@@ -2949,7 +2949,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := atree.GetBaseStorage(storage).(*test_utils.InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*testutils.InMemBaseStorage)
 		require.Equal(t, 4, baseStorage.SegmentCounts())
 
 		savedData, found, err := baseStorage.Retrieve(nestedContainerRootID)
@@ -3287,7 +3287,7 @@ func TestFixLoadedBrokenReferences(t *testing.T) {
 		require.Equal(t, 0, GetDeltasCount(storage))
 
 		// Check encoded data
-		baseStorage := atree.GetBaseStorage(storage).(*test_utils.InMemBaseStorage)
+		baseStorage := atree.GetBaseStorage(storage).(*testutils.InMemBaseStorage)
 		require.Equal(t, 2, baseStorage.SegmentCounts())
 
 		savedData, found, err := baseStorage.Retrieve(rootID1)
@@ -3447,7 +3447,7 @@ func TestGetAllChildReferencesFromArray(t *testing.T) {
 				// CBOR encoded array head (fixed size 3 byte)
 				0x99, 0x00, 0x01,
 				// CBOR encoded array elements
-				0xd8, test_utils.CBORTagSomeValue, 0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0xd8, testutils.CBORTagSomeValue, 0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 			},
 
 			childRootID: {
@@ -4155,7 +4155,7 @@ func TestGetAllChildReferencesFromMap(t *testing.T) {
 				// element: [uint64(0):uint64(0)]
 				0x82,
 				0xd8, 0xa4, 0x00,
-				0xd8, test_utils.CBORTagSomeValue, 0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+				0xd8, testutils.CBORTagSomeValue, 0xd8, 0xff, 0x50, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
 			},
 
 			childRootID: {
@@ -4960,7 +4960,7 @@ func testStorageNondeterministicFastCommit(t *testing.T, numberOfAccounts int, n
 
 	r := newRand(t)
 
-	baseStorage := test_utils.NewInMemBaseStorage()
+	baseStorage := testutils.NewInMemBaseStorage()
 	storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 	encodedSlabs := make(map[atree.SlabID][]byte)
@@ -5103,8 +5103,8 @@ func testStorageBatchPreload(t *testing.T, numberOfAccounts int, numberOfSlabsPe
 		}
 	}
 
-	baseStorage := test_utils.NewInMemBaseStorageFromMap(encodedSlabs)
-	storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, test_utils.DecodeStorable, test_utils.DecodeTypeInfo)
+	baseStorage := testutils.NewInMemBaseStorageFromMap(encodedSlabs)
+	storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, testutils.DecodeStorable, testutils.DecodeTypeInfo)
 
 	ids := make([]atree.SlabID, 0, len(encodedSlabs))
 	for id := range encodedSlabs {
@@ -5147,8 +5147,8 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 			ids[i] = atree.NewSlabID(generateRandomAddress(r), index)
 		}
 
-		baseStorage := test_utils.NewInMemBaseStorage()
-		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, test_utils.DecodeStorable, test_utils.DecodeTypeInfo)
+		baseStorage := testutils.NewInMemBaseStorage()
+		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, testutils.DecodeStorable, testutils.DecodeTypeInfo)
 
 		err := storage.BatchPreload(ids, runtime.NumCPU())
 		require.NoError(t, err)
@@ -5180,8 +5180,8 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 		// Append a slab ID that doesn't exist in storage.
 		ids = append(ids, atree.NewSlabID(generateRandomAddress(r), atree.SlabIndex{numberOfSlabs}))
 
-		baseStorage := test_utils.NewInMemBaseStorageFromMap(encodedSlabs)
-		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, test_utils.DecodeStorable, test_utils.DecodeTypeInfo)
+		baseStorage := testutils.NewInMemBaseStorageFromMap(encodedSlabs)
+		storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, testutils.DecodeStorable, testutils.DecodeTypeInfo)
 
 		err := storage.BatchPreload(ids, runtime.NumCPU())
 		require.NoError(t, err)

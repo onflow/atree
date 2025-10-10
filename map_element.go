@@ -370,7 +370,7 @@ func (e *inlineCollisionGroup) Set(
 				header: MapSlabHeader{
 					slabID:   id,
 					size:     mapDataSlabPrefixSize + e.elements.Size(),
-					firstKey: e.elements.firstKey(),
+					firstKey: e.firstKey(),
 				},
 				elements:       e.elements, // elems shouldn't be copied
 				anySize:        true,
@@ -412,7 +412,7 @@ func (e *inlineCollisionGroup) Remove(storage SlabStorage, digester Digester, le
 
 	// If there is only one single element in this group, return the single element (no collision).
 	if e.elements.Count() == 1 {
-		elem, err := e.elements.Element(0)
+		elem, err := e.Element(0)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by elements.Element().
 			return nil, nil, nil, err
@@ -582,8 +582,8 @@ func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, 
 	// TODO: if element size < maxInlineMapElementSize, return inlineCollisionGroup
 
 	// If there is only one single element in this group, return the single element and remove external slab from storage.
-	if dataSlab.elements.Count() == 1 {
-		elem, err := dataSlab.elements.Element(0)
+	if dataSlab.Count() == 1 {
+		elem, err := dataSlab.Element(0)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by elements.Element().
 			return nil, nil, nil, err

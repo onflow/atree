@@ -258,10 +258,10 @@ func (v *mapVerifier) verifyDataSlab(
 	}
 
 	// Verify slab's first key
-	if dataSlab.elements.firstKey() != dataSlab.header.firstKey {
+	if dataSlab.firstKey() != dataSlab.header.firstKey {
 		return 0, nil, nil, nil, NewFatalError(
 			fmt.Errorf("data slab %d header first key %d is wrong, want %d",
-				id, dataSlab.header.firstKey, dataSlab.elements.firstKey()))
+				id, dataSlab.header.firstKey, dataSlab.firstKey()))
 	}
 
 	// Verify that only root slab can be inlined

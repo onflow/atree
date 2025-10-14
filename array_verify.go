@@ -275,7 +275,7 @@ func (v *arrayVerifier) verifyDataSlab(
 		}
 
 		// Verify element size <= inline size
-		if e.ByteSize() > uint32(maxInlineArrayElementSize) {
+		if e.ByteSize() > maxInlineArrayElementSize {
 			return 0, nil, nil, NewFatalError(fmt.Errorf("data slab %s element %s size %d is too large, want < %d",
 				id, e, e.ByteSize(), maxInlineArrayElementSize))
 		}
@@ -284,7 +284,7 @@ func (v *arrayVerifier) verifyDataSlab(
 		case SlabIDStorable:
 			// Verify not-inlined element > inline size, or can't be inlined
 			if v.inlineEnabled {
-				err = verifyNotInlinedValueStatusAndSize(value, uint32(maxInlineArrayElementSize))
+				err = verifyNotInlinedValueStatusAndSize(value, maxInlineArrayElementSize)
 				if err != nil {
 					return 0, nil, nil, err
 				}

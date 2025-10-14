@@ -19,7 +19,11 @@
 package atree
 
 type Value interface {
-	Storable(SlabStorage, Address, uint64) (Storable, error)
+	// Storable returns storable which byte size doesn't exceed the given maxInlineSize.
+	// If value's storable is larger than the given maxInlineSize, caller should
+	// create StorableSlab containing the storable, store StorableSlab in the given
+	// storage with the given address, and return StorableSlab's SlabID as SlabIDStorable.
+	Storable(_ SlabStorage, _ Address, maxInlineSize uint32) (Storable, error)
 }
 
 // WrapperValue is an interface that supports value wrapping another value.
@@ -27,7 +31,7 @@ type WrapperValue interface {
 	Value
 
 	// UnwrapAtreeValue returns innermost wrapped Value and wrapper size.
-	UnwrapAtreeValue() (Value, uint64)
+	UnwrapAtreeValue() (Value, uint32)
 }
 
 type ValueComparator func(SlabStorage, Value, Storable) (bool, error)
@@ -42,10 +46,11 @@ type mutableValueNotifier interface {
 	ValueID() ValueID
 	setParentUpdater(parentUpdater)
 	Inlined() bool
-	Inlinable(uint64) bool
+	// Inlinable returns true if a mutable value can be inlined by fitting within the given maxInlineSize.
+	Inlinable(maxInlineSize uint32) bool
 }
 
-func unwrapValue(v Value) (Value, uint64) {
+func unwrapValue(v Value) (Value, uint32) {
 	switch v := v.(type) {
 	case WrapperValue:
 		return v.UnwrapAtreeValue()

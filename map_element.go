@@ -112,7 +112,7 @@ func newSingleElement(storage SlabStorage, address Address, key Value, value Val
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get key's storable")
 	}
 
-	vs, err := value.Storable(storage, address, maxInlineMapValueSize(uint64(ks.ByteSize())))
+	vs, err := value.Storable(storage, address, maxInlineMapValueSize(ks.ByteSize()))
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Value interface.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
@@ -179,7 +179,7 @@ func (e *singleElement) Set(
 	if equal {
 		existingMapValueStorable := e.value
 
-		valueStorable, err := value.Storable(storage, address, maxInlineMapValueSize(uint64(e.key.ByteSize())))
+		valueStorable, err := value.Storable(storage, address, maxInlineMapValueSize(e.key.ByteSize()))
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Value interface.
 			return nil, nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
@@ -355,7 +355,7 @@ func (e *inlineCollisionGroup) Set(
 	if level == 1 {
 		// Export oversized inline collision group to separate slab (external collision group)
 		// for first level collision.
-		if e.Size() > uint32(maxInlineMapElementSize) {
+		if e.Size() > maxInlineMapElementSize {
 
 			id, err := storage.GenerateSlabID(address)
 			if err != nil {

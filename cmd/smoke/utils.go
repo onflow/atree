@@ -346,7 +346,7 @@ func newComposite(
 	return expectedValues, m, nil
 }
 
-func unwrapValue(v atree.Value) (atree.Value, uint64) {
+func unwrapValue(v atree.Value) (atree.Value, uint32) {
 	switch v := v.(type) {
 	case atree.WrapperValue:
 		return v.UnwrapAtreeValue()

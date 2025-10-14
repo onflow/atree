@@ -29,7 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/atree"
-	"github.com/onflow/atree/test_utils"
+	testutils "github.com/onflow/atree/test_utils"
 )
 
 func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
@@ -54,10 +54,10 @@ func benchmarkFastCommit(b *testing.B, seed int64, numberOfSlabs int) {
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			b.StopTimer()
 
-			baseStorage := test_utils.NewInMemBaseStorage()
+			baseStorage := testutils.NewInMemBaseStorage()
 			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 			for _, slab := range slabs {
@@ -95,10 +95,10 @@ func benchmarkNondeterministicFastCommit(b *testing.B, seed int64, numberOfSlabs
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			b.StopTimer()
 
-			baseStorage := test_utils.NewInMemBaseStorage()
+			baseStorage := testutils.NewInMemBaseStorage()
 			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, nil, nil)
 
 			for _, slab := range slabs {
@@ -166,11 +166,11 @@ func benchmarkRetrieve(b *testing.B, seed int64, numberOfSlabs int) {
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			b.StopTimer()
 
-			baseStorage := test_utils.NewInMemBaseStorageFromMap(encodedSlabs)
-			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, test_utils.DecodeStorable, test_utils.DecodeTypeInfo)
+			baseStorage := testutils.NewInMemBaseStorageFromMap(encodedSlabs)
+			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, testutils.DecodeStorable, testutils.DecodeTypeInfo)
 
 			b.StartTimer()
 
@@ -213,11 +213,11 @@ func benchmarkBatchPreload(b *testing.B, seed int64, numberOfSlabs int) {
 	}
 
 	b.Run(strconv.Itoa(numberOfSlabs), func(b *testing.B) {
-		for range b.N {
+		for b.Loop() {
 			b.StopTimer()
 
-			baseStorage := test_utils.NewInMemBaseStorageFromMap(encodedSlabs)
-			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, test_utils.DecodeStorable, test_utils.DecodeTypeInfo)
+			baseStorage := testutils.NewInMemBaseStorageFromMap(encodedSlabs)
+			storage := atree.NewPersistentSlabStorage(baseStorage, encMode, decMode, testutils.DecodeStorable, testutils.DecodeTypeInfo)
 
 			b.StartTimer()
 

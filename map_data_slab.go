@@ -61,10 +61,10 @@ func (m *MapDataSlab) Set(
 	}
 
 	// Adjust header's first key
-	m.header.firstKey = m.elements.firstKey()
+	m.header.firstKey = m.firstKey()
 
 	// Adjust header's slab size
-	m.header.size = m.getPrefixSize() + m.elements.Size()
+	m.header.size = m.getPrefixSize() + m.Size()
 
 	// Store modified slab
 	if !m.inlined {
@@ -86,10 +86,10 @@ func (m *MapDataSlab) Remove(storage SlabStorage, digester Digester, level uint,
 	}
 
 	// Adjust header's first key
-	m.header.firstKey = m.elements.firstKey()
+	m.header.firstKey = m.firstKey()
 
 	// Adjust header's slab size
-	m.header.size = m.getPrefixSize() + m.elements.Size()
+	m.header.size = m.getPrefixSize() + m.Size()
 
 	// Store modified slab
 	if !m.inlined {
@@ -118,7 +118,7 @@ func (m *MapDataSlab) PopIterate(storage SlabStorage, fn MapPopIterationFunc) er
 // Slab operations (split, merge, and lend/borrow)
 
 func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
-	if m.elements.Count() < 2 {
+	if m.Count() < 2 {
 		// Can't split slab with less than two elements
 		return nil, nil, NewSlabSplitErrorf("MapDataSlab (%s) has less than 2 elements", m.header.slabID)
 	}
@@ -165,8 +165,8 @@ func (m *MapDataSlab) Merge(slab Slab) error {
 		return err
 	}
 
-	m.header.size = mapDataSlabPrefixSize + m.elements.Size()
-	m.header.firstKey = m.elements.firstKey()
+	m.header.size = mapDataSlabPrefixSize + m.Size()
+	m.header.firstKey = m.firstKey()
 
 	m.next = rightSlab.next
 
@@ -193,7 +193,7 @@ func (m *MapDataSlab) LendToRight(slab Slab) error {
 	rightSlab.header.firstKey = rightElements.firstKey()
 
 	// Update left slab
-	m.header.size = mapDataSlabPrefixSize + m.elements.Size()
+	m.header.size = mapDataSlabPrefixSize + m.Size()
 
 	return nil
 }
@@ -219,8 +219,8 @@ func (m *MapDataSlab) BorrowFromRight(slab Slab) error {
 	rightSlab.header.firstKey = rightElements.firstKey()
 
 	// Update left slab
-	m.header.size = mapDataSlabPrefixSize + m.elements.Size()
-	m.header.firstKey = m.elements.firstKey()
+	m.header.size = mapDataSlabPrefixSize + m.Size()
+	m.header.firstKey = m.firstKey()
 
 	return nil
 }
@@ -278,7 +278,7 @@ func (m *MapDataSlab) Inlinable(maxInlineSize uint64) bool {
 		return false
 	}
 
-	inlinedSize := inlinedMapDataSlabPrefixSize + m.elements.Size()
+	inlinedSize := inlinedMapDataSlabPrefixSize + m.Size()
 
 	// Inlined byte size must be less than max inline size.
 	return uint64(inlinedSize) <= maxInlineSize
@@ -300,7 +300,7 @@ func (m *MapDataSlab) Inline(storage SlabStorage) error {
 	}
 
 	// Update data slab size from not inlined to inlined
-	m.header.size = inlinedMapDataSlabPrefixSize + m.elements.Size()
+	m.header.size = inlinedMapDataSlabPrefixSize + m.Size()
 
 	// Update data slab inlined status.
 	m.inlined = true
@@ -315,7 +315,7 @@ func (m *MapDataSlab) Uninline(storage SlabStorage) error {
 	}
 
 	// Update data slab size from inlined to not inlined.
-	m.header.size = mapRootDataSlabPrefixSize + m.elements.Size()
+	m.header.size = mapRootDataSlabPrefixSize + m.Size()
 
 	// Update data slab inlined status.
 	m.inlined = false
@@ -327,7 +327,7 @@ func (m *MapDataSlab) Uninline(storage SlabStorage) error {
 // Other operations
 
 func (m *MapDataSlab) HasPointer() bool {
-	return m.elements.hasPointer()
+	return m.hasPointer()
 }
 
 func (m *MapDataSlab) getPrefixSize() uint32 {
@@ -342,10 +342,6 @@ func (m *MapDataSlab) getPrefixSize() uint32 {
 
 func (m *MapDataSlab) isCollisionGroup() bool {
 	return m.collisionGroup
-}
-
-func (m *MapDataSlab) elementCount() uint32 {
-	return m.elements.Count()
 }
 
 func (m *MapDataSlab) ChildStorables() []Storable {

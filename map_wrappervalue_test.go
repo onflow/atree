@@ -27,14 +27,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/atree"
-	"github.com/onflow/atree/test_utils"
+	testutils "github.com/onflow/atree/test_utils"
 )
 
 type newKeyFunc func(atree.SlabStorage) (key atree.Value, expected atree.Value)
 
 var newRandomUint64KeyFunc = func(r *rand.Rand) newKeyFunc {
 	return func(atree.SlabStorage) (key atree.Value, expected atree.Value) {
-		v := test_utils.Uint64Value(r.Intn(1844674407370955161))
+		v := testutils.Uint64Value(r.Intn(1844674407370955161))
 		return v, v
 	}
 }
@@ -42,7 +42,7 @@ var newRandomUint64KeyFunc = func(r *rand.Rand) newKeyFunc {
 var newUint64KeyFunc = func() newKeyFunc {
 	i := 0
 	return func(atree.SlabStorage) (key atree.Value, expected atree.Value) {
-		v := test_utils.Uint64Value(i)
+		v := testutils.Uint64Value(i)
 		i++
 		return v, v
 	}
@@ -66,14 +66,14 @@ var newMapValueFunc = func(
 			k, expectedK := newKey(storage)
 			v, expectedV := newValue(storage)
 
-			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
 			keyValues[expectedK] = expectedV
 		}
 
-		return m, test_utils.ExpectedMapValue(keyValues)
+		return m, testutils.ExpectedMapValue(keyValues)
 	}
 }
 
@@ -94,7 +94,7 @@ var modifyMapValueFunc = func(
 		m, ok := originalValue.(*atree.OrderedMap)
 		require.True(t, ok)
 
-		expectedValues, ok := expectedOrigianlValue.(test_utils.ExpectedMapValue)
+		expectedValues, ok := expectedOrigianlValue.(testutils.ExpectedMapValue)
 		require.True(t, ok)
 
 		require.Equal(t, uint64(len(expectedValues)), m.Count())
@@ -103,13 +103,13 @@ var modifyMapValueFunc = func(
 		// Modify first element
 
 		var firstKey atree.Value
-		err = m.IterateKeys(test_utils.CompareValue, test_utils.GetHashInput, func(k atree.Value) (resume bool, err error) {
+		err = m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value) (resume bool, err error) {
 			firstKey = k
 			return false, nil
 		})
 		require.NoError(t, err)
 
-		v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, firstKey)
+		v, err := m.Get(testutils.CompareValue, testutils.GetHashInput, firstKey)
 		require.NoError(t, err)
 
 		modifiedV, expectedModifiedV, err := modifyValueFunc(storage, v, expectedValues[firstKey])
@@ -119,7 +119,7 @@ var modifyMapValueFunc = func(
 
 		if modifiedV == nil {
 
-			existingKeyStorable, existingValueStorable, err := m.Remove(test_utils.CompareValue, test_utils.GetHashInput, firstKey)
+			existingKeyStorable, existingValueStorable, err := m.Remove(testutils.CompareValue, testutils.GetHashInput, firstKey)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -158,7 +158,7 @@ var modifyMapValueFunc = func(
 		} else {
 
 			if needToResetModifiedValue {
-				existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, firstKey, modifiedV)
+				existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, firstKey, modifiedV)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -487,7 +487,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
@@ -536,7 +536,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 
 					v, expectedV := tc.newValue(storage)
 
-					existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
+					existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
 					require.NoError(t, err)
 					require.Nil(t, existingStorable)
 
@@ -549,7 +549,7 @@ func TestMapWrapperValueSetAndModify(t *testing.T) {
 
 				// Retrieve and modify WrapperValue from map
 				for key, expectedValue := range expectedValues {
-					v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, key)
+					v, err := m.Get(testutils.CompareValue, testutils.GetHashInput, key)
 					require.NoError(t, err)
 
 					testValueEqual(t, expectedValue, v)
@@ -599,7 +599,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
@@ -681,7 +681,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 
 							v, expectedV := tc.newValue(storage)
 
-							existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
+							existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
 							require.NoError(t, err)
 							require.Nil(t, existingStorable)
 
@@ -695,7 +695,7 @@ func TestMapWrapperValueSetAndRemove(t *testing.T) {
 						// Retrieve and modify WrapperValue from map
 						if needToModifyElement {
 							for key, expected := range expectedValues {
-								v, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, key)
+								v, err := m.Get(testutils.CompareValue, testutils.GetHashInput, key)
 								require.NoError(t, err)
 
 								testValueEqual(t, expected, v)
@@ -768,7 +768,7 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
@@ -833,7 +833,7 @@ func TestMapWrapperValueReadOnlyIterate(t *testing.T) {
 
 						v, expectedV := tc.newValue(storage)
 
-						existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
+						existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
 						require.NoError(t, err)
 						require.Nil(t, existingStorable)
 
@@ -883,7 +883,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 
 	r := newRand(t)
 
-	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	const (
@@ -950,7 +950,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 
 						v, expectedV := tc.newValue(storage)
 
-						existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
+						existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
 						require.NoError(t, err)
 						require.Nil(t, existingStorable)
 
@@ -961,7 +961,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 
 					testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 
-					iterator, err := m.Iterator(test_utils.CompareValue, test_utils.GetHashInput)
+					iterator, err := m.Iterator(testutils.CompareValue, testutils.GetHashInput)
 					require.NoError(t, err)
 
 					count := 0
@@ -1009,7 +1009,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 
 		value := keyAndValues[1]
 
-		storabeleAsSomeStorable, isSomeStorable := value.(test_utils.SomeStorable)
+		storabeleAsSomeStorable, isSomeStorable := value.(testutils.SomeStorable)
 		require.True(t, isSomeStorable)
 
 		wrappedStorable := storabeleAsSomeStorable.Storable
@@ -1038,16 +1038,16 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 	r := newRand(t)
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	typeInfo := testutils.NewSimpleTypeInfo(42)
 
 	storage := newTestPersistentStorage(t)
 
-	expectedValues := make(test_utils.ExpectedMapValue)
+	expectedValues := make(testutils.ExpectedMapValue)
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	// Set WrapperValue test_utils.SomeValue([]) in map
+	// Set WrapperValue testutils.SomeValue([]) in map
 	{
 		// Create standalone child map
 		childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
@@ -1056,15 +1056,15 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 		require.False(t, childMap.Inlined())
 
 		// Set child map (level-1 inlined map) in parent map
-		key := test_utils.Uint64Value(0)
+		key := testutils.Uint64Value(0)
 
-		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, key, test_utils.NewSomeValue(childMap))
+		existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, key, testutils.NewSomeValue(childMap))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
 		require.True(t, childMap.Inlined())
 
-		expectedValues[key] = test_utils.NewExpectedWrapperValue(test_utils.ExpectedMapValue{})
+		expectedValues[key] = testutils.NewExpectedWrapperValue(testutils.ExpectedMapValue{})
 
 		require.Equal(t, uint64(1), m.Count())
 
@@ -1079,12 +1079,12 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 	const childMapCount = uint64(8)
 	for i := range childMapCount + 1 {
 		// Get element
-		element, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
+		element, err := m.Get(testutils.CompareValue, testutils.GetHashInput, testutils.Uint64Value(0))
 		require.NoError(t, err)
 		require.NotNil(t, element)
 
 		// Test retrieved element type
-		elementAsSomeValue, isSomeValue := element.(test_utils.SomeValue)
+		elementAsSomeValue, isSomeValue := element.(testutils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValue := elementAsSomeValue.Value
@@ -1092,22 +1092,22 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 		wrappedMap, isMap := wrappedValue.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValue := expectedValues[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
+		expectedWrappedValue := expectedValues[testutils.Uint64Value(0)].(testutils.ExpectedWrapperValue).Value
 
-		expectedWrappedMap := expectedWrappedValue.(test_utils.ExpectedMapValue)
+		expectedWrappedMap := expectedWrappedValue.(testutils.ExpectedMapValue)
 
 		// Insert new elements to wrapped child map
 
-		k := test_utils.Uint64Value(i)
-		v := test_utils.Uint64Value(r.Intn(256))
+		k := testutils.Uint64Value(i)
+		v := testutils.Uint64Value(r.Intn(256))
 
-		existingStorable, err := wrappedMap.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.NewSomeValue(v))
+		existingStorable, err := wrappedMap.Set(testutils.CompareValue, testutils.GetHashInput, k, testutils.NewSomeValue(v))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedWrappedMap[k] = test_utils.NewExpectedWrapperValue(v)
+		expectedWrappedMap[k] = testutils.NewExpectedWrapperValue(v)
 
-		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(expectedWrappedMap)
+		expectedValues[testutils.Uint64Value(0)] = testutils.NewExpectedWrapperValue(expectedWrappedMap)
 
 		require.Equal(t, i+1, wrappedMap.Count())
 		require.Equal(t, i+1, uint64(len(expectedWrappedMap)))
@@ -1125,12 +1125,12 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 
 	for i := range removeCount {
 		// Get element
-		element, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
+		element, err := m.Get(testutils.CompareValue, testutils.GetHashInput, testutils.Uint64Value(0))
 		require.NoError(t, err)
 		require.NotNil(t, element)
 
 		// Test retrieved element type
-		elementAsSomeValue, isSomeValue := element.(test_utils.SomeValue)
+		elementAsSomeValue, isSomeValue := element.(testutils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValue := elementAsSomeValue.Value
@@ -1138,15 +1138,15 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 		wrappedMap, isMap := wrappedValue.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValue := expectedValues[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
+		expectedWrappedValue := expectedValues[testutils.Uint64Value(0)].(testutils.ExpectedWrapperValue).Value
 
-		expectedWrappedMap := expectedWrappedValue.(test_utils.ExpectedMapValue)
+		expectedWrappedMap := expectedWrappedValue.(testutils.ExpectedMapValue)
 
 		// Remove element from wrapped child map
 
-		key := test_utils.Uint64Value(i)
+		key := testutils.Uint64Value(i)
 
-		existingKeyStorable, existingValueStorable, err := wrappedMap.Remove(test_utils.CompareValue, test_utils.GetHashInput, key)
+		existingKeyStorable, existingValueStorable, err := wrappedMap.Remove(testutils.CompareValue, testutils.GetHashInput, key)
 		require.NoError(t, err)
 		require.NotNil(t, existingKeyStorable)
 		require.NotNil(t, existingValueStorable)
@@ -1159,7 +1159,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 
 		delete(expectedWrappedMap, key)
 
-		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(expectedWrappedMap)
+		expectedValues[testutils.Uint64Value(0)] = testutils.NewExpectedWrapperValue(expectedWrappedMap)
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	}
@@ -1182,7 +1182,7 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 
 		storableAtLevel1 := keyAndValuesAtLevel1[1]
 
-		storabeleAsSomeStoable, isSomeStorable := storableAtLevel1.(test_utils.SomeStorable)
+		storabeleAsSomeStoable, isSomeStorable := storableAtLevel1.(testutils.SomeStorable)
 		require.True(t, isSomeStorable)
 
 		wrappedStorableAtLevel1 := storabeleAsSomeStoable.Storable
@@ -1196,7 +1196,7 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 
 		storableAtLevel2 := keyAndValuesAtLevel2[1]
 
-		storabeleAsSomeStoable, isSomeStorable = storableAtLevel2.(test_utils.SomeStorable)
+		storabeleAsSomeStoable, isSomeStorable = storableAtLevel2.(testutils.SomeStorable)
 		require.True(t, isSomeStorable)
 
 		wrappedStorableAtLevel2 := storabeleAsSomeStoable.Storable
@@ -1223,18 +1223,18 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 	defer atree.SetThreshold(1024)
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	typeInfo := testutils.NewSimpleTypeInfo(42)
 
 	r := newRand(t)
 
 	storage := newTestPersistentStorage(t)
 
-	expectedValues := make(test_utils.ExpectedMapValue)
+	expectedValues := make(testutils.ExpectedMapValue)
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
 
-	// Set WrapperValue test_utils.SomeValue({test_utils.NewSomeValue(}}) to map
+	// Set WrapperValue testutils.SomeValue({testutils.NewSomeValue(}}) to map
 	{
 		// Create grand child map
 		gchildMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
@@ -1249,22 +1249,22 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		require.False(t, childMap.Inlined())
 
 		// Set grand child map to child map
-		existingStorable, err := childMap.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), test_utils.NewSomeValue(gchildMap))
+		existingStorable, err := childMap.Set(testutils.CompareValue, testutils.GetHashInput, testutils.Uint64Value(0), testutils.NewSomeValue(gchildMap))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
 		require.True(t, gchildMap.Inlined())
 
 		// Append child map to map
-		existingStorable, err = m.Set(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0), test_utils.NewSomeValue(childMap))
+		existingStorable, err = m.Set(testutils.CompareValue, testutils.GetHashInput, testutils.Uint64Value(0), testutils.NewSomeValue(childMap))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
 		require.True(t, childMap.Inlined())
 
-		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(
-			test_utils.ExpectedMapValue{
-				test_utils.Uint64Value(0): test_utils.NewExpectedWrapperValue(test_utils.ExpectedMapValue{})})
+		expectedValues[testutils.Uint64Value(0)] = testutils.NewExpectedWrapperValue(
+			testutils.ExpectedMapValue{
+				testutils.Uint64Value(0): testutils.NewExpectedWrapperValue(testutils.ExpectedMapValue{})})
 
 		require.Equal(t, uint64(1), m.Count())
 
@@ -1280,12 +1280,12 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 	for i := range gchildMapCount {
 		// Get element at level 1
 
-		elementAtLevel1, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
+		elementAtLevel1, err := m.Get(testutils.CompareValue, testutils.GetHashInput, testutils.Uint64Value(0))
 		require.NoError(t, err)
 		require.NotNil(t, elementAtLevel1)
 
 		// Test retrieved element type
-		elementAsSomeValueAtLevel1, isSomeValue := elementAtLevel1.(test_utils.SomeValue)
+		elementAsSomeValueAtLevel1, isSomeValue := elementAtLevel1.(testutils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValueAtLevel1 := elementAsSomeValueAtLevel1.Value
@@ -1293,17 +1293,17 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		wrappedMapAtLevel1, isMap := wrappedValueAtLevel1.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValueAtLevel1 := expectedValues[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
+		expectedWrappedValueAtLevel1 := expectedValues[testutils.Uint64Value(0)].(testutils.ExpectedWrapperValue).Value
 
-		expectedWrappedMapAtLevel1 := expectedWrappedValueAtLevel1.(test_utils.ExpectedMapValue)
+		expectedWrappedMapAtLevel1 := expectedWrappedValueAtLevel1.(testutils.ExpectedMapValue)
 
 		// Get element at level 2
 
-		elementAtLevel2, err := wrappedMapAtLevel1.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
+		elementAtLevel2, err := wrappedMapAtLevel1.Get(testutils.CompareValue, testutils.GetHashInput, testutils.Uint64Value(0))
 		require.NoError(t, err)
 
 		// Test retrieved element type
-		elementAsSomeValueAtLevel2, isSomeValue := elementAtLevel2.(test_utils.SomeValue)
+		elementAsSomeValueAtLevel2, isSomeValue := elementAtLevel2.(testutils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValueAtLevel2 := elementAsSomeValueAtLevel2.Value
@@ -1311,24 +1311,24 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		wrappedMapAtLevel2, isMap := wrappedValueAtLevel2.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValueAtLevel2 := expectedWrappedMapAtLevel1[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
+		expectedWrappedValueAtLevel2 := expectedWrappedMapAtLevel1[testutils.Uint64Value(0)].(testutils.ExpectedWrapperValue).Value
 
-		expectedWrappedMapAtLevel2 := expectedWrappedValueAtLevel2.(test_utils.ExpectedMapValue)
+		expectedWrappedMapAtLevel2 := expectedWrappedValueAtLevel2.(testutils.ExpectedMapValue)
 
 		// Insert new elements to wrapped gchild map
 
-		k := test_utils.Uint64Value(i)
-		v := test_utils.Uint64Value(r.Intn(256))
+		k := testutils.Uint64Value(i)
+		v := testutils.Uint64Value(r.Intn(256))
 
-		existingStorable, err := wrappedMapAtLevel2.Set(test_utils.CompareValue, test_utils.GetHashInput, k, test_utils.NewSomeValue(v))
+		existingStorable, err := wrappedMapAtLevel2.Set(testutils.CompareValue, testutils.GetHashInput, k, testutils.NewSomeValue(v))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedWrappedMapAtLevel2[k] = test_utils.NewExpectedWrapperValue(v)
+		expectedWrappedMapAtLevel2[k] = testutils.NewExpectedWrapperValue(v)
 
-		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(
-			test_utils.ExpectedMapValue{
-				test_utils.Uint64Value(0): test_utils.NewExpectedWrapperValue(expectedWrappedMapAtLevel2)})
+		expectedValues[testutils.Uint64Value(0)] = testutils.NewExpectedWrapperValue(
+			testutils.ExpectedMapValue{
+				testutils.Uint64Value(0): testutils.NewExpectedWrapperValue(expectedWrappedMapAtLevel2)})
 
 		require.Equal(t, i+1, wrappedMapAtLevel2.Count())
 		require.Equal(t, i+1, uint64(len(expectedWrappedMapAtLevel2)))
@@ -1346,11 +1346,11 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 
 	for i := range removeCount {
 		// Get elementAtLevel1
-		elementAtLevel1, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
+		elementAtLevel1, err := m.Get(testutils.CompareValue, testutils.GetHashInput, testutils.Uint64Value(0))
 		require.NoError(t, err)
 
 		// Test retrieved element type
-		elementAsSomeValueAtLevel1, isSomeValue := elementAtLevel1.(test_utils.SomeValue)
+		elementAsSomeValueAtLevel1, isSomeValue := elementAtLevel1.(testutils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValueAtLevel1 := elementAsSomeValueAtLevel1.Value
@@ -1358,17 +1358,17 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		wrappedMapAtLevel1, isMap := wrappedValueAtLevel1.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValueAtLevel1 := expectedValues[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
+		expectedWrappedValueAtLevel1 := expectedValues[testutils.Uint64Value(0)].(testutils.ExpectedWrapperValue).Value
 
-		expectedWrappedMapAtLevel1 := expectedWrappedValueAtLevel1.(test_utils.ExpectedMapValue)
+		expectedWrappedMapAtLevel1 := expectedWrappedValueAtLevel1.(testutils.ExpectedMapValue)
 
 		// Get element at level 2
 
-		elementAtLevel2, err := wrappedMapAtLevel1.Get(test_utils.CompareValue, test_utils.GetHashInput, test_utils.Uint64Value(0))
+		elementAtLevel2, err := wrappedMapAtLevel1.Get(testutils.CompareValue, testutils.GetHashInput, testutils.Uint64Value(0))
 		require.NoError(t, err)
 
 		// Test retrieved element type
-		elementAsSomeValueAtLevel2, isSomeValue := elementAtLevel2.(test_utils.SomeValue)
+		elementAsSomeValueAtLevel2, isSomeValue := elementAtLevel2.(testutils.SomeValue)
 		require.True(t, isSomeValue)
 
 		wrappedValueAtLevel2 := elementAsSomeValueAtLevel2.Value
@@ -1376,15 +1376,15 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 		wrappedMapAtLevel2, isMap := wrappedValueAtLevel2.(*atree.OrderedMap)
 		require.True(t, isMap)
 
-		expectedWrappedValueAtLevel2 := expectedWrappedMapAtLevel1[test_utils.Uint64Value(0)].(test_utils.ExpectedWrapperValue).Value
+		expectedWrappedValueAtLevel2 := expectedWrappedMapAtLevel1[testutils.Uint64Value(0)].(testutils.ExpectedWrapperValue).Value
 
-		expectedWrappedMapAtLevel2 := expectedWrappedValueAtLevel2.(test_utils.ExpectedMapValue)
+		expectedWrappedMapAtLevel2 := expectedWrappedValueAtLevel2.(testutils.ExpectedMapValue)
 
 		// Remove first element from wrapped gchild map
 
-		key := test_utils.Uint64Value(i)
+		key := testutils.Uint64Value(i)
 
-		existingKeyStorable, existingValueStorable, err := wrappedMapAtLevel2.Remove(test_utils.CompareValue, test_utils.GetHashInput, key)
+		existingKeyStorable, existingValueStorable, err := wrappedMapAtLevel2.Remove(testutils.CompareValue, testutils.GetHashInput, key)
 		require.NoError(t, err)
 		require.NotNil(t, existingKeyStorable)
 		require.NotNil(t, existingValueStorable)
@@ -1397,9 +1397,9 @@ func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 
 		delete(expectedWrappedMapAtLevel2, key)
 
-		expectedValues[test_utils.Uint64Value(0)] = test_utils.NewExpectedWrapperValue(
-			test_utils.ExpectedMapValue{
-				test_utils.Uint64Value(0): test_utils.NewExpectedWrapperValue(expectedWrappedMapAtLevel2)})
+		expectedValues[testutils.Uint64Value(0)] = testutils.NewExpectedWrapperValue(
+			testutils.ExpectedMapValue{
+				testutils.Uint64Value(0): testutils.NewExpectedWrapperValue(expectedWrappedMapAtLevel2)})
 
 		testMap(t, storage, typeInfo, address, m, expectedValues, nil, true)
 	}
@@ -1422,13 +1422,13 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 	defer atree.SetThreshold(1024)
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	typeInfo := testutils.NewSimpleTypeInfo(42)
 
 	newElementFuncs := []newValueFunc{
-		// test_utils.SomeValue(uint64)
+		// testutils.SomeValue(uint64)
 		newWrapperValueFunc(1, newRandomUint64ValueFunc(r)),
 
-		// test_utils.SomeValue({uint64: test_utils.SomeValue(uint64)})
+		// testutils.SomeValue({uint64: testutils.SomeValue(uint64)})
 		newWrapperValueFunc(
 			1,
 			newMapValueFunc(
@@ -1441,7 +1441,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 					1,
 					newRandomUint64ValueFunc(r)))),
 
-		// test_utils.SomeValue({uint64: test_utils.SomeValue({uint64: test_utils.SomeValue(uint64)})})
+		// testutils.SomeValue({uint64: testutils.SomeValue({uint64: testutils.SomeValue(uint64)})})
 		newWrapperValueFunc(
 			1,
 			newMapValueFunc(
@@ -1465,7 +1465,7 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 
 	storage := newTestPersistentStorage(t)
 
-	expectedValues := make(test_utils.ExpectedMapValue)
+	expectedValues := make(testutils.ExpectedMapValue)
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
@@ -1480,12 +1480,12 @@ func TestMapWrapperValueModifyNewMapAtLevel1(t *testing.T) {
 		actualMapCount += setCount
 
 		for i := range setCount {
-			k := test_utils.Uint64Value(i)
+			k := testutils.Uint64Value(i)
 
 			newValue := newElementFuncs[r.Intn(len(newElementFuncs))]
 			v, expected := newValue(storage)
 
-			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -1564,9 +1564,9 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 	defer atree.SetThreshold(1024)
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	typeInfo := testutils.NewSimpleTypeInfo(42)
 
-	// newValue creates value of type test_utils.SomeValue({uint64: test_utils.SomeValue(uint64)}).
+	// newValue creates value of type testutils.SomeValue({uint64: testutils.SomeValue(uint64)}).
 	newValue :=
 		newWrapperValueFunc(
 			1,
@@ -1595,7 +1595,7 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 
 	storage := newTestPersistentStorage(t)
 
-	expectedValues := make(test_utils.ExpectedMapValue)
+	expectedValues := make(testutils.ExpectedMapValue)
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
@@ -1610,10 +1610,10 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 		actualMapCount += setCount
 
 		for i := range setCount {
-			k := test_utils.Uint64Value(i)
+			k := testutils.Uint64Value(i)
 			v, expected := newValue(storage)
 
-			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -1676,11 +1676,11 @@ func TestMapWrapperValueModifyNewMapAtLevel2(t *testing.T) {
 			setKey := keys[index]
 
 			// Get element
-			originalValue, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, setKey)
+			originalValue, err := m.Get(testutils.CompareValue, testutils.GetHashInput, setKey)
 			require.NoError(t, err)
 			require.NotNil(t, originalValue)
 
-			_, isWrapperValue := originalValue.(test_utils.SomeValue)
+			_, isWrapperValue := originalValue.(testutils.SomeValue)
 			require.True(t, isWrapperValue)
 
 			// Modify retrieved element without setting back explicitly.
@@ -1758,9 +1758,9 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 	defer atree.SetThreshold(1024)
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	typeInfo := testutils.NewSimpleTypeInfo(42)
 
-	// newValue creates value of type test_utils.SomeValue({uint64: test_utils.SomeValue({uint64: test_utils.SomeValue(uint64)})}))
+	// newValue creates value of type testutils.SomeValue({uint64: testutils.SomeValue({uint64: testutils.SomeValue(uint64)})}))
 	newValue :=
 		newWrapperValueFunc(
 			1,
@@ -1803,7 +1803,7 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 
 	storage := newTestPersistentStorage(t)
 
-	expectedValues := make(test_utils.ExpectedMapValue)
+	expectedValues := make(testutils.ExpectedMapValue)
 
 	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 	require.NoError(t, err)
@@ -1818,10 +1818,10 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 		actualMapCount += setCount
 
 		for i := range setCount {
-			k := test_utils.Uint64Value(i)
+			k := testutils.Uint64Value(i)
 			v, expected := newValue(storage)
 
-			existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, k, v)
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
 			require.NoError(t, err)
 			require.Nil(t, existingStorable)
 
@@ -1884,11 +1884,11 @@ func TestMapWrapperValueModifyNewMapAtLevel3(t *testing.T) {
 			key := keys[index]
 
 			// Get element
-			originalValue, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, key)
+			originalValue, err := m.Get(testutils.CompareValue, testutils.GetHashInput, key)
 			require.NoError(t, err)
 			require.NotNil(t, originalValue)
 
-			_, isWrapperValue := originalValue.(test_utils.SomeValue)
+			_, isWrapperValue := originalValue.(testutils.SomeValue)
 			require.True(t, isWrapperValue)
 
 			// Modify retrieved element without setting back explicitly.
@@ -1955,13 +1955,13 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	t.Run("modify level-1 wrapper map in {uint64: test_utils.SomeValue({uint64: test_utils.SomeValue(uint64)})}", func(t *testing.T) {
+	t.Run("modify level-1 wrapper map in {uint64: testutils.SomeValue({uint64: testutils.SomeValue(uint64)})}", func(t *testing.T) {
 		const (
 			mapCount      = 3
 			childMapCount = 2
 		)
 
-		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		typeInfo := testutils.NewSimpleTypeInfo(42)
 
 		r := newRand(t)
 
@@ -1994,7 +1994,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 			v, expected := createMapOfSomeValueOfMapOfSomeValueOfUint64(storage)
 
 			m := v.(*atree.OrderedMap)
-			expectedKeyValues = expected.(test_utils.ExpectedMapValue)
+			expectedKeyValues = expected.(testutils.ExpectedMapValue)
 
 			testMap(t, storage, typeInfo, address, m, expectedKeyValues, nil, true)
 
@@ -2005,7 +2005,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 		}
 
 		// Create a base storage with map in the format of
-		// {uint64: test_utils.SomeValue({uint64: test_utils.SomeValue(uint64)})}
+		// {uint64: testutils.SomeValue({uint64: testutils.SomeValue(uint64)})}
 		baseStorage, rootSlabID, expectedKeyValues := createStorage(mapCount)
 		require.Equal(t, mapCount, len(expectedKeyValues))
 
@@ -2022,44 +2022,44 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(len(expectedKeyValues)), m.Count())
 
-		// Get and verify first element as test_utils.SomeValue(map)
+		// Get and verify first element as testutils.SomeValue(map)
 
 		key := keys[0]
 		expectedValues := expectedKeyValues[key]
 
-		// Get map element (test_utils.SomeValue)
-		element, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, key)
+		// Get map element (testutils.SomeValue)
+		element, err := m.Get(testutils.CompareValue, testutils.GetHashInput, key)
 		require.NoError(t, err)
 
-		elementAsSomeValue, isSomeValue := element.(test_utils.SomeValue)
+		elementAsSomeValue, isSomeValue := element.(testutils.SomeValue)
 		require.True(t, isSomeValue)
 
 		unwrappedChildMap, isOrderedMap := elementAsSomeValue.Value.(*atree.OrderedMap)
 		require.True(t, isOrderedMap)
 
-		expectedValuesAsSomeValue, isSomeValue := expectedValues.(test_utils.ExpectedWrapperValue)
+		expectedValuesAsSomeValue, isSomeValue := expectedValues.(testutils.ExpectedWrapperValue)
 		require.True(t, isSomeValue)
 
-		expectedUnwrappedChildMap, isMapValue := expectedValuesAsSomeValue.Value.(test_utils.ExpectedMapValue)
+		expectedUnwrappedChildMap, isMapValue := expectedValuesAsSomeValue.Value.(testutils.ExpectedMapValue)
 		require.True(t, isMapValue)
 
 		require.Equal(t, uint64(len(expectedUnwrappedChildMap)), unwrappedChildMap.Count())
 
-		// Modify wrapped child map of test_utils.SomeValue
+		// Modify wrapped child map of testutils.SomeValue
 
-		newKey := test_utils.NewStringValue("x")
-		newValue := test_utils.NewStringValue("y")
-		existingStorable, err := unwrappedChildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, newKey, test_utils.NewSomeValue(newValue))
+		newKey := testutils.NewStringValue("x")
+		newValue := testutils.NewStringValue("y")
+		existingStorable, err := unwrappedChildMap.Set(testutils.CompareValue, testutils.GetHashInput, newKey, testutils.NewSomeValue(newValue))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedChildMapValues := expectedKeyValues[key].(test_utils.ExpectedWrapperValue).Value.(test_utils.ExpectedMapValue)
-		expectedChildMapValues[newKey] = test_utils.NewExpectedWrapperValue(newValue)
+		expectedChildMapValues := expectedKeyValues[key].(testutils.ExpectedWrapperValue).Value.(testutils.ExpectedMapValue)
+		expectedChildMapValues[newKey] = testutils.NewExpectedWrapperValue(newValue)
 
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		// Verify modified wrapped child map of test_utils.SomeValue using new storage with committed data
+		// Verify modified wrapped child map of testutils.SomeValue using new storage with committed data
 
 		storage2 := newTestPersistentStorageWithBaseStorage(t, atree.GetBaseStorage(storage))
 
@@ -2071,14 +2071,14 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 		testMap(t, storage, typeInfo, address, m2, expectedKeyValues, nil, true)
 	})
 
-	t.Run("get and modify 2-level wrapper map in {uint64: test_utils.SomeValue({uint64: test_utils.SomeValue({uint64: test_utils.SomeValue(uint64)})})}", func(t *testing.T) {
+	t.Run("get and modify 2-level wrapper map in {uint64: testutils.SomeValue({uint64: testutils.SomeValue({uint64: testutils.SomeValue(uint64)})})}", func(t *testing.T) {
 		const (
 			mapCount       = 4
 			childMapCount  = 3
 			gchildMapCount = 2
 		)
 
-		typeInfo := test_utils.NewSimpleTypeInfo(42)
+		typeInfo := testutils.NewSimpleTypeInfo(42)
 
 		r := newRand(t)
 
@@ -2119,7 +2119,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 			v, expected := createMapOfSomeValueOfMapOfSomeValueOfMapOfSomeValueOfUint64(storage)
 
 			m := v.(*atree.OrderedMap)
-			expectedKeyValues = expected.(test_utils.ExpectedMapValue)
+			expectedKeyValues = expected.(testutils.ExpectedMapValue)
 
 			testMap(t, storage, typeInfo, address, m, expectedKeyValues, nil, true)
 
@@ -2130,7 +2130,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 		}
 
 		// Create a base storage with map in the format of
-		// {uint64: test_utils.SomeValue({uint64: test_utils.SomeValue({uint64: test_utils.SomeValue(string)})})}
+		// {uint64: testutils.SomeValue({uint64: testutils.SomeValue({uint64: testutils.SomeValue(string)})})}
 		baseStorage, rootSlabID, expectedKeyValues := createStorage(mapCount)
 		require.Equal(t, mapCount, len(expectedKeyValues))
 
@@ -2147,30 +2147,30 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(len(expectedKeyValues)), m.Count())
 
-		// Get and verify first element as test_utils.SomeValue(map)
+		// Get and verify first element as testutils.SomeValue(map)
 
 		key := keys[0]
 		expectedValues := expectedKeyValues[key]
 
-		// Get map element (test_utils.SomeValue)
-		element, err := m.Get(test_utils.CompareValue, test_utils.GetHashInput, key)
+		// Get map element (testutils.SomeValue)
+		element, err := m.Get(testutils.CompareValue, testutils.GetHashInput, key)
 		require.NoError(t, err)
 
-		elementAsSomeValue, isSomeValue := element.(test_utils.SomeValue)
+		elementAsSomeValue, isSomeValue := element.(testutils.SomeValue)
 		require.True(t, isSomeValue)
 
 		unwrappedChildMap, isOrderedMap := elementAsSomeValue.Value.(*atree.OrderedMap)
 		require.True(t, isOrderedMap)
 
-		expectedValuesAsSomeValue, isSomeValue := expectedValues.(test_utils.ExpectedWrapperValue)
+		expectedValuesAsSomeValue, isSomeValue := expectedValues.(testutils.ExpectedWrapperValue)
 		require.True(t, isSomeValue)
 
-		expectedUnwrappedChildMap, isMapValue := expectedValuesAsSomeValue.Value.(test_utils.ExpectedMapValue)
+		expectedUnwrappedChildMap, isMapValue := expectedValuesAsSomeValue.Value.(testutils.ExpectedMapValue)
 		require.True(t, isMapValue)
 
 		require.Equal(t, uint64(len(expectedUnwrappedChildMap)), unwrappedChildMap.Count())
 
-		// Get and verify nested child element as test_utils.SomeValue(map)
+		// Get and verify nested child element as testutils.SomeValue(map)
 
 		childMapKeys := make([]atree.Value, 0, len(expectedUnwrappedChildMap))
 		for k := range expectedUnwrappedChildMap {
@@ -2179,39 +2179,39 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 
 		childMapKey := childMapKeys[0]
 
-		childMapElement, err := unwrappedChildMap.Get(test_utils.CompareValue, test_utils.GetHashInput, childMapKey)
+		childMapElement, err := unwrappedChildMap.Get(testutils.CompareValue, testutils.GetHashInput, childMapKey)
 		require.NoError(t, err)
 
-		childMapElementAsSomeValue, isSomeValue := childMapElement.(test_utils.SomeValue)
+		childMapElementAsSomeValue, isSomeValue := childMapElement.(testutils.SomeValue)
 		require.True(t, isSomeValue)
 
 		unwrappedGChildMap, isOrderedMap := childMapElementAsSomeValue.Value.(*atree.OrderedMap)
 		require.True(t, isOrderedMap)
 
-		expectedChildValuesAsSomeValue, isSomeValue := expectedUnwrappedChildMap[childMapKey].(test_utils.ExpectedWrapperValue)
+		expectedChildValuesAsSomeValue, isSomeValue := expectedUnwrappedChildMap[childMapKey].(testutils.ExpectedWrapperValue)
 		require.True(t, isSomeValue)
 
-		expectedUnwrappedGChildMap, isMapValue := expectedChildValuesAsSomeValue.Value.(test_utils.ExpectedMapValue)
+		expectedUnwrappedGChildMap, isMapValue := expectedChildValuesAsSomeValue.Value.(testutils.ExpectedMapValue)
 		require.True(t, isMapValue)
 
 		require.Equal(t, uint64(len(expectedUnwrappedGChildMap)), unwrappedGChildMap.Count())
 
-		// Modify wrapped gchild map of test_utils.SomeValue
+		// Modify wrapped gchild map of testutils.SomeValue
 
-		newKey := test_utils.NewStringValue("x")
-		newValue := test_utils.NewStringValue("y")
-		existingStorable, err := unwrappedGChildMap.Set(test_utils.CompareValue, test_utils.GetHashInput, newKey, test_utils.NewSomeValue(newValue))
+		newKey := testutils.NewStringValue("x")
+		newValue := testutils.NewStringValue("y")
+		existingStorable, err := unwrappedGChildMap.Set(testutils.CompareValue, testutils.GetHashInput, newKey, testutils.NewSomeValue(newValue))
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
-		expectedChildMapValues := expectedKeyValues[key].(test_utils.ExpectedWrapperValue).Value.(test_utils.ExpectedMapValue)
-		expectedGChildMapValues := expectedChildMapValues[childMapKey].(test_utils.ExpectedWrapperValue).Value.(test_utils.ExpectedMapValue)
-		expectedGChildMapValues[newKey] = test_utils.NewExpectedWrapperValue(newValue)
+		expectedChildMapValues := expectedKeyValues[key].(testutils.ExpectedWrapperValue).Value.(testutils.ExpectedMapValue)
+		expectedGChildMapValues := expectedChildMapValues[childMapKey].(testutils.ExpectedWrapperValue).Value.(testutils.ExpectedMapValue)
+		expectedGChildMapValues[newKey] = testutils.NewExpectedWrapperValue(newValue)
 
 		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
-		// Verify modified wrapped child map of test_utils.SomeValue using new storage with committed data
+		// Verify modified wrapped child map of testutils.SomeValue using new storage with committed data
 
 		storage2 := newTestPersistentStorageWithBaseStorage(t, atree.GetBaseStorage(storage))
 
@@ -2225,7 +2225,7 @@ func TestMapWrapperValueModifyExistingMap(t *testing.T) {
 }
 
 func testSetElementInMap(t *testing.T, storage atree.SlabStorage, m *atree.OrderedMap, key atree.Value, newValue atree.Value, expected atree.Value) {
-	existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, key, newValue)
+	existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, key, newValue)
 	require.NoError(t, err)
 	require.NotNil(t, existingStorable)
 
@@ -2256,7 +2256,7 @@ func testSetElementInMap(t *testing.T, storage atree.SlabStorage, m *atree.Order
 }
 
 func testRemoveElementFromMap(t *testing.T, storage atree.SlabStorage, m *atree.OrderedMap, key atree.Value, expected atree.Value) {
-	existingKeyStorable, existingValueStorable, err := m.Remove(test_utils.CompareValue, test_utils.GetHashInput, key)
+	existingKeyStorable, existingValueStorable, err := m.Remove(testutils.CompareValue, testutils.GetHashInput, key)
 	require.NoError(t, err)
 	require.NotNil(t, existingKeyStorable)
 	require.NotNil(t, existingValueStorable)

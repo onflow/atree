@@ -30,7 +30,7 @@ import (
 
 	"github.com/onflow/atree"
 
-	"github.com/onflow/atree/test_utils"
+	testutils "github.com/onflow/atree/test_utils"
 )
 
 const (
@@ -76,24 +76,24 @@ func randomValue(r *rand.Rand, maxInlineSize uint64) atree.Value {
 	switch r.Intn(maxSimpleValueType) {
 
 	case uint8Type:
-		return test_utils.Uint8Value(r.Intn(255))
+		return testutils.Uint8Value(r.Intn(255))
 
 	case uint16Type:
-		return test_utils.Uint16Value(r.Intn(6535))
+		return testutils.Uint16Value(r.Intn(6535))
 
 	case uint32Type:
-		return test_utils.Uint32Value(r.Intn(4294967295))
+		return testutils.Uint32Value(r.Intn(4294967295))
 
 	case uint64Type:
-		return test_utils.Uint64Value(r.Intn(1844674407370955161))
+		return testutils.Uint64Value(r.Intn(1844674407370955161))
 
 	case smallStringType: // small string (inlinable)
 		slen := r.Intn(int(maxInlineSize))
-		return test_utils.NewStringValue(randStr(r, slen))
+		return testutils.NewStringValue(randStr(r, slen))
 
 	case largeStringType: // large string (external)
 		slen := r.Intn(1024) + int(maxInlineSize)
-		return test_utils.NewStringValue(randStr(r, slen))
+		return testutils.NewStringValue(randStr(r, slen))
 
 	default:
 		panic(atree.NewUnreachableError())
@@ -101,7 +101,7 @@ func randomValue(r *rand.Rand, maxInlineSize uint64) atree.Value {
 }
 
 func testValueEqual(t *testing.T, expected atree.Value, actual atree.Value) {
-	equal, err := test_utils.ValueEqual(expected, actual)
+	equal, err := testutils.ValueEqual(expected, actual)
 	require.NoError(t, err)
 	require.True(t, equal)
 }
@@ -139,7 +139,7 @@ var (
 // Storage test util functions
 
 func newTestPersistentStorage(t testing.TB) *atree.PersistentSlabStorage {
-	baseStorage := test_utils.NewInMemBaseStorage()
+	baseStorage := testutils.NewInMemBaseStorage()
 
 	encMode, err := cbor.EncOptions{}.EncMode()
 	require.NoError(t, err)
@@ -151,13 +151,13 @@ func newTestPersistentStorage(t testing.TB) *atree.PersistentSlabStorage {
 		baseStorage,
 		encMode,
 		decMode,
-		test_utils.DecodeStorable,
-		test_utils.DecodeTypeInfo,
+		testutils.DecodeStorable,
+		testutils.DecodeTypeInfo,
 	)
 }
 
 func newTestPersistentStorageWithData(t testing.TB, data map[atree.SlabID][]byte) *atree.PersistentSlabStorage {
-	baseStorage := test_utils.NewInMemBaseStorageFromMap(data)
+	baseStorage := testutils.NewInMemBaseStorageFromMap(data)
 	return newTestPersistentStorageWithBaseStorage(t, baseStorage)
 }
 
@@ -173,8 +173,8 @@ func newTestPersistentStorageWithBaseStorage(t testing.TB, baseStorage atree.Bas
 		baseStorage,
 		encMode,
 		decMode,
-		test_utils.DecodeStorable,
-		test_utils.DecodeTypeInfo,
+		testutils.DecodeStorable,
+		testutils.DecodeTypeInfo,
 	)
 }
 
@@ -196,8 +196,8 @@ func newTestBasicStorage(t testing.TB) *atree.BasicSlabStorage {
 	return atree.NewBasicSlabStorage(
 		encMode,
 		decMode,
-		test_utils.DecodeStorable,
-		test_utils.DecodeTypeInfo,
+		testutils.DecodeStorable,
+		testutils.DecodeTypeInfo,
 	)
 }
 

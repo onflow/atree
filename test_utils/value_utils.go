@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package test_utils
+package testutils
 
 import (
 	"encoding/binary"

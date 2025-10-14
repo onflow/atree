@@ -61,8 +61,8 @@ func DumpMapSlabs(m *OrderedMap) ([]string, error) {
 			case *MapDataSlab:
 				dumps = append(dumps, fmt.Sprintf("level %d, %s", level+1, slab))
 
-				for i := 0; i < int(slab.elements.Count()); i++ {
-					elem, err := slab.elements.Element(i)
+				for i := 0; i < int(slab.Count()); i++ {
+					elem, err := slab.Element(i)
 					if err != nil {
 						// Don't need to wrap error as external error because err is already categorized by elements.Element().
 						return nil, err

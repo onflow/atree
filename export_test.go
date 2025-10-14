@@ -54,7 +54,6 @@ var (
 // Exported function of MapDataSlab for testing.
 var (
 	IsMapDataSlabCollisionGroup = (*MapDataSlab).isCollisionGroup
-	GetMapDataSlabElementCount  = (*MapDataSlab).elementCount
 )
 
 // Exported function for testing

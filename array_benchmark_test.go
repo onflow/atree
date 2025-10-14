@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/atree"
-	"github.com/onflow/atree/test_utils"
+	testutils "github.com/onflow/atree/test_utils"
 )
 
 // GENERAL COMMENT:
@@ -58,7 +58,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	typeInfo := testutils.NewSimpleTypeInfo(42)
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 
@@ -191,7 +191,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
-	typeInfo := test_utils.NewSimpleTypeInfo(42)
+	typeInfo := testutils.NewSimpleTypeInfo(42)
 
 	array, err := atree.NewArray(storage, address, typeInfo)
 

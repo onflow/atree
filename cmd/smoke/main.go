@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/onflow/atree"
-	"github.com/onflow/atree/test_utils"
+	testutils "github.com/onflow/atree/test_utils"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -134,13 +134,13 @@ func main() {
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
 
-	baseStorage := test_utils.NewInMemBaseStorage()
+	baseStorage := testutils.NewInMemBaseStorage()
 
 	storage := atree.NewPersistentSlabStorage(
 		baseStorage,
 		cborEncMode,
 		cborDecMode,
-		test_utils.DecodeStorable,
+		testutils.DecodeStorable,
 		decodeTypeInfo,
 	)
 

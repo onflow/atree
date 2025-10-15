@@ -229,7 +229,7 @@ func (m *MapDataSlab) IsFull() bool {
 	if m.anySize {
 		return false
 	}
-	return m.header.size > uint32(maxThreshold)
+	return m.header.size > maxThreshold
 }
 
 // IsUnderflow returns the number of bytes needed for the data slab
@@ -239,8 +239,8 @@ func (m *MapDataSlab) IsUnderflow() (uint32, bool) {
 	if m.anySize {
 		return 0, false
 	}
-	if uint32(minThreshold) > m.header.size {
-		return uint32(minThreshold) - m.header.size, true
+	if minThreshold > m.header.size {
+		return minThreshold - m.header.size, true
 	}
 	return 0, false
 }
@@ -272,7 +272,7 @@ func (m *MapDataSlab) Inlined() bool {
 // Inlinable returns true if
 // - map data slab is root slab
 // - size of inlined map data slab <= maxInlineSize
-func (m *MapDataSlab) Inlinable(maxInlineSize uint64) bool {
+func (m *MapDataSlab) Inlinable(maxInlineSize uint32) bool {
 	if m.extraData == nil {
 		// Non-root data slab is not inlinable.
 		return false
@@ -281,7 +281,7 @@ func (m *MapDataSlab) Inlinable(maxInlineSize uint64) bool {
 	inlinedSize := inlinedMapDataSlabPrefixSize + m.Size()
 
 	// Inlined byte size must be less than max inline size.
-	return uint64(inlinedSize) <= maxInlineSize
+	return inlinedSize <= maxInlineSize
 }
 
 // Inline converts not-inlined MapDataSlab to inlined MapDataSlab and removes it from storage.

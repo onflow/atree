@@ -132,7 +132,7 @@ func (e *singleElements) Set(
 			existingKeyStorable := elem.key
 			existingValueStorable := elem.value
 
-			vs, err := value.Storable(storage, address, maxInlineMapValueSize(uint64(elem.key.ByteSize())))
+			vs, err := value.Storable(storage, address, maxInlineMapValueSize(elem.key.ByteSize()))
 			if err != nil {
 				// Wrap err as external error (if needed) because err is returned by Value interface.
 				return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")

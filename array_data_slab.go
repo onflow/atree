@@ -249,7 +249,7 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 	// Left slab size is as close to midPoint as possible while right slab size >= minThreshold
 	for i := len(a.elements) - 1; i >= 0; i-- {
 		elemSize := a.elements[i].ByteSize()
-		if leftSize-elemSize < midPoint && size-leftSize >= uint32(minThreshold) {
+		if leftSize-elemSize < midPoint && size-leftSize >= minThreshold {
 			break
 		}
 		leftSize -= elemSize
@@ -287,7 +287,7 @@ func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 	for _, e := range rightSlab.elements {
 		elemSize := e.ByteSize()
 		if leftSize+elemSize > midPoint {
-			if size-leftSize-elemSize >= uint32(minThreshold) {
+			if size-leftSize-elemSize >= minThreshold {
 				// Include this element in left slab
 				leftSize += elemSize
 				leftCount++
@@ -314,15 +314,15 @@ func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 }
 
 func (a *ArrayDataSlab) IsFull() bool {
-	return a.header.size > uint32(maxThreshold)
+	return a.header.size > maxThreshold
 }
 
 // IsUnderflow returns the number of bytes needed for the data slab
 // to reach the min threshold.
 // Returns true if the min threshold has not been reached yet.
 func (a *ArrayDataSlab) IsUnderflow() (uint32, bool) {
-	if uint32(minThreshold) > a.header.size {
-		return uint32(minThreshold) - a.header.size, true
+	if minThreshold > a.header.size {
+		return minThreshold - a.header.size, true
 	}
 	return 0, false
 }
@@ -333,13 +333,13 @@ func (a *ArrayDataSlab) CanLendToLeft(size uint32) bool {
 	if len(a.elements) < 2 {
 		return false
 	}
-	if a.header.size-size < uint32(minThreshold) {
+	if a.header.size-size < minThreshold {
 		return false
 	}
 	lendSize := uint32(0)
 	for i := range a.elements {
 		lendSize += a.elements[i].ByteSize()
-		if a.header.size-lendSize < uint32(minThreshold) {
+		if a.header.size-lendSize < minThreshold {
 			return false
 		}
 		if lendSize >= size {
@@ -355,13 +355,13 @@ func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
 	if len(a.elements) < 2 {
 		return false
 	}
-	if a.header.size-size < uint32(minThreshold) {
+	if a.header.size-size < minThreshold {
 		return false
 	}
 	lendSize := uint32(0)
 	for i := len(a.elements) - 1; i >= 0; i-- {
 		lendSize += a.elements[i].ByteSize()
-		if a.header.size-lendSize < uint32(minThreshold) {
+		if a.header.size-lendSize < minThreshold {
 			return false
 		}
 		if lendSize >= size {
@@ -376,7 +376,7 @@ func (a *ArrayDataSlab) CanLendToRight(size uint32) bool {
 // Inlinable returns true if
 // - array data slab is root slab
 // - size of inlined array data slab <= maxInlineSize
-func (a *ArrayDataSlab) Inlinable(maxInlineSize uint64) bool {
+func (a *ArrayDataSlab) Inlinable(maxInlineSize uint32) bool {
 	if a.extraData == nil {
 		// Non-root data slab is not inlinable.
 		return false
@@ -395,7 +395,7 @@ func (a *ArrayDataSlab) Inlinable(maxInlineSize uint64) bool {
 	}
 
 	// Inlined byte size must be less than max inline size.
-	return uint64(inlinedSize) <= maxInlineSize
+	return inlinedSize <= maxInlineSize
 }
 
 // Inline converts not-inlined ArrayDataSlab to inlined ArrayDataSlab and removes it from storage.

@@ -5024,7 +5024,7 @@ func TestArrayMaxInlineElement(t *testing.T) {
 	// Size of root data slab with two elements of max inlined size is target slab size minus
 	// slab id size (next slab id is omitted in root slab), and minus 1 byte
 	// (for rounding when computing max inline array element size).
-	require.Equal(t, atree.TargetSlabSize()-atree.SlabIDLength-1, uint64(GetArrayRootSlabByteSize(array)))
+	require.Equal(t, atree.TargetSlabSize()-atree.SlabIDLength-1, GetArrayRootSlabByteSize(array))
 
 	testArray(t, storage, typeInfo, address, array, expectedValues, false)
 }

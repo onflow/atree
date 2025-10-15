@@ -773,29 +773,29 @@ func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab) error {
 }
 
 func (a ArrayMetaDataSlab) IsFull() bool {
-	return a.header.size > uint32(maxThreshold)
+	return a.header.size > maxThreshold
 }
 
 func (a ArrayMetaDataSlab) IsUnderflow() (uint32, bool) {
-	if uint32(minThreshold) > a.header.size {
-		return uint32(minThreshold) - a.header.size, true
+	if minThreshold > a.header.size {
+		return minThreshold - a.header.size, true
 	}
 	return 0, false
 }
 
 func (a *ArrayMetaDataSlab) CanLendToLeft(size uint32) bool {
 	n := uint32(math.Ceil(float64(size) / arraySlabHeaderSize))
-	return a.header.size-arraySlabHeaderSize*n > uint32(minThreshold)
+	return a.header.size-arraySlabHeaderSize*n > minThreshold
 }
 
 func (a *ArrayMetaDataSlab) CanLendToRight(size uint32) bool {
 	n := uint32(math.Ceil(float64(size) / arraySlabHeaderSize))
-	return a.header.size-arraySlabHeaderSize*n > uint32(minThreshold)
+	return a.header.size-arraySlabHeaderSize*n > minThreshold
 }
 
 // Inline operations
 
-func (a *ArrayMetaDataSlab) Inlinable(_ uint64) bool {
+func (a *ArrayMetaDataSlab) Inlinable(_ uint32) bool {
 	return false
 }
 

@@ -72,7 +72,7 @@ func randStr(r *rand.Rand, length int) string {
 	return string(b)
 }
 
-func randomValue(r *rand.Rand, maxInlineSize uint64) atree.Value {
+func randomValue(r *rand.Rand, maxInlineSize uint32) atree.Value {
 	switch r.Intn(maxSimpleValueType) {
 
 	case uint8Type:

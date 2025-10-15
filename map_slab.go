@@ -86,7 +86,7 @@ type MapSlab interface {
 	PopIterate(SlabStorage, MapPopIterationFunc) error
 
 	Inlined() bool
-	Inlinable(maxInlineSize uint64) bool
+	Inlinable(maxInlineSize uint32) bool
 	Inline(SlabStorage) error
 	Uninline(SlabStorage) error
 }

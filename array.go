@@ -145,7 +145,7 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 		}
 
 		// Finalize current data slab without appending new element
-		if dataSlab.header.size >= uint32(targetThreshold) {
+		if dataSlab.header.size >= targetThreshold {
 
 			// Generate storage id for next data slab
 			nextID, err := storage.GenerateSlabID(address)
@@ -738,7 +738,7 @@ func (a *Array) setParentUpdater(f parentUpdater) {
 
 // setCallbackWithChild sets up callback function with child value (child)
 // so parent array (a) can be notified when child value is modified.
-func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint64) {
+func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint32) {
 	// Unwrap child value if needed (e.g. interpreter.SomeValue)
 	unwrappedChild, wrapperSize := unwrapValue(child)
 
@@ -878,7 +878,7 @@ func (a *Array) Inlined() bool {
 	return a.root.Inlined()
 }
 
-func (a *Array) Inlinable(maxInlineSize uint64) bool {
+func (a *Array) Inlinable(maxInlineSize uint32) bool {
 	return a.root.Inlinable(maxInlineSize)
 }
 
@@ -899,7 +899,7 @@ func (a *Array) getMutableElementIndex() map[ValueID]uint64 {
 // Storable returns array a as either:
 // - SlabIDStorable, or
 // - inlined data slab storable
-func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storable, error) {
+func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint32) (Storable, error) {
 
 	inlined := a.root.Inlined()
 	inlinable := a.root.Inlinable(maxInlineSize)

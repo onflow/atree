@@ -14328,7 +14328,7 @@ func TestMapMaxInlineElement(t *testing.T) {
 	// Size of root data slab with two elements (key+value pairs) of
 	// max inlined size is target slab size minus
 	// slab id size (next slab id is omitted in root slab)
-	require.Equal(t, atree.TargetSlabSize()-atree.SlabIDLength, uint64(GetMapRootSlabByteSize(m)))
+	require.Equal(t, atree.TargetSlabSize()-atree.SlabIDLength, GetMapRootSlabByteSize(m))
 
 	testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 }
@@ -20033,7 +20033,7 @@ func TestMapDataSlabIterate(t *testing.T) {
 			ks, err := k.Storable(storage, address, atree.MaxInlineMapKeySize())
 			require.NoError(t, err)
 
-			vs, err := v.Storable(storage, address, atree.MaxInlineMapValueSize(uint64(ks.ByteSize())))
+			vs, err := v.Storable(storage, address, atree.MaxInlineMapValueSize(ks.ByteSize()))
 			require.NoError(t, err)
 
 			keyValueStorables = append(keyValueStorables, ks, vs)
@@ -20118,7 +20118,7 @@ func TestMapDataSlabIterate(t *testing.T) {
 				ks, err := k.Storable(storage, address, atree.MaxInlineMapKeySize())
 				require.NoError(t, err)
 
-				vs, err := v.Storable(storage, address, atree.MaxInlineMapValueSize(uint64(ks.ByteSize())))
+				vs, err := v.Storable(storage, address, atree.MaxInlineMapValueSize(ks.ByteSize()))
 				require.NoError(t, err)
 
 				keyValueStorables = append(keyValueStorables, ks, vs)

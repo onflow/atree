@@ -266,8 +266,8 @@ func NewMapFromBatchData(
 		// Finalize data slab
 		currentSlabSize := mapDataSlabPrefixSize + elements.Size()
 		newElementSize := digestSize + elem.Size()
-		if currentSlabSize >= uint32(targetThreshold) ||
-			currentSlabSize+newElementSize > uint32(maxThreshold) {
+		if currentSlabSize >= targetThreshold ||
+			currentSlabSize+newElementSize > maxThreshold {
 
 			// Generate storage id for next data slab
 			nextID, err := storage.GenerateSlabID(address)
@@ -424,7 +424,7 @@ func nextLevelMapSlabs(storage SlabStorage, address Address, slabs []MapSlab) ([
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", address))
 	}
 
-	childrenCount := min(uint64(len(slabs)), maxNumberOfHeadersInMetaSlab)
+	childrenCount := min(len(slabs), int(maxNumberOfHeadersInMetaSlab))
 
 	metaSlab := &MapMetaDataSlab{
 		header: MapSlabHeader{
@@ -443,7 +443,7 @@ func nextLevelMapSlabs(storage SlabStorage, address Address, slabs []MapSlab) ([
 			nextLevelSlabsIndex++
 
 			// compute number of children for next meta data slab
-			childrenCount = min(uint64(len(slabs)-i), maxNumberOfHeadersInMetaSlab)
+			childrenCount = min(len(slabs)-i, int(maxNumberOfHeadersInMetaSlab))
 
 			// Generate storage id for next meta data slab
 			id, err = storage.GenerateSlabID(address)
@@ -505,7 +505,7 @@ func (m *OrderedMap) Get(comparator ValueComparator, hip HashInputProvider, key 
 
 	// As a parent, this map (m) sets up notification callback with child
 	// value (v) so this map can be notified when child value is modified.
-	maxInlineSize := maxInlineMapValueSize(uint64(keyStorable.ByteSize()))
+	maxInlineSize := maxInlineMapValueSize(keyStorable.ByteSize())
 	m.setCallbackWithChild(comparator, hip, key, v, maxInlineSize)
 
 	return v, nil
@@ -577,7 +577,7 @@ func (m *OrderedMap) getElementAndNextKey(comparator ValueComparator, hip HashIn
 
 	// As a parent, this map (m) sets up notification callback with child
 	// value (v) so this map can be notified when child value is modified.
-	maxInlineSize := maxInlineMapValueSize(uint64(keyStorable.ByteSize()))
+	maxInlineSize := maxInlineMapValueSize(keyStorable.ByteSize())
 	m.setCallbackWithChild(comparator, hip, key, v, maxInlineSize)
 
 	return k, v, nextKey, nil
@@ -705,7 +705,7 @@ func (m *OrderedMap) set(comparator ValueComparator, hip HashInputProvider, key 
 	// Setting up notification with new child value can happen at any time
 	// (either before or after this map notifies its parent) because
 	// setting up notification doesn't trigger any read/write ops on parent or child.
-	maxInlineSize := maxInlineMapValueSize(uint64(keyStorable.ByteSize()))
+	maxInlineSize := maxInlineMapValueSize(keyStorable.ByteSize())
 	m.setCallbackWithChild(comparator, hip, key, value, maxInlineSize)
 
 	return existingMapValueStorable, nil
@@ -941,7 +941,7 @@ func (m *OrderedMap) Inlined() bool {
 	return m.root.Inlined()
 }
 
-func (m *OrderedMap) Inlinable(maxInlineSize uint64) bool {
+func (m *OrderedMap) Inlinable(maxInlineSize uint32) bool {
 	return m.root.Inlinable(maxInlineSize)
 }
 
@@ -956,7 +956,7 @@ func (m *OrderedMap) setCallbackWithChild(
 	hip HashInputProvider,
 	key Value,
 	child Value,
-	maxInlineSize uint64,
+	maxInlineSize uint32,
 ) {
 	// Unwrap child value if needed (e.g. interpreter.SomeValue)
 	unwrappedChild, wrapperSize := unwrapValue(child)
@@ -1091,7 +1091,7 @@ func (m *OrderedMap) notifyParentIfNeeded() error {
 // Storable returns OrderedMap m as either:
 // - SlabIDStorable, or
 // - inlined data slab storable
-func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint64) (Storable, error) {
+func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint32) (Storable, error) {
 
 	inlined := m.root.Inlined()
 	inlinable := m.root.Inlinable(maxInlineSize)

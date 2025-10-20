@@ -435,118 +435,6 @@ func TestMapSetAndGet(t *testing.T) {
 	})
 }
 
-func TestMapSetAndGetWithHashCollision(t *testing.T) {
-	const (
-		mapCount = 1024
-	)
-
-	atree.SetThreshold(256)
-
-	savedMaxCollisionLimitPerDigest := atree.MaxCollisionLimitPerDigest
-	atree.MaxCollisionLimitPerDigest = uint32(math.Ceil(float64(mapCount) / 10))
-
-	t.Cleanup(func() {
-		atree.SetThreshold(1024)
-		atree.MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
-	})
-
-	t.Run("unique keys with hash collision", func(t *testing.T) {
-		t.Parallel()
-
-		const (
-			keyStringSize = 16
-		)
-
-		r := newRand(t)
-
-		digesterBuilder := &mockDigesterBuilder{}
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		i := uint64(0)
-		for len(keyValues) < mapCount {
-			k := testutils.NewStringValue(randStr(r, keyStringSize))
-			v := testutils.Uint64Value(i)
-			keyValues[k] = v
-			i++
-
-			digests := []atree.Digest{
-				atree.Digest(i % 10),
-			}
-			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
-		}
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		storage := newTestPersistentStorage(t)
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		for k, v := range keyValues {
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-		}
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("replicate keys with hash collision", func(t *testing.T) {
-		t.Parallel()
-
-		const (
-			keyStringSize = 16
-		)
-
-		r := newRand(t)
-
-		digesterBuilder := &mockDigesterBuilder{}
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		i := uint64(0)
-		for len(keyValues) < mapCount {
-			k := testutils.NewStringValue(randStr(r, keyStringSize))
-			v := testutils.Uint64Value(i)
-			keyValues[k] = v
-			i++
-
-			digests := []atree.Digest{
-				atree.Digest(i % 10),
-			}
-			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
-		}
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		storage := newTestPersistentStorage(t)
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		for k, v := range keyValues {
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-		}
-
-		// Overwrite values
-		for k, v := range keyValues {
-			oldValue := v.(testutils.Uint64Value)
-			newValue := testutils.Uint64Value(uint64(oldValue) + mapCount)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-			require.NotNil(t, existingStorable)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			testValueEqual(t, oldValue, existingValue)
-
-			keyValues[k] = newValue
-		}
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-}
-
 func TestMapGetKeyNotFound(t *testing.T) {
 	t.Parallel()
 
@@ -2312,954 +2200,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 }
 
-func TestMutableMapIterateWithSmallerSlabs(t *testing.T) {
-	atree.SetThreshold(256)
-	t.Cleanup(func() {
-		atree.SetThreshold(1024)
-	})
-
-	t.Run("iterate pairs, root is data slab, no slab operation", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(15)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.True(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate pairs
-		i := 0
-		err = m.Iterate(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
-			testValueEqual(t, sortedKeys[i], k)
-			testValueEqual(t, keyValues[k], v)
-
-			newValue := v.(testutils.Uint64Value) * 2
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.True(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate keys, root is data slab, no slab operation", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(15)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.True(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate keys
-		i := 0
-		err = m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value) (bool, error) {
-			testValueEqual(t, sortedKeys[i], k)
-
-			v := keyValues[k]
-			newValue := v.(testutils.Uint64Value) * 2
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.True(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate values, root is data slab, no slab operation", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(15)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.True(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate values
-		i := 0
-		err = m.IterateValues(testutils.CompareValue, testutils.GetHashInput, func(v atree.Value) (bool, error) {
-			k := sortedKeys[i]
-
-			testValueEqual(t, keyValues[k], v)
-
-			newValue := v.(testutils.Uint64Value) * 2
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.True(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate pairs, root is metadata slab, no slab operation", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(25)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			sortedKeys[i] = k
-			keyValues[k] = v
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.False(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate key value pairs
-
-		i := 0
-		err = m.Iterate(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
-			testValueEqual(t, sortedKeys[i], k)
-			testValueEqual(t, keyValues[k], v)
-
-			newValue := v.(testutils.Uint64Value) * 2
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.False(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate keys, root is metadata slab, no slab operation", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(25)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			sortedKeys[i] = k
-			keyValues[k] = v
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.False(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate keys
-
-		i := 0
-		err = m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value) (bool, error) {
-			testValueEqual(t, sortedKeys[i], k)
-
-			v := keyValues[k]
-			newValue := v.(testutils.Uint64Value) * 2
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.False(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate values, root is metadata slab, no slab operation", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(25)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			sortedKeys[i] = k
-			keyValues[k] = v
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.False(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate values
-
-		i := 0
-		err = m.IterateValues(testutils.CompareValue, testutils.GetHashInput, func(v atree.Value) (bool, error) {
-			k := sortedKeys[i]
-
-			testValueEqual(t, keyValues[k], v)
-
-			newValue := v.(testutils.Uint64Value) * 2
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.False(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate pairs, root is data slab, split slab", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(15)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.True(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate key value pairs
-
-		i := 0
-		r := 'a'
-		err = m.Iterate(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
-			testValueEqual(t, sortedKeys[i], k)
-			testValueEqual(t, keyValues[k], v)
-
-			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-			r++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.False(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate keys, root is data slab, split slab", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(15)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.True(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate keys
-
-		i := 0
-		r := 'a'
-		err = m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value) (bool, error) {
-			testValueEqual(t, sortedKeys[i], k)
-
-			v := keyValues[k]
-			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-			r++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.False(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate values, root is data slab, split slab", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(15)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.True(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate values
-
-		i := 0
-		r := 'a'
-		err = m.IterateValues(testutils.CompareValue, testutils.GetHashInput, func(v atree.Value) (bool, error) {
-			k := sortedKeys[i]
-
-			testValueEqual(t, sortedKeys[i], k)
-			testValueEqual(t, keyValues[k], v)
-
-			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-			r++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.False(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate pairs, root is metadata slab, split slab", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(25)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.False(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate key value pairs
-
-		i := 0
-		r := 'a'
-		err = m.Iterate(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
-			testValueEqual(t, sortedKeys[i], k)
-			testValueEqual(t, keyValues[k], v)
-
-			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-			r++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.False(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate keys, root is metadata slab, split slab", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(25)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.False(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate keys
-
-		i := 0
-		r := 'a'
-		err = m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value) (bool, error) {
-			testValueEqual(t, sortedKeys[i], k)
-
-			v := keyValues[k]
-			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-			r++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.False(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate values, root is metadata slab, split slab", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(25)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.Uint64Value(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.False(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate values
-
-		i := 0
-		r := 'a'
-		err = m.IterateValues(testutils.CompareValue, testutils.GetHashInput, func(v atree.Value) (bool, error) {
-			k := sortedKeys[i]
-
-			testValueEqual(t, keyValues[k], v)
-
-			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-			r++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.False(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate pairs, root is metadata slab, merge slabs", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(10)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		r := 'a'
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.NewStringValue(strings.Repeat(string(r), 25))
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			r++
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.False(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate key value pairs
-
-		i := 0
-		err = m.Iterate(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
-			testValueEqual(t, sortedKeys[i], k)
-			testValueEqual(t, keyValues[k], v)
-
-			newValue := testutils.NewUint64ValueFromInteger(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-			r++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.True(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate keys, root is metadata slab, merge slabs", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(10)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		r := 'a'
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.NewStringValue(strings.Repeat(string(r), 25))
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			r++
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.False(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate keys
-
-		i := 0
-		err = m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value) (bool, error) {
-			testValueEqual(t, sortedKeys[i], k)
-
-			v := keyValues[k]
-			newValue := testutils.NewUint64ValueFromInteger(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-			r++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.True(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("iterate values, root is metadata slab, merge slabs", func(t *testing.T) {
-		t.Parallel()
-
-		const mapCount = uint64(10)
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		storage := newTestPersistentStorage(t)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		r := 'a'
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		sortedKeys := make([]atree.Value, mapCount)
-		for i := range mapCount {
-			k := testutils.Uint64Value(i)
-			v := testutils.NewStringValue(strings.Repeat(string(r), 25))
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-
-			r++
-			keyValues[k] = v
-			sortedKeys[i] = k
-		}
-		require.Equal(t, mapCount, m.Count())
-		require.False(t, IsMapRootDataSlab(m))
-
-		// Sort keys by digest
-		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
-
-		// Iterate values
-
-		i := 0
-		err = m.IterateValues(testutils.CompareValue, testutils.GetHashInput, func(v atree.Value) (bool, error) {
-			k := sortedKeys[i]
-
-			testValueEqual(t, keyValues[k], v)
-
-			newValue := testutils.NewUint64ValueFromInteger(i)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			require.Equal(t, v, existingValue)
-
-			keyValues[k] = newValue
-
-			i++
-			r++
-
-			return true, nil
-		})
-		require.NoError(t, err)
-		require.Equal(t, mapCount, uint64(i))
-		require.True(t, IsMapRootDataSlab(m))
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-}
-
 func TestMutableMapIterate(t *testing.T) {
-	t.Parallel()
 
 	t.Run("empty", func(t *testing.T) {
 		t.Parallel()
@@ -3282,6 +2223,313 @@ func TestMutableMapIterate(t *testing.T) {
 		require.Equal(t, 0, i)
 
 		testMap(t, storage, typeInfo, address, m, testutils.ExpectedMapValue{}, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is data slab, no slab operation", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(15)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.True(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		err = m.Iterate(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
+
+			newValue := v.(testutils.Uint64Value) * 2
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.True(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is metadata slab, no slab operation", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(25)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			sortedKeys[i] = k
+			keyValues[k] = v
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.False(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		err = m.Iterate(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
+
+			newValue := v.(testutils.Uint64Value) * 2
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.False(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is data slab, split slab", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(15)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.True(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		r := 'a'
+		err = m.Iterate(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
+
+			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+			r++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.False(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is metadata slab, split slab", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(25)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.False(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		r := 'a'
+		err = m.Iterate(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
+
+			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+			r++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.False(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is metadata slab, merge slabs", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(10)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		r := 'a'
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.NewStringValue(strings.Repeat(string(r), 25))
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			r++
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.False(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		err = m.Iterate(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value, v atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
+
+			newValue := testutils.NewUint64ValueFromInteger(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+			r++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.True(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
 
 	t.Run("mutate collision primitive values, 1 level", func(t *testing.T) {
@@ -4549,7 +3797,6 @@ func TestMutableMapIterate(t *testing.T) {
 }
 
 func TestMutableMapIterateKeys(t *testing.T) {
-	t.Parallel()
 
 	t.Run("empty", func(t *testing.T) {
 		t.Parallel()
@@ -4571,6 +3818,313 @@ func TestMutableMapIterateKeys(t *testing.T) {
 		require.Equal(t, 0, i)
 
 		testMap(t, storage, typeInfo, address, m, testutils.ExpectedMapValue{}, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is data slab, no slab operation", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(15)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.True(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		err = m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+
+			v := keyValues[k]
+			newValue := v.(testutils.Uint64Value) * 2
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.True(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is metadata slab, no slab operation", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(25)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			sortedKeys[i] = k
+			keyValues[k] = v
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.False(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		err = m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+
+			v := keyValues[k]
+			newValue := v.(testutils.Uint64Value) * 2
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.False(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is data slab, split slab", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(15)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.True(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		r := 'a'
+		err = m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+
+			v := keyValues[k]
+			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+			r++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.False(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is metadata slab, split slab", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(25)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.False(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		r := 'a'
+		err = m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+
+			v := keyValues[k]
+			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+			r++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.False(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is metadata slab, merge slabs", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(10)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		r := 'a'
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.NewStringValue(strings.Repeat(string(r), 25))
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			r++
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.False(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		err = m.IterateKeys(testutils.CompareValue, testutils.GetHashInput, func(k atree.Value) (bool, error) {
+			testValueEqual(t, sortedKeys[i], k)
+
+			v := keyValues[k]
+			newValue := testutils.NewUint64ValueFromInteger(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+			r++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.True(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
 
 	t.Run("mutate collision primitive values, 1 level", func(t *testing.T) {
@@ -5861,7 +5415,6 @@ func TestMutableMapIterateKeys(t *testing.T) {
 }
 
 func TestMutableMapIterateValues(t *testing.T) {
-	t.Parallel()
 
 	t.Run("empty", func(t *testing.T) {
 		t.Parallel()
@@ -5883,6 +5436,319 @@ func TestMutableMapIterateValues(t *testing.T) {
 		require.Equal(t, 0, i)
 
 		testMap(t, storage, typeInfo, address, m, testutils.ExpectedMapValue{}, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is data slab, no slab operation", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(15)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.True(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		err = m.IterateValues(testutils.CompareValue, testutils.GetHashInput, func(v atree.Value) (bool, error) {
+			k := sortedKeys[i]
+
+			testValueEqual(t, keyValues[k], v)
+
+			newValue := v.(testutils.Uint64Value) * 2
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.True(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is metadata slab, no slab operation", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(25)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			sortedKeys[i] = k
+			keyValues[k] = v
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.False(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		err = m.IterateValues(testutils.CompareValue, testutils.GetHashInput, func(v atree.Value) (bool, error) {
+			k := sortedKeys[i]
+
+			testValueEqual(t, keyValues[k], v)
+
+			newValue := v.(testutils.Uint64Value) * 2
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.False(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is data slab, split slab", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(15)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.True(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		r := 'a'
+		err = m.IterateValues(testutils.CompareValue, testutils.GetHashInput, func(v atree.Value) (bool, error) {
+			k := sortedKeys[i]
+
+			testValueEqual(t, sortedKeys[i], k)
+			testValueEqual(t, keyValues[k], v)
+
+			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+			r++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.False(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is metadata slab, split slab", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(25)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.Uint64Value(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.False(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		r := 'a'
+		err = m.IterateValues(testutils.CompareValue, testutils.GetHashInput, func(v atree.Value) (bool, error) {
+			k := sortedKeys[i]
+
+			testValueEqual(t, keyValues[k], v)
+
+			newValue := testutils.NewStringValue(strings.Repeat(string(r), 25))
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+			r++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.False(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("mutate primitive values, root is metadata slab, merge slabs", func(t *testing.T) {
+		atree.SetThreshold(256)
+		defer atree.SetThreshold(1024)
+
+		const mapCount = uint64(10)
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		storage := newTestPersistentStorage(t)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		r := 'a'
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		sortedKeys := make([]atree.Value, mapCount)
+		for i := range mapCount {
+			k := testutils.Uint64Value(i)
+			v := testutils.NewStringValue(strings.Repeat(string(r), 25))
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+
+			r++
+			keyValues[k] = v
+			sortedKeys[i] = k
+		}
+		require.Equal(t, mapCount, m.Count())
+		require.False(t, IsMapRootDataSlab(m))
+
+		// Sort keys by digest
+		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
+
+		i := 0
+		err = m.IterateValues(testutils.CompareValue, testutils.GetHashInput, func(v atree.Value) (bool, error) {
+			k := sortedKeys[i]
+
+			testValueEqual(t, keyValues[k], v)
+
+			newValue := testutils.NewUint64ValueFromInteger(i)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			require.Equal(t, v, existingValue)
+
+			keyValues[k] = newValue
+
+			i++
+			r++
+
+			return true, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, mapCount, uint64(i))
+		require.True(t, IsMapRootDataSlab(m))
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
 
 	t.Run("mutate collision primitive values, 1 level", func(t *testing.T) {
@@ -20543,4 +20409,116 @@ func testMapDataSlabIterate(
 	require.NoError(t, err)
 
 	require.Equal(t, i, len(expectedKeyAndValues))
+}
+
+func TestMapSetAndGetWithHashCollision(t *testing.T) {
+	const (
+		mapCount = 1024
+	)
+
+	atree.SetThreshold(256)
+
+	savedMaxCollisionLimitPerDigest := atree.MaxCollisionLimitPerDigest
+	atree.MaxCollisionLimitPerDigest = uint32(math.Ceil(float64(mapCount) / 10))
+
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+		atree.MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
+	})
+
+	t.Run("unique keys with hash collision", func(t *testing.T) {
+		t.Parallel()
+
+		const (
+			keyStringSize = 16
+		)
+
+		r := newRand(t)
+
+		digesterBuilder := &mockDigesterBuilder{}
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		i := uint64(0)
+		for len(keyValues) < mapCount {
+			k := testutils.NewStringValue(randStr(r, keyStringSize))
+			v := testutils.Uint64Value(i)
+			keyValues[k] = v
+			i++
+
+			digests := []atree.Digest{
+				atree.Digest(i % 10),
+			}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+		}
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("replicate keys with hash collision", func(t *testing.T) {
+		t.Parallel()
+
+		const (
+			keyStringSize = 16
+		)
+
+		r := newRand(t)
+
+		digesterBuilder := &mockDigesterBuilder{}
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		i := uint64(0)
+		for len(keyValues) < mapCount {
+			k := testutils.NewStringValue(randStr(r, keyStringSize))
+			v := testutils.Uint64Value(i)
+			keyValues[k] = v
+			i++
+
+			digests := []atree.Digest{
+				atree.Digest(i % 10),
+			}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+		}
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Overwrite values
+		for k, v := range keyValues {
+			oldValue := v.(testutils.Uint64Value)
+			newValue := testutils.Uint64Value(uint64(oldValue) + mapCount)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+			require.NotNil(t, existingStorable)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			testValueEqual(t, oldValue, existingValue)
+
+			keyValues[k] = newValue
+		}
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
 }

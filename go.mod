@@ -3,7 +3,7 @@ module github.com/onflow/atree
 go 1.24
 
 require (
-	github.com/fxamacker/cbor/v2 v2.8.1-0.20250402194037-6f932b086829
+	github.com/fxamacker/cbor/v2 v2.9.1-0.20251019205732-39888e6be013
 	github.com/fxamacker/circlehash v0.3.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zeebo/blake3 v0.2.4

@@ -514,7 +514,7 @@ func (e *hkeyElements) LendToRight(re elements) error {
 	// Left elements size is as close to midPoint as possible while right elements size >= minThreshold
 	for i := len(e.elems) - 1; i >= 0; i-- {
 		elemSize := e.elems[i].Size() + digestSize
-		if leftSize-elemSize < midPoint && size-leftSize >= uint32(minSize) {
+		if leftSize-elemSize < midPoint && size-leftSize >= minSize {
 			break
 		}
 		leftSize -= elemSize
@@ -559,7 +559,7 @@ func (e *hkeyElements) BorrowFromRight(re elements) error {
 	for _, elem := range rightElements.elems {
 		elemSize := elem.Size() + digestSize
 		if leftSize+elemSize > midPoint {
-			if size-leftSize-elemSize >= uint32(minSize) {
+			if size-leftSize-elemSize >= minSize {
 				// Include this element in left elements
 				leftSize += elemSize
 				leftCount++
@@ -594,14 +594,14 @@ func (e *hkeyElements) CanLendToLeft(size uint32) bool {
 	}
 
 	minSize := minThreshold - mapDataSlabPrefixSize
-	if e.Size()-size < uint32(minSize) {
+	if e.Size()-size < minSize {
 		return false
 	}
 
 	lendSize := uint32(0)
 	for i := range e.elems {
 		lendSize += e.elems[i].Size() + digestSize
-		if e.Size()-lendSize < uint32(minSize) {
+		if e.Size()-lendSize < minSize {
 			return false
 		}
 		if lendSize >= size {
@@ -621,14 +621,14 @@ func (e *hkeyElements) CanLendToRight(size uint32) bool {
 	}
 
 	minSize := minThreshold - mapDataSlabPrefixSize
-	if e.Size()-size < uint32(minSize) {
+	if e.Size()-size < minSize {
 		return false
 	}
 
 	lendSize := uint32(0)
 	for i := len(e.elems) - 1; i >= 0; i-- {
 		lendSize += e.elems[i].Size() + digestSize
-		if e.Size()-lendSize < uint32(minSize) {
+		if e.Size()-lendSize < minSize {
 			return false
 		}
 		if lendSize >= size {

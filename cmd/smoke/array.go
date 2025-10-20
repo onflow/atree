@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/onflow/atree"
-	"github.com/onflow/atree/test_utils"
+	testutils "github.com/onflow/atree/test_utils"
 )
 
 type arrayOpType int
@@ -146,7 +146,7 @@ func testArray(
 	}
 
 	// expectedValues contains array elements in the same order.  It is used to check data loss.
-	expectedValues := make(test_utils.ExpectedArrayValue, 0, flagMaxLength)
+	expectedValues := make(testutils.ExpectedArrayValue, 0, flagMaxLength)
 
 	reduceHeapAllocs := false
 
@@ -259,7 +259,7 @@ func testArray(
 }
 
 func nextArrayOp(
-	expectedValues test_utils.ExpectedArrayValue,
+	expectedValues testutils.ExpectedArrayValue,
 	array *atree.Array,
 	nestedLevels int,
 	forceRemove bool,
@@ -305,11 +305,11 @@ func nextArrayOp(
 }
 
 func modifyArray(
-	expectedValues test_utils.ExpectedArrayValue,
+	expectedValues testutils.ExpectedArrayValue,
 	array *atree.Array,
 	nestedLevels int,
 	forceRemove bool,
-) (test_utils.ExpectedArrayValue, arrayOpType, error) {
+) (testutils.ExpectedArrayValue, arrayOpType, error) {
 
 	storage := array.Storage
 	address := array.Address()
@@ -395,7 +395,7 @@ func modifyArray(
 			return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingStorable, err)
 		}
 
-		equal, err := test_utils.ValueEqual(oldExpectedValue, existingValue)
+		equal, err := testutils.ValueEqual(oldExpectedValue, existingValue)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to compare %s and %s: %s", existingValue, oldExpectedValue, err)
 		}
@@ -477,7 +477,7 @@ func modifyArray(
 			return nil, 0, fmt.Errorf("failed to convert %s to value: %s", existingStorable, err)
 		}
 
-		equal, err := test_utils.ValueEqual(oldExpectedValue, existingValue)
+		equal, err := testutils.ValueEqual(oldExpectedValue, existingValue)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to compare %s and %s: %s", existingValue, oldExpectedValue, err)
 		}
@@ -517,7 +517,7 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 
 	switch value := value.(type) {
 	case *atree.Array:
-		expectedArrayValue, ok := expectedValue.(test_utils.ExpectedArrayValue)
+		expectedArrayValue, ok := expectedValue.(testutils.ExpectedArrayValue)
 		if !ok {
 			return nil, fmt.Errorf("failed to get expected value of type arrayValue: got %T", expectedValue)
 		}
@@ -528,7 +528,7 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 		}
 
 	case *atree.OrderedMap:
-		expectedMapValue, ok := expectedValue.(test_utils.ExpectedMapValue)
+		expectedMapValue, ok := expectedValue.(testutils.ExpectedMapValue)
 		if !ok {
 			return nil, fmt.Errorf("failed to get expected value of type mapValue: got %T", expectedValue)
 		}
@@ -538,8 +538,8 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 			return nil, err
 		}
 
-	case test_utils.SomeValue:
-		expectedSomeValue, ok := expectedValue.(test_utils.ExpectedWrapperValue)
+	case testutils.SomeValue:
+		expectedSomeValue, ok := expectedValue.(testutils.ExpectedWrapperValue)
 		if !ok {
 			return nil, fmt.Errorf("failed to get expected value of type someValue: got %T", expectedValue)
 		}
@@ -549,7 +549,7 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 			return nil, err
 		}
 
-		return test_utils.NewExpectedWrapperValue(expected), nil
+		return testutils.NewExpectedWrapperValue(expected), nil
 
 	default:
 		return nil, fmt.Errorf("failed to get container: got %T", value)
@@ -558,23 +558,23 @@ func modifyContainer(expectedValue atree.Value, value atree.Value, nestedLevels 
 	return expectedValue, nil
 }
 
-func hasChildContainerInArray(expectedValues test_utils.ExpectedArrayValue) bool {
+func hasChildContainerInArray(expectedValues testutils.ExpectedArrayValue) bool {
 	for _, v := range expectedValues {
 		v, _ = unwrapValue(v)
 		switch v.(type) {
-		case test_utils.ExpectedArrayValue, test_utils.ExpectedMapValue:
+		case testutils.ExpectedArrayValue, testutils.ExpectedMapValue:
 			return true
 		}
 	}
 	return false
 }
 
-func getRandomChildContainerIndexInArray(expectedValues test_utils.ExpectedArrayValue) (index int, found bool) {
+func getRandomChildContainerIndexInArray(expectedValues testutils.ExpectedArrayValue) (index int, found bool) {
 	indexes := make([]int, 0, len(expectedValues))
 	for i, v := range expectedValues {
 		v, _ = unwrapValue(v)
 		switch v.(type) {
-		case test_utils.ExpectedArrayValue, test_utils.ExpectedMapValue:
+		case testutils.ExpectedArrayValue, testutils.ExpectedMapValue:
 			indexes = append(indexes, i)
 		}
 	}
@@ -609,7 +609,7 @@ func checkStorageHealth(storage *atree.PersistentSlabStorage, rootSlabID atree.S
 	return true
 }
 
-func checkArrayDataLoss(expectedValues test_utils.ExpectedArrayValue, array *atree.Array) error {
+func checkArrayDataLoss(expectedValues testutils.ExpectedArrayValue, array *atree.Array) error {
 
 	// Check array has the same number of elements as values
 	if array.Count() != uint64(len(expectedValues)) {
@@ -622,7 +622,7 @@ func checkArrayDataLoss(expectedValues test_utils.ExpectedArrayValue, array *atr
 		if err != nil {
 			return fmt.Errorf("failed to get element at %d: %w", i, err)
 		}
-		equal, err := test_utils.ValueEqual(v, convertedValue)
+		equal, err := testutils.ValueEqual(v, convertedValue)
 		if err != nil {
 			return fmt.Errorf("failed to compare %s and %s: %w", v, convertedValue, err)
 		}
@@ -642,7 +642,7 @@ func checkArrayDataLoss(expectedValues test_utils.ExpectedArrayValue, array *atr
 }
 
 func checkArraySlab(array *atree.Array) error {
-	err := atree.VerifyArray(array, array.Address(), array.Type(), compareTypeInfo, test_utils.GetHashInput, true)
+	err := atree.VerifyArray(array, array.Address(), array.Type(), compareTypeInfo, testutils.GetHashInput, true)
 	if err != nil {
 		return err
 	}
@@ -651,7 +651,7 @@ func checkArraySlab(array *atree.Array) error {
 		array,
 		cborDecMode,
 		cborEncMode,
-		test_utils.DecodeStorable,
+		testutils.DecodeStorable,
 		decodeTypeInfo,
 		func(a, b atree.Storable) bool {
 			return reflect.DeepEqual(a, b)

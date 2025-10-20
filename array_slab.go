@@ -50,7 +50,7 @@ type ArraySlab interface {
 	PopIterate(SlabStorage, ArrayPopIterationFunc) error
 
 	Inlined() bool
-	Inlinable(maxInlineSize uint64) bool
+	Inlinable(maxInlineSize uint32) bool
 	Inline(SlabStorage) error
 	Uninline(SlabStorage) error
 }

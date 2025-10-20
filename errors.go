@@ -80,24 +80,24 @@ func (e *FatalError) Unwrap() error {
 type SliceOutOfBoundsError struct {
 	startIndex uint64
 	endIndex   uint64
-	min        uint64
-	max        uint64
+	minIndex   uint64
+	maxIndex   uint64
 }
 
 // NewSliceOutOfBoundsError constructs a SliceOutOfBoundsError.
-func NewSliceOutOfBoundsError(startIndex, endIndex, min, max uint64) error {
+func NewSliceOutOfBoundsError(startIndex, endIndex, minIndex, maxIndex uint64) error {
 	return NewUserError(
 		&SliceOutOfBoundsError{
 			startIndex: startIndex,
 			endIndex:   endIndex,
-			min:        min,
-			max:        max,
+			minIndex:   minIndex,
+			maxIndex:   maxIndex,
 		},
 	)
 }
 
 func (e *SliceOutOfBoundsError) Error() string {
-	return fmt.Sprintf("slice [%d:%d] is out of bounds with range %d-%d", e.startIndex, e.endIndex, e.min, e.max)
+	return fmt.Sprintf("slice [%d:%d] is out of bounds with range %d-%d", e.startIndex, e.endIndex, e.minIndex, e.maxIndex)
 }
 
 // InvalidSliceIndexError is returned when array slice index is invalid, such as startIndex > endIndex
@@ -123,24 +123,24 @@ func (e *InvalidSliceIndexError) Error() string {
 
 // IndexOutOfBoundsError is returned when get, insert or delete operation is attempted on an array index which is out of bounds
 type IndexOutOfBoundsError struct {
-	index uint64
-	min   uint64
-	max   uint64
+	index    uint64
+	minIndex uint64
+	maxIndex uint64
 }
 
 // NewIndexOutOfBoundsError constructs a IndexOutOfBoundsError
-func NewIndexOutOfBoundsError(index, min, max uint64) error {
+func NewIndexOutOfBoundsError(index, minIndex, maxIndex uint64) error {
 	return NewUserError(
 		&IndexOutOfBoundsError{
-			index: index,
-			min:   min,
-			max:   max,
+			index:    index,
+			minIndex: minIndex,
+			maxIndex: maxIndex,
 		},
 	)
 }
 
 func (e *IndexOutOfBoundsError) Error() string {
-	return fmt.Sprintf("index %d is outside required range (%d-%d)", e.index, e.min, e.max)
+	return fmt.Sprintf("index %d is outside required range (%d-%d)", e.index, e.minIndex, e.maxIndex)
 }
 
 // NotValueError is returned when we try to create Value objects from non-root slabs.

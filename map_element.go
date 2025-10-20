@@ -112,7 +112,7 @@ func newSingleElement(storage SlabStorage, address Address, key Value, value Val
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get key's storable")
 	}
 
-	vs, err := value.Storable(storage, address, maxInlineMapValueSize(uint64(ks.ByteSize())))
+	vs, err := value.Storable(storage, address, maxInlineMapValueSize(ks.ByteSize()))
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by Value interface.
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
@@ -179,7 +179,7 @@ func (e *singleElement) Set(
 	if equal {
 		existingMapValueStorable := e.value
 
-		valueStorable, err := value.Storable(storage, address, maxInlineMapValueSize(uint64(e.key.ByteSize())))
+		valueStorable, err := value.Storable(storage, address, maxInlineMapValueSize(e.key.ByteSize()))
 		if err != nil {
 			// Wrap err as external error (if needed) because err is returned by Value interface.
 			return nil, nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
@@ -355,7 +355,7 @@ func (e *inlineCollisionGroup) Set(
 	if level == 1 {
 		// Export oversized inline collision group to separate slab (external collision group)
 		// for first level collision.
-		if e.Size() > uint32(maxInlineMapElementSize) {
+		if e.Size() > maxInlineMapElementSize {
 
 			id, err := storage.GenerateSlabID(address)
 			if err != nil {
@@ -370,7 +370,7 @@ func (e *inlineCollisionGroup) Set(
 				header: MapSlabHeader{
 					slabID:   id,
 					size:     mapDataSlabPrefixSize + e.elements.Size(),
-					firstKey: e.elements.firstKey(),
+					firstKey: e.firstKey(),
 				},
 				elements:       e.elements, // elems shouldn't be copied
 				anySize:        true,
@@ -412,7 +412,7 @@ func (e *inlineCollisionGroup) Remove(storage SlabStorage, digester Digester, le
 
 	// If there is only one single element in this group, return the single element (no collision).
 	if e.elements.Count() == 1 {
-		elem, err := e.elements.Element(0)
+		elem, err := e.Element(0)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by elements.Element().
 			return nil, nil, nil, err
@@ -582,8 +582,8 @@ func (e *externalCollisionGroup) Remove(storage SlabStorage, digester Digester, 
 	// TODO: if element size < maxInlineMapElementSize, return inlineCollisionGroup
 
 	// If there is only one single element in this group, return the single element and remove external slab from storage.
-	if dataSlab.elements.Count() == 1 {
-		elem, err := dataSlab.elements.Element(0)
+	if dataSlab.Count() == 1 {
+		elem, err := dataSlab.Element(0)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by elements.Element().
 			return nil, nil, nil, err

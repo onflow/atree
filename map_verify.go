@@ -258,10 +258,10 @@ func (v *mapVerifier) verifyDataSlab(
 	}
 
 	// Verify slab's first key
-	if dataSlab.elements.firstKey() != dataSlab.header.firstKey {
+	if dataSlab.firstKey() != dataSlab.header.firstKey {
 		return 0, nil, nil, nil, NewFatalError(
 			fmt.Errorf("data slab %d header first key %d is wrong, want %d",
-				id, dataSlab.header.firstKey, dataSlab.elements.firstKey()))
+				id, dataSlab.header.firstKey, dataSlab.firstKey()))
 	}
 
 	// Verify that only root slab can be inlined
@@ -489,7 +489,7 @@ func (v *mapVerifier) verifyHkeyElements(
 
 		// Verify element size is <= inline size
 		if digestLevel == 0 {
-			if e.Size() > uint32(maxInlineMapElementSize) {
+			if e.Size() > maxInlineMapElementSize {
 				return 0, 0, NewFatalError(
 					fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
 						id, e, e.Size(), maxInlineMapElementSize))
@@ -588,7 +588,7 @@ func (v *mapVerifier) verifySingleElements(
 		}
 
 		// Verify element size is <= inline size
-		if e.Size() > uint32(maxInlineMapElementSize) {
+		if e.Size() > maxInlineMapElementSize {
 			return 0, 0, NewFatalError(
 				fmt.Errorf("data slab %d element %s size %d is too large, want < %d",
 					id, e, e.Size(), maxInlineMapElementSize))
@@ -622,7 +622,7 @@ func (v *mapVerifier) verifySingleElement(
 	err error,
 ) {
 	// Verify key storable's size is less than size limit
-	if e.key.ByteSize() > uint32(maxInlineMapKeySize) {
+	if e.key.ByteSize() > maxInlineMapKeySize {
 		return 0, 0, NewFatalError(
 			fmt.Errorf(
 				"map element key %s size %d exceeds size limit %d",
@@ -631,8 +631,8 @@ func (v *mapVerifier) verifySingleElement(
 	}
 
 	// Verify value storable's size is less than size limit
-	valueSizeLimit := maxInlineMapValueSize(uint64(e.key.ByteSize()))
-	if e.value.ByteSize() > uint32(valueSizeLimit) {
+	valueSizeLimit := maxInlineMapValueSize(e.key.ByteSize())
+	if e.value.ByteSize() > valueSizeLimit {
 		return 0, 0, NewFatalError(
 			fmt.Errorf(
 				"map element value %s size %d exceeds size limit %d",
@@ -664,7 +664,7 @@ func (v *mapVerifier) verifySingleElement(
 	case SlabIDStorable:
 		// Verify not-inlined value > inline size, or can't be inlined
 		if v.inlineEnabled {
-			err = verifyNotInlinedValueStatusAndSize(vv, uint32(valueSizeLimit))
+			err = verifyNotInlinedValueStatusAndSize(vv, valueSizeLimit)
 			if err != nil {
 				return 0, 0, err
 			}

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package test_utils
+package testutils
 
 import (
 	"fmt"
@@ -31,7 +31,7 @@ type ExpectedArrayValue []atree.Value
 
 var _ atree.Value = &ExpectedArrayValue{}
 
-func (v ExpectedArrayValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
+func (v ExpectedArrayValue) Storable(atree.SlabStorage, atree.Address, uint32) (atree.Storable, error) {
 	panic(atree.NewUnreachableError())
 }
 
@@ -41,7 +41,7 @@ type ExpectedMapValue map[atree.Value]atree.Value
 
 var _ atree.Value = &ExpectedMapValue{}
 
-func (v ExpectedMapValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
+func (v ExpectedMapValue) Storable(atree.SlabStorage, atree.Address, uint32) (atree.Storable, error) {
 	panic(atree.NewUnreachableError())
 }
 
@@ -57,7 +57,7 @@ func NewExpectedWrapperValue(value atree.Value) ExpectedWrapperValue {
 	return ExpectedWrapperValue{value}
 }
 
-func (v ExpectedWrapperValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
+func (v ExpectedWrapperValue) Storable(atree.SlabStorage, atree.Address, uint32) (atree.Storable, error) {
 	panic(atree.NewUnreachableError())
 }
 

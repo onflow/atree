@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/onflow/atree"
-	"github.com/onflow/atree/test_utils"
+	testutils "github.com/onflow/atree/test_utils"
 )
 
 const (
@@ -79,29 +79,29 @@ func generateSimpleValue(
 ) (expected atree.Value, actual atree.Value, err error) {
 	switch valueType {
 	case uint8Type:
-		v := test_utils.Uint8Value(r.Intn(math.MaxUint8)) // 255
+		v := testutils.Uint8Value(r.Intn(math.MaxUint8)) // 255
 		return v, v, nil
 
 	case uint16Type:
-		v := test_utils.Uint16Value(r.Intn(math.MaxUint16)) // 65535
+		v := testutils.Uint16Value(r.Intn(math.MaxUint16)) // 65535
 		return v, v, nil
 
 	case uint32Type:
-		v := test_utils.Uint32Value(r.Intn(math.MaxUint32)) // 4294967295
+		v := testutils.Uint32Value(r.Intn(math.MaxUint32)) // 4294967295
 		return v, v, nil
 
 	case uint64Type:
-		v := test_utils.Uint64Value(r.Intn(math.MaxInt)) // 9_223_372_036_854_775_807
+		v := testutils.Uint64Value(r.Intn(math.MaxInt)) // 9_223_372_036_854_775_807
 		return v, v, nil
 
 	case smallStringType:
 		slen := r.Intn(125)
-		v := test_utils.NewStringValue(randStr(slen))
+		v := testutils.NewStringValue(randStr(slen))
 		return v, v, nil
 
 	case largeStringType:
 		slen := r.Intn(125) + 1024/2
-		v := test_utils.NewStringValue(randStr(slen))
+		v := testutils.NewStringValue(randStr(slen))
 		return v, v, nil
 
 	default:
@@ -170,7 +170,7 @@ func randomWrapperValue(expected atree.Value, actual atree.Value) (atree.Value, 
 	)
 
 	if flagAlwaysUseWrapperValue || r.Intn(maxWrapperValueChoice) == useWrapperValue {
-		return test_utils.NewExpectedWrapperValue(expected), test_utils.NewSomeValue(actual)
+		return testutils.NewExpectedWrapperValue(expected), testutils.NewSomeValue(actual)
 	}
 
 	return expected, actual
@@ -217,7 +217,7 @@ func newArray(
 	address atree.Address,
 	length int,
 	nestedLevel int,
-) (test_utils.ExpectedArrayValue, *atree.Array, error) {
+) (testutils.ExpectedArrayValue, *atree.Array, error) {
 
 	typeInfo := newArrayTypeInfo()
 
@@ -226,7 +226,7 @@ func newArray(
 		return nil, nil, fmt.Errorf("failed to create new array: %w", err)
 	}
 
-	expectedValues := make(test_utils.ExpectedArrayValue, length)
+	expectedValues := make(testutils.ExpectedArrayValue, length)
 
 	for i := range expectedValues {
 		expectedValue, value, err := randomValue(storage, address, nestedLevel-1)
@@ -256,7 +256,7 @@ func newMap(
 	address atree.Address,
 	length int,
 	nestedLevel int,
-) (test_utils.ExpectedMapValue, *atree.OrderedMap, error) {
+) (testutils.ExpectedMapValue, *atree.OrderedMap, error) {
 
 	typeInfo := newMapTypeInfo()
 
@@ -265,7 +265,7 @@ func newMap(
 		return nil, nil, fmt.Errorf("failed to create new map: %w", err)
 	}
 
-	expectedValues := make(test_utils.ExpectedMapValue, length)
+	expectedValues := make(testutils.ExpectedMapValue, length)
 
 	for m.Count() < uint64(length) {
 		expectedKey, key, err := randomKey()
@@ -280,7 +280,7 @@ func newMap(
 
 		expectedValues[expectedKey] = expectedValue
 
-		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, key, value)
+		existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, key, value)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -307,7 +307,7 @@ func newComposite(
 	storage atree.SlabStorage,
 	address atree.Address,
 	nestedLevel int,
-) (test_utils.ExpectedMapValue, *atree.OrderedMap, error) {
+) (testutils.ExpectedMapValue, *atree.OrderedMap, error) {
 
 	compositeType := newCompositeTypeInfo()
 
@@ -316,11 +316,11 @@ func newComposite(
 		return nil, nil, fmt.Errorf("failed to create new map: %w", err)
 	}
 
-	expectedValues := make(test_utils.ExpectedMapValue)
+	expectedValues := make(testutils.ExpectedMapValue)
 
 	for _, name := range compositeType.getFieldNames() {
 
-		expectedKey, key := test_utils.NewStringValue(name), test_utils.NewStringValue(name)
+		expectedKey, key := testutils.NewStringValue(name), testutils.NewStringValue(name)
 
 		expectedValue, value, err := randomValue(storage, address, nestedLevel-1)
 		if err != nil {
@@ -329,7 +329,7 @@ func newComposite(
 
 		expectedValues[expectedKey] = expectedValue
 
-		existingStorable, err := m.Set(test_utils.CompareValue, test_utils.GetHashInput, key, value)
+		existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, key, value)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -346,7 +346,7 @@ func newComposite(
 	return expectedValues, m, nil
 }
 
-func unwrapValue(v atree.Value) (atree.Value, uint64) {
+func unwrapValue(v atree.Value) (atree.Value, uint32) {
 	switch v := v.(type) {
 	case atree.WrapperValue:
 		return v.UnwrapAtreeValue()

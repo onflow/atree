@@ -20,7 +20,7 @@ package atree
 
 import "fmt"
 
-type arrayStats struct {
+type ArrayStats struct {
 	Levels            uint64
 	ElementCount      uint64
 	MetaDataSlabCount uint64
@@ -28,12 +28,12 @@ type arrayStats struct {
 	StorableSlabCount uint64
 }
 
-func (s *arrayStats) SlabCount() uint64 {
+func (s *ArrayStats) SlabCount() uint64 {
 	return s.DataSlabCount + s.MetaDataSlabCount + s.StorableSlabCount
 }
 
 // GetArrayStats returns stats about array slabs.
-func GetArrayStats(a *Array) (arrayStats, error) {
+func GetArrayStats(a *Array) (ArrayStats, error) {
 	level := uint64(0)
 	metaDataSlabCount := uint64(0)
 	dataSlabCount := uint64(0)
@@ -52,7 +52,7 @@ func GetArrayStats(a *Array) (arrayStats, error) {
 			slab, err := getArraySlab(a.Storage, id)
 			if err != nil {
 				// Don't need to wrap error as external error because err is already categorized by getArraySlab().
-				return arrayStats{}, err
+				return ArrayStats{}, err
 			}
 
 			switch slab.(type) {
@@ -68,7 +68,7 @@ func GetArrayStats(a *Array) (arrayStats, error) {
 				for _, storable := range slab.ChildStorables() {
 					id, ok := storable.(SlabIDStorable)
 					if !ok {
-						return arrayStats{}, NewFatalError(fmt.Errorf("metadata slab's child storables are not of type SlabIDStorable"))
+						return ArrayStats{}, NewFatalError(fmt.Errorf("metadata slab's child storables are not of type SlabIDStorable"))
 					}
 					nextLevelIDs = append(nextLevelIDs, SlabID(id))
 				}
@@ -79,7 +79,7 @@ func GetArrayStats(a *Array) (arrayStats, error) {
 
 	}
 
-	return arrayStats{
+	return ArrayStats{
 		Levels:            level,
 		ElementCount:      a.Count(),
 		MetaDataSlabCount: metaDataSlabCount,

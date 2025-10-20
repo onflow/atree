@@ -1,38 +1,52 @@
-# .golangci.yml for github.com/onflow/atree
-
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
     - asciicheck
     - bidichk
     - copyloopvar
     - errcheck
-    # - forbidigo # TODO: enable forbidigo after adding non-default settings
     - gocritic
-    - gofmt
-    - goimports
-    - gosimple
     - govet
     - ineffassign
     - misspell
     - nilerr
+    - revive
     - staticcheck
-    - typecheck
     - unconvert
     - unused
-
+  settings:
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+        - singleCaseSwitch
+        - commentFormatting
+        - exitAfterDefer
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-
-linters-settings:
-  gocritic:
-    disabled-checks:
-      - ifElseChain        # style
-      - singleCaseSwitch   # style
-      - unslice            # false positives
-      - commentFormatting  # does not detect commented out code
-      - exitAfterDefer
-
-  goimports:
-    local-prefixes: github.com/onflow/atree
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/onflow/atree
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

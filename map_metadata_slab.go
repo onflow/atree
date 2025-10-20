@@ -677,24 +677,24 @@ func (m *MapMetaDataSlab) BorrowFromRight(slab Slab) error {
 }
 
 func (m MapMetaDataSlab) IsFull() bool {
-	return m.header.size > uint32(maxThreshold)
+	return m.header.size > maxThreshold
 }
 
 func (m MapMetaDataSlab) IsUnderflow() (uint32, bool) {
-	if uint32(minThreshold) > m.header.size {
-		return uint32(minThreshold) - m.header.size, true
+	if minThreshold > m.header.size {
+		return minThreshold - m.header.size, true
 	}
 	return 0, false
 }
 
 func (m *MapMetaDataSlab) CanLendToLeft(size uint32) bool {
 	n := uint32(math.Ceil(float64(size) / mapSlabHeaderSize))
-	return m.header.size-mapSlabHeaderSize*n > uint32(minThreshold)
+	return m.header.size-mapSlabHeaderSize*n > minThreshold
 }
 
 func (m *MapMetaDataSlab) CanLendToRight(size uint32) bool {
 	n := uint32(math.Ceil(float64(size) / mapSlabHeaderSize))
-	return m.header.size-mapSlabHeaderSize*n > uint32(minThreshold)
+	return m.header.size-mapSlabHeaderSize*n > minThreshold
 }
 
 // Inline operations
@@ -703,7 +703,7 @@ func (m *MapMetaDataSlab) Inlined() bool {
 	return false
 }
 
-func (m *MapMetaDataSlab) Inlinable(_ uint64) bool {
+func (m *MapMetaDataSlab) Inlinable(_ uint32) bool {
 	return false
 }
 

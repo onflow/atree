@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package test_utils
+package testutils
 
 import (
 	"github.com/onflow/atree"

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package test_utils
+package testutils
 
 import (
 	"encoding/binary"
@@ -57,7 +57,7 @@ func (v Uint8Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v Uint8Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (atree.Storable, error) {
+func (v Uint8Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint32) (atree.Storable, error) {
 	return v, nil
 }
 
@@ -122,7 +122,7 @@ func (v Uint16Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v Uint16Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (atree.Storable, error) {
+func (v Uint16Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint32) (atree.Storable, error) {
 	return v, nil
 }
 
@@ -186,7 +186,7 @@ func (v Uint32Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v Uint32Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (atree.Storable, error) {
+func (v Uint32Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint32) (atree.Storable, error) {
 	return v, nil
 }
 
@@ -270,7 +270,7 @@ func (v Uint64Value) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
 	return v, nil
 }
 
-func (v Uint64Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint64) (atree.Storable, error) {
+func (v Uint64Value) Storable(_ atree.SlabStorage, _ atree.Address, _ uint32) (atree.Storable, error) {
 	return v, nil
 }
 
@@ -383,8 +383,8 @@ func (v StringValue) Copy() atree.Storable {
 	return v
 }
 
-func (v StringValue) Storable(storage atree.SlabStorage, address atree.Address, maxInlineSize uint64) (atree.Storable, error) {
-	if uint64(v.ByteSize()) > maxInlineSize {
+func (v StringValue) Storable(storage atree.SlabStorage, address atree.Address, maxInlineSize uint32) (atree.Storable, error) {
+	if v.ByteSize() > maxInlineSize {
 		return atree.NewStorableSlab(storage, address, v)
 	}
 
@@ -471,7 +471,7 @@ func NewSomeValue(v atree.Value) SomeValue {
 func (v SomeValue) Storable(
 	storage atree.SlabStorage,
 	address atree.Address,
-	maxInlineSize uint64,
+	maxInlineSize uint32,
 ) (atree.Storable, error) {
 
 	// SomeStorable returned from this function can be encoded in two ways:
@@ -489,7 +489,7 @@ func (v SomeValue) Storable(
 
 	// Reduce maxInlineSize for non-SomeValue to make sure
 	// that SomeStorable wrapper is always encoded inline.
-	maxInlineSize -= uint64(someStorableEncodedPrefixSize)
+	maxInlineSize -= someStorableEncodedPrefixSize
 
 	nonSomeValueStorable, err := nonSomeValue.Storable(
 		storage,
@@ -539,19 +539,19 @@ func (v SomeValue) String() string {
 	return fmt.Sprintf("SomeValue(%s)", v.Value)
 }
 
-func (v SomeValue) UnwrapAtreeValue() (atree.Value, uint64) {
+func (v SomeValue) UnwrapAtreeValue() (atree.Value, uint32) {
 	nonSomeValue, nestedLevels := v.nonSomeValue()
 
 	someStorableEncodedPrefixSize := getSomeStorableEncodedPrefixSize(nestedLevels)
 
 	wv, ok := nonSomeValue.(atree.WrapperValue)
 	if !ok {
-		return nonSomeValue, uint64(someStorableEncodedPrefixSize)
+		return nonSomeValue, someStorableEncodedPrefixSize
 	}
 
 	unwrappedValue, wrapperSize := wv.UnwrapAtreeValue()
 
-	return unwrappedValue, wrapperSize + uint64(someStorableEncodedPrefixSize)
+	return unwrappedValue, wrapperSize + someStorableEncodedPrefixSize
 }
 
 // nonSomeValue returns a non-SomeValue and nested levels of SomeValue reached
@@ -592,7 +592,7 @@ func NewMutableValue(storableSize uint32) *MutableValue {
 	}
 }
 
-func (v *MutableValue) Storable(atree.SlabStorage, atree.Address, uint64) (atree.Storable, error) {
+func (v *MutableValue) Storable(atree.SlabStorage, atree.Address, uint32) (atree.Storable, error) {
 	return v.storable, nil
 }
 
@@ -613,7 +613,7 @@ func NewHashableMap(m *atree.OrderedMap) *HashableMap {
 	return &HashableMap{m}
 }
 
-func (v *HashableMap) Storable(storage atree.SlabStorage, address atree.Address, maxInlineSize uint64) (atree.Storable, error) {
+func (v *HashableMap) Storable(storage atree.SlabStorage, address atree.Address, maxInlineSize uint32) (atree.Storable, error) {
 	return v.m.Storable(storage, address, maxInlineSize)
 }
 

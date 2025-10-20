@@ -305,14 +305,17 @@ func (d keysByDigest) Less(i, j int) bool {
 }
 
 func TestMapSetAndGet(t *testing.T) {
+	atree.SetThreshold(256)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("unique keys", func(t *testing.T) {
+		t.Parallel()
+
 		// Map tree will be 4 levels, with ~35 metadata slabs, and ~270 data slabs when
 		// slab size is 256 bytes, number of map elements is 2048,
 		// keys are strings of 16 bytes of random content, values are 0-2048,
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
 
 		const (
 			mapCount      = 2048
@@ -347,8 +350,7 @@ func TestMapSetAndGet(t *testing.T) {
 	})
 
 	t.Run("replicate keys", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const (
 			mapCount      = 2048
@@ -399,8 +401,7 @@ func TestMapSetAndGet(t *testing.T) {
 	})
 
 	t.Run("random key and value", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const (
 			mapCount         = 2048
@@ -432,122 +433,11 @@ func TestMapSetAndGet(t *testing.T) {
 
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
 	})
-
-	t.Run("unique keys with hash collision", func(t *testing.T) {
-
-		const (
-			mapCount      = 1024
-			keyStringSize = 16
-		)
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
-
-		savedMaxCollisionLimitPerDigest := atree.MaxCollisionLimitPerDigest
-		atree.MaxCollisionLimitPerDigest = uint32(math.Ceil(float64(mapCount) / 10))
-		defer func() {
-			atree.MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
-		}()
-
-		r := newRand(t)
-
-		digesterBuilder := &mockDigesterBuilder{}
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		i := uint64(0)
-		for len(keyValues) < mapCount {
-			k := testutils.NewStringValue(randStr(r, keyStringSize))
-			v := testutils.Uint64Value(i)
-			keyValues[k] = v
-			i++
-
-			digests := []atree.Digest{
-				atree.Digest(i % 10),
-			}
-			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
-		}
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		storage := newTestPersistentStorage(t)
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		for k, v := range keyValues {
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-		}
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
-
-	t.Run("replicate keys with hash collision", func(t *testing.T) {
-		const (
-			mapCount      = 1024
-			keyStringSize = 16
-		)
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
-
-		savedMaxCollisionLimitPerDigest := atree.MaxCollisionLimitPerDigest
-		atree.MaxCollisionLimitPerDigest = uint32(math.Ceil(float64(mapCount) / 10))
-		defer func() {
-			atree.MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
-		}()
-
-		r := newRand(t)
-
-		digesterBuilder := &mockDigesterBuilder{}
-		keyValues := make(map[atree.Value]atree.Value, mapCount)
-		i := uint64(0)
-		for len(keyValues) < mapCount {
-			k := testutils.NewStringValue(randStr(r, keyStringSize))
-			v := testutils.Uint64Value(i)
-			keyValues[k] = v
-			i++
-
-			digests := []atree.Digest{
-				atree.Digest(i % 10),
-			}
-			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
-		}
-
-		typeInfo := testutils.NewSimpleTypeInfo(42)
-		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-		storage := newTestPersistentStorage(t)
-
-		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
-		require.NoError(t, err)
-
-		for k, v := range keyValues {
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
-			require.NoError(t, err)
-			require.Nil(t, existingStorable)
-		}
-
-		// Overwrite values
-		for k, v := range keyValues {
-			oldValue := v.(testutils.Uint64Value)
-			newValue := testutils.Uint64Value(uint64(oldValue) + mapCount)
-
-			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
-			require.NoError(t, err)
-			require.NotNil(t, existingStorable)
-
-			existingValue, err := existingStorable.StoredValue(storage)
-			require.NoError(t, err)
-			testValueEqual(t, oldValue, existingValue)
-
-			keyValues[k] = newValue
-		}
-
-		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
-	})
 }
 
 func TestMapGetKeyNotFound(t *testing.T) {
+	t.Parallel()
+
 	t.Run("no collision", func(t *testing.T) {
 		const mapCount = uint64(1024)
 
@@ -671,6 +561,7 @@ func TestMapGetKeyNotFound(t *testing.T) {
 }
 
 func TestMapHas(t *testing.T) {
+	t.Parallel()
 
 	t.Run("no error", func(t *testing.T) {
 		const (
@@ -782,7 +673,9 @@ func testMapRemoveElement(t *testing.T, m *atree.OrderedMap, k atree.Value, expe
 func TestMapRemove(t *testing.T) {
 
 	atree.SetThreshold(512)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	const (
 		mapCount             = 2048
@@ -818,6 +711,8 @@ func TestMapRemove(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			typeInfo := testutils.NewSimpleTypeInfo(42)
 			address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 			storage := newTestPersistentStorage(t)
@@ -858,9 +753,7 @@ func TestMapRemove(t *testing.T) {
 		// - last collision element is inlined after all other collision elements are removed
 		// - data slab overflows with inlined collision element
 		// - data slab splits
-
-		atree.SetThreshold(512)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const (
 			numOfElementsBeforeCollision = uint64(54)
@@ -957,8 +850,7 @@ func TestMapRemove(t *testing.T) {
 		// - data slab overflows with inlined collision element
 		// - data slab splits
 
-		atree.SetThreshold(512)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const (
 			numOfElementsWithCollision    = uint64(10)
@@ -1034,6 +926,8 @@ func TestMapRemove(t *testing.T) {
 	})
 
 	t.Run("no collision key not found", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(1024)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -1070,6 +964,8 @@ func TestMapRemove(t *testing.T) {
 	})
 
 	t.Run("collision key not found", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(256)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -1115,8 +1011,10 @@ func TestMapRemove(t *testing.T) {
 }
 
 func TestReadOnlyMapIterate(t *testing.T) {
+	t.Parallel()
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -1159,6 +1057,8 @@ func TestReadOnlyMapIterate(t *testing.T) {
 	})
 
 	t.Run("no collision", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount      = 2048
 			keyStringSize = 16
@@ -1234,6 +1134,8 @@ func TestReadOnlyMapIterate(t *testing.T) {
 	})
 
 	t.Run("collision", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount        = 1024
 			keyStringSize   = 16
@@ -1311,16 +1213,19 @@ func TestReadOnlyMapIterate(t *testing.T) {
 func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	storage := newTestPersistentStorage(t)
-	digesterBuilder := atree.NewDefaultDigesterBuilder()
-
-	var mutationError *atree.ReadOnlyIteratorElementMutationError
 
 	t.Run("mutate inlined map key from IterateReadOnly", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
 		parentMap, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
@@ -1337,6 +1242,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate elements and modify key
 		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyWithMutationCallback(
 			func(k atree.Value, _ atree.Value) (resume bool, err error) {
 				c, ok := k.(*atree.OrderedMap)
@@ -1365,6 +1271,11 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate inlined map value from IterateReadOnly", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
 		parentMap, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
@@ -1381,6 +1292,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate elements and modify value
 		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyWithMutationCallback(
 			func(_ atree.Value, v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -1409,6 +1321,11 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate inlined map key from IterateReadOnlyKeys", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
 		parentMap, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
@@ -1425,6 +1342,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate and modify key
 		var keyMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyKeysWithMutationCallback(
 			func(v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -1449,6 +1367,11 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate inlined map value from IterateReadOnlyValues", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
 		parentMap, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
@@ -1465,6 +1388,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate and modify value
 		var valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyValuesWithMutationCallback(
 			func(v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -1489,6 +1413,11 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate not inlined map key from IterateReadOnly", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
 		parentMap, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
@@ -1515,6 +1444,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate elements and modify key
 		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyWithMutationCallback(
 			func(k atree.Value, _ atree.Value) (resume bool, err error) {
 				c, ok := k.(*atree.OrderedMap)
@@ -1544,6 +1474,11 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate not inlined map value from IterateReadOnly", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
 		parentMap, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
@@ -1569,6 +1504,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate elements and modify value
 		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyWithMutationCallback(
 			func(_ atree.Value, v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -1598,6 +1534,11 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate not inlined map key from IterateReadOnlyKeys", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
 		parentMap, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
@@ -1624,6 +1565,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate and modify key
 		var keyMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyKeysWithMutationCallback(
 			func(v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -1649,6 +1591,11 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate not inlined map value from IterateReadOnlyValues", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+		digesterBuilder := atree.NewDefaultDigesterBuilder()
+
 		parentMap, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
 		require.NoError(t, err)
 
@@ -1674,6 +1621,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate and modify value
 		var valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyValuesWithMutationCallback(
 			func(v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -1699,6 +1647,9 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate inlined map key in collision from IterateReadOnly", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
 		digesterBuilder := &mockDigesterBuilder{}
 
 		// childMapKey1 {}
@@ -1729,6 +1680,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate element and modify key
 		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyWithMutationCallback(
 			func(k atree.Value, _ atree.Value) (resume bool, err error) {
 				c, ok := k.(*atree.OrderedMap)
@@ -1757,6 +1709,10 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate inlined map value in collision from IterateReadOnly", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+
 		digesterBuilder := &mockDigesterBuilder{}
 
 		// childMap1 {}
@@ -1784,6 +1740,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate elements and modify values
 		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyWithMutationCallback(
 			func(_ atree.Value, v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -1812,6 +1769,10 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate inlined map key in collision from IterateReadOnlyKeys", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+
 		digesterBuilder := &mockDigesterBuilder{}
 
 		// childMapKey1 {}
@@ -1842,6 +1803,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate and modify keys
 		var keyMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyKeysWithMutationCallback(
 			func(v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -1866,6 +1828,10 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate inlined map value in collision from IterateReadOnlyValues", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+
 		digesterBuilder := &mockDigesterBuilder{}
 
 		// childMap1 {}
@@ -1893,6 +1859,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate and modify values
 		var valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyValuesWithMutationCallback(
 			func(v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -1917,6 +1884,10 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate not inlined map key in collision from IterateReadOnly", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+
 		digesterBuilder := &mockDigesterBuilder{}
 
 		// childMapKey1 {}
@@ -1966,6 +1937,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate elements and modify keys
 		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyWithMutationCallback(
 			func(k atree.Value, _ atree.Value) (resume bool, err error) {
 				c, ok := k.(*atree.OrderedMap)
@@ -1995,6 +1967,10 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate not inlined map value in collision from IterateReadOnly", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+
 		digesterBuilder := &mockDigesterBuilder{}
 
 		// childMap1 {}
@@ -2040,6 +2016,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate elements and modify values
 		var keyMutationCallbackCalled, valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyWithMutationCallback(
 			func(_ atree.Value, v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -2069,6 +2046,10 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate not inlined map key in collision from IterateReadOnlyKeys", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+
 		digesterBuilder := &mockDigesterBuilder{}
 
 		// childMapKey1 {}
@@ -2118,6 +2099,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate and modify keys
 		var keyMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyKeysWithMutationCallback(
 			func(v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -2143,6 +2125,10 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 	})
 
 	t.Run("mutate not inlined map value in collision from IterateReadOnlyValues", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+
 		digesterBuilder := &mockDigesterBuilder{}
 
 		// childMap1 {}
@@ -2188,6 +2174,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 
 		// Iterate and modify values
 		var valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentMap.IterateReadOnlyValuesWithMutationCallback(
 			func(v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.OrderedMap)
@@ -2216,6 +2203,7 @@ func TestMutateElementFromReadOnlyMapIterator(t *testing.T) {
 func TestMutableMapIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -2545,6 +2533,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("mutate collision primitive values, 1 level", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -2606,6 +2596,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("mutate collision primitive values, 4 levels", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -2667,6 +2659,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is data slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(15)
 		)
@@ -2751,6 +2745,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(35)
 		)
@@ -2835,6 +2831,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is data slab, split slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(1)
@@ -2930,6 +2928,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, split slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(35)
 			childMapCount        = uint64(1)
@@ -3025,6 +3025,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, merge slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(10)
@@ -3120,6 +3122,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("mutate collision inlined container, 1 level", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -3202,6 +3206,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("mutate collision inlined container, 4 levels", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -3284,6 +3290,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount        = uint64(15)
 			valueStringSize = 16
@@ -3404,6 +3412,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("uninline inlined container, root is data slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(1)
@@ -3498,6 +3508,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("uninline inlined container, root is metadata slab, merge slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(5)
@@ -3592,6 +3604,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("inline uninlined container, root is data slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(35)
@@ -3686,6 +3700,8 @@ func TestMutableMapIterate(t *testing.T) {
 	})
 
 	t.Run("inline uninlined container, root is data slab, split slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(35)
@@ -3783,6 +3799,7 @@ func TestMutableMapIterate(t *testing.T) {
 func TestMutableMapIterateKeys(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -4111,6 +4128,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("mutate collision primitive values, 1 level", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -4171,6 +4190,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("mutate collision primitive values, 4 levels", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -4231,6 +4252,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is data slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(15)
 		)
@@ -4317,6 +4340,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(35)
 		)
@@ -4403,6 +4428,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is data slab, split slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(1)
@@ -4500,6 +4527,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, split slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(35)
 			childMapCount        = uint64(1)
@@ -4597,6 +4626,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, merge slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(10)
@@ -4694,6 +4725,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("mutate collision inlined container, 1 level", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -4778,6 +4811,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("mutate collision inlined container, 4 levels", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -4861,6 +4896,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount        = uint64(15)
 			valueStringSize = 16
@@ -4985,6 +5022,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("uninline inlined container, root is data slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(1)
@@ -5081,6 +5120,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("uninline inlined container, root is metadata slab, merge slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(5)
@@ -5177,6 +5218,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("inline uninlined container, root is data slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(35)
@@ -5273,6 +5316,8 @@ func TestMutableMapIterateKeys(t *testing.T) {
 	})
 
 	t.Run("inline uninlined container, root is data slab, split slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(35)
@@ -5372,6 +5417,7 @@ func TestMutableMapIterateKeys(t *testing.T) {
 func TestMutableMapIterateValues(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -5706,6 +5752,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("mutate collision primitive values, 1 level", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -5768,6 +5816,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("mutate collision primitive values, 4 levels", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -5830,6 +5880,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is data slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(15)
 		)
@@ -5915,6 +5967,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(35)
 		)
@@ -6000,6 +6054,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is data slab, split slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(1)
@@ -6096,6 +6152,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, split slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(35)
 			childMapCount        = uint64(1)
@@ -6192,6 +6250,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, merge slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(10)
@@ -6288,6 +6348,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("mutate collision inlined container, 1 level", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -6371,6 +6433,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("mutate collision inlined container, 4 levels", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount = uint64(1024)
 		)
@@ -6454,6 +6518,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount        = uint64(15)
 			valueStringSize = 16
@@ -6576,6 +6642,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("uninline inlined container, root is data slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(1)
@@ -6671,6 +6739,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("uninline inlined container, root is metadata slab, merge slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(5)
@@ -6766,6 +6836,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("inline uninlined container, root is data slab, no slab operation", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(35)
@@ -6861,6 +6933,8 @@ func TestMutableMapIterateValues(t *testing.T) {
 	})
 
 	t.Run("inline uninlined container, root is data slab, split slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = uint64(15)
 			childMapCount        = uint64(35)
@@ -7122,15 +7196,17 @@ func testMapRandomHashCollision(t *testing.T, r *rand.Rand, maxDigestLevel int) 
 func TestMapHashCollision(t *testing.T) {
 
 	atree.SetThreshold(512)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	const maxDigestLevel = 4
-
-	r := newRand(t)
 
 	for hashLevel := 1; hashLevel <= maxDigestLevel; hashLevel++ {
 		name := fmt.Sprintf("deterministic max hash level %d", hashLevel)
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r := newRand(t)
 			testMapDeterministicHashCollision(t, r, hashLevel)
 		})
 	}
@@ -7138,6 +7214,8 @@ func TestMapHashCollision(t *testing.T) {
 	for hashLevel := 1; hashLevel <= maxDigestLevel; hashLevel++ {
 		name := fmt.Sprintf("random max hash level %d", hashLevel)
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			r := newRand(t)
 			testMapRandomHashCollision(t, r, hashLevel)
 		})
 	}
@@ -7270,10 +7348,16 @@ func TestMapSetRemoveRandomValues(t *testing.T) {
 
 func TestMapDecodeV0(t *testing.T) {
 
+	atree.SetThreshold(256)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
+
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
 
 		mapSlabID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1})
 
@@ -7326,8 +7410,7 @@ func TestMapDecodeV0(t *testing.T) {
 	})
 
 	t.Run("dataslab as root", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -7399,9 +7482,7 @@ func TestMapDecodeV0(t *testing.T) {
 	})
 
 	t.Run("has pointer no collision", func(t *testing.T) {
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -7600,9 +7681,7 @@ func TestMapDecodeV0(t *testing.T) {
 	})
 
 	t.Run("inline collision 1 level", func(t *testing.T) {
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -7774,9 +7853,7 @@ func TestMapDecodeV0(t *testing.T) {
 	})
 
 	t.Run("inline collision 2 levels", func(t *testing.T) {
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -7998,9 +8075,7 @@ func TestMapDecodeV0(t *testing.T) {
 	})
 
 	t.Run("external collision", func(t *testing.T) {
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		digesterBuilder := &mockDigesterBuilder{}
 
@@ -8218,11 +8293,16 @@ func TestMapDecodeV0(t *testing.T) {
 }
 
 func TestMapEncodeDecode(t *testing.T) {
+	atree.SetThreshold(256)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
 
 		storage := newTestBasicStorage(t)
 
@@ -8284,8 +8364,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("dataslab as root", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -8373,9 +8452,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("has inlined array", func(t *testing.T) {
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -8607,8 +8684,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root data slab, inlined child map of same type", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo := testutils.NewSimpleTypeInfo(43)
 
@@ -8794,8 +8870,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root data slab, inlined child map of different type", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo1 := testutils.NewSimpleTypeInfo(43)
 		childMapTypeInfo2 := testutils.NewSimpleTypeInfo(44)
@@ -8985,8 +9060,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root data slab, multiple levels of inlined child map of same type", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo := testutils.NewSimpleTypeInfo(43)
 
@@ -9247,8 +9321,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root data slab, multiple levels of inlined child map of different type", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo1 := testutils.NewSimpleTypeInfo(43)
 		childMapTypeInfo2 := testutils.NewSimpleTypeInfo(44)
@@ -9519,8 +9592,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root metadata slab, inlined child map of same type", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo := testutils.NewSimpleTypeInfo(43)
 
@@ -10003,8 +10075,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root metadata slab, inlined child map of different type", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo1 := testutils.NewSimpleTypeInfo(43)
 		childMapTypeInfo2 := testutils.NewSimpleTypeInfo(44)
@@ -10484,9 +10555,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("inline collision 1 level", func(t *testing.T) {
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -10671,9 +10740,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("inline collision 2 levels", func(t *testing.T) {
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -10908,9 +10975,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("external collision", func(t *testing.T) {
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -11138,8 +11203,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("pointer to child map", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -11317,8 +11381,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("pointer to grand child map", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -11546,9 +11609,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("pointer to child array", func(t *testing.T) {
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -11798,9 +11859,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("pointer to grand child array", func(t *testing.T) {
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -11989,9 +12048,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("pointer to storable slab", func(t *testing.T) {
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		// Create and populate map in memory
 		storage := newTestBasicStorage(t)
@@ -12130,8 +12187,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("same composite with one field", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo := testutils.NewCompositeTypeInfo(43)
 
@@ -12289,8 +12345,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("same composite with two fields (same order)", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo := testutils.NewCompositeTypeInfo(43)
 
@@ -12467,8 +12522,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("same composite with two fields (different order)", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo := testutils.NewCompositeTypeInfo(43)
 
@@ -12648,8 +12702,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("same composite with different fields", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo := testutils.NewCompositeTypeInfo(43)
 
@@ -12903,8 +12956,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("same composite with different number of fields", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo := testutils.NewCompositeTypeInfo(43)
 
@@ -13102,8 +13154,7 @@ func TestMapEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("different composite", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		childMapTypeInfo1 := testutils.NewCompositeTypeInfo(43)
 		childMapTypeInfo2 := testutils.NewCompositeTypeInfo(44)
@@ -13375,6 +13426,7 @@ func TestMapEncodeDecodeRandomValues(t *testing.T) {
 }
 
 func TestMapStoredValue(t *testing.T) {
+	t.Parallel()
 
 	const mapCount = 4096
 
@@ -13437,6 +13489,8 @@ func TestMapStoredValue(t *testing.T) {
 func TestMapPopIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -13460,6 +13514,8 @@ func TestMapPopIterate(t *testing.T) {
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(10)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -13511,6 +13567,8 @@ func TestMapPopIterate(t *testing.T) {
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = 4096
 
 		r := newRand(t)
@@ -13707,8 +13765,14 @@ func TestEmptyMap(t *testing.T) {
 }
 
 func TestMapFromBatchData(t *testing.T) {
+	atree.SetThreshold(256)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 
 		m, err := atree.NewMap(
@@ -13745,7 +13809,7 @@ func TestMapFromBatchData(t *testing.T) {
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
-		atree.SetThreshold(1024)
+		t.Parallel()
 
 		const mapCount = uint64(10)
 
@@ -13806,8 +13870,7 @@ func TestMapFromBatchData(t *testing.T) {
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const mapCount = uint64(4096)
 
@@ -13865,8 +13928,7 @@ func TestMapFromBatchData(t *testing.T) {
 	})
 
 	t.Run("rebalance two data slabs", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const mapCount = uint64(10)
 
@@ -13930,8 +13992,7 @@ func TestMapFromBatchData(t *testing.T) {
 	})
 
 	t.Run("merge two data slabs", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const mapCount = uint64(8)
 
@@ -13999,8 +14060,7 @@ func TestMapFromBatchData(t *testing.T) {
 	})
 
 	t.Run("random", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const mapCount = 4096
 
@@ -14062,14 +14122,12 @@ func TestMapFromBatchData(t *testing.T) {
 	})
 
 	t.Run("collision", func(t *testing.T) {
+		// This subtest can't run in parallel because it changes MaxCollisionLimitPerDigest.
 
 		const (
 			mapCount                   = uint64(1024)
 			maxCollisionLimitPerDigest = uint32(1024 / 2)
 		)
-
-		atree.SetThreshold(512)
-		defer atree.SetThreshold(1024)
 
 		savedMaxCollisionLimitPerDigest := atree.MaxCollisionLimitPerDigest
 		defer func() {
@@ -14147,12 +14205,11 @@ func TestMapFromBatchData(t *testing.T) {
 	})
 
 	t.Run("data slab too large", func(t *testing.T) {
+		t.Parallel()
+
 		// Slab size must not exceed maxThreshold.
 		// We cannot make this problem happen after Atree Issue #193
 		// was fixed by PR #194 & PR #197. This test is to catch regressions.
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
 
 		r := newRand(t)
 
@@ -14230,8 +14287,9 @@ func TestMapFromBatchData(t *testing.T) {
 }
 
 func TestMapNestedStorables(t *testing.T) {
+	t.Parallel()
 
-	t.Run("testutils.SomeValue", func(t *testing.T) {
+	t.Run("SomeValue", func(t *testing.T) {
 
 		const mapCount = 4096
 
@@ -14261,7 +14319,7 @@ func TestMapNestedStorables(t *testing.T) {
 		testMap(t, storage, typeInfo, address, m, keyValues, nil, true)
 	})
 
-	t.Run("atree.Array", func(t *testing.T) {
+	t.Run("Array", func(t *testing.T) {
 
 		const mapCount = 4096
 
@@ -14336,9 +14394,13 @@ func TestMapMaxInlineElement(t *testing.T) {
 func TestMapString(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("small", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(3)
 
 		digesterBuilder := &mockDigesterBuilder{}
@@ -14364,6 +14426,8 @@ func TestMapString(t *testing.T) {
 	})
 
 	t.Run("large", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(30)
 
 		digesterBuilder := &mockDigesterBuilder{}
@@ -14392,9 +14456,13 @@ func TestMapString(t *testing.T) {
 func TestMapSlabDump(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("small", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(3)
 
 		digesterBuilder := &mockDigesterBuilder{}
@@ -14424,6 +14492,8 @@ func TestMapSlabDump(t *testing.T) {
 	})
 
 	t.Run("large", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(30)
 
 		digesterBuilder := &mockDigesterBuilder{}
@@ -14455,6 +14525,8 @@ func TestMapSlabDump(t *testing.T) {
 	})
 
 	t.Run("inline collision", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(30)
 
 		digesterBuilder := &mockDigesterBuilder{}
@@ -14486,6 +14558,8 @@ func TestMapSlabDump(t *testing.T) {
 	})
 
 	t.Run("external collision", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(30)
 
 		digesterBuilder := &mockDigesterBuilder{}
@@ -14517,6 +14591,7 @@ func TestMapSlabDump(t *testing.T) {
 	})
 
 	t.Run("key overflow", func(t *testing.T) {
+		t.Parallel()
 
 		digesterBuilder := &mockDigesterBuilder{}
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -14544,6 +14619,7 @@ func TestMapSlabDump(t *testing.T) {
 	})
 
 	t.Run("value overflow", func(t *testing.T) {
+		t.Parallel()
 
 		digesterBuilder := &mockDigesterBuilder{}
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -14729,7 +14805,9 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 func TestMapLoadedValueIterator(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -14745,6 +14823,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 	}
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		storage := newTestPersistentStorage(t)
 
 		digesterBuilder := &mockDigesterBuilder{}
@@ -14761,6 +14841,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with simple values", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
@@ -14784,6 +14866,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
@@ -14808,6 +14892,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values in collision group", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			// Create parent map with 3 collision groups, 2 elements in each group.
@@ -14833,6 +14919,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values in external collision group", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			// Create parent map with 3 external collision group, 4 elements in the group.
@@ -14858,6 +14946,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values, unload value from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
@@ -14890,6 +14980,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with long string keys, unload key from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
@@ -14935,6 +15027,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values in collision group, unload value from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			// Create parent map with 3 collision groups, 2 elements in each group.
@@ -14968,6 +15062,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values in external collision group, unload value from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
@@ -15001,6 +15097,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values in external collision group, unload external slab from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
@@ -15056,6 +15154,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values, unload composite value from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
@@ -15089,6 +15189,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with long string key, unload key from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
@@ -15135,6 +15237,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values in collision group, unload value from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			// Create parent map with 3 collision groups, 2 elements in each group.
@@ -15169,6 +15273,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values in external collision group, unload value from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
@@ -15203,6 +15309,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values in external collision group, unload external slab from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
@@ -15257,6 +15365,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values, unload value in the middle", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
@@ -15295,6 +15405,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with long string key, unload key in the middle", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
@@ -15346,6 +15458,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values in collision group, unload value in the middle", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			// Create parent map with 3 collision groups, 2 elements in each group.
@@ -15386,6 +15500,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values in external collision group, unload value in the middle", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
@@ -15429,6 +15545,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values in external collision group, unload external slab in the middle", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			// Create parent map with 3 external collision groups, 4 elements in the group.
@@ -15483,6 +15601,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values, unload composite elements during iteration", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 3
@@ -15527,6 +15647,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with simple and composite values, unloading composite value", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			const mapCount = 3
 
 			// Create a map with nested composite value at specified index
@@ -15564,6 +15686,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with simple values", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
@@ -15587,6 +15711,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
@@ -15611,6 +15737,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload value from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
@@ -15643,6 +15771,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload values from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
@@ -15676,6 +15806,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload value in the middle", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
@@ -15712,6 +15844,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with simple and composite values, unload composite value", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			const mapCount = 20
 
 			// Create a map with nested composite value at specified index
@@ -15748,6 +15882,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab, unload data slab from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
@@ -15795,6 +15931,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab, unload data slab from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
@@ -15844,6 +15982,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab, unload data slab in the middle", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 20
@@ -15903,6 +16043,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab, unload non-root metadata slab from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 200
@@ -15944,6 +16086,8 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab, unload non-root metadata slab from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const mapCount = 200
@@ -15984,6 +16128,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload composite value at random index", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
 
 			storage := newTestPersistentStorage(t)
 
@@ -16026,6 +16171,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random data slab", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
 
 			storage := newTestPersistentStorage(t)
 
@@ -16115,6 +16261,7 @@ func TestMapLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random slab", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
 
 			storage := newTestPersistentStorage(t)
 
@@ -16540,12 +16687,15 @@ func getMapMetaDataSlabCount(storage *atree.PersistentSlabStorage) int {
 }
 
 func TestMaxInlineMapValueSize(t *testing.T) {
+	atree.SetThreshold(256)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("small key", func(t *testing.T) {
-		// atree.Value has larger max inline size when key is less than max map key size.
+		t.Parallel()
 
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		// atree.Value has larger max inline size when key is less than max map key size.
 
 		mapCount := 2
 		keyStringSize := 16                                       // Key size is less than max map key size.
@@ -16580,10 +16730,9 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 	})
 
 	t.Run("max size key", func(t *testing.T) {
-		// atree.Value max size is about half of max map element size when key is exactly max map key size.
+		t.Parallel()
 
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		// atree.Value max size is about half of max map element size when key is exactly max map key size.
 
 		mapCount := 1
 		keyStringSize := atree.MaxInlineMapKeySize() - 2         // Key size is exactly max map key size (2 bytes is string encoding overhead).
@@ -16618,12 +16767,11 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 	})
 
 	t.Run("large key", func(t *testing.T) {
+		t.Parallel()
+
 		// atree.Value has larger max inline size when key is more than max map key size because
 		// when key size exceeds max map key size, it is stored in a separate storable slab,
 		// and atree.SlabIDStorable is stored as key in the map, which is 19 bytes.
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
 
 		mapCount := 1
 		keyStringSize := atree.MaxInlineMapKeySize() + 10         // key size is more than max map key size
@@ -16659,6 +16807,8 @@ func TestMaxInlineMapValueSize(t *testing.T) {
 }
 
 func TestMapID(t *testing.T) {
+	t.Parallel()
+
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -16673,6 +16823,8 @@ func TestMapID(t *testing.T) {
 }
 
 func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
+	t.Parallel()
+
 	const (
 		mapCount            = uint64(3)
 		keyStringSize       = 16
@@ -16736,9 +16888,13 @@ func TestSlabSizeWhenResettingMutableStorableInMap(t *testing.T) {
 func TestChildMapInlinabilityInParentMap(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("parent is root data slab, with one child map", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount        = 1
 			keyStringSize   = 9
@@ -16912,6 +17068,8 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 	})
 
 	t.Run("parent is root data slab, with two child maps", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount        = 2
 			keyStringSize   = 9
@@ -17147,6 +17305,8 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 	})
 
 	t.Run("parent is root metadata slab, with four child maps", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount        = 4
 			keyStringSize   = 9
@@ -17349,9 +17509,13 @@ func TestChildMapInlinabilityInParentMap(t *testing.T) {
 func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("parent is root data slab, one child map, one grand child map, changes to grand child map triggers child map slab to become standalone slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount        = 1
 			keyStringSize   = 9
@@ -17632,6 +17796,8 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 	})
 
 	t.Run("parent is root data slab, one child map, one grand child map, changes to grand child map triggers grand child array slab to become standalone slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount             = 1
 			keyStringSize        = 9
@@ -17916,6 +18082,8 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 	})
 
 	t.Run("parent is root data slab, two child map, one grand child map each, changes to child map triggers child map slab to become standalone slab", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount        = 2
 			keyStringSize   = 4
@@ -18363,6 +18531,8 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 	})
 
 	t.Run("parent is root metadata slab, with four child maps, each child map has grand child maps", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount        = 4
 			keyStringSize   = 4
@@ -18686,6 +18856,8 @@ func TestNestedThreeLevelChildMapInlinabilityInParentMap(t *testing.T) {
 }
 
 func TestChildMapWhenParentMapIsModified(t *testing.T) {
+	t.Parallel()
+
 	const (
 		mapCount        = 2
 		keyStringSize   = 4
@@ -19040,10 +19212,14 @@ func getInlinedChildMapsFromParentMap(t *testing.T, address atree.Address, paren
 }
 
 func TestMapSetReturnedValue(t *testing.T) {
+	t.Parallel()
+
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("child array is not inlined", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(2)
 
 		storage := newTestPersistentStorage(t)
@@ -19108,6 +19284,8 @@ func TestMapSetReturnedValue(t *testing.T) {
 	})
 
 	t.Run("child array is inlined", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(2)
 
 		storage := newTestPersistentStorage(t)
@@ -19165,6 +19343,8 @@ func TestMapSetReturnedValue(t *testing.T) {
 	})
 
 	t.Run("child map is not inlined", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(2)
 
 		storage := newTestPersistentStorage(t)
@@ -19233,6 +19413,8 @@ func TestMapSetReturnedValue(t *testing.T) {
 	})
 
 	t.Run("child map is inlined", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(2)
 
 		storage := newTestPersistentStorage(t)
@@ -19294,10 +19476,14 @@ func TestMapSetReturnedValue(t *testing.T) {
 }
 
 func TestMapRemoveReturnedValue(t *testing.T) {
+	t.Parallel()
+
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("child array is not inlined", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(2)
 
 		storage := newTestPersistentStorage(t)
@@ -19362,6 +19548,8 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 	})
 
 	t.Run("child array is inlined", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(2)
 
 		storage := newTestPersistentStorage(t)
@@ -19419,6 +19607,8 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 	})
 
 	t.Run("child map is not inlined", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(2)
 
 		storage := newTestPersistentStorage(t)
@@ -19487,6 +19677,8 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 	})
 
 	t.Run("child map is inlined", func(t *testing.T) {
+		t.Parallel()
+
 		const mapCount = uint64(2)
 
 		storage := newTestPersistentStorage(t)
@@ -19548,10 +19740,13 @@ func TestMapRemoveReturnedValue(t *testing.T) {
 }
 
 func TestMapWithOutdatedCallback(t *testing.T) {
+	t.Parallel()
+
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("overwritten child array", func(t *testing.T) {
+		t.Parallel()
 
 		storage := newTestPersistentStorage(t)
 
@@ -19610,6 +19805,7 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 	})
 
 	t.Run("removed child array", func(t *testing.T) {
+		t.Parallel()
 
 		storage := newTestPersistentStorage(t)
 
@@ -19670,11 +19866,15 @@ func TestMapWithOutdatedCallback(t *testing.T) {
 }
 
 func TestMapSetType(t *testing.T) {
+	t.Parallel()
+
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	newTypeInfo := testutils.NewSimpleTypeInfo(43)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		storage := newTestPersistentStorage(t)
 
 		m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
@@ -19699,6 +19899,8 @@ func TestMapSetType(t *testing.T) {
 	})
 
 	t.Run("data slab root", func(t *testing.T) {
+		t.Parallel()
+
 		storage := newTestPersistentStorage(t)
 
 		m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
@@ -19732,6 +19934,8 @@ func TestMapSetType(t *testing.T) {
 	})
 
 	t.Run("metadata slab root", func(t *testing.T) {
+		t.Parallel()
+
 		storage := newTestPersistentStorage(t)
 
 		m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
@@ -19765,6 +19969,8 @@ func TestMapSetType(t *testing.T) {
 	})
 
 	t.Run("inlined in parent container root data slab", func(t *testing.T) {
+		t.Parallel()
+
 		storage := newTestPersistentStorage(t)
 
 		parentMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
@@ -19811,6 +20017,8 @@ func TestMapSetType(t *testing.T) {
 	})
 
 	t.Run("inlined in parent container non-root data slab", func(t *testing.T) {
+		t.Parallel()
+
 		storage := newTestPersistentStorage(t)
 
 		parentMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
@@ -19977,6 +20185,7 @@ func newRandomDigest(r *rand.Rand) atree.Digest {
 }
 
 func TestMapDataSlabIterate(t *testing.T) {
+	t.Parallel()
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -19985,6 +20194,7 @@ func TestMapDataSlabIterate(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
 
 		baseStorage := testutils.NewInMemBaseStorage()
 		storage := newTestPersistentStorageWithBaseStorage(t, baseStorage)
@@ -20011,6 +20221,8 @@ func TestMapDataSlabIterate(t *testing.T) {
 	})
 
 	t.Run("no collision", func(t *testing.T) {
+		t.Parallel()
+
 		const (
 			mapCount        = 10
 			valueStringSize = 10
@@ -20097,6 +20309,8 @@ func TestMapDataSlabIterate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			const (
 				valueStringSize = 10
 			)
@@ -20195,4 +20409,116 @@ func testMapDataSlabIterate(
 	require.NoError(t, err)
 
 	require.Equal(t, i, len(expectedKeyAndValues))
+}
+
+func TestMapSetAndGetWithHashCollision(t *testing.T) {
+	const (
+		mapCount = 1024
+	)
+
+	atree.SetThreshold(256)
+
+	savedMaxCollisionLimitPerDigest := atree.MaxCollisionLimitPerDigest
+	atree.MaxCollisionLimitPerDigest = uint32(math.Ceil(float64(mapCount) / 10))
+
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+		atree.MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
+	})
+
+	t.Run("unique keys with hash collision", func(t *testing.T) {
+		t.Parallel()
+
+		const (
+			keyStringSize = 16
+		)
+
+		r := newRand(t)
+
+		digesterBuilder := &mockDigesterBuilder{}
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		i := uint64(0)
+		for len(keyValues) < mapCount {
+			k := testutils.NewStringValue(randStr(r, keyStringSize))
+			v := testutils.Uint64Value(i)
+			keyValues[k] = v
+			i++
+
+			digests := []atree.Digest{
+				atree.Digest(i % 10),
+			}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+		}
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
+
+	t.Run("replicate keys with hash collision", func(t *testing.T) {
+		t.Parallel()
+
+		const (
+			keyStringSize = 16
+		)
+
+		r := newRand(t)
+
+		digesterBuilder := &mockDigesterBuilder{}
+		keyValues := make(map[atree.Value]atree.Value, mapCount)
+		i := uint64(0)
+		for len(keyValues) < mapCount {
+			k := testutils.NewStringValue(randStr(r, keyStringSize))
+			v := testutils.Uint64Value(i)
+			keyValues[k] = v
+			i++
+
+			digests := []atree.Digest{
+				atree.Digest(i % 10),
+			}
+			digesterBuilder.On("Digest", k).Return(mockDigester{digests})
+		}
+
+		typeInfo := testutils.NewSimpleTypeInfo(42)
+		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+		storage := newTestPersistentStorage(t)
+
+		m, err := atree.NewMap(storage, address, digesterBuilder, typeInfo)
+		require.NoError(t, err)
+
+		for k, v := range keyValues {
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+			require.NoError(t, err)
+			require.Nil(t, existingStorable)
+		}
+
+		// Overwrite values
+		for k, v := range keyValues {
+			oldValue := v.(testutils.Uint64Value)
+			newValue := testutils.Uint64Value(uint64(oldValue) + mapCount)
+
+			existingStorable, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k, newValue)
+			require.NoError(t, err)
+			require.NotNil(t, existingStorable)
+
+			existingValue, err := existingStorable.StoredValue(storage)
+			require.NoError(t, err)
+			testValueEqual(t, oldValue, existingValue)
+
+			keyValues[k] = newValue
+		}
+
+		testMap(t, storage, typeInfo, address, m, keyValues, nil, false)
+	})
 }

@@ -56,9 +56,8 @@ import (
 // Tests for input sizes greater than 128 bytes can help BLAKE3 implementations
 // that rely on input size to determine which optimized code path to execute.
 
-var countBLAKE3 uint64 // count calls to Hash256 (doesn't double count zeebo & luke)
-
 func TestBLAKE3Vectors(t *testing.T) {
+	t.Parallel()
 
 	// Official BLAKE3 test vector checks 35 digests using
 	// 35 sizes of input from the same repeating pattern
@@ -104,6 +103,7 @@ func makeBLAKE3InputData(length int) []byte {
 // is used with other tests for size 0 and some
 // sizes > 64KiB.
 func TestBLAKE3Regression(t *testing.T) {
+	t.Parallel()
 
 	// Create 64 KiB of test data from SHA-512 using the simplest
 	// form of SHA-512 feedback loop (nothing-up-my-sleeve).
@@ -216,6 +216,5 @@ func countedAndComparedBLAKE3(t *testing.T, data []byte) [32]byte {
 		t.Errorf("BLAKE3zeebo 0x%x != BLAKE3luke 0x%x", digest, digest2)
 	}
 
-	countBLAKE3++
 	return digest
 }

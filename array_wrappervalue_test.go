@@ -69,10 +69,10 @@ func getWrappedValue(t *testing.T, v atree.Value, expected atree.Value) (atree.V
 	return v, expected
 }
 
-type newValueFunc func(atree.SlabStorage) (value atree.Value, expected atree.Value)
+type newValueFunc func(*rand.Rand, atree.SlabStorage) (value atree.Value, expected atree.Value)
 
 var nilValueFunc = func() newValueFunc {
-	return func(_ atree.SlabStorage) (atree.Value, atree.Value) {
+	return func(*rand.Rand, atree.SlabStorage) (atree.Value, atree.Value) {
 		return nil, nil
 	}
 }
@@ -81,14 +81,14 @@ var newWrapperValueFunc = func(
 	nestedLevels int,
 	newWrappedValue newValueFunc,
 ) newValueFunc {
-	return func(storage atree.SlabStorage) (value atree.Value, expected atree.Value) {
-		wrappedValue, expectedWrappedValue := newWrappedValue(storage)
+	return func(r *rand.Rand, storage atree.SlabStorage) (value atree.Value, expected atree.Value) {
+		wrappedValue, expectedWrappedValue := newWrappedValue(r, storage)
 		return newWrapperValue(nestedLevels, wrappedValue, expectedWrappedValue)
 	}
 }
 
-var newRandomUint64ValueFunc = func(r *rand.Rand) newValueFunc {
-	return func(atree.SlabStorage) (value atree.Value, expected atree.Value) {
+var newRandomUint64ValueFunc = func() newValueFunc {
+	return func(r *rand.Rand, _ atree.SlabStorage) (value atree.Value, expected atree.Value) {
 		v := testutils.Uint64Value(r.Intn(1844674407370955161))
 		return v, v
 	}
@@ -101,14 +101,14 @@ var newArrayValueFunc = func(
 	arrayCount int,
 	newValue newValueFunc,
 ) newValueFunc {
-	return func(storage atree.SlabStorage) (value atree.Value, expected atree.Value) {
+	return func(r *rand.Rand, storage atree.SlabStorage) (value atree.Value, expected atree.Value) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
 		expectedValues := make([]atree.Value, arrayCount)
 
 		for i := range expectedValues {
-			v, expectedV := newValue(storage)
+			v, expectedV := newValue(r, storage)
 
 			err := array.Append(v)
 			require.NoError(t, err)
@@ -120,17 +120,17 @@ var newArrayValueFunc = func(
 	}
 }
 
-type modifyValueFunc func(atree.SlabStorage, atree.Value, atree.Value) (value atree.Value, expected atree.Value, err error)
+type modifyValueFunc func(*rand.Rand, atree.SlabStorage, atree.Value, atree.Value) (value atree.Value, expected atree.Value, err error)
 
 var replaceWithNewValueFunc = func(newValue newValueFunc) modifyValueFunc {
-	return func(storage atree.SlabStorage, _ atree.Value, _ atree.Value) (atree.Value, atree.Value, error) {
-		v, expected := newValue(storage)
+	return func(r *rand.Rand, storage atree.SlabStorage, _ atree.Value, _ atree.Value) (atree.Value, atree.Value, error) {
+		v, expected := newValue(r, storage)
 		return v, expected, nil
 	}
 }
 
-var modifyRandomUint64ValueFunc = func(r *rand.Rand) modifyValueFunc {
-	return replaceWithNewValueFunc(newRandomUint64ValueFunc(r))
+var modifyRandomUint64ValueFunc = func() modifyValueFunc {
+	return replaceWithNewValueFunc(newRandomUint64ValueFunc())
 }
 
 var modifyWrapperValueFunc = func(
@@ -139,13 +139,14 @@ var modifyWrapperValueFunc = func(
 	modifyWrappedValue modifyValueFunc,
 ) modifyValueFunc {
 	return func(
+		r *rand.Rand,
 		storage atree.SlabStorage,
 		v atree.Value,
 		expected atree.Value,
 	) (modifiedValue atree.Value, expectedModifiedValue atree.Value, err error) {
 		wrappedValue, expectedWrappedValue := getWrappedValue(t, v, expected)
 
-		newWrappedValue, expectedNewWrappedValue, err := modifyWrappedValue(storage, wrappedValue, expectedWrappedValue)
+		newWrappedValue, expectedNewWrappedValue, err := modifyWrappedValue(r, storage, wrappedValue, expectedWrappedValue)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -162,6 +163,7 @@ var modifyArrayValueFunc = func(
 	modifyValueFunc modifyValueFunc,
 ) modifyValueFunc {
 	return func(
+		r *rand.Rand,
 		storage atree.SlabStorage,
 		originalValue atree.Value,
 		expectedOrigianlValue atree.Value,
@@ -186,7 +188,7 @@ var modifyArrayValueFunc = func(
 		v, err := array.Get(uint64(index))
 		require.NoError(t, err)
 
-		modifiedV, expectedModifiedV, err := modifyValueFunc(storage, v, expectedValues[index])
+		modifiedV, expectedModifiedV, err := modifyValueFunc(r, storage, v, expectedValues[index])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -284,7 +286,6 @@ type arrayWrapperValueTestCase struct {
 
 func newArrayWrapperValueTestCases(
 	t *testing.T,
-	r *rand.Rand,
 	address atree.Address,
 	typeInfo atree.TypeInfo,
 ) []arrayWrapperValueTestCase {
@@ -297,8 +298,8 @@ func newArrayWrapperValueTestCases(
 			modifyName:                    "modify wrapped primitive",
 			wrapperValueNestedLevels:      1,
 			mustSetModifiedElementInArray: true,
-			newElement:                    newWrapperValueFunc(1, newRandomUint64ValueFunc(r)),
-			modifyElement:                 modifyWrapperValueFunc(t, 1, modifyRandomUint64ValueFunc(r)),
+			newElement:                    newWrapperValueFunc(1, newRandomUint64ValueFunc()),
+			modifyElement:                 modifyWrapperValueFunc(t, 1, modifyRandomUint64ValueFunc()),
 		},
 
 		// Test arrays [SomeValue(SomeValue(uint64))]
@@ -307,8 +308,8 @@ func newArrayWrapperValueTestCases(
 			modifyName:                    "modify wrapped primitive",
 			wrapperValueNestedLevels:      2,
 			mustSetModifiedElementInArray: true,
-			newElement:                    newWrapperValueFunc(2, newRandomUint64ValueFunc(r)),
-			modifyElement:                 modifyWrapperValueFunc(t, 2, modifyRandomUint64ValueFunc(r)),
+			newElement:                    newWrapperValueFunc(2, newRandomUint64ValueFunc()),
+			modifyElement:                 modifyWrapperValueFunc(t, 2, modifyRandomUint64ValueFunc()),
 		},
 
 		// Test arrays [SomeValue([uint64]))]
@@ -317,8 +318,8 @@ func newArrayWrapperValueTestCases(
 			modifyName:                    "modify wrapped array",
 			wrapperValueNestedLevels:      1,
 			mustSetModifiedElementInArray: false,
-			newElement:                    newWrapperValueFunc(1, newArrayValueFunc(t, address, typeInfo, 2, newRandomUint64ValueFunc(r))),
-			modifyElement:                 modifyWrapperValueFunc(t, 1, modifyArrayValueFunc(t, true, modifyRandomUint64ValueFunc(r))),
+			newElement:                    newWrapperValueFunc(1, newArrayValueFunc(t, address, typeInfo, 2, newRandomUint64ValueFunc())),
+			modifyElement:                 modifyWrapperValueFunc(t, 1, modifyArrayValueFunc(t, true, modifyRandomUint64ValueFunc())),
 		},
 
 		// Test arrays [SomeValue(SomeValue([uint64])))]
@@ -327,8 +328,8 @@ func newArrayWrapperValueTestCases(
 			modifyName:                    "modify wrapped array",
 			wrapperValueNestedLevels:      2,
 			mustSetModifiedElementInArray: false,
-			newElement:                    newWrapperValueFunc(2, newArrayValueFunc(t, address, typeInfo, 2, newRandomUint64ValueFunc(r))),
-			modifyElement:                 modifyWrapperValueFunc(t, 2, modifyArrayValueFunc(t, true, modifyRandomUint64ValueFunc(r))),
+			newElement:                    newWrapperValueFunc(2, newArrayValueFunc(t, address, typeInfo, 2, newRandomUint64ValueFunc())),
+			modifyElement:                 modifyWrapperValueFunc(t, 2, modifyArrayValueFunc(t, true, modifyRandomUint64ValueFunc())),
 		},
 
 		// Test arrays [SomeValue([SomeValue(uint64)]))]
@@ -337,8 +338,8 @@ func newArrayWrapperValueTestCases(
 			modifyName:                    "modify wrapped array",
 			wrapperValueNestedLevels:      1,
 			mustSetModifiedElementInArray: false,
-			newElement:                    newWrapperValueFunc(1, newArrayValueFunc(t, address, typeInfo, 2, newWrapperValueFunc(1, newRandomUint64ValueFunc(r)))),
-			modifyElement:                 modifyWrapperValueFunc(t, 1, modifyArrayValueFunc(t, true, modifyWrapperValueFunc(t, 1, modifyRandomUint64ValueFunc(r)))),
+			newElement:                    newWrapperValueFunc(1, newArrayValueFunc(t, address, typeInfo, 2, newWrapperValueFunc(1, newRandomUint64ValueFunc()))),
+			modifyElement:                 modifyWrapperValueFunc(t, 1, modifyArrayValueFunc(t, true, modifyWrapperValueFunc(t, 1, modifyRandomUint64ValueFunc()))),
 		},
 
 		// Test arrays [SomeValue(SomeValue([SomeValue(SomeValue(uint64))])))]
@@ -347,8 +348,8 @@ func newArrayWrapperValueTestCases(
 			modifyName:                    "modify wrapped array",
 			wrapperValueNestedLevels:      2,
 			mustSetModifiedElementInArray: false,
-			newElement:                    newWrapperValueFunc(2, newArrayValueFunc(t, address, typeInfo, 2, newWrapperValueFunc(2, newRandomUint64ValueFunc(r)))),
-			modifyElement:                 modifyWrapperValueFunc(t, 2, modifyArrayValueFunc(t, true, modifyWrapperValueFunc(t, 2, modifyRandomUint64ValueFunc(r)))),
+			newElement:                    newWrapperValueFunc(2, newArrayValueFunc(t, address, typeInfo, 2, newWrapperValueFunc(2, newRandomUint64ValueFunc()))),
+			modifyElement:                 modifyWrapperValueFunc(t, 2, modifyArrayValueFunc(t, true, modifyWrapperValueFunc(t, 2, modifyRandomUint64ValueFunc()))),
 		},
 
 		// Test arrays [SomeValue([SomeValue([SomeValue(uint64)])]))] and modify innermost array
@@ -373,7 +374,7 @@ func newArrayWrapperValueTestCases(
 							2,
 							newWrapperValueFunc(
 								1,
-								newRandomUint64ValueFunc(r)))))),
+								newRandomUint64ValueFunc()))))),
 			modifyElement: modifyWrapperValueFunc(
 				t,
 				1,
@@ -389,7 +390,7 @@ func newArrayWrapperValueTestCases(
 							modifyWrapperValueFunc(
 								t,
 								1,
-								modifyRandomUint64ValueFunc(r)))))),
+								modifyRandomUint64ValueFunc()))))),
 		},
 
 		// Test arrays [SomeValue([SomeValue([SomeValue(uint64)])]))] and remove element from middle array
@@ -414,7 +415,7 @@ func newArrayWrapperValueTestCases(
 							2,
 							newWrapperValueFunc(
 								1,
-								newRandomUint64ValueFunc(r)))))),
+								newRandomUint64ValueFunc()))))),
 			modifyElement: modifyWrapperValueFunc(
 				t,
 				1,
@@ -445,7 +446,7 @@ func newArrayWrapperValueTestCases(
 							2,
 							newWrapperValueFunc(
 								1,
-								newRandomUint64ValueFunc(r)))))),
+								newRandomUint64ValueFunc()))))),
 			modifyElement: modifyWrapperValueFunc(
 				t,
 				1,
@@ -462,7 +463,7 @@ func newArrayWrapperValueTestCases(
 								2,
 								newWrapperValueFunc(
 									1,
-									newRandomUint64ValueFunc(r))))))),
+									newRandomUint64ValueFunc())))))),
 		},
 	}
 }
@@ -474,9 +475,9 @@ func newArrayWrapperValueTestCases(
 func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
-
-	r := newRand(t)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -494,7 +495,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 		{name: "large array", arrayCount: largeArrayCount},
 	}
 
-	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
+	testCases := newArrayWrapperValueTestCases(t, address, typeInfo)
 
 	for _, tc := range testCases {
 
@@ -508,6 +509,9 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 			}
 
 			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+
+				r := newRand(t)
 
 				storage := newTestPersistentStorage(t)
 
@@ -519,7 +523,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 				// Append WrapperValue to array
 				expectedValues := make([]atree.Value, arrayCount)
 				for i := range expectedValues {
-					v, expectedV := tc.newElement(storage)
+					v, expectedV := tc.newElement(r, storage)
 
 					err := array.Append(v)
 					require.NoError(t, err)
@@ -545,7 +549,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 					testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
 
 					// Modify element
-					newV, newExpectedV, err := tc.modifyElement(storage, v, expected)
+					newV, newExpectedV, err := tc.modifyElement(r, storage, v, expected)
 					require.NoError(t, err)
 
 					if tc.mustSetModifiedElementInArray {
@@ -586,9 +590,9 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
-
-	r := newRand(t)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -606,7 +610,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 		{name: "large array", arrayCount: largeArrayCount},
 	}
 
-	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
+	testCases := newArrayWrapperValueTestCases(t, address, typeInfo)
 
 	for _, tc := range testCases {
 
@@ -620,6 +624,9 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 			}
 
 			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+
+				r := newRand(t)
 
 				storage := newTestPersistentStorage(t)
 
@@ -631,7 +638,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 				// Insert WrapperValue in reverse order to array
 				expectedValues := make([]atree.Value, arrayCount)
 				for i := len(expectedValues) - 1; i >= 0; i-- {
-					v, expectedV := tc.newElement(storage)
+					v, expectedV := tc.newElement(r, storage)
 
 					err := array.Insert(0, v)
 					require.NoError(t, err)
@@ -657,7 +664,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 					testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
 
 					// Modify element
-					newV, newExpectedV, err := tc.modifyElement(storage, v, expected)
+					newV, newExpectedV, err := tc.modifyElement(r, storage, v, expected)
 					require.NoError(t, err)
 
 					if tc.mustSetModifiedElementInArray {
@@ -698,9 +705,9 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 // - setting modified WrapperValue
 func TestArrayWrapperValueSetAndModify(t *testing.T) {
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
-
-	r := newRand(t)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -718,7 +725,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 		{name: "large array", arrayCount: largeArrayCount},
 	}
 
-	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
+	testCases := newArrayWrapperValueTestCases(t, address, typeInfo)
 
 	for _, tc := range testCases {
 
@@ -732,6 +739,9 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 			}
 
 			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+
+				r := newRand(t)
 
 				storage := newTestPersistentStorage(t)
 
@@ -743,7 +753,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 				// Insert WrapperValue to array
 				expectedValues := make([]atree.Value, arrayCount)
 				for i := range expectedValues {
-					v, expectedV := tc.newElement(storage)
+					v, expectedV := tc.newElement(r, storage)
 
 					err := array.Insert(array.Count(), v)
 					require.NoError(t, err)
@@ -759,7 +769,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 
 				// Set new WrapperValue in array
 				for i := range expectedValues {
-					v, expected := tc.newElement(storage)
+					v, expected := tc.newElement(r, storage)
 
 					testSetElementInArray(t, storage, array, i, v, expectedValues[i])
 
@@ -784,7 +794,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 					testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
 
 					// Modify element
-					newV, newExpectedV, err := tc.modifyElement(storage, v, expected)
+					newV, newExpectedV, err := tc.modifyElement(r, storage, v, expected)
 					require.NoError(t, err)
 
 					if tc.mustSetModifiedElementInArray {
@@ -824,9 +834,9 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 // - also test setting new elements before removal
 func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
-
-	r := newRand(t)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -862,7 +872,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 		{name: fmt.Sprintf("remove %d element", smallArrayCount/2), removeElementCount: smallArrayCount / 2},
 	}
 
-	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
+	testCases := newArrayWrapperValueTestCases(t, address, typeInfo)
 
 	for _, tc := range testCases {
 
@@ -890,6 +900,9 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 					}
 
 					t.Run(name, func(t *testing.T) {
+						t.Parallel()
+
+						r := newRand(t)
 
 						storage := newTestPersistentStorage(t)
 
@@ -901,7 +914,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 						// Insert WrapperValue to array
 						expectedValues := make([]atree.Value, arrayCount)
 						for i := range expectedValues {
-							v, expectedV := tc.newElement(storage)
+							v, expectedV := tc.newElement(r, storage)
 
 							err := array.Insert(array.Count(), v)
 							require.NoError(t, err)
@@ -928,7 +941,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 								testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
 
 								// Modify element
-								newV, newExpectedV, err := tc.modifyElement(storage, v, expected)
+								newV, newExpectedV, err := tc.modifyElement(r, storage, v, expected)
 								require.NoError(t, err)
 
 								if tc.mustSetModifiedElementInArray {
@@ -988,9 +1001,9 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 // - also test setting new elements before removal
 func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
-
-	r := newRand(t)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -1026,7 +1039,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 		{name: fmt.Sprintf("remove %d element", smallArrayCount/2), removeElementCount: smallArrayCount / 2},
 	}
 
-	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
+	testCases := newArrayWrapperValueTestCases(t, address, typeInfo)
 
 	for _, tc := range testCases {
 
@@ -1054,6 +1067,9 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 					}
 
 					t.Run(name, func(t *testing.T) {
+						t.Parallel()
+
+						r := newRand(t)
 
 						storage := newTestPersistentStorage(t)
 
@@ -1066,7 +1082,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 						// Insert WrapperValue to array
 						for i := range expectedValues {
-							v, expectedV := tc.newElement(storage)
+							v, expectedV := tc.newElement(r, storage)
 
 							err := array.Insert(array.Count(), v)
 							require.NoError(t, err)
@@ -1082,7 +1098,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 						// Set WrapperValue in array
 						for i := range expectedValues {
-							v, expectedV := tc.newElement(storage)
+							v, expectedV := tc.newElement(r, storage)
 
 							testSetElementInArray(t, storage, array, i, v, expectedValues[i])
 
@@ -1108,7 +1124,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 								testWrapperValueLevels(t, tc.wrapperValueNestedLevels, v)
 
 								// Modify element
-								newV, newExpectedV, err := tc.modifyElement(storage, v, expected)
+								newV, newExpectedV, err := tc.modifyElement(r, storage, v, expected)
 								require.NoError(t, err)
 
 								if tc.mustSetModifiedElementInArray {
@@ -1164,9 +1180,9 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
-
-	r := newRand(t)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -1192,7 +1208,7 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 		{name: "", testModifyElement: false},
 	}
 
-	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
+	testCases := newArrayWrapperValueTestCases(t, address, typeInfo)
 
 	for _, tc := range testCases {
 
@@ -1215,6 +1231,9 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 				}
 
 				t.Run(name, func(t *testing.T) {
+					t.Parallel()
+
+					r := newRand(t)
 
 					storage := newTestPersistentStorage(t)
 
@@ -1225,7 +1244,7 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 
 					// Insert WrapperValue to array
 					for i := range expectedValues {
-						v, expectedV := tc.newElement(storage)
+						v, expectedV := tc.newElement(r, storage)
 
 						err := array.Insert(array.Count(), v)
 						require.NoError(t, err)
@@ -1259,7 +1278,7 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 
 						// Test modifying elements that don't need to reset in parent container.
 						if testModifyElement {
-							_, _, err := tc.modifyElement(storage, next, expected)
+							_, _, err := tc.modifyElement(r, storage, next, expected)
 							var targetErr *atree.ReadOnlyIteratorElementMutationError
 							require.ErrorAs(t, err, &targetErr)
 						}
@@ -1276,9 +1295,9 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 
 func TestArrayWrapperValueIterate(t *testing.T) {
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
-
-	r := newRand(t)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -1304,7 +1323,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 		{name: "", testModifyElement: false},
 	}
 
-	testCases := newArrayWrapperValueTestCases(t, r, address, typeInfo)
+	testCases := newArrayWrapperValueTestCases(t, address, typeInfo)
 
 	for _, tc := range testCases {
 
@@ -1329,6 +1348,9 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 				}
 
 				t.Run(name, func(t *testing.T) {
+					t.Parallel()
+
+					r := newRand(t)
 
 					storage := newTestPersistentStorage(t)
 
@@ -1339,7 +1361,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 
 					// Insert WrapperValue to array
 					for i := range expectedValues {
-						v, expectedV := tc.newElement(storage)
+						v, expectedV := tc.newElement(r, storage)
 
 						err := array.Insert(array.Count(), v)
 						require.NoError(t, err)
@@ -1373,7 +1395,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 
 						// Test modifying container elements.
 						if testModifyElement {
-							_, newExpectedV, err := tc.modifyElement(storage, next, expected)
+							_, newExpectedV, err := tc.modifyElement(r, storage, next, expected)
 							require.NoError(t, err)
 
 							expectedValues[count] = newExpectedV
@@ -1811,7 +1833,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 	newElementFuncs := []newValueFunc{
 		// testutils.SomeValue(uint64)
-		newWrapperValueFunc(1, newRandomUint64ValueFunc(r)),
+		newWrapperValueFunc(1, newRandomUint64ValueFunc()),
 
 		// testutils.SomeValue([testutils.SomeValue(uint64)])
 		newWrapperValueFunc(
@@ -1823,7 +1845,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 				r.Intn(4),
 				newWrapperValueFunc(
 					1,
-					newRandomUint64ValueFunc(r)))),
+					newRandomUint64ValueFunc()))),
 
 		// testutils.SomeValue([testutils.SomeValue([testutils.SomeValue(uint64)])])
 		newWrapperValueFunc(
@@ -1842,7 +1864,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 						r.Intn(4),
 						newWrapperValueFunc(
 							1,
-							newRandomUint64ValueFunc(r)))))),
+							newRandomUint64ValueFunc()))))),
 	}
 
 	storage := newTestPersistentStorage(t)
@@ -1864,7 +1886,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 		for range appendCount {
 			newValue := newElementFuncs[r.Intn(len(newElementFuncs))]
-			v, expected := newValue(storage)
+			v, expected := newValue(r, storage)
 
 			err = array.Append(v)
 			require.NoError(t, err)
@@ -1914,7 +1936,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 		for range insertCount {
 			newValue := newElementFuncs[r.Intn(len(newElementFuncs))]
-			v, expected := newValue(storage)
+			v, expected := newValue(r, storage)
 
 			index := getRandomArrayIndex(r, array)
 
@@ -1981,7 +2003,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 		for range setCount {
 			newValue := newElementFuncs[r.Intn(len(newElementFuncs))]
-			v, expected := newValue(storage)
+			v, expected := newValue(r, storage)
 
 			index := getRandomArrayIndex(r, array)
 
@@ -2092,7 +2114,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 				r.Intn(4)+1, // at least one element
 				newWrapperValueFunc(
 					1,
-					newRandomUint64ValueFunc(r))))
+					newRandomUint64ValueFunc())))
 
 	// modifyValue modifies nested array's first element.
 	modifyValue :=
@@ -2105,7 +2127,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 				modifyWrapperValueFunc(
 					t,
 					1,
-					modifyRandomUint64ValueFunc(r))))
+					modifyRandomUint64ValueFunc())))
 
 	storage := newTestPersistentStorage(t)
 
@@ -2125,7 +2147,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 		actualArrayCount += appendCount
 
 		for range appendCount {
-			v, expected := newValue(storage)
+			v, expected := newValue(r, storage)
 
 			err = array.Append(v)
 			require.NoError(t, err)
@@ -2174,7 +2196,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 		lowestInsertIndex := array.Count()
 
 		for range insertCount {
-			v, expected := newValue(storage)
+			v, expected := newValue(r, storage)
 
 			index := getRandomArrayIndex(r, array)
 
@@ -2252,7 +2274,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 			require.True(t, isWrapperValue)
 
 			// Modify retrieved element without setting back explicitly.
-			_, modifiedExpectedValue, err := modifyValue(storage, originalValue, expectedValues[index])
+			_, modifiedExpectedValue, err := modifyValue(r, storage, originalValue, expectedValues[index])
 			require.NoError(t, err)
 
 			expectedValues[index] = modifiedExpectedValue
@@ -2367,7 +2389,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 						2,
 						newWrapperValueFunc(
 							1,
-							newRandomUint64ValueFunc(r))))))
+							newRandomUint64ValueFunc())))))
 
 	// modifyValue modifies innermost nested array's first element.
 	modifyValue :=
@@ -2386,7 +2408,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 						modifyWrapperValueFunc(
 							t,
 							1,
-							modifyRandomUint64ValueFunc(r))))))
+							modifyRandomUint64ValueFunc())))))
 
 	storage := newTestPersistentStorage(t)
 
@@ -2406,7 +2428,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 		actualArrayCount += appendCount
 
 		for range appendCount {
-			v, expected := newValue(storage)
+			v, expected := newValue(r, storage)
 
 			err = array.Append(v)
 			require.NoError(t, err)
@@ -2455,7 +2477,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 		lowestInsertIndex := array.Count()
 
 		for range insertCount {
-			v, expected := newValue(storage)
+			v, expected := newValue(r, storage)
 
 			index := getRandomArrayIndex(r, array)
 
@@ -2533,7 +2555,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 			require.True(t, isWrapperValue)
 
 			// Modify retrieved element without setting back explicitly.
-			_, modifiedExpectedValue, err := modifyValue(storage, originalValue, expectedValues[index])
+			_, modifiedExpectedValue, err := modifyValue(r, storage, originalValue, expectedValues[index])
 			require.NoError(t, err)
 
 			expectedValues[index] = modifiedExpectedValue
@@ -2616,6 +2638,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 }
 
 func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
+	t.Parallel()
 
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -2651,9 +2674,9 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 							childArrayCount,
 							newWrapperValueFunc(
 								1,
-								newRandomUint64ValueFunc(r)))))
+								newRandomUint64ValueFunc()))))
 
-			v, expected := createArrayOfSomeValueOfArrayOfSomeValueOfUint64(storage)
+			v, expected := createArrayOfSomeValueOfArrayOfSomeValueOfUint64(r, storage)
 
 			array := v.(*atree.Array)
 			expectedValues = expected.(testutils.ExpectedArrayValue)
@@ -2769,9 +2792,9 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 									gchildArrayCount,
 									newWrapperValueFunc(
 										1,
-										newRandomUint64ValueFunc(r)))))))
+										newRandomUint64ValueFunc()))))))
 
-			v, expected := createArrayOfSomeValueOfArrayOfSomeValueOfArrayOfSomeValueOfUint64(storage)
+			v, expected := createArrayOfSomeValueOfArrayOfSomeValueOfArrayOfSomeValueOfUint64(r, storage)
 
 			array := v.(*atree.Array)
 			expectedValues = expected.(testutils.ExpectedArrayValue)

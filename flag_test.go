@@ -25,6 +25,8 @@ import (
 )
 
 func TestFlagIsRoot(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name string
 		h    head
@@ -48,6 +50,8 @@ func TestFlagIsRoot(t *testing.T) {
 }
 
 func TestFlagSetRootV1(t *testing.T) {
+	t.Parallel()
+
 	var h head
 	h[0] = 1 << 4 // version 1
 
@@ -59,6 +63,8 @@ func TestFlagSetRootV1(t *testing.T) {
 }
 
 func TestFlagHasPointers(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name string
 		h    head
@@ -83,6 +89,8 @@ func TestFlagHasPointers(t *testing.T) {
 }
 
 func TestFlagSetHasPointersV1(t *testing.T) {
+	t.Parallel()
+
 	var h head
 	h[0] = 1 << 4 // version 1
 
@@ -95,6 +103,8 @@ func TestFlagSetHasPointersV1(t *testing.T) {
 }
 
 func TestFlagHasSizeLimit(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name string
 		h    head
@@ -119,6 +129,8 @@ func TestFlagHasSizeLimit(t *testing.T) {
 }
 
 func TestFlagSetNoSizeLimitV1(t *testing.T) {
+	t.Parallel()
+
 	var h head
 	h[0] = 1 << 4 // version 1
 
@@ -131,6 +143,8 @@ func TestFlagSetNoSizeLimitV1(t *testing.T) {
 }
 
 func TestFlagHasNextSlabID(t *testing.T) {
+	t.Parallel()
+
 	var h head
 	h[0] = 1 << 4 // v1
 
@@ -164,6 +178,8 @@ func TestFlagHasNextSlabID(t *testing.T) {
 }
 
 func TestFlagSetHasNextSlabIDV1(t *testing.T) {
+	t.Parallel()
+
 	var h head
 	h[0] = 1 << 4 // version 1
 
@@ -182,6 +198,8 @@ func TestFlagSetHasNextSlabIDV1(t *testing.T) {
 }
 
 func TestFlagHasInlinedSlabs(t *testing.T) {
+	t.Parallel()
+
 	var h head
 	h[0] = 1 << 4 // v1
 
@@ -215,6 +233,8 @@ func TestFlagHasInlinedSlabs(t *testing.T) {
 }
 
 func TestFlagSetHasInlinedSlabsV1(t *testing.T) {
+	t.Parallel()
+
 	var h head
 	h[0] = 1 << 4 // version 1
 
@@ -233,6 +253,8 @@ func TestFlagSetHasInlinedSlabsV1(t *testing.T) {
 }
 
 func TestFlagGetSlabType(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name string
 		h    head
@@ -261,6 +283,8 @@ func TestFlagGetSlabType(t *testing.T) {
 }
 
 func TestFlagGetSlabArrayType(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name string
 		h    head
@@ -289,6 +313,8 @@ func TestFlagGetSlabArrayType(t *testing.T) {
 }
 
 func TestFlagGetSlabMapType(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name string
 		h    head
@@ -325,6 +351,8 @@ func TestFlagGetSlabMapType(t *testing.T) {
 }
 
 func TestVersion(t *testing.T) {
+	t.Parallel()
+
 	t.Run("v0", func(t *testing.T) {
 		const expectedVersion = byte(0)
 

@@ -27,6 +27,8 @@ import (
 )
 
 func TestIsRootOfAnObject(t *testing.T) {
+	t.Parallel()
+
 	// We just need first 2 bytes of slab data to test.
 	testCases := []struct {
 		name   string
@@ -81,6 +83,8 @@ func TestIsRootOfAnObject(t *testing.T) {
 }
 
 func TestHasPointers(t *testing.T) {
+	t.Parallel()
+
 	// We just need first 2 bytes of slab data to test.
 	testCases := []struct {
 		name        string
@@ -135,6 +139,8 @@ func TestHasPointers(t *testing.T) {
 }
 
 func TestHasSizeLimit(t *testing.T) {
+	t.Parallel()
+
 	// We just need first 2 bytes of slab data to test.
 	testCases := []struct {
 		name         string

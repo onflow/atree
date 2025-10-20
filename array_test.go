@@ -20,12 +20,14 @@ package atree_test
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/rand"
 	"reflect"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -231,6 +233,8 @@ func TestArrayAppendAndGet(t *testing.T) {
 func TestArraySetAndGet(t *testing.T) {
 
 	t.Run("new elements with similar bytesize", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(4096)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -360,6 +364,7 @@ func TestArraySetAndGet(t *testing.T) {
 	})
 
 	t.Run("index out of bounds", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(1024)
 
@@ -398,9 +403,12 @@ func TestArraySetAndGet(t *testing.T) {
 func TestArrayInsertAndGet(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("insert-first", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -423,6 +431,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 	})
 
 	t.Run("insert-last", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -445,6 +454,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 	})
 
 	t.Run("insert", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -476,6 +486,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 	})
 
 	t.Run("index out of bounds", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(1024)
 
@@ -512,9 +523,12 @@ func TestArrayInsertAndGet(t *testing.T) {
 
 func TestArrayRemove(t *testing.T) {
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("remove-first", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -566,6 +580,7 @@ func TestArrayRemove(t *testing.T) {
 	})
 
 	t.Run("remove-last", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -613,6 +628,7 @@ func TestArrayRemove(t *testing.T) {
 	})
 
 	t.Run("remove", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -667,6 +683,7 @@ func TestArrayRemove(t *testing.T) {
 	})
 
 	t.Run("index out of bounds", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -700,8 +717,14 @@ func TestArrayRemove(t *testing.T) {
 }
 
 func TestReadOnlyArrayIterate(t *testing.T) {
+	atree.SetThreshold(256)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -719,8 +742,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 	})
 
 	t.Run("append", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -747,8 +769,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 	})
 
 	t.Run("set", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -784,8 +805,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 	})
 
 	t.Run("insert", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -817,8 +837,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 	})
 
 	t.Run("remove", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -854,6 +873,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 	})
 
 	t.Run("stop", func(t *testing.T) {
+		t.Parallel()
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
@@ -881,6 +901,7 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
+		t.Parallel()
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
@@ -918,15 +939,18 @@ func TestReadOnlyArrayIterate(t *testing.T) {
 func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
-	storage := newTestPersistentStorage(t)
-
-	var mutationError *atree.ReadOnlyIteratorElementMutationError
 
 	t.Run("mutate inlined element from IterateReadOnly", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
@@ -942,6 +966,7 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 
 		// Iterate and modify element
 		var valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentArray.IterateReadOnlyWithMutationCallback(
 			func(v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.Array)
@@ -962,6 +987,10 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 	})
 
 	t.Run("mutate inlined element from IterateReadOnlyRange", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
@@ -977,6 +1006,7 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 
 		// Iterate and modify element
 		var valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentArray.IterateReadOnlyRangeWithMutationCallback(
 			0,
 			parentArray.Count(),
@@ -999,6 +1029,10 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 	})
 
 	t.Run("mutate not inlined array element from IterateReadOnly", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
@@ -1021,6 +1055,7 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 
 		// Iterate and modify element
 		var valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentArray.IterateReadOnlyWithMutationCallback(
 			func(v atree.Value) (resume bool, err error) {
 				c, ok := v.(*atree.Array)
@@ -1042,6 +1077,10 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 	})
 
 	t.Run("mutate not inlined array element from IterateReadOnlyRange", func(t *testing.T) {
+		t.Parallel()
+
+		storage := newTestPersistentStorage(t)
+
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
@@ -1064,6 +1103,7 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 
 		// Iterate and modify element
 		var valueMutationCallbackCalled bool
+		var mutationError *atree.ReadOnlyIteratorElementMutationError
 		err = parentArray.IterateReadOnlyRangeWithMutationCallback(
 			0,
 			parentArray.Count(),
@@ -1088,8 +1128,14 @@ func TestMutateElementFromReadOnlyArrayIterator(t *testing.T) {
 }
 
 func TestMutableArrayIterate(t *testing.T) {
+	atree.SetThreshold(256)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -1107,8 +1153,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("mutate primitive values, root is data slab, no slab operation", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(15)
 
@@ -1156,8 +1201,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("mutate primitive values, root is metadata slab, no slab operation", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(1024)
 
@@ -1205,8 +1249,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("mutate primitive values, root is data slab, split slab", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(15)
 
@@ -1259,8 +1302,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("mutate primitive values, root is metadata slab, split slab", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(200)
 
@@ -1313,8 +1355,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("mutate primitive values, root is metadata slab, merge slabs", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(80)
 
@@ -1367,8 +1408,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is data slab, no slab operation", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(15)
 
@@ -1427,8 +1467,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, no slab operation", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(25)
 
@@ -1487,8 +1526,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is data slab, split slab", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const (
 			arrayCount             = uint64(15)
@@ -1561,8 +1599,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, split slab", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const (
 			arrayCount             = uint64(25)
@@ -1635,8 +1672,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("mutate inlined container, root is metadata slab, merge slab", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const (
 			arrayCount             = uint64(10)
@@ -1709,8 +1745,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("uninline inlined container, root is data slab, no slab operation", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const (
 			arrayCount             = uint64(2)
@@ -1784,8 +1819,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("uninline inlined container, root is metadata slab, merge slab", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const (
 			arrayCount             = uint64(10)
@@ -1859,8 +1893,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("inline uninlined container, root is data slab, no slab operation", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const (
 			arrayCount             = uint64(2)
@@ -1935,8 +1968,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("inline uninlined container, root is data slab, split slab", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const (
 			arrayCount             = uint64(4)
@@ -2011,6 +2043,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("stop", func(t *testing.T) {
+		t.Parallel()
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
@@ -2038,6 +2071,7 @@ func TestMutableArrayIterate(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
+		t.Parallel()
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
@@ -2117,18 +2151,74 @@ func testArrayIterateRange(t *testing.T, array *atree.Array, expectedValues test
 		require.Equal(t, uint64(0), i)
 	}
 
-	// IterateRange returns no error and iteration function is called on sliced array
-	for startIndex := uint64(0); startIndex <= count; startIndex++ {
-		for endIndex := startIndex; endIndex <= count; endIndex++ {
-			i = uint64(0)
-			err = array.IterateReadOnlyRange(startIndex, endIndex, func(v atree.Value) (bool, error) {
-				testValueEqual(t, v, expectedValues[startIndex+i])
-				i++
-				return true, nil
-			})
-			require.NoError(t, err)
-			require.Equal(t, endIndex-startIndex, i)
+	testRange := func(startIndex, endIndex uint64) error {
+		i := uint64(0)
+		err := array.IterateReadOnlyRange(startIndex, endIndex, func(v atree.Value) (bool, error) {
+			expected := expectedValues[startIndex+i]
+			equal, err := testutils.ValueEqual(expected, v)
+			if err != nil {
+				return false, err
+			}
+			if !equal {
+				return false, fmt.Errorf("unexpected iterated value: want %v (%T), got %v (%T)", expected, expected, v, v)
+			}
+			i++
+			return true, nil
+		})
+		if err != nil {
+			return err
 		}
+		if endIndex-startIndex != i {
+			return fmt.Errorf("unexpected number of iterations: want %d, got %d", endIndex-startIndex, i)
+		}
+		return nil
+	}
+
+	// IterateRange returns no error and iteration function is called on sliced array
+	if count <= 10 {
+		for startIndex := uint64(0); startIndex <= count; startIndex++ {
+			for endIndex := startIndex; endIndex <= count; endIndex++ {
+				err := testRange(startIndex, endIndex)
+				require.NoError(t, err)
+			}
+		}
+	} else {
+		type iteratorRange struct {
+			startIndex uint64
+			endIndex   uint64
+		}
+
+		goroutineCount := runtime.NumCPU()
+
+		in := make(chan iteratorRange, count)
+
+		var wg sync.WaitGroup
+
+		for range goroutineCount {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for r := range in {
+					err := testRange(r.startIndex, r.endIndex)
+					require.NoError(t, err)
+				}
+			}()
+		}
+
+		go func() {
+			defer close(in)
+
+			for startIndex := uint64(0); startIndex <= count; startIndex++ {
+				for endIndex := startIndex; endIndex <= count; endIndex++ {
+					in <- iteratorRange{
+						startIndex: startIndex,
+						endIndex:   endIndex,
+					}
+				}
+			}
+		}()
+
+		wg.Wait()
 	}
 }
 
@@ -2137,6 +2227,8 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		storage := newTestPersistentStorage(t)
 
 		array, err := atree.NewArray(storage, address, typeInfo)
@@ -2146,6 +2238,8 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 	})
 
 	t.Run("dataslab as root", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(10)
 
 		storage := newTestPersistentStorage(t)
@@ -2187,6 +2281,8 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 	})
 
 	t.Run("stop", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(10)
 
 		storage := newTestPersistentStorage(t)
@@ -2215,6 +2311,8 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
+		t.Parallel()
+
 		storage := newTestPersistentStorage(t)
 
 		array, err := atree.NewArray(storage, address, typeInfo)
@@ -2254,6 +2352,8 @@ func TestMutableArrayIterateRange(t *testing.T) {
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		storage := newTestPersistentStorage(t)
 
 		array, err := atree.NewArray(storage, address, typeInfo)
@@ -2333,6 +2433,8 @@ func TestMutableArrayIterateRange(t *testing.T) {
 	})
 
 	t.Run("stop", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(10)
 
 		storage := newTestPersistentStorage(t)
@@ -2361,6 +2463,8 @@ func TestMutableArrayIterateRange(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
+		t.Parallel()
+
 		storage := newTestPersistentStorage(t)
 
 		array, err := atree.NewArray(storage, address, typeInfo)
@@ -2478,9 +2582,12 @@ func TestArraySetRandomValues(t *testing.T) {
 func TestArrayInsertRandomValues(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("insert-first", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -2506,6 +2613,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 	})
 
 	t.Run("insert-last", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -2531,6 +2639,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 	})
 
 	t.Run("insert-random", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -2724,9 +2833,12 @@ func TestArrayAppendSetInsertRemoveRandomValues(t *testing.T) {
 func TestArrayWithChildArrayMap(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("small array", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -2763,6 +2875,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 	})
 
 	t.Run("big array", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 		const childArrayCount = 40
@@ -2804,6 +2917,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 	})
 
 	t.Run("small map", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -2838,6 +2952,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 	})
 
 	t.Run("big map", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -2883,9 +2998,13 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 func TestArrayDecodeV0(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -2926,6 +3045,8 @@ func TestArrayDecodeV0(t *testing.T) {
 	})
 
 	t.Run("dataslab as root", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -2972,6 +3093,8 @@ func TestArrayDecodeV0(t *testing.T) {
 	})
 
 	t.Run("metadataslab as root", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -3105,9 +3228,13 @@ func TestArrayDecodeV0(t *testing.T) {
 func TestArrayEncodeDecode(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -3147,6 +3274,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root dataslab", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -3193,6 +3322,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root metadata slab", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestBasicStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -3306,6 +3437,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 	// Same type info is reused.
 	t.Run("root data slab, inlined child array of same type", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		childTypeInfo := testutils.NewSimpleTypeInfo(43)
 		storage := newTestBasicStorage(t)
@@ -3385,6 +3518,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 	// Different type info are encoded.
 	t.Run("root data slab, inlined array of different type", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		typeInfo2 := testutils.NewSimpleTypeInfo(43)
 		typeInfo3 := testutils.NewSimpleTypeInfo(44)
@@ -3474,6 +3609,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 	// Same type info is reused.
 	t.Run("root data slab, multiple levels of inlined array of same type", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		typeInfo2 := testutils.NewSimpleTypeInfo(43)
 		typeInfo3 := testutils.NewSimpleTypeInfo(44)
@@ -3565,6 +3702,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root data slab, multiple levels of inlined array of different type", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		typeInfo2 := testutils.NewSimpleTypeInfo(43)
 		typeInfo3 := testutils.NewSimpleTypeInfo(44)
@@ -3678,6 +3817,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root metadata slab, inlined array of same type", func(t *testing.T) {
+		t.Parallel()
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		typeInfo2 := testutils.NewSimpleTypeInfo(43)
@@ -3821,6 +3961,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("root metadata slab, inlined array of different type", func(t *testing.T) {
+		t.Parallel()
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		typeInfo2 := testutils.NewSimpleTypeInfo(43)
@@ -3976,6 +4117,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("has pointers", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		typeInfo2 := testutils.NewSimpleTypeInfo(43)
 		storage := newTestBasicStorage(t)
@@ -4138,6 +4281,8 @@ func TestArrayEncodeDecode(t *testing.T) {
 	})
 
 	t.Run("has pointers in inlined slab", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		typeInfo2 := testutils.NewSimpleTypeInfo(43)
 		typeInfo3 := testutils.NewSimpleTypeInfo(44)
@@ -4510,6 +4655,7 @@ func TestArrayStringElement(t *testing.T) {
 }
 
 func TestArrayStoredValue(t *testing.T) {
+	t.Parallel()
 
 	const arrayCount = uint64(4096)
 
@@ -4564,6 +4710,8 @@ func TestArrayStoredValue(t *testing.T) {
 func TestArrayPopIterate(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
 		address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -4582,6 +4730,7 @@ func TestArrayPopIterate(t *testing.T) {
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(10)
 
@@ -4650,7 +4799,14 @@ func TestArrayPopIterate(t *testing.T) {
 
 func TestArrayFromBatchData(t *testing.T) {
 
+	atree.SetThreshold(256)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
+
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 
 		array, err := atree.NewArray(
@@ -4680,6 +4836,7 @@ func TestArrayFromBatchData(t *testing.T) {
 	})
 
 	t.Run("root-dataslab", func(t *testing.T) {
+		t.Parallel()
 
 		const arrayCount = uint64(10)
 
@@ -4721,8 +4878,7 @@ func TestArrayFromBatchData(t *testing.T) {
 	})
 
 	t.Run("root-metaslab", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -4764,8 +4920,7 @@ func TestArrayFromBatchData(t *testing.T) {
 	})
 
 	t.Run("rebalance two data slabs", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(36)
 
@@ -4816,8 +4971,7 @@ func TestArrayFromBatchData(t *testing.T) {
 	})
 
 	t.Run("merge two data slabs", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(36)
 
@@ -4867,8 +5021,7 @@ func TestArrayFromBatchData(t *testing.T) {
 	})
 
 	t.Run("random", func(t *testing.T) {
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
+		t.Parallel()
 
 		const arrayCount = uint64(4096)
 
@@ -4914,12 +5067,11 @@ func TestArrayFromBatchData(t *testing.T) {
 	})
 
 	t.Run("data slab too large", func(t *testing.T) {
+		t.Parallel()
+
 		// Slab size must not exceed maxThreshold.
 		// We cannot make this problem happen after Atree Issue #193
 		// was fixed by PR #194 & PR #197. This test is to catch regressions.
-
-		atree.SetThreshold(256)
-		defer atree.SetThreshold(1024)
 
 		r := newRand(t)
 
@@ -5032,9 +5184,13 @@ func TestArrayMaxInlineElement(t *testing.T) {
 func TestArrayString(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("small", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(6)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -5054,6 +5210,8 @@ func TestArrayString(t *testing.T) {
 	})
 
 	t.Run("large", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(120)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -5075,9 +5233,13 @@ func TestArrayString(t *testing.T) {
 
 func TestArraySlabDump(t *testing.T) {
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("small", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(6)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -5101,6 +5263,8 @@ func TestArraySlabDump(t *testing.T) {
 	})
 
 	t.Run("large", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(120)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -5127,6 +5291,7 @@ func TestArraySlabDump(t *testing.T) {
 	})
 
 	t.Run("overflow", func(t *testing.T) {
+		t.Parallel()
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 		storage := newTestPersistentStorage(t)
@@ -5170,7 +5335,9 @@ func errorCategorizationCount(err error) int {
 func TestArrayLoadedValueIterator(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -5186,6 +5353,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 	}
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		storage := newTestPersistentStorage(t)
 
 		array, err := atree.NewArray(storage, address, typeInfo)
@@ -5200,6 +5369,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with simple values", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(3)
@@ -5215,6 +5386,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(3)
@@ -5231,6 +5404,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values, unload composite element from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(3)
@@ -5256,6 +5431,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values, unload composite element from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(3)
@@ -5282,6 +5459,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values, unload composite element in the middle", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(3)
@@ -5310,6 +5489,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with composite values, unload composite elements during iteration", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(3)
@@ -5345,6 +5526,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root data slab with simple and composite values, unload composite element", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			const arrayCount = uint64(3)
 
 			// Create an array with nested composite value at specified index
@@ -5373,6 +5556,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with simple values", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(20)
@@ -5388,6 +5573,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(20)
@@ -5404,6 +5591,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload composite element from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(20)
@@ -5429,6 +5618,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload composite element from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(20)
@@ -5455,6 +5646,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload composite element in the middle", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(20)
@@ -5484,6 +5677,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with simple and composite values, unload composite element", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			const arrayCount = uint64(20)
 
 			// Create an array with composite value at specified index.
@@ -5512,6 +5707,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab, unload data slab from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(30)
@@ -5546,6 +5743,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab, unload data slab from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(30)
@@ -5580,6 +5779,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab, unload data slab in the middle", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(30)
@@ -5619,6 +5820,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab, unload non-root metadata slab from front to back", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(250)
@@ -5650,6 +5853,8 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab, unload non-root metadata slab from back to front", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
+
 			storage := newTestPersistentStorage(t)
 
 			const arrayCount = uint64(250)
@@ -5681,6 +5886,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random composite value", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
 
 			storage := newTestPersistentStorage(t)
 
@@ -5717,6 +5923,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random data slab", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
 
 			storage := newTestPersistentStorage(t)
 
@@ -5794,6 +6001,7 @@ func TestArrayLoadedValueIterator(t *testing.T) {
 
 	runTest("root metadata slab with composite values, unload random slab", func(useWrapperValue bool) func(t *testing.T) {
 		return func(t *testing.T) {
+			t.Parallel()
 
 			storage := newTestPersistentStorage(t)
 
@@ -6138,6 +6346,8 @@ func getArrayMetaDataSlabCount(storage *atree.PersistentSlabStorage) int {
 }
 
 func TestArrayID(t *testing.T) {
+	t.Parallel()
+
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	storage := newTestPersistentStorage(t)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
@@ -6152,6 +6362,8 @@ func TestArrayID(t *testing.T) {
 }
 
 func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
+	t.Parallel()
+
 	const (
 		arrayCount          = 3
 		initialStorableSize = 1
@@ -6203,9 +6415,13 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("parent is root data slab, with one child array", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(1)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -6331,6 +6547,8 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 	})
 
 	t.Run("parent is root data slab, with two child arrays", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(2)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -6532,6 +6750,8 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 	})
 
 	t.Run("parent is root metadata slab, with four child arrays", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(4)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -6728,9 +6948,13 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 	atree.SetThreshold(256)
-	defer atree.SetThreshold(1024)
+	t.Cleanup(func() {
+		atree.SetThreshold(1024)
+	})
 
 	t.Run("parent is root data slab, one child array, one grand child array, changes to grand child array triggers child array slab to become standalone slab", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(1)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -6929,6 +7153,8 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 	})
 
 	t.Run("parent is root data slab, one child array, one grand child array, changes to grand child array triggers grand child array slab to become standalone slab", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(1)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -7132,6 +7358,8 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 	})
 
 	t.Run("parent is root data slab, two child array, one grand child array each, changes to child array triggers child array slab to become standalone slab", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(2)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -7463,6 +7691,8 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 	})
 
 	t.Run("parent is root metadata slab, with four child arrays, each child array has grand child arrays", func(t *testing.T) {
+		t.Parallel()
+
 		const arrayCount = uint64(4)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -7825,6 +8055,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 }
 
 func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
+	t.Parallel()
 
 	const arrayCount = uint64(2)
 
@@ -8207,6 +8438,8 @@ func getStoredDeltas(storage *atree.PersistentSlabStorage) int {
 }
 
 func TestArraySetReturnedValue(t *testing.T) {
+	t.Parallel()
+
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -8474,6 +8707,8 @@ func TestArraySetReturnedValue(t *testing.T) {
 }
 
 func TestArrayRemoveReturnedValue(t *testing.T) {
+	t.Parallel()
+
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -8730,6 +8965,8 @@ func TestArrayRemoveReturnedValue(t *testing.T) {
 }
 
 func TestArrayWithOutdatedCallback(t *testing.T) {
+	t.Parallel()
+
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
 
@@ -8845,6 +9082,8 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 }
 
 func TestArraySetType(t *testing.T) {
+	t.Parallel()
+
 	typeInfo := testutils.NewSimpleTypeInfo(42)
 	newTypeInfo := testutils.NewSimpleTypeInfo(43)
 	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}

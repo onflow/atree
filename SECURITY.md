@@ -12,4 +12,6 @@ We ask that all researchers adhere to these guidelines [here](https://flow.com/f
 
 Currently, Atree does not officially support 32-bit platforms. If a vulnerability requires compiling the software for a 32-bit platform, then it should only be reported if the affected software officially supports 32-bit platforms.
 
+Before submitting a security report, please review your source code included in the report. For example, please check if function calls return any errors and avoid calling functions on a `nil` object.
+
 Please include the name and version of the tool that detected the issue (if applicable).  This can help us identify buggy or noisy vulnerability detectors, and identify duplicate reports more efficiently.

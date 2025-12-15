@@ -16,6 +16,6 @@ Additionally, please include the following in the security report:
 
 - list of affected 32-bit or 64-bit architectures (currently, Atree is officially supported on 64-bit platforms)
 
-- version of [Flow Emulator](https://github.com/onflow/flow-emulator) used to check if the reported issue (issue might be prevented by Flow components that set or enforce limits on Atree)
+- version of [Flow Emulator](https://github.com/onflow/flow-emulator) used to check the reported issue (issue might be prevented by Flow components that set or enforce limits on Atree)
 
 Before submitting a security report, please review your source code included in the report. For example, please make sure the reported panic isn't caused by an overlooked mistake in the report's test code.

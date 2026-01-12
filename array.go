@@ -20,7 +20,17 @@ package atree
 
 import (
 	"fmt"
+	"math"
 	"strings"
+)
+
+const (
+	// maxArrayElementCount is the max number of elements that can be stored in an array.
+	// Currently, this limit is set to math.MaxUint32 (4,294,967,295 elements per array).
+	// ArraySlabHeader.Count (uint32) is used to track element count in array slabs.
+	// NOTE: MaxArrayElementCount is uint64 since we may want to increase the limit to be
+	// greater than MaxUint32 in the future.
+	maxArrayElementCount uint64 = math.MaxUint32
 )
 
 // Array is a heterogeneous variable-size array, storing any type of values
@@ -444,6 +454,11 @@ func (a *Array) Append(value Value) error {
 }
 
 func (a *Array) Insert(index uint64, value Value) error {
+	if a.Count() == maxArrayElementCount {
+		// Don't insert new element if array already has max number of elements.
+		return NewArrayElementCannotExceedMaxElementCountError(maxArrayElementCount)
+	}
+
 	err := a.root.Insert(a.Storage, a.Address(), index, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Insert().

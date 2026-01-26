@@ -26,4 +26,5 @@ Before submitting a security report, please review your source code included in 
 
 Security reports that follow the guidelines and meet other conditions of the vulnerability disclosure program might qualify for Flow Protocol Rewards.
 
-Security reports should not evaluate Atree as a standalone component, because Atree relies on some limits and security guarantees provided by other components in Flow (such as `onflow/cadence` and `onflow/flow-go`).  Before submitting a report, please try to reproduce the vulnerability using a Cadence script running on unmodified flow-emulator.
+Security reports should not evaluate Atree as a standalone component, because Atree relies on some limits and security guarantees provided by other components, i.e. in the [Cadence programming language](https://github.com/onflow/cadence) and the [Flow node software](https://github.com/onflow/flow-go).  
+Before submitting a report, please try to reproduce the vulnerability using a Cadence script or transaction using an unmodified [Flow Emulator](https://github.com/onflow/flow-emulator). See the [documentation](https://developers.flow.com/build/tools/emulator) on how to install and use it.

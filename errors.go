@@ -76,6 +76,25 @@ func (e *FatalError) Unwrap() error {
 	return e.err
 }
 
+// ArrayElementCannotExceedMaxElementCountError is returned when new element can't be inserted into an array
+// because the array already has the max number of elements allowed.
+type ArrayElementCannotExceedMaxElementCountError struct {
+	maxCount uint64
+}
+
+// NewArrayElementCannotExceedMaxElementCountError returns ArrayElementCannotExceedMaxElementCountError.
+func NewArrayElementCannotExceedMaxElementCountError(maxCount uint64) error {
+	return NewUserError(
+		&ArrayElementCannotExceedMaxElementCountError{
+			maxCount: maxCount,
+		},
+	)
+}
+
+func (e *ArrayElementCannotExceedMaxElementCountError) Error() string {
+	return fmt.Sprintf("new element cann't be inserted into an array: array already has max number of elements %d", e.maxCount)
+}
+
 // SliceOutOfBoundsError is returned when index for array slice is out of bounds.
 type SliceOutOfBoundsError struct {
 	startIndex uint64

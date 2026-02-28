@@ -535,7 +535,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 
 				testArrayMutableElementIndex(t, array)
 
-				testArray(t, storage, typeInfo, address, array, expectedValues, true)
+				testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 				// Retrieve and modify WrapperValue from array
 				for i := range expectedValues {
@@ -563,7 +563,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 
 				testArrayMutableElementIndex(t, array)
 
-				testArray(t, storage, typeInfo, address, array, expectedValues, true)
+				testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 				// Commit storage
 				err = storage.FastCommit(runtime.NumCPU())
@@ -577,7 +577,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 				require.Equal(t, arrayCount, array2.Count())
 
 				// Test loaded array
-				testArray(t, storage2, typeInfo, address, array2, expectedValues, true)
+				testArray(t, storage2, typeInfo, address, array2, expectedValues, true, 1)
 			})
 		}
 	}
@@ -650,7 +650,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 
 				testArrayMutableElementIndex(t, array)
 
-				testArray(t, storage, typeInfo, address, array, expectedValues, true)
+				testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 				// Retrieve and modify WrapperValue from array
 				for i := range expectedValues {
@@ -678,7 +678,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 
 				testArrayMutableElementIndex(t, array)
 
-				testArray(t, storage, typeInfo, address, array, expectedValues, true)
+				testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 				// Commit storage
 				err = storage.FastCommit(runtime.NumCPU())
@@ -692,7 +692,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 				require.Equal(t, arrayCount, array2.Count())
 
 				// Test loaded array
-				testArray(t, storage2, typeInfo, address, array2, expectedValues, true)
+				testArray(t, storage2, typeInfo, address, array2, expectedValues, true, 1)
 			})
 		}
 	}
@@ -765,7 +765,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 
 				testArrayMutableElementIndex(t, array)
 
-				testArray(t, storage, typeInfo, address, array, expectedValues, true)
+				testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 				// Set new WrapperValue in array
 				for i := range expectedValues {
@@ -780,7 +780,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 
 				testArrayMutableElementIndex(t, array)
 
-				testArray(t, storage, typeInfo, address, array, expectedValues, true)
+				testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 				// Retrieve and modify WrapperValue from array
 				for i := range expectedValues {
@@ -808,7 +808,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 
 				testArrayMutableElementIndex(t, array)
 
-				testArray(t, storage, typeInfo, address, array, expectedValues, true)
+				testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 				// Commit storage
 				err = storage.FastCommit(runtime.NumCPU())
@@ -822,7 +822,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 				require.Equal(t, arrayCount, array2.Count())
 
 				// Test loaded array
-				testArray(t, storage2, typeInfo, address, array2, expectedValues, true)
+				testArray(t, storage2, typeInfo, address, array2, expectedValues, true, 1)
 			})
 		}
 	}
@@ -926,7 +926,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 
 						testArrayMutableElementIndex(t, array)
 
-						testArray(t, storage, typeInfo, address, array, expectedValues, true)
+						testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 						// Retrieve and modify WrapperValue from array
 						if needToModifyElement {
@@ -955,7 +955,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 
 							testArrayMutableElementIndex(t, array)
 
-							testArray(t, storage, typeInfo, address, array, expectedValues, true)
+							testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 						}
 
 						// Remove random elements
@@ -973,7 +973,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 
 						testArrayMutableElementIndex(t, array)
 
-						testArray(t, storage, typeInfo, address, array, expectedValues, true)
+						testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 						// Commit storage
 						err = storage.FastCommit(runtime.NumCPU())
@@ -987,7 +987,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 						require.Equal(t, arrayCount-removeCount, array2.Count())
 
 						// Test loaded array
-						testArray(t, storage2, typeInfo, address, array2, expectedValues, true)
+						testArray(t, storage2, typeInfo, address, array2, expectedValues, true, 1)
 					})
 				}
 			}
@@ -1094,7 +1094,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 						testArrayMutableElementIndex(t, array)
 
-						testArray(t, storage, typeInfo, address, array, expectedValues, true)
+						testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 						// Set WrapperValue in array
 						for i := range expectedValues {
@@ -1109,7 +1109,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 						testArrayMutableElementIndex(t, array)
 
-						testArray(t, storage, typeInfo, address, array, expectedValues, true)
+						testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 						// Retrieve and modify WrapperValue from array
 						if needToModifyElement {
@@ -1138,7 +1138,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 							testArrayMutableElementIndex(t, array)
 
-							testArray(t, storage, typeInfo, address, array, expectedValues, true)
+							testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 						}
 
 						// Remove random elements
@@ -1156,7 +1156,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 						testArrayMutableElementIndex(t, array)
 
-						testArray(t, storage, typeInfo, address, array, expectedValues, true)
+						testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 						// Commit storage
 						err = storage.FastCommit(runtime.NumCPU())
@@ -1170,7 +1170,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 						require.Equal(t, arrayCount-removeCount, array2.Count())
 
 						// Test loaded array
-						testArray(t, storage2, typeInfo, address, array2, expectedValues, true)
+						testArray(t, storage2, typeInfo, address, array2, expectedValues, true, 1)
 					})
 				}
 			}
@@ -1256,7 +1256,7 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 
 					testArrayMutableElementIndex(t, array)
 
-					testArray(t, storage, typeInfo, address, array, expectedValues, true)
+					testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 					iterator, err := array.ReadOnlyIterator()
 					require.NoError(t, err)
@@ -1373,7 +1373,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 
 					testArrayMutableElementIndex(t, array)
 
-					testArray(t, storage, typeInfo, address, array, expectedValues, true)
+					testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 					iterator, err := array.Iterator()
 					require.NoError(t, err)
@@ -1408,7 +1408,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 
 					testArrayMutableElementIndex(t, array)
 
-					testArray(t, storage, typeInfo, address, array, expectedValues, true)
+					testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 				})
 			}
 		}
@@ -1480,7 +1480,7 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 		testLevel1WrappedChildArrayInlined(t, array, true)
 	}
@@ -1523,7 +1523,7 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	}
 
 	testLevel1WrappedChildArrayInlined(t, array, false)
@@ -1570,14 +1570,14 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	}
 
 	testLevel1WrappedChildArrayInlined(t, array, true)
 
 	testArrayMutableElementIndex(t, array)
 
-	testArray(t, storage, typeInfo, address, array, expectedValues, true)
+	testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 }
 
 func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
@@ -1675,7 +1675,7 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 		testLevel2WrappedChildArrayInlined(t, array, true)
 	}
@@ -1739,7 +1739,7 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	}
 
 	testLevel2WrappedChildArrayInlined(t, array, false)
@@ -1806,14 +1806,14 @@ func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	}
 
 	testLevel2WrappedChildArrayInlined(t, array, true)
 
 	testArrayMutableElementIndex(t, array)
 
-	testArray(t, storage, typeInfo, address, array, expectedValues, true)
+	testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 }
 
 func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
@@ -1898,7 +1898,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 		// Remove at least half of elements
 
@@ -1922,7 +1922,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 
 	t.Run("insert and remove", func(t *testing.T) {
@@ -1954,7 +1954,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 		// Remove some elements (including one previously inserted element)
 
@@ -1988,7 +1988,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 
 	t.Run("set and remove", func(t *testing.T) {
@@ -2018,7 +2018,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 		// Remove some elements (including some previously set elements)
 
@@ -2065,7 +2065,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 
 	t.Run("remove all", func(t *testing.T) {
@@ -2084,7 +2084,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 }
 
@@ -2159,7 +2159,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 		// Remove some elements
 
@@ -2183,7 +2183,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 
 	t.Run("insert and remove", func(t *testing.T) {
@@ -2214,7 +2214,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 		// Remove some elements (including one previously inserted element)
 
@@ -2248,7 +2248,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 
 	t.Run("modify retrieved nested container and remove", func(t *testing.T) {
@@ -2286,7 +2286,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 		// Remove some elements (including some previously set elements)
 
@@ -2333,7 +2333,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 
 	t.Run("remove all", func(t *testing.T) {
@@ -2352,7 +2352,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel2(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 }
 
@@ -2440,7 +2440,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 		// Remove some elements
 
@@ -2464,7 +2464,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 
 	t.Run("insert and remove", func(t *testing.T) {
@@ -2495,7 +2495,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 		// Remove some elements (including one previously inserted element)
 
@@ -2529,7 +2529,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 
 	t.Run("modify retrieved nested container and remove", func(t *testing.T) {
@@ -2567,7 +2567,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 		// Remove some elements (including some previously set elements)
 
@@ -2614,7 +2614,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 
 	t.Run("remove all", func(t *testing.T) {
@@ -2633,7 +2633,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel3(t *testing.T) {
 
 		testArrayMutableElementIndex(t, array)
 
-		testArray(t, storage, typeInfo, address, array, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 	})
 }
 
@@ -2681,7 +2681,7 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 			array := v.(*atree.Array)
 			expectedValues = expected.(testutils.ExpectedArrayValue)
 
-			testArray(t, storage, typeInfo, address, array, expectedValues, true)
+			testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 			err := storage.FastCommit(runtime.NumCPU())
 			require.NoError(t, err)
@@ -2749,7 +2749,7 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(len(expectedValues)), array2.Count())
 
-		testArray(t, storage, typeInfo, address, array2, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array2, expectedValues, true, 1)
 	})
 
 	t.Run("modify 2-level wrapper array in [testutils.SomeValue([testutils.SomeValue([testutils.SomeValue(uint64)])])]", func(t *testing.T) {
@@ -2799,7 +2799,7 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 			array := v.(*atree.Array)
 			expectedValues = expected.(testutils.ExpectedArrayValue)
 
-			testArray(t, storage, typeInfo, address, array, expectedValues, true)
+			testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
 
 			err := storage.FastCommit(runtime.NumCPU())
 			require.NoError(t, err)
@@ -2883,7 +2883,7 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(len(expectedValues)), array2.Count())
 
-		testArray(t, storage, typeInfo, address, array2, expectedValues, true)
+		testArray(t, storage, typeInfo, address, array2, expectedValues, true, 1)
 	})
 }
 

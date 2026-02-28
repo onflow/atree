@@ -21,6 +21,7 @@ package atree
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"runtime/debug"
 )
 
@@ -515,4 +516,24 @@ func wrapErrorfAsExternalErrorIfNeeded(err error, msg string) error {
 
 	// Create new external error wrapping err with context.
 	return NewExternalError(err, msg)
+}
+
+// UnexpectedElementTypeError is returned when the array element type is not as expected during array and byte slice conversion.
+type UnexpectedElementTypeError struct {
+	expectedType reflect.Type
+	actualType   reflect.Type
+}
+
+// NewUnexpectedElementTypeError returns UnexpectedElementTypeError.
+func NewUnexpectedElementTypeError(expectedType, actualType reflect.Type) error {
+	return NewUserError(
+		&UnexpectedElementTypeError{
+			expectedType: expectedType,
+			actualType:   actualType,
+		},
+	)
+}
+
+func (e *UnexpectedElementTypeError) Error() string {
+	return fmt.Sprintf("invalid element type: expected %s, got %s", e.expectedType.String(), e.actualType.String())
 }

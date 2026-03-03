@@ -1564,3 +1564,8 @@ func (m *OrderedMap) Copy(address Address, digestBuilder DigesterBuilder) (*Orde
 		root:            copiedRoot,
 	}, nil
 }
+
+// IsWithinSingleSlab returns true if the map is stored in a single slab.
+func (m *OrderedMap) IsWithinSingleSlab() bool {
+	return m.root.IsData()
+}

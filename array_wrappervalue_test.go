@@ -1418,7 +1418,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 
 	testLevel1WrappedChildArrayInlined := func(t *testing.T, array *atree.Array, expectedInlined bool) {
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		elements := atree.GetArrayRootSlabStorables(array)
 
@@ -1583,7 +1583,7 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 
 	testLevel2WrappedChildArrayInlined := func(t *testing.T, array *atree.Array, expectedInlined bool) {
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		elements := atree.GetArrayRootSlabStorables(array)
 

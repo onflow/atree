@@ -1174,7 +1174,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 			expectedValues[i] = v
 		}
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		err = array.Iterate(func(v atree.Value) (bool, error) {
@@ -1197,7 +1197,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1222,7 +1222,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 			expectedValues[i] = v
 		}
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		err = array.Iterate(func(v atree.Value) (bool, error) {
@@ -1245,7 +1245,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1272,7 +1272,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			expectedValues[i] = v
 			r++
 		}
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		r = rune('a')
@@ -1298,7 +1298,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1325,7 +1325,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			expectedValues[i] = v
 			r++
 		}
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		r = rune('a')
@@ -1351,7 +1351,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1378,7 +1378,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			expectedValues[i] = v
 			r++
 		}
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		r = rune('a')
@@ -1404,7 +1404,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1435,7 +1435,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 			expectedValues[i] = testutils.ExpectedArrayValue{v}
 		}
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		err = array.Iterate(func(v atree.Value) (bool, error) {
@@ -1463,7 +1463,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1494,7 +1494,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 			expectedValues[i] = testutils.ExpectedArrayValue{v}
 		}
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		err = array.Iterate(func(v atree.Value) (bool, error) {
@@ -1522,7 +1522,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1562,7 +1562,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 			expectedValues[i] = expectedValue
 		}
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		err = array.Iterate(func(v atree.Value) (bool, error) {
@@ -1595,7 +1595,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1635,7 +1635,7 @@ func TestMutableArrayIterate(t *testing.T) {
 
 			expectedValues[i] = expectedValue
 		}
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		err = array.Iterate(func(v atree.Value) (bool, error) {
@@ -1668,7 +1668,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1709,7 +1709,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			expectedValues[i] = expectedValue
 		}
 
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		err = array.Iterate(func(v atree.Value) (bool, error) {
@@ -1741,7 +1741,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1782,7 +1782,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			expectedValues[i] = expectedValue
 		}
 
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		err = array.Iterate(func(v atree.Value) (bool, error) {
@@ -1815,7 +1815,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
 
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1857,7 +1857,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			expectedValues[i] = expectedValue
 		}
 
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		err = array.Iterate(func(v atree.Value) (bool, error) {
@@ -1889,7 +1889,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -1931,7 +1931,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			expectedValues[i] = expectedValue
 		}
 
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		err = array.Iterate(func(v atree.Value) (bool, error) {
@@ -1964,7 +1964,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
 
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -2006,7 +2006,7 @@ func TestMutableArrayIterate(t *testing.T) {
 			expectedValues[i] = expectedValue
 		}
 
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		i := uint64(0)
 		err = array.Iterate(func(v atree.Value) (bool, error) {
@@ -2039,7 +2039,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, arrayCount, i)
 
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -2397,7 +2397,7 @@ func TestMutableArrayIterateRange(t *testing.T) {
 
 			expectedValues[i] = testutils.ExpectedArrayValue{v}
 		}
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		sizeBeforeMutation := GetArrayRootSlabByteSize(array)
 
@@ -2429,7 +2429,7 @@ func TestMutableArrayIterateRange(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, endIndex-startIndex, i)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, false, 1)
 	})
@@ -2863,7 +2863,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			err = childArray.Append(v)
 			require.NoError(t, err)
 
-			require.True(t, IsArrayRootDataSlab(childArray))
+			require.True(t, childArray.IsWithinSingleSlab())
 			require.False(t, childArray.Inlined())
 
 			err = array.Append(childArray)
@@ -2906,7 +2906,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 				expectedChildArrayValues[j] = v
 			}
 
-			require.False(t, IsArrayRootDataSlab(childArray))
+			require.False(t, childArray.IsWithinSingleSlab())
 
 			err = array.Append(childArray)
 			require.NoError(t, err)
@@ -2942,7 +2942,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, storable)
 
-			require.True(t, IsMapRootDataSlab(childMap))
+			require.True(t, childMap.IsWithinSingleSlab())
 
 			err = array.Append(childMap)
 			require.NoError(t, err)
@@ -2985,7 +2985,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 				expectedChildMapValues[k] = v
 			}
 
-			require.False(t, IsMapRootDataSlab(childMap))
+			require.False(t, childMap.IsWithinSingleSlab())
 
 			err = array.Append(childMap)
 			require.NoError(t, err)
@@ -5173,7 +5173,7 @@ func TestArrayMaxInlineElement(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	require.True(t, IsArrayRootDataSlab(array))
+	require.True(t, array.IsWithinSingleSlab())
 
 	// Size of root data slab with two elements of max inlined size is target slab size minus
 	// slab id size (next slab id is omitted in root slab), and minus 1 byte
@@ -6388,7 +6388,7 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	require.True(t, IsArrayRootDataSlab(array))
+	require.True(t, array.IsWithinSingleSlab())
 
 	expectedArrayRootDataSlabSize := atree.ComputeArrayRootDataSlabByteSizeWithFixSizedElement(initialStorableSize, arrayCount)
 	require.Equal(t, expectedArrayRootDataSlabSize, GetArrayRootSlabByteSize(array))
@@ -6405,7 +6405,7 @@ func TestSlabSizeWhenResettingMutableStorable(t *testing.T) {
 		require.NotNil(t, existingStorable)
 	}
 
-	require.True(t, IsArrayRootDataSlab(array))
+	require.True(t, array.IsWithinSingleSlab())
 
 	expectedArrayRootDataSlabSize = atree.ComputeArrayRootDataSlabByteSizeWithFixSizedElement(mutatedStorableSize, arrayCount)
 	require.Equal(t, expectedArrayRootDataSlabSize, GetArrayRootSlabByteSize(array))
@@ -6435,7 +6435,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 
 		require.True(t, atree.GetArrayMutableElementIndexCount(parentArray) <= parentArray.Count())
 		require.Equal(t, arrayCount, parentArray.Count())
-		require.True(t, IsArrayRootDataSlab(parentArray))
+		require.True(t, parentArray.IsWithinSingleSlab())
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 		// Test parent slab size with 1 empty inlined child arrays
@@ -6764,7 +6764,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		parentArray, expectedValues := createArrayWithEmptyChildArray(t, storage, address, typeInfo, arrayCount)
 
 		require.Equal(t, arrayCount, parentArray.Count())
-		require.True(t, IsArrayRootDataSlab(parentArray))
+		require.True(t, parentArray.IsWithinSingleSlab())
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 		// Test parent slab size with 4 empty inlined child arrays
@@ -6837,7 +6837,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Parent array has 1 meta data slab and 2 data slabs.
 		// All child arrays are inlined.
 		require.Equal(t, 3, getStoredDeltas(storage))
-		require.False(t, IsArrayRootDataSlab(parentArray))
+		require.False(t, parentArray.IsWithinSingleSlab())
 
 		// Add one more element to child array which triggers inlined child array slab becomes standalone slab
 		for i, child := range children {
@@ -6869,7 +6869,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 
 		// Parent array has one data slab and all child arrays are not inlined.
 		require.Equal(t, 1+arrayCount, uint64(getStoredDeltas(storage)))
-		require.True(t, IsArrayRootDataSlab(parentArray))
+		require.True(t, parentArray.IsWithinSingleSlab())
 
 		// Remove one element from child array which triggers standalone array slab becomes inlined slab again.
 		for i, child := range children {
@@ -6902,7 +6902,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Parent array has 1 meta data slab and 2 data slabs.
 		// All child arrays are inlined.
 		require.Equal(t, 3, getStoredDeltas(storage))
-		require.False(t, IsArrayRootDataSlab(parentArray))
+		require.False(t, parentArray.IsWithinSingleSlab())
 
 		// Remove remaining elements from inlined child array
 		childArrayCount := children[0].array.Count()
@@ -6938,7 +6938,7 @@ func TestChildArrayInlinabilityInParentArray(t *testing.T) {
 		// Parent array has 1 data slab.
 		// All child arrays are inlined.
 		require.Equal(t, 1, getStoredDeltas(storage))
-		require.True(t, IsArrayRootDataSlab(parentArray))
+		require.True(t, parentArray.IsWithinSingleSlab())
 
 		for _, child := range children {
 			require.Equal(t, uint64(0), child.array.Count())
@@ -6967,7 +6967,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		parentArray, expectedValues := createArrayWithEmpty2LevelChildArray(t, storage, address, typeInfo, arrayCount)
 
 		require.Equal(t, arrayCount, parentArray.Count())
-		require.True(t, IsArrayRootDataSlab(parentArray))
+		require.True(t, parentArray.IsWithinSingleSlab())
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 		// Test parent slab size with 1 inlined child array
@@ -7167,7 +7167,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		parentArray, expectedValues := createArrayWithEmpty2LevelChildArray(t, storage, address, typeInfo, arrayCount)
 
 		require.Equal(t, arrayCount, parentArray.Count())
-		require.True(t, IsArrayRootDataSlab(parentArray))
+		require.True(t, parentArray.IsWithinSingleSlab())
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 		// Test parent slab size with 1 inlined child array
@@ -7401,7 +7401,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		}
 
 		require.Equal(t, arrayCount, parentArray.Count())
-		require.True(t, IsArrayRootDataSlab(parentArray))
+		require.True(t, parentArray.IsWithinSingleSlab())
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 		// Test parent slab size with 1 inlined child array
@@ -7730,7 +7730,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		}
 
 		require.Equal(t, arrayCount, parentArray.Count())
-		require.True(t, IsArrayRootDataSlab(parentArray))
+		require.True(t, parentArray.IsWithinSingleSlab())
 		require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 		gchildArraySize := emptyInlinedArrayByteSize
@@ -7883,7 +7883,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		}
 
 		require.Equal(t, 3, getStoredDeltas(storage)) // There are 3 stored slab because child array is no longer inlined.
-		require.False(t, IsArrayRootDataSlab(parentArray))
+		require.False(t, parentArray.IsWithinSingleSlab())
 
 		// Add one more element to grand child array which triggers
 		// - child arrays become standalone slab (grand child arrays are still inlined)
@@ -7937,7 +7937,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 		// Parent array has one root data slab, 4 grand child array with standalone root data slab.
 		require.Equal(t, 1+arrayCount, uint64(getStoredDeltas(storage)))
-		require.True(t, IsArrayRootDataSlab(parentArray))
+		require.True(t, parentArray.IsWithinSingleSlab())
 
 		// Remove elements from grand child array to trigger child array inlined again.
 		for i, child := range children {
@@ -7989,7 +7989,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 
 		// Parent array has 1 metadata slab, and two data slab, all child and grand child arrays are inlined.
 		require.Equal(t, 3, getStoredDeltas(storage))
-		require.False(t, IsArrayRootDataSlab(parentArray))
+		require.False(t, parentArray.IsWithinSingleSlab())
 
 		// Remove elements from grand child array.
 		elementCount := children[0].child.array.Count()
@@ -8069,7 +8069,7 @@ func TestChildArrayWhenParentArrayIsModified(t *testing.T) {
 	parentArray, expectedValues := createArrayWithEmptyChildArray(t, storage, address, typeInfo, arrayCount)
 
 	require.Equal(t, arrayCount, parentArray.Count())
-	require.True(t, IsArrayRootDataSlab(parentArray))
+	require.True(t, parentArray.IsWithinSingleSlab())
 	require.Equal(t, 1, getStoredDeltas(storage)) // There is only 1 stored slab because child array is inlined.
 
 	// Test parent slab size with empty inlined child arrays
@@ -9098,7 +9098,7 @@ func TestArraySetType(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), array.Count())
 		require.Equal(t, typeInfo, array.Type())
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		// Modify type info of new array
 		err = array.SetType(newTypeInfo)
@@ -9127,7 +9127,7 @@ func TestArraySetType(t *testing.T) {
 
 		require.Equal(t, arrayCount, array.Count())
 		require.Equal(t, typeInfo, array.Type())
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		err = array.SetType(newTypeInfo)
 		require.NoError(t, err)
@@ -9155,7 +9155,7 @@ func TestArraySetType(t *testing.T) {
 
 		require.Equal(t, arrayCount, array.Count())
 		require.Equal(t, typeInfo, array.Type())
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		err = array.SetType(newTypeInfo)
 		require.NoError(t, err)
@@ -9182,12 +9182,12 @@ func TestArraySetType(t *testing.T) {
 
 		require.Equal(t, uint64(1), parentArray.Count())
 		require.Equal(t, typeInfo, parentArray.Type())
-		require.True(t, IsArrayRootDataSlab(parentArray))
+		require.True(t, parentArray.IsWithinSingleSlab())
 		require.False(t, parentArray.Inlined())
 
 		require.Equal(t, uint64(0), childArray.Count())
 		require.Equal(t, typeInfo, childArray.Type())
-		require.True(t, IsArrayRootDataSlab(childArray))
+		require.True(t, childArray.IsWithinSingleSlab())
 		require.True(t, childArray.Inlined())
 
 		err = childArray.SetType(newTypeInfo)
@@ -9222,12 +9222,12 @@ func TestArraySetType(t *testing.T) {
 
 		require.Equal(t, arrayCount, parentArray.Count())
 		require.Equal(t, typeInfo, parentArray.Type())
-		require.False(t, IsArrayRootDataSlab(parentArray))
+		require.False(t, parentArray.IsWithinSingleSlab())
 		require.False(t, parentArray.Inlined())
 
 		require.Equal(t, uint64(0), childArray.Count())
 		require.Equal(t, typeInfo, childArray.Type())
-		require.True(t, IsArrayRootDataSlab(childArray))
+		require.True(t, childArray.IsWithinSingleSlab())
 		require.True(t, childArray.Inlined())
 
 		err = childArray.SetType(newTypeInfo)

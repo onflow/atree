@@ -25,7 +25,7 @@ func TestArrayCopy(t *testing.T) {
 
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		// Copy array.
 
@@ -67,7 +67,7 @@ func TestArrayCopy(t *testing.T) {
 
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
@@ -115,7 +115,7 @@ func TestArrayCopy(t *testing.T) {
 
 		err = array.Append(nestedArray)
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := testutils.ExpectedArrayValue{
 			testutils.ExpectedArrayValue{
@@ -142,7 +142,7 @@ func TestArrayCopy(t *testing.T) {
 
 		err = array.Append(testutils.NewStringValue(strings.Repeat("a", 1_000)))
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := testutils.ExpectedArrayValue{
 			testutils.NewStringValue(strings.Repeat("a", 1_000)),
@@ -166,7 +166,7 @@ func TestArrayCopy(t *testing.T) {
 
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
@@ -215,7 +215,7 @@ func TestArrayCopy(t *testing.T) {
 
 		err = array.Append(testutils.NewSomeValue(nestedArray))
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := testutils.ExpectedArrayValue{
 			testutils.NewExpectedWrapperValue(
@@ -244,7 +244,7 @@ func TestArrayCopy(t *testing.T) {
 
 		err = array.Append(testutils.NewSomeValue(testutils.NewStringValue(strings.Repeat("a", 1_000))))
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := testutils.ExpectedArrayValue{
 			testutils.NewExpectedWrapperValue(
@@ -276,7 +276,7 @@ func TestArrayCopy(t *testing.T) {
 
 		err = array.Append(nestedArray)
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := testutils.ExpectedArrayValue{
 			testutils.ExpectedArrayValue{
@@ -332,7 +332,7 @@ func TestArrayCopy(t *testing.T) {
 
 		err = array.Append(nestedArray2)
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := testutils.ExpectedArrayValue{
 			testutils.ExpectedArrayValue{
@@ -373,7 +373,7 @@ func TestArrayCopy(t *testing.T) {
 
 		err = array.Append(nestedArray1)
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := testutils.ExpectedArrayValue{
 			testutils.ExpectedArrayValue{
@@ -421,7 +421,7 @@ func TestArrayCopy(t *testing.T) {
 
 		err = array.Append(nestedArray)
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := testutils.ExpectedArrayValue{nestedArrayExpectedValues}
 
@@ -474,7 +474,7 @@ func TestArrayCopy(t *testing.T) {
 
 		err = array.Append(nestedArray2)
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := testutils.ExpectedArrayValue{
 			testutils.ExpectedArrayValue{
@@ -517,7 +517,7 @@ func TestArrayCopy(t *testing.T) {
 
 		err = array.Append(nestedArray)
 		require.NoError(t, err)
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		expectedValues := testutils.ExpectedArrayValue{
 			testutils.ExpectedArrayValue{
@@ -561,7 +561,7 @@ func TestArrayCopy(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		require.False(t, IsArrayRootDataSlab(array))
+		require.False(t, array.IsWithinSingleSlab())
 
 		// Multi-slab array can't be copied.
 

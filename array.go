@@ -1401,3 +1401,8 @@ func (a *Array) Copy(address Address) (*Array, error) {
 		root:    copiedRootSlab,
 	}, nil
 }
+
+// IsWithinSingleSlab returns true if the array is stored in a single slab.
+func (a *Array) IsWithinSingleSlab() bool {
+	return a.root.IsData()
+}

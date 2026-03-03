@@ -1014,7 +1014,7 @@ func TestMapWrapperValueIterate(t *testing.T) {
 func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 
 	testLevel1WrappedChildMapInlined := func(t *testing.T, m *atree.OrderedMap, expectedInlined bool) {
-		require.True(t, IsMapRootDataSlab(m))
+		require.True(t, m.IsWithinSingleSlab())
 
 		keyAndValues := atree.GetMapRootSlabStorables(m)
 		require.Equal(t, 2, len(keyAndValues))
@@ -1186,7 +1186,7 @@ func TestMapWrapperValueInlineMapAtLevel1(t *testing.T) {
 func TestMapWrapperValueInlineMapAtLevel2(t *testing.T) {
 
 	testLevel2WrappedChildMapInlined := func(t *testing.T, m *atree.OrderedMap, expectedInlined bool) {
-		require.True(t, IsMapRootDataSlab(m))
+		require.True(t, m.IsWithinSingleSlab())
 
 		keyAndValuesAtLevel1 := atree.GetMapRootSlabStorables(m)
 

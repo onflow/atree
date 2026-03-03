@@ -37,7 +37,8 @@ func TestArrayCopy(t *testing.T) {
 
 		// Modify original array.
 
-		array.Append(testutils.NewUint64ValueFromInteger(0))
+		err = array.Append(testutils.NewUint64ValueFromInteger(0))
+		require.NoError(t, err)
 
 		expectedValues := testutils.ExpectedArrayValue{
 			testutils.NewUint64ValueFromInteger(0),
@@ -45,7 +46,8 @@ func TestArrayCopy(t *testing.T) {
 
 		// Modify copied array.
 
-		copiedArray.Append(testutils.NewUint64ValueFromInteger(42))
+		err = copiedArray.Append(testutils.NewUint64ValueFromInteger(42))
+		require.NoError(t, err)
 
 		copiedArrayExpectedValues := testutils.ExpectedArrayValue{
 			testutils.NewUint64ValueFromInteger(42),
@@ -85,7 +87,9 @@ func TestArrayCopy(t *testing.T) {
 		require.NoError(t, err)
 
 		// Modify copied array.
-		copiedArray.Set(0, testutils.NewUint64ValueFromInteger(42))
+		existingStorable, err := copiedArray.Set(0, testutils.NewUint64ValueFromInteger(42))
+		require.NoError(t, err)
+		require.Equal(t, testutils.NewUint64ValueFromInteger(0), existingStorable)
 
 		copiedArrayExpectedValues := slices.Clone(expectedValues)
 		copiedArrayExpectedValues[0] = testutils.NewUint64ValueFromInteger(42)
@@ -183,7 +187,9 @@ func TestArrayCopy(t *testing.T) {
 		require.NoError(t, err)
 
 		// Modify copied array.
-		copiedArray.Set(0, testutils.NewSomeValue(testutils.NewUint64ValueFromInteger(42)))
+		existingStorable, err := copiedArray.Set(0, testutils.NewSomeValue(testutils.NewUint64ValueFromInteger(42)))
+		require.NoError(t, err)
+		require.Equal(t, testutils.SomeStorable{Storable: testutils.NewUint64ValueFromInteger(0)}, existingStorable)
 
 		copiedArrayExpectedValues := slices.Clone(expectedValues)
 		copiedArrayExpectedValues[0] = testutils.NewExpectedWrapperValue(testutils.NewUint64ValueFromInteger(42))
@@ -293,7 +299,9 @@ func TestArrayCopy(t *testing.T) {
 		require.NoError(t, err)
 
 		// Modified copied array.
-		copiedArray.Set(uint64(0), testutils.NewUint64ValueFromInteger(42))
+		existingStorable, err := copiedArray.Set(0, testutils.NewUint64ValueFromInteger(42))
+		require.NoError(t, err)
+		require.Equal(t, testutils.NewUint64ValueFromInteger(0), existingStorable)
 
 		copiedArrayExpectedValues := testutils.ExpectedArrayValue{testutils.NewUint64ValueFromInteger(42)}
 
@@ -432,7 +440,9 @@ func TestArrayCopy(t *testing.T) {
 		require.NoError(t, err)
 
 		// Modify copied array.
-		copiedArray.Set(0, testutils.NewSomeValue(testutils.NewUint64ValueFromInteger(42)))
+		existingStorable, err := copiedArray.Set(0, testutils.NewSomeValue(testutils.NewUint64ValueFromInteger(42)))
+		require.NoError(t, err)
+		require.Equal(t, testutils.SomeStorable{Storable: testutils.NewUint64ValueFromInteger(0)}, existingStorable)
 
 		copiedArrayExpectedValues := slices.Clone(nestedArrayExpectedValues)
 		copiedArrayExpectedValues[0] = testutils.NewExpectedWrapperValue(testutils.NewUint64ValueFromInteger(42))

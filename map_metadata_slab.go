@@ -39,11 +39,11 @@ var _ MapSlab = &MapMetaDataSlab{}
 
 // Copy
 
-func (m *MapMetaDataSlab) CanCopy() bool {
+func (*MapMetaDataSlab) CanCopy() bool {
 	return false
 }
 
-func (a *MapMetaDataSlab) Copy() (Storable, error) {
+func (*MapMetaDataSlab) Copy() (Storable, error) {
 	return nil, NewCopyError("MapMetaDataSlab", "can't copy MapMetaDataSlab")
 }
 

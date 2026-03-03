@@ -2912,7 +2912,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 			require.NoError(t, err)
 			require.False(t, childArray.Inlined())
 
-			expectedValues[i] = testutils.ExpectedArrayValue(expectedChildArrayValues)
+			expectedValues[i] = expectedChildArrayValues
 		}
 
 		testArray(t, storage, typeInfo, address, array, expectedValues, true, 1)
@@ -4156,7 +4156,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		err = array.Append(childArray)
 		require.NoError(t, err)
 
-		expectedValues = append(expectedValues, testutils.ExpectedArrayValue(expectedChildArrayValues))
+		expectedValues = append(expectedValues, expectedChildArrayValues)
 
 		require.Equal(t, arrayCount, array.Count())
 		require.Equal(t, childArrayCount, childArray.Count())
@@ -4330,7 +4330,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedValues = append(expectedValues, testutils.ExpectedArrayValue{
-			testutils.ExpectedArrayValue(expectedGChildArrayValues),
+			expectedGChildArrayValues,
 		})
 
 		require.Equal(t, arrayCount, array.Count())
@@ -6243,12 +6243,12 @@ func createArrayWithChildArrays(
 			err = array.Append(testutils.NewSomeValue(childArray))
 			require.NoError(t, err)
 
-			expectedValues[i] = testutils.NewExpectedWrapperValue(testutils.ExpectedArrayValue(expectedChildArrayValues))
+			expectedValues[i] = testutils.NewExpectedWrapperValue(expectedChildArrayValues)
 		} else {
 			err = array.Append(childArray)
 			require.NoError(t, err)
 
-			expectedValues[i] = testutils.ExpectedArrayValue(expectedChildArrayValues)
+			expectedValues[i] = expectedChildArrayValues
 		}
 	}
 
@@ -6294,12 +6294,12 @@ func createArrayWithSimpleAndChildArrayValues(
 				err = array.Append(testutils.NewSomeValue(childArray))
 				require.NoError(t, err)
 
-				expectedValues[i] = testutils.NewExpectedWrapperValue(testutils.ExpectedArrayValue(expectedChildArrayValues))
+				expectedValues[i] = testutils.NewExpectedWrapperValue(expectedChildArrayValues)
 			} else {
 				err = array.Append(childArray)
 				require.NoError(t, err)
 
-				expectedValues[i] = testutils.ExpectedArrayValue(expectedChildArrayValues)
+				expectedValues[i] = expectedChildArrayValues
 			}
 
 			childSlabID = childArray.SlabID()

@@ -73,7 +73,7 @@ var newMapValueFunc = func(
 			keyValues[expectedK] = expectedV
 		}
 
-		return m, testutils.ExpectedMapValue(keyValues)
+		return m, keyValues
 	}
 }
 

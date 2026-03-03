@@ -1413,16 +1413,16 @@ func (nonStorable) ByteSize() uint32 {
 	return 1
 }
 
-func (v nonStorable) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
-	return v, nil
+func (s nonStorable) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
+	return s, nil
 }
 
 func (nonStorable) ChildStorables() []atree.Storable {
 	return nil
 }
 
-func (v nonStorable) Storable(_ atree.SlabStorage, _ atree.Address, _ uint32) (atree.Storable, error) {
-	return v, nil
+func (s nonStorable) Storable(_ atree.SlabStorage, _ atree.Address, _ uint32) (atree.Storable, error) {
+	return s, nil
 }
 
 type slowStorable struct {

@@ -1364,3 +1364,40 @@ func (a *Array) String() string {
 
 	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
+
+// CanCopy returns true if the array can be copied.
+func (a *Array) CanCopy() bool {
+	return a.root.canCopyWithoutSlabID()
+}
+
+// Copy returns a copy of the array.
+// NOTE: Please call CanCopy() to confirm the copy operation
+// is feasible for the array before calling Copy().
+func (a *Array) Copy(address Address) (*Array, error) {
+	if !a.root.IsData() {
+		return nil, NewCopyArrayError("can't copy multi-slab array")
+	}
+
+	newID, err := a.Storage.GenerateSlabID(address)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(
+			err,
+			fmt.Sprintf("failed to generate slab ID for address 0x%x", address))
+	}
+
+	copiedRootSlab, err := a.root.copyWithNewSlabID(newID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = storeSlab(a.Storage, copiedRootSlab)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Array{
+		Storage: a.Storage,
+		root:    copiedRootSlab,
+	}, nil
+}

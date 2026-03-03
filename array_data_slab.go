@@ -44,6 +44,78 @@ var _ Slab = &ArrayDataSlab{}
 var _ Storable = &ArrayDataSlab{}
 var _ ContainerStorable = &ArrayDataSlab{}
 
+// Copy
+
+func (a *ArrayDataSlab) CanCopy() bool {
+	// ArrayDataSlab can't be copied because it contains
+	// a SlabID that must be unique per slab.
+	return false
+}
+
+func (a *ArrayDataSlab) Copy() (Storable, error) {
+	return nil, NewCopyError("ArrayDataSlab", "can't copy ArrayDataSlab")
+}
+
+// canCopyWithoutSlabID returns true if the ArrayDataSlab (except SlabID) can be copied.
+// Specifically, ArrayDataSlab can be copied if:
+// - Next slab ID is empty, and
+// - All elements can be copied.
+// NOTE: Inlined ArrayDataSlab can be copied if all conditions are met.
+func (a *ArrayDataSlab) canCopyWithoutSlabID() bool {
+	if a.next != SlabIDUndefined {
+		return false
+	}
+	for _, e := range a.elements {
+		if !e.CanCopy() {
+			return false
+		}
+	}
+	return true
+}
+
+// copyWithNewSlabID returns a copy of the ArrayDataSlab.
+// NOTE: Source ArrayDataSlab can be inlined, but copied ArrayDataSlab is never inlined.
+func (a *ArrayDataSlab) copyWithNewSlabID(newID SlabID) (ArraySlab, error) {
+	if a.next != SlabIDUndefined {
+		return nil, NewCopyArrayError("can't copy array data slab with next slab ID")
+	}
+
+	var err error
+
+	copiedElements := make([]Storable, len(a.elements))
+	for i, e := range a.elements {
+		copiedElements[i], err = e.Copy()
+		if err != nil {
+			return nil, wrapErrorAsExternalErrorIfNeeded(err)
+		}
+	}
+
+	var copiedSlab ArrayDataSlab
+
+	if a.extraData != nil {
+		copiedSlab.extraData = &ArrayExtraData{
+			TypeInfo: a.extraData.TypeInfo.Copy(),
+		}
+	}
+
+	copiedSlab.header = ArraySlabHeader{
+		slabID: newID,
+		size:   a.header.size,
+		count:  a.header.count,
+	}
+
+	copiedSlab.elements = copiedElements
+
+	// Adjust size if source array is inlined.
+	if a.inlined {
+		copiedSlab.header.size = a.header.size -
+			inlinedArrayDataSlabPrefixSize +
+			arrayRootDataSlabPrefixSize
+	}
+
+	return &copiedSlab, nil
+}
+
 // Array operations (get, set, insert, remove, and pop iterate)
 
 func (a *ArrayDataSlab) Get(_ SlabStorage, index uint64) (Storable, error) {

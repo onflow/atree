@@ -1522,3 +1522,45 @@ func (m *OrderedMap) SlabID() SlabID {
 func (m *OrderedMap) ValueID() ValueID {
 	return slabIDToValueID(m.root.SlabID())
 }
+
+// CanCopy returns true if the map can be copied.
+func (m *OrderedMap) CanCopy() bool {
+	return m.root.canCopyWithoutSlabID()
+}
+
+// Copy returns a copy of the map.
+// NOTE: Please call CanCopy() to confirm the copy operation
+// is feasible for the map before calling Copy().
+func (m *OrderedMap) Copy(address Address, digestBuilder DigesterBuilder) (*OrderedMap, error) {
+	if !m.root.IsData() {
+		return nil, NewCopyMapError("can't copy multi-slab map")
+	}
+
+	seed := m.root.ExtraData().Seed
+
+	// Seed digester
+	digestBuilder.SetSeed(seed, typicalRandomConstant)
+
+	// Create root slab ID
+	newID, err := m.Storage.GenerateSlabID(address)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", address))
+	}
+
+	copiedRoot, err := m.root.copyWithNewSlabID(newID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = storeSlab(m.Storage, copiedRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	return &OrderedMap{
+		Storage:         m.Storage,
+		digesterBuilder: digestBuilder,
+		root:            copiedRoot,
+	}, nil
+}

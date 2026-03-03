@@ -366,7 +366,10 @@ func DecodeInlinedCompactMapStorable(
 		}
 
 		// Make a copy of key in case it is shared.
-		key := extraData.keys[i].Copy()
+		key, err := extraData.keys[i].Copy()
+		if err != nil {
+			return nil, wrapErrorAsExternalErrorIfNeeded(err)
+		}
 
 		elemSize := singleElementPrefixSize + key.ByteSize() + value.ByteSize()
 		elem := &singleElement{key, value, elemSize}

@@ -1395,6 +1395,16 @@ var errEncodeNonStorable = errors.New("failed to encode non-storable")
 // nonStorable can't be encoded successfully.
 type nonStorable struct{}
 
+var _ atree.Storable = nonStorable{}
+
+func (nonStorable) CanCopy() bool {
+	return true
+}
+
+func (s nonStorable) Copy() (atree.Storable, error) {
+	return s, nil
+}
+
 func (nonStorable) Encode(_ *atree.Encoder) error {
 	return errEncodeNonStorable
 }

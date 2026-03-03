@@ -75,6 +75,10 @@ type element interface {
 
 	hasPointer() bool
 
+	canCopy() bool
+
+	copy() (element, error)
+
 	Size() uint32
 
 	Count(storage SlabStorage) (uint32, error)
@@ -122,6 +126,28 @@ func newSingleElement(storage SlabStorage, address Address, key Value, value Val
 		key:   ks,
 		value: vs,
 		size:  singleElementPrefixSize + ks.ByteSize() + vs.ByteSize(),
+	}, nil
+}
+
+func (e *singleElement) canCopy() bool {
+	return e.key.CanCopy() && e.value.CanCopy()
+}
+
+func (e *singleElement) copy() (element, error) {
+	copiedKey, err := e.key.Copy()
+	if err != nil {
+		return nil, wrapErrorAsExternalErrorIfNeeded(err)
+	}
+
+	copiedValue, err := e.value.Copy()
+	if err != nil {
+		return nil, wrapErrorAsExternalErrorIfNeeded(err)
+	}
+
+	return &singleElement{
+		key:   copiedKey,
+		value: copiedValue,
+		size:  e.size,
 	}, nil
 }
 
@@ -290,6 +316,20 @@ type inlineCollisionGroup struct {
 
 var _ element = &inlineCollisionGroup{}
 var _ elementGroup = &inlineCollisionGroup{}
+
+func (e *inlineCollisionGroup) canCopy() bool {
+	return e.elements.canCopy()
+}
+
+func (e *inlineCollisionGroup) copy() (element, error) {
+	copiedElements, err := e.elements.copy()
+	if err != nil {
+		return nil, err
+	}
+	return &inlineCollisionGroup{
+		elements: copiedElements,
+	}, nil
+}
 
 func (e *inlineCollisionGroup) getElementAndNextKey(
 	storage SlabStorage,
@@ -468,6 +508,14 @@ type externalCollisionGroup struct {
 
 var _ element = &externalCollisionGroup{}
 var _ elementGroup = &externalCollisionGroup{}
+
+func (e *externalCollisionGroup) canCopy() bool {
+	return false
+}
+
+func (e *externalCollisionGroup) copy() (element, error) {
+	return nil, NewCopyError("externalCollisionGroup", "can't copy external collision group")
+}
 
 func (e *externalCollisionGroup) getElementAndNextKey(
 	storage SlabStorage,

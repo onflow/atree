@@ -49,6 +49,13 @@ type ArraySlab interface {
 
 	PopIterate(SlabStorage, ArrayPopIterationFunc) error
 
+	// canCopyWithoutSlabID returns true if
+	// - All elements can be copied, and
+	// - Slab doesn't have any references to other slabs (such as next slab ID).
+	canCopyWithoutSlabID() bool
+	// copyWithNewSlabID copies the ArraySlab and uses the given newID as the SlabID.
+	copyWithNewSlabID(newID SlabID) (ArraySlab, error)
+
 	Inlined() bool
 	Inlinable(maxInlineSize uint32) bool
 	Inline(SlabStorage) error

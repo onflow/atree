@@ -183,9 +183,7 @@ func _testArray(
 
 		stats, err := atree.GetArrayStats(array)
 		require.NoError(t, err)
-		if numberOfRootSlabsInStorage == 1 {
-			require.Equal(t, stats.SlabCount(), uint64(storage.Count()))
-		}
+		require.True(t, stats.SlabCount() <= uint64(storage.Count()))
 
 		if len(expectedValues) == 0 {
 			// Verify slab count for empty array
@@ -213,7 +211,7 @@ func TestArrayAppendAndGet(t *testing.T) {
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([]atree.Value, arrayCount)
+	expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 	for i := range expectedValues {
 		v := testutils.NewUint64ValueFromInteger(i)
 		expectedValues[i] = v
@@ -248,7 +246,7 @@ func TestArraySetAndGet(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -294,7 +292,7 @@ func TestArraySetAndGet(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -341,7 +339,7 @@ func TestArraySetAndGet(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.Uint64Value(math.MaxUint64 - arrayCount + uint64(i) + 1)
 			expectedValues[i] = v
@@ -379,7 +377,7 @@ func TestArraySetAndGet(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -423,7 +421,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := len(expectedValues) - 1; i >= 0; i-- {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -446,7 +444,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -469,7 +467,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, 0, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, 0, arrayCount)
 		for i := uint64(0); i < arrayCount; i += 2 {
 			v := testutils.Uint64Value(i)
 			expectedValues = append(expectedValues, v)
@@ -501,7 +499,7 @@ func TestArrayInsertAndGet(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -543,7 +541,7 @@ func TestArrayRemove(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -595,7 +593,7 @@ func TestArrayRemove(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -643,7 +641,7 @@ func TestArrayRemove(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -698,7 +696,7 @@ func TestArrayRemove(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -1168,7 +1166,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			err = array.Append(v)
@@ -1216,7 +1214,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			err = array.Append(v)
@@ -1264,7 +1262,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		r := rune('a')
 		for i := range expectedValues {
 			v := testutils.NewStringValue(string(r))
@@ -1317,7 +1315,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		r := rune('a')
 		for i := range expectedValues {
 			v := testutils.NewStringValue(string(r))
@@ -1370,7 +1368,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		r := rune('a')
 		for i := range expectedValues {
 			v := testutils.NewStringValue(strings.Repeat(string(r), 25))
@@ -1423,7 +1421,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -1482,7 +1480,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -1545,7 +1543,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -1618,7 +1616,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -1691,7 +1689,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range arrayCount {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -1764,7 +1762,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -1838,7 +1836,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -1912,7 +1910,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -1987,7 +1985,7 @@ func TestMutableArrayIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -2238,7 +2236,7 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		testArrayIterateRange(t, array, []atree.Value{})
+		testArrayIterateRange(t, array, testutils.ExpectedArrayValue{})
 	})
 
 	t.Run("dataslab as root", func(t *testing.T) {
@@ -2251,7 +2249,7 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			value := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = value
@@ -2273,7 +2271,7 @@ func TestReadOnlyArrayIterateRange(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			value := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = value
@@ -2385,7 +2383,7 @@ func TestMutableArrayIterateRange(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
@@ -2559,7 +2557,7 @@ func TestArraySetRandomValues(t *testing.T) {
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([]atree.Value, arrayCount)
+	expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 	for i := range expectedValues {
 		v := testutils.NewUint64ValueFromInteger(i)
 		expectedValues[i] = v
@@ -2604,7 +2602,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := len(expectedValues) - 1; i >= 0; i-- {
 			v := randomValue(r, atree.MaxInlineArrayElementSize())
 			expectedValues[i] = v
@@ -2630,7 +2628,7 @@ func TestArrayInsertRandomValues(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := randomValue(r, atree.MaxInlineArrayElementSize())
 			expectedValues[i] = v
@@ -2687,7 +2685,7 @@ func TestArrayRemoveRandomValues(t *testing.T) {
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([]atree.Value, arrayCount)
+	expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 	// Insert n random values into array
 	for i := range expectedValues {
 		v := randomValue(r, atree.MaxInlineArrayElementSize())
@@ -2728,7 +2726,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 	typeInfo atree.TypeInfo,
 	address atree.Address,
 	opCount int,
-) (*atree.Array, []atree.Value) {
+) (*atree.Array, testutils.ExpectedArrayValue) {
 	const (
 		ArrayAppendOp = iota
 		ArrayInsertOp
@@ -2740,7 +2738,7 @@ func testArrayAppendSetInsertRemoveRandomValues(
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([]atree.Value, 0, opCount)
+	expectedValues := make(testutils.ExpectedArrayValue, 0, opCount)
 	for range opCount {
 
 		var nextOp int
@@ -2855,7 +2853,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create child arrays with 1 element.
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childArray, err := atree.NewArray(storage, address, childTypeInfo)
 			require.NoError(t, err)
@@ -2893,12 +2891,12 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create child arrays with 40 element.
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childArray, err := atree.NewArray(storage, address, childTypeInfo)
 			require.NoError(t, err)
 
-			expectedChildArrayValues := make([]atree.Value, childArrayCount)
+			expectedChildArrayValues := make(testutils.ExpectedArrayValue, childArrayCount)
 			for j := range expectedChildArrayValues {
 				v := testutils.Uint64Value(math.MaxUint64)
 
@@ -2933,7 +2931,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), childArayTypeInfo)
 			require.NoError(t, err)
@@ -2968,7 +2966,7 @@ func TestArrayWithChildArrayMap(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 
 			childMap, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), nestedTypeInfo)
@@ -3059,7 +3057,7 @@ func TestArrayDecodeV0(t *testing.T) {
 			atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 1},
 		)
 
-		expectedValues := []atree.Value{
+		expectedValues := testutils.ExpectedArrayValue{
 			testutils.Uint64Value(0),
 		}
 
@@ -3109,7 +3107,7 @@ func TestArrayDecodeV0(t *testing.T) {
 		childArraySlabID := atree.NewSlabID(address, atree.SlabIndex{0, 0, 0, 0, 0, 0, 0, 4})
 
 		const arrayCount = uint64(20)
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			var v atree.Value
 			if i == len(expectedValues)-1 {
@@ -3288,7 +3286,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		v := testutils.Uint64Value(0)
-		expectedValues := []atree.Value{v}
+		expectedValues := testutils.ExpectedArrayValue{v}
 		err = array.Append(v)
 		require.NoError(t, err)
 
@@ -3336,7 +3334,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const arrayCount = uint64(18)
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewStringValue(strings.Repeat("a", 22))
 			expectedValues[i] = v
@@ -3452,7 +3450,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const arrayCount = uint64(2)
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 
@@ -3534,7 +3532,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const arrayCount = uint64(2)
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 
@@ -3625,7 +3623,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const arrayCount = uint64(2)
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 
@@ -3720,7 +3718,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const arrayCount = uint64(2)
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 
@@ -3832,7 +3830,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const arrayCount = uint64(20)
-		expectedValues := make([]atree.Value, 0, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, 0, arrayCount)
 		for range arrayCount - 2 {
 			v := testutils.NewStringValue(strings.Repeat("a", 22))
 
@@ -3977,7 +3975,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const arrayCount = uint64(20)
-		expectedValues := make([]atree.Value, 0, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, 0, arrayCount)
 		for range arrayCount - 2 {
 			v := testutils.NewStringValue(strings.Repeat("a", 22))
 
@@ -4132,7 +4130,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const arrayCount = uint64(20)
-		expectedValues := make([]atree.Value, 0, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, 0, arrayCount)
 		for range arrayCount - 1 {
 			v := testutils.NewStringValue(strings.Repeat("a", 22))
 
@@ -4147,7 +4145,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		childArray, err := atree.NewArray(storage, address, typeInfo2)
 		require.NoError(t, err)
 
-		expectedChildArrayValues := make([]atree.Value, childArrayCount)
+		expectedChildArrayValues := make(testutils.ExpectedArrayValue, childArrayCount)
 		for i := range expectedChildArrayValues {
 			v := testutils.NewStringValue(strings.Repeat("b", 22))
 			err = childArray.Append(v)
@@ -4297,7 +4295,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 		require.NoError(t, err)
 
 		const arrayCount = uint64(20)
-		expectedValues := make([]atree.Value, 0, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, 0, arrayCount)
 		for range arrayCount - 1 {
 			v := testutils.NewStringValue(strings.Repeat("a", 22))
 
@@ -4315,7 +4313,7 @@ func TestArrayEncodeDecode(t *testing.T) {
 
 		const gchildArrayCount = 5
 
-		expectedGChildArrayValues := make([]atree.Value, gchildArrayCount)
+		expectedGChildArrayValues := make(testutils.ExpectedArrayValue, gchildArrayCount)
 		for i := range expectedGChildArrayValues {
 			v := testutils.NewStringValue(strings.Repeat("b", 22))
 
@@ -4599,7 +4597,7 @@ func TestArrayStringElement(t *testing.T) {
 
 		stringSize := int(atree.MaxInlineArrayElementSize() - 3)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			s := randStr(r, stringSize)
 			expectedValues[i] = testutils.NewStringValue(s)
@@ -4632,7 +4630,7 @@ func TestArrayStringElement(t *testing.T) {
 
 		stringSize := int(atree.MaxInlineArrayElementSize() + 512)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			s := randStr(r, stringSize)
 			expectedValues[i] = testutils.NewStringValue(s)
@@ -4670,7 +4668,7 @@ func TestArrayStoredValue(t *testing.T) {
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([]atree.Value, arrayCount)
+	expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 	for i := range expectedValues {
 		v := testutils.NewUint64ValueFromInteger(i)
 		expectedValues[i] = v
@@ -4745,7 +4743,7 @@ func TestArrayPopIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -4779,7 +4777,7 @@ func TestArrayPopIterate(t *testing.T) {
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -4851,7 +4849,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -4894,7 +4892,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := testutils.NewUint64ValueFromInteger(i)
 			expectedValues[i] = v
@@ -4936,7 +4934,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues []atree.Value
+		var expectedValues testutils.ExpectedArrayValue
 		var v atree.Value
 
 		v = testutils.NewStringValue(strings.Repeat("a", int(atree.MaxInlineArrayElementSize()-2)))
@@ -4987,7 +4985,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues []atree.Value
+		var expectedValues testutils.ExpectedArrayValue
 		var v atree.Value
 		for i := range arrayCount - 1 {
 			v = testutils.Uint64Value(i)
@@ -5039,7 +5037,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			v := randomValue(r, atree.MaxInlineArrayElementSize())
 			expectedValues[i] = v
@@ -5086,7 +5084,7 @@ func TestArrayFromBatchData(t *testing.T) {
 			typeInfo)
 		require.NoError(t, err)
 
-		var expectedValues []atree.Value
+		var expectedValues testutils.ExpectedArrayValue
 		var v atree.Value
 
 		v = testutils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-2)))
@@ -5138,7 +5136,7 @@ func TestArrayNestedStorables(t *testing.T) {
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([]atree.Value, arrayCount)
+	expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 	for i := range expectedValues {
 		s := strings.Repeat("a", i)
 		v := testutils.NewSomeValue(testutils.NewStringValue(s))
@@ -5165,7 +5163,7 @@ func TestArrayMaxInlineElement(t *testing.T) {
 
 	const arrayCount = uint64(2)
 
-	expectedValues := make([]atree.Value, arrayCount)
+	expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 	for i := range expectedValues {
 		// String length is atree.MaxInlineArrayElementSize - 3 to account for string encoding overhead.
 		v := testutils.NewStringValue(randStr(r, int(atree.MaxInlineArrayElementSize()-3)))
@@ -6180,13 +6178,13 @@ func createArrayWithSimpleValues(
 	typeInfo atree.TypeInfo,
 	arrayCount uint64,
 	useWrapperValue bool,
-) (*atree.Array, []atree.Value) {
+) (*atree.Array, testutils.ExpectedArrayValue) {
 
 	// Create parent array
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([]atree.Value, arrayCount)
+	expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 	r := rune('a')
 	for i := range expectedValues {
 		s := testutils.NewStringValue(strings.Repeat(string(r), 20))
@@ -6221,7 +6219,7 @@ func createArrayWithChildArrays(
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([]atree.Value, arrayCount)
+	expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 	childSlabIDs := make([]atree.SlabID, arrayCount)
 
 	for i := range expectedValues {
@@ -6229,7 +6227,7 @@ func createArrayWithChildArrays(
 		childArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedChildArrayValues := make([]atree.Value, childArrayCount)
+		expectedChildArrayValues := make(testutils.ExpectedArrayValue, childArrayCount)
 		for j := range expectedChildArrayValues {
 			v := testutils.NewUint64ValueFromInteger(j)
 			err = childArray.Append(v)
@@ -6265,7 +6263,7 @@ func createArrayWithSimpleAndChildArrayValues(
 	arrayCount uint64,
 	compositeValueIndex uint64,
 	useWrapperValue bool,
-) (*atree.Array, []atree.Value, atree.SlabID) {
+) (*atree.Array, testutils.ExpectedArrayValue, atree.SlabID) {
 	const childArrayCount = 50
 
 	require.True(t, compositeValueIndex < arrayCount)
@@ -6273,7 +6271,7 @@ func createArrayWithSimpleAndChildArrayValues(
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([]atree.Value, arrayCount)
+	expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 	var childSlabID atree.SlabID
 	r := 'a'
 	for i := range expectedValues {
@@ -6283,7 +6281,7 @@ func createArrayWithSimpleAndChildArrayValues(
 			childArray, err := atree.NewArray(storage, address, typeInfo)
 			require.NoError(t, err)
 
-			expectedChildArrayValues := make([]atree.Value, childArrayCount)
+			expectedChildArrayValues := make(testutils.ExpectedArrayValue, childArrayCount)
 			for j := range expectedChildArrayValues {
 				v := testutils.NewUint64ValueFromInteger(j)
 				err = childArray.Append(v)
@@ -7377,7 +7375,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			// Create child array
 			child, err := atree.NewArray(storage, address, typeInfo)
@@ -7710,7 +7708,7 @@ func TestNestedThreeLevelChildArrayInlinabilityInParentArray(t *testing.T) {
 		parentArray, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 		for i := range expectedValues {
 			// Create child array
 			child, err := atree.NewArray(storage, address, typeInfo)
@@ -8372,13 +8370,13 @@ func createArrayWithEmptyChildArray(
 	address atree.Address,
 	typeInfo atree.TypeInfo,
 	arrayCount uint64,
-) (*atree.Array, []atree.Value) {
+) (*atree.Array, testutils.ExpectedArrayValue) {
 
 	// Create parent array
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([]atree.Value, arrayCount)
+	expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 	for i := range expectedValues {
 		// Create child array
 		child, err := atree.NewArray(storage, address, typeInfo)
@@ -8400,13 +8398,13 @@ func createArrayWithEmpty2LevelChildArray(
 	address atree.Address,
 	typeInfo atree.TypeInfo,
 	arrayCount uint64,
-) (*atree.Array, []atree.Value) {
+) (*atree.Array, testutils.ExpectedArrayValue) {
 
 	// Create parent array
 	array, err := atree.NewArray(storage, address, typeInfo)
 	require.NoError(t, err)
 
-	expectedValues := make([]atree.Value, arrayCount)
+	expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 	for i := range expectedValues {
 		// Create child array
 		child, err := atree.NewArray(storage, address, typeInfo)

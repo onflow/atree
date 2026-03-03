@@ -28,6 +28,14 @@ type SlabIDStorable SlabID
 
 var _ ContainerStorable = SlabIDStorable{}
 
+func (v SlabIDStorable) CanCopy() bool {
+	return false
+}
+
+func (v SlabIDStorable) Copy() (Storable, error) {
+	return nil, NewCopyError("SlabIDStorable", "can't copy SlabIDStorable")
+}
+
 func (v SlabIDStorable) HasPointer() bool {
 	return true
 }

@@ -79,6 +79,13 @@ type MapSlab interface {
 
 	Header() MapSlabHeader
 
+	// canCopyWithoutSlabID returns true if
+	// - All elements can be copied, and
+	// - Slab doesn't have any references to other slabs (such as next slab ID).
+	canCopyWithoutSlabID() bool
+	// copyWithNewSlabID copies the MapSlab and uses the given newID as the the SlabID.
+	copyWithNewSlabID(newID SlabID) (MapSlab, error)
+
 	ExtraData() *MapExtraData
 	RemoveExtraData() *MapExtraData
 	SetExtraData(*MapExtraData)

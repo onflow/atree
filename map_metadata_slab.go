@@ -37,6 +37,24 @@ type MapMetaDataSlab struct {
 
 var _ MapSlab = &MapMetaDataSlab{}
 
+// Copy
+
+func (m *MapMetaDataSlab) CanCopy() bool {
+	return false
+}
+
+func (a *MapMetaDataSlab) Copy() (Storable, error) {
+	return nil, NewCopyError("MapMetaDataSlab", "can't copy MapMetaDataSlab")
+}
+
+func (m *MapMetaDataSlab) canCopyWithoutSlabID() bool {
+	return false
+}
+
+func (m *MapMetaDataSlab) copyWithNewSlabID(SlabID) (MapSlab, error) {
+	return nil, NewCopyError("MapMetaDataSlab", "can't copy map metdata slab")
+}
+
 // Map operations (get, set, remove, and pop iterate)
 
 func (m *MapMetaDataSlab) getChildSlabByDigest(storage SlabStorage, hkey Digest, key Value) (MapSlab, int, error) {

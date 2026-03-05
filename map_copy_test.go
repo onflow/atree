@@ -28,10 +28,10 @@ func TestMapCopy(t *testing.T) {
 
 		// Copy empty map.
 
-		canCopy := m.CanCopy()
+		canCopy := m.CanCopyNonRefSimple()
 		require.True(t, canCopy)
 
-		copiedMap, err := m.Copy(newAddress, atree.NewDefaultDigesterBuilder())
+		copiedMap, err := m.CopyNonRefSimple(newAddress, atree.NewDefaultDigesterBuilder())
 		require.NoError(t, err)
 
 		// Test map and verify storage health.
@@ -86,10 +86,10 @@ func TestMapCopy(t *testing.T) {
 
 		// Copy map.
 
-		canCopy := m.CanCopy()
+		canCopy := m.CanCopyNonRefSimple()
 		require.True(t, canCopy)
 
-		copiedMap, err := m.Copy(newAddress, atree.NewDefaultDigesterBuilder())
+		copiedMap, err := m.CopyNonRefSimple(newAddress, atree.NewDefaultDigesterBuilder())
 		require.NoError(t, err)
 
 		// Test map and verify storage health.
@@ -155,10 +155,10 @@ func TestMapCopy(t *testing.T) {
 
 		// Copy map.
 
-		canCopy := m.CanCopy()
+		canCopy := m.CanCopyNonRefSimple()
 		require.True(t, canCopy)
 
-		copiedMap, err := m.Copy(newAddress, collisionDigesterBuilder)
+		copiedMap, err := m.CopyNonRefSimple(newAddress, collisionDigesterBuilder)
 		require.NoError(t, err)
 
 		// Test map and verify storage health.
@@ -221,7 +221,7 @@ func TestMapCopy(t *testing.T) {
 
 		// Map with inlined container can't be copied.
 
-		canCopy := m.CanCopy()
+		canCopy := m.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test map and verify storage health.
@@ -248,7 +248,7 @@ func TestMapCopy(t *testing.T) {
 
 		// Map with SlabIDStorable can't be copied.
 
-		canCopy := m.CanCopy()
+		canCopy := m.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test map and verify storage health.
@@ -274,7 +274,7 @@ func TestMapCopy(t *testing.T) {
 
 		// Map with SlabIDStorable can't be copied.
 
-		canCopy := m.CanCopy()
+		canCopy := m.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test map and verify storage health.
@@ -300,10 +300,10 @@ func TestMapCopy(t *testing.T) {
 
 		// Copy map.
 
-		canCopy := m.CanCopy()
+		canCopy := m.CanCopyNonRefSimple()
 		require.True(t, canCopy)
 
-		copiedMap, err := m.Copy(newAddress, atree.NewDefaultDigesterBuilder())
+		copiedMap, err := m.CopyNonRefSimple(newAddress, atree.NewDefaultDigesterBuilder())
 		require.NoError(t, err)
 
 		// Test map and verify storage health.
@@ -363,7 +363,7 @@ func TestMapCopy(t *testing.T) {
 
 		// Map with wrapped inlined container can't be copied.
 
-		canCopy := m.CanCopy()
+		canCopy := m.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test map and verify storage health.
@@ -390,7 +390,7 @@ func TestMapCopy(t *testing.T) {
 
 		// Map with wrapped SlabIDStorable can't be copied.
 
-		canCopy := m.CanCopy()
+		canCopy := m.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test map and verify storage health.
@@ -437,10 +437,10 @@ func TestMapCopy(t *testing.T) {
 
 		// Copy map.
 
-		canCopy := retrievedInlinedMap.CanCopy()
+		canCopy := retrievedInlinedMap.CanCopyNonRefSimple()
 		require.True(t, canCopy)
 
-		copiedMap, err := retrievedInlinedMap.Copy(newAddress, atree.NewDefaultDigesterBuilder())
+		copiedMap, err := retrievedInlinedMap.CopyNonRefSimple(newAddress, atree.NewDefaultDigesterBuilder())
 		require.NoError(t, err)
 
 		// Test map and verify storage health.
@@ -515,7 +515,7 @@ func TestMapCopy(t *testing.T) {
 
 		// Map with inlined container can't be copied.
 
-		canCopy := retrievedInlinedMap.CanCopy()
+		canCopy := retrievedInlinedMap.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test map and verify storage health.
@@ -557,7 +557,7 @@ func TestMapCopy(t *testing.T) {
 
 		// Map with SlabIDStorable can't be copied.
 
-		canCopy := retrievedInlinedMap.CanCopy()
+		canCopy := retrievedInlinedMap.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test map and verify storage health.
@@ -601,10 +601,10 @@ func TestMapCopy(t *testing.T) {
 
 		// Copy map.
 
-		canCopy := retrievedInlinedMap.CanCopy()
+		canCopy := retrievedInlinedMap.CanCopyNonRefSimple()
 		require.True(t, canCopy)
 
-		copiedMap, err := retrievedInlinedMap.Copy(newAddress, atree.NewDefaultDigesterBuilder())
+		copiedMap, err := retrievedInlinedMap.CopyNonRefSimple(newAddress, atree.NewDefaultDigesterBuilder())
 		require.NoError(t, err)
 
 		// Test map and verify storage health.
@@ -670,7 +670,7 @@ func TestMapCopy(t *testing.T) {
 
 		// Map with wrapped inlined container can't be copied.
 
-		canCopy := retrievedInlinedMap.CanCopy()
+		canCopy := retrievedInlinedMap.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test map and verify storage health.
@@ -712,7 +712,7 @@ func TestMapCopy(t *testing.T) {
 
 		// Map with wrapped SlabIDStorable can't be copied.
 
-		canCopy := retrievedInlinedMap.CanCopy()
+		canCopy := retrievedInlinedMap.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test map and verify storage health.
@@ -742,7 +742,7 @@ func TestMapCopy(t *testing.T) {
 
 		// Multi slab map can't be copied.
 
-		canCopy := m.CanCopy()
+		canCopy := m.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test map and verify storage health.

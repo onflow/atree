@@ -44,7 +44,7 @@ var _ Slab = &ArrayDataSlab{}
 var _ Storable = &ArrayDataSlab{}
 var _ ContainerStorable = &ArrayDataSlab{}
 
-// Copy
+// CopyNonRefSimple
 
 func (a *ArrayDataSlab) CanCopyNonRefSimple() bool {
 	// ArrayDataSlab can't be copied because it contains

@@ -1365,15 +1365,17 @@ func (a *Array) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
 
-// CanCopy returns true if the array can be copied.
-func (a *Array) CanCopy() bool {
+// CanCopyNonRefSimple returns true if the array can be copied
+// as a container with only non-reference and simple storables.
+func (a *Array) CanCopyNonRefSimple() bool {
 	return a.root.canCopyWithoutSlabID()
 }
 
-// Copy returns a copy of the array.
-// NOTE: Please call CanCopy() to confirm the copy operation
-// is feasible for the array before calling Copy().
-func (a *Array) Copy(address Address) (*Array, error) {
+// CopyNonRefSimple returns a copy of the array that only
+// contains non-reference and simple storables.
+// NOTE: Please call CanCopyNonRefSimple() to confirm the copy operation
+// is feasible for the array before calling CopyNonRefSimple().
+func (a *Array) CopyNonRefSimple(address Address) (*Array, error) {
 	if !a.root.IsData() {
 		return nil, newCopyArrayErrorf("can't copy multi-slab array")
 	}

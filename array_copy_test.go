@@ -29,10 +29,10 @@ func TestArrayCopy(t *testing.T) {
 
 		// Copy array.
 
-		canCopy := array.CanCopy()
+		canCopy := array.CanCopyNonRefSimple()
 		require.True(t, canCopy)
 
-		copiedArray, err := array.Copy(newAddress)
+		copiedArray, err := array.CopyNonRefSimple(newAddress)
 		require.NoError(t, err)
 
 		// Test array and verify storage health.
@@ -84,10 +84,10 @@ func TestArrayCopy(t *testing.T) {
 
 		// Copy array.
 
-		canCopy := array.CanCopy()
+		canCopy := array.CanCopyNonRefSimple()
 		require.True(t, canCopy)
 
-		copiedArray, err := array.Copy(newAddress)
+		copiedArray, err := array.CopyNonRefSimple(newAddress)
 		require.NoError(t, err)
 
 		// Test array and verify storage health.
@@ -133,7 +133,7 @@ func TestArrayCopy(t *testing.T) {
 
 		// Array with inlined container can't be copied.
 
-		canCopy := array.CanCopy()
+		canCopy := array.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test array and verify storage health.
@@ -158,7 +158,7 @@ func TestArrayCopy(t *testing.T) {
 
 		// Array with reference to another slab can't be copied.
 
-		canCopy := array.CanCopy()
+		canCopy := array.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test array and verify storage health.
@@ -188,10 +188,10 @@ func TestArrayCopy(t *testing.T) {
 
 		// Copy array.
 
-		canCopy := array.CanCopy()
+		canCopy := array.CanCopyNonRefSimple()
 		require.True(t, canCopy)
 
-		copiedArray, err := array.Copy(newAddress)
+		copiedArray, err := array.CopyNonRefSimple(newAddress)
 		require.NoError(t, err)
 
 		// Test array and verify storage health.
@@ -239,7 +239,7 @@ func TestArrayCopy(t *testing.T) {
 
 		// Array with wrapped inlined container can not be copied.
 
-		canCopy := array.CanCopy()
+		canCopy := array.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test array and verify storage health.
@@ -265,7 +265,7 @@ func TestArrayCopy(t *testing.T) {
 		}
 
 		// Array with wrapped reference can't be copied.
-		canCopy := array.CanCopy()
+		canCopy := array.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test array and verify storage health.
@@ -306,10 +306,10 @@ func TestArrayCopy(t *testing.T) {
 		require.True(t, atree.GetArrayRootSlab(retrievedInlinedArray).Inlined())
 
 		// Inlined array with simple values can be copied.
-		canCopy := retrievedInlinedArray.CanCopy()
+		canCopy := retrievedInlinedArray.CanCopyNonRefSimple()
 		require.True(t, canCopy)
 
-		copiedArray, err := retrievedInlinedArray.Copy(newAddress)
+		copiedArray, err := retrievedInlinedArray.CopyNonRefSimple(newAddress)
 		require.NoError(t, err)
 
 		// Test array and verify storage health.
@@ -368,7 +368,7 @@ func TestArrayCopy(t *testing.T) {
 		require.True(t, atree.GetArrayRootSlab(retrievedInlinedArray).Inlined())
 
 		// Inlined array with another inlined container can't be copied.
-		canCopy := retrievedInlinedArray.CanCopy()
+		canCopy := retrievedInlinedArray.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test array and verify storage health.
@@ -407,7 +407,7 @@ func TestArrayCopy(t *testing.T) {
 		require.True(t, atree.GetArrayRootSlab(retrievedInlinedArray).Inlined())
 
 		// Inlined array with reference to another slab can't be copied.
-		canCopy := retrievedInlinedArray.CanCopy()
+		canCopy := retrievedInlinedArray.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test array and verify storage health.
@@ -451,10 +451,10 @@ func TestArrayCopy(t *testing.T) {
 		require.True(t, atree.GetArrayRootSlab(retrievedInlinedArray).Inlined())
 
 		// Inlined array with wrapped simple values can be copied.
-		canCopy := retrievedInlinedArray.CanCopy()
+		canCopy := retrievedInlinedArray.CanCopyNonRefSimple()
 		require.True(t, canCopy)
 
-		copiedArray, err := retrievedInlinedArray.Copy(newAddress)
+		copiedArray, err := retrievedInlinedArray.CopyNonRefSimple(newAddress)
 		require.NoError(t, err)
 
 		// Test array and verify storage health.
@@ -516,7 +516,7 @@ func TestArrayCopy(t *testing.T) {
 		require.True(t, atree.GetArrayRootSlab(retrievedInlinedArray).Inlined())
 
 		// Inlined array with wrapped inlined container can not be copied.
-		canCopy := retrievedInlinedArray.CanCopy()
+		canCopy := retrievedInlinedArray.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test array and verify storage health.
@@ -557,7 +557,7 @@ func TestArrayCopy(t *testing.T) {
 		require.True(t, atree.GetArrayRootSlab(retrievedInlinedArray).Inlined())
 
 		// Inlined array with wrapped reference can't be copied.
-		canCopy := retrievedInlinedArray.CanCopy()
+		canCopy := retrievedInlinedArray.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test array and verify storage health.
@@ -587,7 +587,7 @@ func TestArrayCopy(t *testing.T) {
 
 		// Multi-slab array can't be copied.
 
-		canCopy := array.CanCopy()
+		canCopy := array.CanCopyNonRefSimple()
 		require.False(t, canCopy)
 
 		// Test array and verify storage health.

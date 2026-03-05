@@ -40,7 +40,7 @@ type MapDataSlab struct {
 var _ MapSlab = &MapDataSlab{}
 var _ ContainerStorable = &MapDataSlab{}
 
-// Copy
+// CopyNonRefSimple
 
 func (m *MapDataSlab) CanCopyNonRefSimple() bool {
 	// MapDataSlab can't be copied because it contains
@@ -58,7 +58,7 @@ func (*MapDataSlab) CopyNonRefSimple() (Storable, error) {
 // - All elements can be copied.
 // NOTE: Inlined MapDataSlab can be copied if all conditions are met.
 func (m *MapDataSlab) canCopyWithoutSlabID() bool {
-	return m.next == SlabIDUndefined && m.canCopy()
+	return m.next == SlabIDUndefined && m.canCopyNonRefSimple()
 }
 
 // copyWithNewSlabID returns a copy of the MapDataSlab.
@@ -85,7 +85,7 @@ func (m *MapDataSlab) copyWithNewSlabID(newID SlabID) (MapSlab, error) {
 		firstKey: m.header.firstKey,
 	}
 
-	copiedSlab.elements, err = m.copy()
+	copiedSlab.elements, err = m.copyNonRefSimple()
 	if err != nil {
 		return nil, err
 	}

@@ -81,9 +81,9 @@ type elements interface {
 
 	hasPointer() bool
 
-	canCopy() bool
+	canCopyNonRefSimple() bool
 
-	copy() (elements, error)
+	copyNonRefSimple() (elements, error)
 
 	firstKey() Digest
 

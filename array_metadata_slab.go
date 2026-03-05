@@ -48,7 +48,7 @@ var _ ArraySlab = &ArrayMetaDataSlab{}
 var _ Slab = &ArrayMetaDataSlab{}
 var _ Storable = &ArrayMetaDataSlab{}
 
-// Copy
+// CopyNonRefSimple
 
 func (a *ArrayMetaDataSlab) CanCopyNonRefSimple() bool {
 	return false

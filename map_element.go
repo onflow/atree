@@ -75,9 +75,9 @@ type element interface {
 
 	hasPointer() bool
 
-	canCopy() bool
+	canCopyNonRefSimple() bool
 
-	copy() (element, error)
+	copyNonRefSimple() (element, error)
 
 	Size() uint32
 
@@ -129,11 +129,11 @@ func newSingleElement(storage SlabStorage, address Address, key Value, value Val
 	}, nil
 }
 
-func (e *singleElement) canCopy() bool {
+func (e *singleElement) canCopyNonRefSimple() bool {
 	return e.key.CanCopyNonRefSimple() && e.value.CanCopyNonRefSimple()
 }
 
-func (e *singleElement) copy() (element, error) {
+func (e *singleElement) copyNonRefSimple() (element, error) {
 	copiedKey, err := e.key.CopyNonRefSimple()
 	if err != nil {
 		return nil, wrapErrorAsExternalErrorIfNeeded(err)
@@ -317,12 +317,12 @@ type inlineCollisionGroup struct {
 var _ element = &inlineCollisionGroup{}
 var _ elementGroup = &inlineCollisionGroup{}
 
-func (e *inlineCollisionGroup) canCopy() bool {
-	return e.elements.canCopy()
+func (e *inlineCollisionGroup) canCopyNonRefSimple() bool {
+	return e.elements.canCopyNonRefSimple()
 }
 
-func (e *inlineCollisionGroup) copy() (element, error) {
-	copiedElements, err := e.elements.copy()
+func (e *inlineCollisionGroup) copyNonRefSimple() (element, error) {
+	copiedElements, err := e.elements.copyNonRefSimple()
 	if err != nil {
 		return nil, err
 	}
@@ -509,11 +509,11 @@ type externalCollisionGroup struct {
 var _ element = &externalCollisionGroup{}
 var _ elementGroup = &externalCollisionGroup{}
 
-func (e *externalCollisionGroup) canCopy() bool {
+func (e *externalCollisionGroup) canCopyNonRefSimple() bool {
 	return false
 }
 
-func (e *externalCollisionGroup) copy() (element, error) {
+func (e *externalCollisionGroup) copyNonRefSimple() (element, error) {
 	return nil, fmt.Errorf("failed to copy externalCollisionGroup: can't copy slab reference")
 }
 

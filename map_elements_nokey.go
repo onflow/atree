@@ -42,22 +42,22 @@ func newSingleElementsWithElement(level uint, elem *singleElement) *singleElemen
 	}
 }
 
-// Copy
+// CopyNonRefSimple
 
-func (e *singleElements) canCopy() bool {
+func (e *singleElements) canCopyNonRefSimple() bool {
 	for _, elem := range e.elems {
-		if !elem.canCopy() {
+		if !elem.canCopyNonRefSimple() {
 			return false
 		}
 	}
 	return true
 }
 
-func (e *singleElements) copy() (elements, error) {
+func (e *singleElements) copyNonRefSimple() (elements, error) {
 	copiedElements := make([]*singleElement, len(e.elems))
 
 	for i, e := range e.elems {
-		ce, err := e.copy()
+		ce, err := e.copyNonRefSimple()
 		if err != nil {
 			return nil, err
 		}

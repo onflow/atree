@@ -37,7 +37,7 @@ type MapMetaDataSlab struct {
 
 var _ MapSlab = &MapMetaDataSlab{}
 
-// Copy
+// CopyNonRefSimple
 
 func (*MapMetaDataSlab) CanCopyNonRefSimple() bool {
 	return false

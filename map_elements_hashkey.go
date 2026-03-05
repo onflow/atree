@@ -58,22 +58,22 @@ func newHkeyElementsWithElement(level uint, hkey Digest, elem element) *hkeyElem
 	}
 }
 
-// Copy
+// CopyNonRefSimple
 
-func (e *hkeyElements) canCopy() bool {
+func (e *hkeyElements) canCopyNonRefSimple() bool {
 	for _, elem := range e.elems {
-		if !elem.canCopy() {
+		if !elem.canCopyNonRefSimple() {
 			return false
 		}
 	}
 	return true
 }
 
-func (e *hkeyElements) copy() (elements, error) {
+func (e *hkeyElements) copyNonRefSimple() (elements, error) {
 	copiedElements := make([]element, len(e.elems))
 
 	for i, e := range e.elems {
-		ce, err := e.copy()
+		ce, err := e.copyNonRefSimple()
 		if err != nil {
 			return nil, err
 		}

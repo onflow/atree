@@ -1523,15 +1523,17 @@ func (m *OrderedMap) ValueID() ValueID {
 	return slabIDToValueID(m.root.SlabID())
 }
 
-// CanCopy returns true if the map can be copied.
-func (m *OrderedMap) CanCopy() bool {
+// CanCopyNonRefSimple returns true if the map can be copied
+// as a container with only non-reference and simple storables.
+func (m *OrderedMap) CanCopyNonRefSimple() bool {
 	return m.root.canCopyWithoutSlabID()
 }
 
-// Copy returns a copy of the map.
-// NOTE: Please call CanCopy() to confirm the copy operation
-// is feasible for the map before calling Copy().
-func (m *OrderedMap) Copy(address Address, digestBuilder DigesterBuilder) (*OrderedMap, error) {
+// CopyNonRefSimple returns a copy of the map that only
+// contains non-reference and simple storables.
+// NOTE: Please call CanCopyNonRefSimple() to confirm the copy operation
+// is feasible for the map before calling CopyNonRefSimple().
+func (m *OrderedMap) CopyNonRefSimple(address Address, digestBuilder DigesterBuilder) (*OrderedMap, error) {
 	if !m.root.IsData() {
 		return nil, newCopyMapErrorf("can't copy multi-slab map")
 	}

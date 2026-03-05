@@ -29,17 +29,18 @@ type Storable interface {
 	// (not recursive).  This function shouldn't load extra slabs.
 	ChildStorables() []Storable
 
-	// CanCopy returns true if a storable can be copied.
+	// CanCopyNonRefSimple returns true if a storable can be copied.
 	// Storable can not be copied if:
 	// - storable is, or wraps a container,
 	// - storable is, or wraps a reference (SlabIDStorable) to a container,
 	// - other reasons specific to the storable.
-	CanCopy() bool
+	CanCopyNonRefSimple() bool
 
-	// Copy returns a copy of the storable.
-	// NOTE: Copy doesn't perform a recursive check as CanCopy().  Please call
-	// CanCopy() to confirm the copy operation is feasible before calling Copy().
-	Copy() (Storable, error)
+	// CopyNonRefSimple returns a copy of the storable, or an error if
+	// the storable can't be copied as a non-reference simple storable.
+	// See [CanCopyNonRefSimple] for related details.
+	// CopyNonRefSimple should only return an error if CanCopyNonRefSimple() returns false.
+	CopyNonRefSimple() (Storable, error)
 }
 
 // ComparableStorable is an interface that supports comparison and cloning of Storable.

@@ -58,11 +58,11 @@ func NewStorableSlab(storage SlabStorage, address Address, storable Storable) (S
 	return SlabIDStorable(id), nil
 }
 
-func (s *StorableSlab) CanCopy() bool {
+func (s *StorableSlab) CanCopyNonRefSimple() bool {
 	return false
 }
 
-func (s *StorableSlab) Copy() (Storable, error) {
+func (s *StorableSlab) CopyNonRefSimple() (Storable, error) {
 	return nil, fmt.Errorf("failed to copy StorableSlab: copying StorableSlab isn't supported")
 }
 

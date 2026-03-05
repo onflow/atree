@@ -39,11 +39,11 @@ var _ MapSlab = &MapMetaDataSlab{}
 
 // Copy
 
-func (*MapMetaDataSlab) CanCopy() bool {
+func (*MapMetaDataSlab) CanCopyNonRefSimple() bool {
 	return false
 }
 
-func (*MapMetaDataSlab) Copy() (Storable, error) {
+func (*MapMetaDataSlab) CopyNonRefSimple() (Storable, error) {
 	return nil, fmt.Errorf("failed to copy MapMetaDataSlab: can't copy slab reference")
 }
 

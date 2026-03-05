@@ -28,11 +28,11 @@ type SlabIDStorable SlabID
 
 var _ ContainerStorable = SlabIDStorable{}
 
-func (v SlabIDStorable) CanCopy() bool {
+func (v SlabIDStorable) CanCopyNonRefSimple() bool {
 	return false
 }
 
-func (v SlabIDStorable) Copy() (Storable, error) {
+func (v SlabIDStorable) CopyNonRefSimple() (Storable, error) {
 	return nil, fmt.Errorf("failed to copy SlabIDStorable: can't copy slab reference")
 }
 

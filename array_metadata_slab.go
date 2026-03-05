@@ -50,11 +50,11 @@ var _ Storable = &ArrayMetaDataSlab{}
 
 // Copy
 
-func (a *ArrayMetaDataSlab) CanCopy() bool {
+func (a *ArrayMetaDataSlab) CanCopyNonRefSimple() bool {
 	return false
 }
 
-func (a *ArrayMetaDataSlab) Copy() (Storable, error) {
+func (a *ArrayMetaDataSlab) CopyNonRefSimple() (Storable, error) {
 	return nil, fmt.Errorf("failed to copy ArrayMetaDataSlab: can't copy slab reference")
 }
 

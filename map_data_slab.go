@@ -42,13 +42,13 @@ var _ ContainerStorable = &MapDataSlab{}
 
 // Copy
 
-func (m *MapDataSlab) CanCopy() bool {
+func (m *MapDataSlab) CanCopyNonRefSimple() bool {
 	// MapDataSlab can't be copied because it contains
 	// a SlabID that must be unique per slab.
 	return false
 }
 
-func (*MapDataSlab) Copy() (Storable, error) {
+func (*MapDataSlab) CopyNonRefSimple() (Storable, error) {
 	return nil, fmt.Errorf("failed to copy MapDataSlab: can't copy container")
 }
 

@@ -46,13 +46,13 @@ var _ ContainerStorable = &ArrayDataSlab{}
 
 // Copy
 
-func (a *ArrayDataSlab) CanCopy() bool {
+func (a *ArrayDataSlab) CanCopyNonRefSimple() bool {
 	// ArrayDataSlab can't be copied because it contains
 	// a SlabID that must be unique per slab.
 	return false
 }
 
-func (a *ArrayDataSlab) Copy() (Storable, error) {
+func (a *ArrayDataSlab) CopyNonRefSimple() (Storable, error) {
 	return nil, fmt.Errorf("failed to copy ArrayDataSlab: can't copy container")
 }
 
@@ -66,7 +66,7 @@ func (a *ArrayDataSlab) canCopyWithoutSlabID() bool {
 		return false
 	}
 	for _, e := range a.elements {
-		if !e.CanCopy() {
+		if !e.CanCopyNonRefSimple() {
 			return false
 		}
 	}
@@ -84,7 +84,7 @@ func (a *ArrayDataSlab) copyWithNewSlabID(newID SlabID) (ArraySlab, error) {
 
 	copiedElements := make([]Storable, len(a.elements))
 	for i, e := range a.elements {
-		copiedElements[i], err = e.Copy()
+		copiedElements[i], err = e.CopyNonRefSimple()
 		if err != nil {
 			return nil, wrapErrorAsExternalErrorIfNeeded(err)
 		}

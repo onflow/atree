@@ -1397,11 +1397,11 @@ type nonStorable struct{}
 
 var _ atree.Storable = nonStorable{}
 
-func (nonStorable) CanCopy() bool {
+func (nonStorable) CanCopyNonRefSimple() bool {
 	return true
 }
 
-func (s nonStorable) Copy() (atree.Storable, error) {
+func (s nonStorable) CopyNonRefSimple() (atree.Storable, error) {
 	return s, nil
 }
 

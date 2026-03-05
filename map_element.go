@@ -130,16 +130,16 @@ func newSingleElement(storage SlabStorage, address Address, key Value, value Val
 }
 
 func (e *singleElement) canCopy() bool {
-	return e.key.CanCopy() && e.value.CanCopy()
+	return e.key.CanCopyNonRefSimple() && e.value.CanCopyNonRefSimple()
 }
 
 func (e *singleElement) copy() (element, error) {
-	copiedKey, err := e.key.Copy()
+	copiedKey, err := e.key.CopyNonRefSimple()
 	if err != nil {
 		return nil, wrapErrorAsExternalErrorIfNeeded(err)
 	}
 
-	copiedValue, err := e.value.Copy()
+	copiedValue, err := e.value.CopyNonRefSimple()
 	if err != nil {
 		return nil, wrapErrorAsExternalErrorIfNeeded(err)
 	}

@@ -52,11 +52,11 @@ var _ atree.Value = Uint8Value(0)
 var _ atree.Storable = Uint8Value(0)
 var _ HashableValue = Uint8Value(0)
 
-func (v Uint8Value) CanCopy() bool {
+func (v Uint8Value) CanCopyNonRefSimple() bool {
 	return true
 }
 
-func (v Uint8Value) Copy() (atree.Storable, error) {
+func (v Uint8Value) CopyNonRefSimple() (atree.Storable, error) {
 	return v, nil
 }
 
@@ -125,11 +125,11 @@ var _ atree.Value = Uint16Value(0)
 var _ atree.Storable = Uint16Value(0)
 var _ HashableValue = Uint16Value(0)
 
-func (v Uint16Value) CanCopy() bool {
+func (v Uint16Value) CanCopyNonRefSimple() bool {
 	return true
 }
 
-func (v Uint16Value) Copy() (atree.Storable, error) {
+func (v Uint16Value) CopyNonRefSimple() (atree.Storable, error) {
 	return v, nil
 }
 
@@ -197,11 +197,11 @@ var _ atree.Value = Uint32Value(0)
 var _ atree.Storable = Uint32Value(0)
 var _ HashableValue = Uint32Value(0)
 
-func (v Uint32Value) CanCopy() bool {
+func (v Uint32Value) CanCopyNonRefSimple() bool {
 	return true
 }
 
-func (v Uint32Value) Copy() (atree.Storable, error) {
+func (v Uint32Value) CopyNonRefSimple() (atree.Storable, error) {
 	return v, nil
 }
 
@@ -289,11 +289,11 @@ func NewUint64ValueFromInteger(i int) Uint64Value {
 	return Uint64Value(i)
 }
 
-func (v Uint64Value) CanCopy() bool {
+func (v Uint64Value) CanCopyNonRefSimple() bool {
 	return true
 }
 
-func (v Uint64Value) Copy() (atree.Storable, error) {
+func (v Uint64Value) CopyNonRefSimple() (atree.Storable, error) {
 	return v, nil
 }
 
@@ -388,11 +388,11 @@ func NewStringValue(s string) StringValue {
 	return StringValue{str: s, size: size}
 }
 
-func (v StringValue) CanCopy() bool {
+func (v StringValue) CanCopyNonRefSimple() bool {
 	return true
 }
 
-func (v StringValue) Copy() (atree.Storable, error) {
+func (v StringValue) CopyNonRefSimple() (atree.Storable, error) {
 	return StringValue{
 		str:  strings.Clone(v.str),
 		size: v.size,

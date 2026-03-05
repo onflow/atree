@@ -35,6 +35,10 @@ func TestArrayCopy(t *testing.T) {
 		copiedArray, err := array.Copy(newAddress)
 		require.NoError(t, err)
 
+		// Test array and verify storage health.
+		testEmptyArray(t, storage, typeInfo, address, array, 2)
+		testEmptyArray(t, storage, typeInfo, newAddress, copiedArray, 2)
+
 		// Modify original array.
 
 		err = array.Append(testutils.NewUint64ValueFromInteger(0))
@@ -85,6 +89,10 @@ func TestArrayCopy(t *testing.T) {
 
 		copiedArray, err := array.Copy(newAddress)
 		require.NoError(t, err)
+
+		// Test array and verify storage health.
+		testArray(t, storage, typeInfo, address, array, expectedValues, false, 2)
+		testArray(t, storage, typeInfo, newAddress, copiedArray, expectedValues, false, 2)
 
 		// Modify copied array.
 		existingStorable, err := copiedArray.Set(0, testutils.NewUint64ValueFromInteger(42))
@@ -186,6 +194,10 @@ func TestArrayCopy(t *testing.T) {
 		copiedArray, err := array.Copy(newAddress)
 		require.NoError(t, err)
 
+		// Test array and verify storage health.
+		testArray(t, storage, typeInfo, address, array, expectedValues, false, 2)
+		testArray(t, storage, typeInfo, newAddress, copiedArray, expectedValues, false, 2)
+
 		// Modify copied array.
 		existingStorable, err := copiedArray.Set(0, testutils.NewSomeValue(testutils.NewUint64ValueFromInteger(42)))
 		require.NoError(t, err)
@@ -278,10 +290,12 @@ func TestArrayCopy(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, array.IsWithinSingleSlab())
 
+		expectedNestedValues := testutils.ExpectedArrayValue{
+			testutils.NewUint64ValueFromInteger(0),
+		}
+
 		expectedValues := testutils.ExpectedArrayValue{
-			testutils.ExpectedArrayValue{
-				testutils.NewUint64ValueFromInteger(0),
-			},
+			expectedNestedValues,
 		}
 
 		// Get nested (inlined) array
@@ -297,6 +311,10 @@ func TestArrayCopy(t *testing.T) {
 
 		copiedArray, err := retrievedInlinedArray.Copy(newAddress)
 		require.NoError(t, err)
+
+		// Test array and verify storage health.
+		testArray(t, storage, typeInfo, address, array, expectedValues, false, 2)
+		testArray(t, storage, typeInfo, newAddress, copiedArray, expectedNestedValues, false, 2)
 
 		// Modified copied array.
 		existingStorable, err := copiedArray.Set(0, testutils.NewUint64ValueFromInteger(42))
@@ -438,6 +456,10 @@ func TestArrayCopy(t *testing.T) {
 
 		copiedArray, err := retrievedInlinedArray.Copy(newAddress)
 		require.NoError(t, err)
+
+		// Test array and verify storage health.
+		testArray(t, storage, typeInfo, address, array, expectedValues, false, 2)
+		testArray(t, storage, typeInfo, newAddress, copiedArray, nestedArrayExpectedValues, false, 2)
 
 		// Modify copied array.
 		existingStorable, err := copiedArray.Set(0, testutils.NewSomeValue(testutils.NewUint64ValueFromInteger(42)))

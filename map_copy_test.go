@@ -34,6 +34,10 @@ func TestMapCopy(t *testing.T) {
 		copiedMap, err := m.Copy(newAddress, atree.NewDefaultDigesterBuilder())
 		require.NoError(t, err)
 
+		// Test map and verify storage health.
+		testEmptyMap(t, storage, typeInfo, address, m, 2)
+		testEmptyMap(t, storage, typeInfo, newAddress, copiedMap, 2)
+
 		// Modify original map.
 
 		k := testutils.NewStringValue("a")
@@ -87,6 +91,10 @@ func TestMapCopy(t *testing.T) {
 
 		copiedMap, err := m.Copy(newAddress, atree.NewDefaultDigesterBuilder())
 		require.NoError(t, err)
+
+		// Test map and verify storage health.
+		testMap(t, storage, typeInfo, address, m, expectedValues, nil, false, 2)
+		testMap(t, storage, typeInfo, newAddress, copiedMap, expectedValues, nil, false, 2)
 
 		// Modify copied map.
 
@@ -152,6 +160,10 @@ func TestMapCopy(t *testing.T) {
 
 		copiedMap, err := m.Copy(newAddress, collisionDigesterBuilder)
 		require.NoError(t, err)
+
+		// Test map and verify storage health.
+		testMap(t, storage, typeInfo, address, m, expectedValues, nil, false, 2)
+		testMap(t, storage, typeInfo, newAddress, copiedMap, expectedValues, nil, false, 2)
 
 		// Modify copied map.
 
@@ -294,6 +306,10 @@ func TestMapCopy(t *testing.T) {
 		copiedMap, err := m.Copy(newAddress, atree.NewDefaultDigesterBuilder())
 		require.NoError(t, err)
 
+		// Test map and verify storage health.
+		testMap(t, storage, typeInfo, address, m, expectedValues, nil, false, 2)
+		testMap(t, storage, typeInfo, newAddress, copiedMap, expectedValues, nil, false, 2)
+
 		// Modify copied map.
 
 		v = testutils.NewSomeValue(testutils.Uint64Value(1))
@@ -403,10 +419,12 @@ func TestMapCopy(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
+		expectedNestedValues := testutils.ExpectedMapValue{
+			testutils.NewStringValue("b"): testutils.Uint64Value(0),
+		}
+
 		expectedValues := testutils.ExpectedMapValue{
-			testutils.NewStringValue("a"): testutils.ExpectedMapValue{
-				testutils.NewStringValue("b"): testutils.Uint64Value(0),
-			},
+			testutils.NewStringValue("a"): expectedNestedValues,
 		}
 
 		// Get nested (inlined) map
@@ -424,6 +442,10 @@ func TestMapCopy(t *testing.T) {
 
 		copiedMap, err := retrievedInlinedMap.Copy(newAddress, atree.NewDefaultDigesterBuilder())
 		require.NoError(t, err)
+
+		// Test map and verify storage health.
+		testMap(t, storage, typeInfo, address, m, expectedValues, nil, false, 2)
+		testMap(t, storage, typeInfo, newAddress, copiedMap, expectedNestedValues, nil, false, 2)
 
 		// Modify copied map.
 
@@ -491,7 +513,7 @@ func TestMapCopy(t *testing.T) {
 		retrievedInlinedMap := retrievedInlinedMapElement.(*atree.OrderedMap)
 		require.True(t, atree.GetMapRootSlab(retrievedInlinedMap).Inlined())
 
-		// Map with inlined container can't be copied1.
+		// Map with inlined container can't be copied.
 
 		canCopy := retrievedInlinedMap.CanCopy()
 		require.False(t, canCopy)
@@ -561,10 +583,12 @@ func TestMapCopy(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, existingStorable)
 
+		expectedNestedValues := testutils.ExpectedMapValue{
+			testutils.NewStringValue("b"): testutils.NewExpectedWrapperValue(testutils.NewUint64ValueFromInteger(0)),
+		}
+
 		expectedValues := testutils.ExpectedMapValue{
-			testutils.NewStringValue("a"): testutils.ExpectedMapValue{
-				testutils.NewStringValue("b"): testutils.NewExpectedWrapperValue(testutils.NewUint64ValueFromInteger(0)),
-			},
+			testutils.NewStringValue("a"): expectedNestedValues,
 		}
 
 		// Get nested (inlined) map
@@ -582,6 +606,10 @@ func TestMapCopy(t *testing.T) {
 
 		copiedMap, err := retrievedInlinedMap.Copy(newAddress, atree.NewDefaultDigesterBuilder())
 		require.NoError(t, err)
+
+		// Test map and verify storage health.
+		testMap(t, storage, typeInfo, address, m, expectedValues, nil, false, 2)
+		testMap(t, storage, typeInfo, newAddress, copiedMap, expectedNestedValues, nil, false, 2)
 
 		// Modify copied map.
 

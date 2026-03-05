@@ -95,7 +95,9 @@ func (m *MapDataSlab) copyWithNewSlabID(newID SlabID) (MapSlab, error) {
 
 	// Adjust size if original map is inline
 	if m.inlined {
-		copiedSlab.header.size = mapRootDataSlabPrefixSize + m.Size()
+		copiedSlab.header.size = m.header.size -
+			inlinedMapDataSlabPrefixSize +
+			mapRootDataSlabPrefixSize
 	}
 
 	return &copiedSlab, nil

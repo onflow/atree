@@ -28,6 +28,19 @@ type Storable interface {
 	// ChildStorables only returns child storables in this storable
 	// (not recursive).  This function shouldn't load extra slabs.
 	ChildStorables() []Storable
+
+	// CanCopyNonRefSimple returns true if a storable can be copied.
+	// Storable can not be copied if:
+	// - storable is, or wraps a container,
+	// - storable is, or wraps a reference (SlabIDStorable) to a container,
+	// - other reasons specific to the storable.
+	CanCopyNonRefSimple() bool
+
+	// CopyNonRefSimple returns a copy of the storable, or an error if
+	// the storable can't be copied as a non-reference simple storable.
+	// See [CanCopyNonRefSimple] for related details.
+	// CopyNonRefSimple should only return an error if CanCopyNonRefSimple() returns false.
+	CopyNonRefSimple() (Storable, error)
 }
 
 // ComparableStorable is an interface that supports comparison and cloning of Storable.
@@ -43,8 +56,6 @@ type ComparableStorable interface {
 
 	// ID returns a unique identifier.
 	ID() string
-
-	Copy() Storable
 }
 
 // ContainerStorable is an interface that supports Storable containing other storables.

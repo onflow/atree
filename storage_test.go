@@ -1395,6 +1395,16 @@ var errEncodeNonStorable = errors.New("failed to encode non-storable")
 // nonStorable can't be encoded successfully.
 type nonStorable struct{}
 
+var _ atree.Storable = nonStorable{}
+
+func (nonStorable) CanCopyNonRefSimple() bool {
+	return true
+}
+
+func (s nonStorable) CopyNonRefSimple() (atree.Storable, error) {
+	return s, nil
+}
+
 func (nonStorable) Encode(_ *atree.Encoder) error {
 	return errEncodeNonStorable
 }
@@ -1403,16 +1413,16 @@ func (nonStorable) ByteSize() uint32 {
 	return 1
 }
 
-func (v nonStorable) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
-	return v, nil
+func (s nonStorable) StoredValue(_ atree.SlabStorage) (atree.Value, error) {
+	return s, nil
 }
 
 func (nonStorable) ChildStorables() []atree.Storable {
 	return nil
 }
 
-func (v nonStorable) Storable(_ atree.SlabStorage, _ atree.Address, _ uint32) (atree.Storable, error) {
-	return v, nil
+func (s nonStorable) Storable(_ atree.SlabStorage, _ atree.Address, _ uint32) (atree.Storable, error) {
+	return s, nil
 }
 
 type slowStorable struct {

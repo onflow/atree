@@ -40,6 +40,69 @@ type MapDataSlab struct {
 var _ MapSlab = &MapDataSlab{}
 var _ ContainerStorable = &MapDataSlab{}
 
+// CopyNonRefSimple
+
+func (m *MapDataSlab) CanCopyNonRefSimple() bool {
+	// MapDataSlab can't be copied because it contains
+	// a SlabID that must be unique per slab.
+	return false
+}
+
+func (*MapDataSlab) CopyNonRefSimple() (Storable, error) {
+	return nil, fmt.Errorf("failed to copy MapDataSlab: can't copy container")
+}
+
+// canCopyWithoutSlabID returns true if the MapDataSlab (except SlabID) can be copied.
+// Specifically, MapDataSlab can be copied if:
+// - Next slab ID is empty, and
+// - All elements can be copied.
+// NOTE: Inlined MapDataSlab can be copied if all conditions are met.
+func (m *MapDataSlab) canCopyWithoutSlabID() bool {
+	return m.next == SlabIDUndefined && m.canCopyNonRefSimple()
+}
+
+// copyWithNewSlabID returns a copy of the MapDataSlab.
+// NOTE: Source MapDataSlab can be inlined, but copied MapDataSlab is never inlined.
+func (m *MapDataSlab) copyWithNewSlabID(newID SlabID) (MapSlab, error) {
+	if m.next != SlabIDUndefined {
+		return nil, fmt.Errorf("failed to copy MapDataSlab: can't copy MapDataSlab with next slab ID")
+	}
+
+	var copiedSlab MapDataSlab
+	var err error
+
+	if m.extraData != nil {
+		copiedSlab.extraData = &MapExtraData{
+			TypeInfo: m.extraData.TypeInfo.Copy(),
+			Count:    m.extraData.Count,
+			Seed:     m.extraData.Seed,
+		}
+	}
+
+	copiedSlab.header = MapSlabHeader{
+		slabID:   newID,
+		size:     m.header.size,
+		firstKey: m.header.firstKey,
+	}
+
+	copiedSlab.elements, err = m.copyNonRefSimple()
+	if err != nil {
+		return nil, err
+	}
+
+	copiedSlab.anySize = m.anySize
+	copiedSlab.collisionGroup = m.collisionGroup
+
+	// Adjust size if original map is inline
+	if m.inlined {
+		copiedSlab.header.size = m.header.size -
+			inlinedMapDataSlabPrefixSize +
+			mapRootDataSlabPrefixSize
+	}
+
+	return &copiedSlab, nil
+}
+
 // Map operations (has, get, set, remove, and pop iterate)
 
 func (m *MapDataSlab) Set(

@@ -48,6 +48,24 @@ var _ ArraySlab = &ArrayMetaDataSlab{}
 var _ Slab = &ArrayMetaDataSlab{}
 var _ Storable = &ArrayMetaDataSlab{}
 
+// CopyNonRefSimple
+
+func (a *ArrayMetaDataSlab) CanCopyNonRefSimple() bool {
+	return false
+}
+
+func (a *ArrayMetaDataSlab) CopyNonRefSimple() (Storable, error) {
+	return nil, fmt.Errorf("failed to copy ArrayMetaDataSlab: can't copy slab reference")
+}
+
+func (a *ArrayMetaDataSlab) canCopyWithoutSlabID() bool {
+	return false
+}
+
+func (a *ArrayMetaDataSlab) copyWithNewSlabID(SlabID) (ArraySlab, error) {
+	return nil, fmt.Errorf("failed to copy ArrayMetaDataSlab: can't copy slab reference")
+}
+
 // Array operations (get, set, insert, remove, and pop iterate)
 
 // TODO: improve naming

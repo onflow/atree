@@ -58,6 +58,36 @@ func newHkeyElementsWithElement(level uint, hkey Digest, elem element) *hkeyElem
 	}
 }
 
+// CopyNonRefSimple
+
+func (e *hkeyElements) canCopyNonRefSimple() bool {
+	for _, elem := range e.elems {
+		if !elem.canCopyNonRefSimple() {
+			return false
+		}
+	}
+	return true
+}
+
+func (e *hkeyElements) copyNonRefSimple() (elements, error) {
+	copiedElements := make([]element, len(e.elems))
+
+	for i, e := range e.elems {
+		ce, err := e.copyNonRefSimple()
+		if err != nil {
+			return nil, err
+		}
+		copiedElements[i] = ce
+	}
+
+	return &hkeyElements{
+		hkeys: slices.Clone(e.hkeys),
+		elems: copiedElements,
+		size:  e.size,
+		level: e.level,
+	}, nil
+}
+
 // Map operations (has, get, set, remove, and pop iterate)
 
 func (e *hkeyElements) getElement(

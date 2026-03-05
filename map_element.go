@@ -75,6 +75,10 @@ type element interface {
 
 	hasPointer() bool
 
+	canCopyNonRefSimple() bool
+
+	copyNonRefSimple() (element, error)
+
 	Size() uint32
 
 	Count(storage SlabStorage) (uint32, error)
@@ -122,6 +126,28 @@ func newSingleElement(storage SlabStorage, address Address, key Value, value Val
 		key:   ks,
 		value: vs,
 		size:  singleElementPrefixSize + ks.ByteSize() + vs.ByteSize(),
+	}, nil
+}
+
+func (e *singleElement) canCopyNonRefSimple() bool {
+	return e.key.CanCopyNonRefSimple() && e.value.CanCopyNonRefSimple()
+}
+
+func (e *singleElement) copyNonRefSimple() (element, error) {
+	copiedKey, err := e.key.CopyNonRefSimple()
+	if err != nil {
+		return nil, wrapErrorAsExternalErrorIfNeeded(err)
+	}
+
+	copiedValue, err := e.value.CopyNonRefSimple()
+	if err != nil {
+		return nil, wrapErrorAsExternalErrorIfNeeded(err)
+	}
+
+	return &singleElement{
+		key:   copiedKey,
+		value: copiedValue,
+		size:  e.size,
 	}, nil
 }
 
@@ -290,6 +316,20 @@ type inlineCollisionGroup struct {
 
 var _ element = &inlineCollisionGroup{}
 var _ elementGroup = &inlineCollisionGroup{}
+
+func (e *inlineCollisionGroup) canCopyNonRefSimple() bool {
+	return e.elements.canCopyNonRefSimple()
+}
+
+func (e *inlineCollisionGroup) copyNonRefSimple() (element, error) {
+	copiedElements, err := e.elements.copyNonRefSimple()
+	if err != nil {
+		return nil, err
+	}
+	return &inlineCollisionGroup{
+		elements: copiedElements,
+	}, nil
+}
 
 func (e *inlineCollisionGroup) getElementAndNextKey(
 	storage SlabStorage,
@@ -468,6 +508,14 @@ type externalCollisionGroup struct {
 
 var _ element = &externalCollisionGroup{}
 var _ elementGroup = &externalCollisionGroup{}
+
+func (e *externalCollisionGroup) canCopyNonRefSimple() bool {
+	return false
+}
+
+func (e *externalCollisionGroup) copyNonRefSimple() (element, error) {
+	return nil, fmt.Errorf("failed to copy externalCollisionGroup: can't copy slab reference")
+}
 
 func (e *externalCollisionGroup) getElementAndNextKey(
 	storage SlabStorage,

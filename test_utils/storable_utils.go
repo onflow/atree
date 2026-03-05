@@ -36,6 +36,20 @@ type SomeStorable struct {
 var _ atree.ContainerStorable = SomeStorable{}
 var _ atree.WrapperStorable = SomeStorable{}
 
+func (s SomeStorable) CanCopyNonRefSimple() bool {
+	return s.UnwrapAtreeStorable().CanCopyNonRefSimple()
+}
+
+func (s SomeStorable) CopyNonRefSimple() (atree.Storable, error) {
+	wrapped, err := s.UnwrapAtreeStorable().CopyNonRefSimple()
+	if err != nil {
+		return nil, fmt.Errorf("failed to copy SomeStorable: %w", err)
+	}
+
+	copiedStorable := s.WrapAtreeStorable(wrapped)
+	return copiedStorable, nil
+}
+
 func (s SomeStorable) HasPointer() bool {
 	if ms, ok := s.Storable.(atree.ContainerStorable); ok {
 		return ms.HasPointer()
@@ -185,6 +199,14 @@ type MutableStorable struct {
 }
 
 var _ atree.Storable = &MutableStorable{}
+
+func (*MutableStorable) CanCopyNonRefSimple() bool {
+	return true
+}
+
+func (s *MutableStorable) CopyNonRefSimple() (atree.Storable, error) {
+	return &MutableStorable{size: s.size}, nil
+}
 
 func (s *MutableStorable) ByteSize() uint32 {
 	return s.size

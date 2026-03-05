@@ -1364,3 +1364,47 @@ func (a *Array) String() string {
 
 	return fmt.Sprintf("[%s]", strings.Join(elemsStr, " "))
 }
+
+// CanCopyNonRefSimple returns true if the array can be copied
+// as a container with only non-reference and simple storables.
+func (a *Array) CanCopyNonRefSimple() bool {
+	return a.root.canCopyWithoutSlabID()
+}
+
+// CopyNonRefSimple returns a copy of the array that only
+// contains non-reference and simple storables.
+// NOTE: Please call CanCopyNonRefSimple() to confirm the copy operation
+// is feasible for the array before calling CopyNonRefSimple().
+func (a *Array) CopyNonRefSimple(address Address) (*Array, error) {
+	if !a.root.IsData() {
+		return nil, newCopyArrayErrorf("can't copy multi-slab array")
+	}
+
+	newID, err := a.Storage.GenerateSlabID(address)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(
+			err,
+			fmt.Sprintf("failed to generate slab ID for address 0x%x", address))
+	}
+
+	copiedRootSlab, err := a.root.copyWithNewSlabID(newID)
+	if err != nil {
+		return nil, newCopyArrayError(err)
+	}
+
+	err = storeSlab(a.Storage, copiedRootSlab)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Array{
+		Storage: a.Storage,
+		root:    copiedRootSlab,
+	}, nil
+}
+
+// IsWithinSingleSlab returns true if the array is stored in a single slab.
+func (a *Array) IsWithinSingleSlab() bool {
+	return a.root.IsData()
+}

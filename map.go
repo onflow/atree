@@ -1522,3 +1522,52 @@ func (m *OrderedMap) SlabID() SlabID {
 func (m *OrderedMap) ValueID() ValueID {
 	return slabIDToValueID(m.root.SlabID())
 }
+
+// CanCopyNonRefSimple returns true if the map can be copied
+// as a container with only non-reference and simple storables.
+func (m *OrderedMap) CanCopyNonRefSimple() bool {
+	return m.root.canCopyWithoutSlabID()
+}
+
+// CopyNonRefSimple returns a copy of the map that only
+// contains non-reference and simple storables.
+// NOTE: Please call CanCopyNonRefSimple() to confirm the copy operation
+// is feasible for the map before calling CopyNonRefSimple().
+func (m *OrderedMap) CopyNonRefSimple(address Address, digestBuilder DigesterBuilder) (*OrderedMap, error) {
+	if !m.root.IsData() {
+		return nil, newCopyMapErrorf("can't copy multi-slab map")
+	}
+
+	seed := m.root.ExtraData().Seed
+
+	// Seed digester
+	digestBuilder.SetSeed(seed, typicalRandomConstant)
+
+	// Create root slab ID
+	newID, err := m.Storage.GenerateSlabID(address)
+	if err != nil {
+		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", address))
+	}
+
+	copiedRoot, err := m.root.copyWithNewSlabID(newID)
+	if err != nil {
+		return nil, newCopyMapError(err)
+	}
+
+	err = storeSlab(m.Storage, copiedRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	return &OrderedMap{
+		Storage:         m.Storage,
+		digesterBuilder: digestBuilder,
+		root:            copiedRoot,
+	}, nil
+}
+
+// IsWithinSingleSlab returns true if the map is stored in a single slab.
+func (m *OrderedMap) IsWithinSingleSlab() bool {
+	return m.root.IsData()
+}

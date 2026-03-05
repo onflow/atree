@@ -81,6 +81,10 @@ type elements interface {
 
 	hasPointer() bool
 
+	canCopyNonRefSimple() bool
+
+	copyNonRefSimple() (elements, error)
+
 	firstKey() Digest
 
 	Count() uint32

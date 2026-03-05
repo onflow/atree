@@ -105,7 +105,7 @@ var newArrayValueFunc = func(
 		array, err := atree.NewArray(storage, address, typeInfo)
 		require.NoError(t, err)
 
-		expectedValues := make([]atree.Value, arrayCount)
+		expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 
 		for i := range expectedValues {
 			v, expectedV := newValue(r, storage)
@@ -116,7 +116,7 @@ var newArrayValueFunc = func(
 			expectedValues[i] = expectedV
 		}
 
-		return array, testutils.ExpectedArrayValue(expectedValues)
+		return array, expectedValues
 	}
 }
 
@@ -521,7 +521,7 @@ func TestArrayWrapperValueAppendAndModify(t *testing.T) {
 				arraySlabID := array.SlabID()
 
 				// Append WrapperValue to array
-				expectedValues := make([]atree.Value, arrayCount)
+				expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 				for i := range expectedValues {
 					v, expectedV := tc.newElement(r, storage)
 
@@ -636,7 +636,7 @@ func TestArrayWrapperValueInsertAndModify(t *testing.T) {
 				arraySlabID := array.SlabID()
 
 				// Insert WrapperValue in reverse order to array
-				expectedValues := make([]atree.Value, arrayCount)
+				expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 				for i := len(expectedValues) - 1; i >= 0; i-- {
 					v, expectedV := tc.newElement(r, storage)
 
@@ -751,7 +751,7 @@ func TestArrayWrapperValueSetAndModify(t *testing.T) {
 				arraySlabID := array.SlabID()
 
 				// Insert WrapperValue to array
-				expectedValues := make([]atree.Value, arrayCount)
+				expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 				for i := range expectedValues {
 					v, expectedV := tc.newElement(r, storage)
 
@@ -912,7 +912,7 @@ func TestArrayWrapperValueInsertAndRemove(t *testing.T) {
 						arraySlabID := array.SlabID()
 
 						// Insert WrapperValue to array
-						expectedValues := make([]atree.Value, arrayCount)
+						expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 						for i := range expectedValues {
 							v, expectedV := tc.newElement(r, storage)
 
@@ -1078,7 +1078,7 @@ func TestArrayWrapperValueSetAndRemove(t *testing.T) {
 
 						arraySlabID := array.SlabID()
 
-						expectedValues := make([]atree.Value, arrayCount)
+						expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 
 						// Insert WrapperValue to array
 						for i := range expectedValues {
@@ -1240,7 +1240,7 @@ func TestArrayWrapperValueReadOnlyIterate(t *testing.T) {
 					array, err := atree.NewArray(storage, address, typeInfo)
 					require.NoError(t, err)
 
-					expectedValues := make([]atree.Value, arrayCount)
+					expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 
 					// Insert WrapperValue to array
 					for i := range expectedValues {
@@ -1357,7 +1357,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 					array, err := atree.NewArray(storage, address, typeInfo)
 					require.NoError(t, err)
 
-					expectedValues := make([]atree.Value, arrayCount)
+					expectedValues := make(testutils.ExpectedArrayValue, arrayCount)
 
 					// Insert WrapperValue to array
 					for i := range expectedValues {
@@ -1418,7 +1418,7 @@ func TestArrayWrapperValueIterate(t *testing.T) {
 func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 
 	testLevel1WrappedChildArrayInlined := func(t *testing.T, array *atree.Array, expectedInlined bool) {
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		elements := atree.GetArrayRootSlabStorables(array)
 
@@ -1583,7 +1583,7 @@ func TestArrayWrapperValueInlineArrayAtLevel1(t *testing.T) {
 func TestArrayWrapperValueInlineArrayAtLevel2(t *testing.T) {
 
 	testLevel2WrappedChildArrayInlined := func(t *testing.T, array *atree.Array, expectedInlined bool) {
-		require.True(t, IsArrayRootDataSlab(array))
+		require.True(t, array.IsWithinSingleSlab())
 
 		elements := atree.GetArrayRootSlabStorables(array)
 
@@ -1947,7 +1947,7 @@ func TestArrayWrapperValueModifyNewArrayAtLevel1(t *testing.T) {
 			err = array.Insert(index, v)
 			require.NoError(t, err)
 
-			expectedValues = slices.Insert(expectedValues, int(index), expected)
+			expectedValues = slices.Insert([]atree.Value(expectedValues), int(index), expected)
 		}
 
 		require.Equal(t, actualArrayCount, array.Count())
@@ -2655,7 +2655,7 @@ func TestArrayWrapperValueModifyExistingArray(t *testing.T) {
 		createStorage := func(arrayCount int) (
 			_ atree.BaseStorage,
 			rootSlabID atree.SlabID,
-			expectedValues []atree.Value,
+			expectedValues testutils.ExpectedArrayValue,
 		) {
 			storage := newTestPersistentStorage(t)
 

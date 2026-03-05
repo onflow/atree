@@ -42,6 +42,35 @@ func newSingleElementsWithElement(level uint, elem *singleElement) *singleElemen
 	}
 }
 
+// CopyNonRefSimple
+
+func (e *singleElements) canCopyNonRefSimple() bool {
+	for _, elem := range e.elems {
+		if !elem.canCopyNonRefSimple() {
+			return false
+		}
+	}
+	return true
+}
+
+func (e *singleElements) copyNonRefSimple() (elements, error) {
+	copiedElements := make([]*singleElement, len(e.elems))
+
+	for i, e := range e.elems {
+		ce, err := e.copyNonRefSimple()
+		if err != nil {
+			return nil, err
+		}
+		copiedElements[i] = ce.(*singleElement)
+	}
+
+	return &singleElements{
+		elems: copiedElements,
+		size:  e.size,
+		level: e.level,
+	}, nil
+}
+
 // Map operations (has, get, set, remove, and pop iterate)
 
 func (e *singleElements) get(storage SlabStorage, digester Digester, level uint, _ Digest, comparator ValueComparator, key Value) (MapKey, MapValue, int, error) {

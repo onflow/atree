@@ -110,16 +110,8 @@ func GetCacheCount(storage *atree.PersistentSlabStorage) int {
 	return len(atree.GetCache(storage))
 }
 
-func IsArrayRootDataSlab(array *atree.Array) bool {
-	return atree.GetArrayRootSlab(array).IsData()
-}
-
 func GetArrayRootSlabByteSize(array *atree.Array) uint32 {
 	return atree.GetArrayRootSlab(array).ByteSize()
-}
-
-func IsMapRootDataSlab(m *atree.OrderedMap) bool {
-	return atree.GetMapRootSlab(m).IsData()
 }
 
 func GetMapRootSlabByteSize(m *atree.OrderedMap) uint32 {

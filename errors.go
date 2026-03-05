@@ -537,3 +537,43 @@ func NewUnexpectedElementTypeError(expectedType, actualType reflect.Type) error 
 func (e *UnexpectedElementTypeError) Error() string {
 	return fmt.Sprintf("invalid element type: expected %s, got %s", e.expectedType.String(), e.actualType.String())
 }
+
+// CopyError is returned when failed to copy array or map.
+type CopyError struct {
+	typ string
+	err error
+}
+
+func newCopyArrayErrorf(msg string, args ...any) error {
+	return newCopyArrayError(fmt.Errorf(msg, args...))
+}
+
+func newCopyArrayError(err error) error {
+	return NewFatalError(
+		&CopyError{
+			typ: "array",
+			err: err,
+		},
+	)
+}
+
+func newCopyMapErrorf(msg string, args ...any) error {
+	return newCopyMapError(fmt.Errorf(msg, args...))
+}
+
+func newCopyMapError(err error) error {
+	return NewFatalError(
+		&CopyError{
+			typ: "map",
+			err: err,
+		},
+	)
+}
+
+func (e *CopyError) Unwrap() error {
+	return e.err
+}
+
+func (e *CopyError) Error() string {
+	return fmt.Sprintf("failed to copy %s: %s", e.typ, e.err.Error())
+}

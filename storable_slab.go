@@ -63,7 +63,7 @@ func (s *StorableSlab) CanCopy() bool {
 }
 
 func (s *StorableSlab) Copy() (Storable, error) {
-	return nil, NewCopyError("StorableSlab", "failed to copy StorableSlab")
+	return nil, fmt.Errorf("failed to copy StorableSlab: copying StorableSlab isn't supported")
 }
 
 func (s *StorableSlab) String() string {

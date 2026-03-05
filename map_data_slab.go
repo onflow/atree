@@ -49,7 +49,7 @@ func (m *MapDataSlab) CanCopy() bool {
 }
 
 func (*MapDataSlab) Copy() (Storable, error) {
-	return nil, NewCopyError("MapDataSlab", "can't copy MapDataSlab")
+	return nil, fmt.Errorf("failed to copy MapDataSlab: can't copy container")
 }
 
 // canCopyWithoutSlabID returns true if the MapDataSlab (except SlabID) can be copied.
@@ -65,7 +65,7 @@ func (m *MapDataSlab) canCopyWithoutSlabID() bool {
 // NOTE: Source MapDataSlab can be inlined, but copied MapDataSlab is never inlined.
 func (m *MapDataSlab) copyWithNewSlabID(newID SlabID) (MapSlab, error) {
 	if m.next != SlabIDUndefined {
-		return nil, NewCopyMapError("can't copy map data slab with next slab ID")
+		return nil, fmt.Errorf("failed to copy MapDataSlab: can't copy MapDataSlab with next slab ID")
 	}
 
 	var copiedSlab MapDataSlab

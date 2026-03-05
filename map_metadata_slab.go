@@ -44,7 +44,7 @@ func (*MapMetaDataSlab) CanCopy() bool {
 }
 
 func (*MapMetaDataSlab) Copy() (Storable, error) {
-	return nil, NewCopyError("MapMetaDataSlab", "can't copy MapMetaDataSlab")
+	return nil, fmt.Errorf("failed to copy MapMetaDataSlab: can't copy slab reference")
 }
 
 func (m *MapMetaDataSlab) canCopyWithoutSlabID() bool {
@@ -52,7 +52,7 @@ func (m *MapMetaDataSlab) canCopyWithoutSlabID() bool {
 }
 
 func (m *MapMetaDataSlab) copyWithNewSlabID(SlabID) (MapSlab, error) {
-	return nil, NewCopyError("MapMetaDataSlab", "can't copy map metdata slab")
+	return nil, fmt.Errorf("failed to copy MapMetaDataSlab: can't copy slab reference")
 }
 
 // Map operations (get, set, remove, and pop iterate)

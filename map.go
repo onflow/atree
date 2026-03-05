@@ -1533,7 +1533,7 @@ func (m *OrderedMap) CanCopy() bool {
 // is feasible for the map before calling Copy().
 func (m *OrderedMap) Copy(address Address, digestBuilder DigesterBuilder) (*OrderedMap, error) {
 	if !m.root.IsData() {
-		return nil, NewCopyMapError("can't copy multi-slab map")
+		return nil, newCopyMapErrorf("can't copy multi-slab map")
 	}
 
 	seed := m.root.ExtraData().Seed
@@ -1550,7 +1550,7 @@ func (m *OrderedMap) Copy(address Address, digestBuilder DigesterBuilder) (*Orde
 
 	copiedRoot, err := m.root.copyWithNewSlabID(newID)
 	if err != nil {
-		return nil, err
+		return nil, newCopyMapError(err)
 	}
 
 	err = storeSlab(m.Storage, copiedRoot)

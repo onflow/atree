@@ -33,7 +33,7 @@ func (v SlabIDStorable) CanCopy() bool {
 }
 
 func (v SlabIDStorable) Copy() (Storable, error) {
-	return nil, NewCopyError("SlabIDStorable", "can't copy SlabIDStorable")
+	return nil, fmt.Errorf("failed to copy SlabIDStorable: can't copy slab reference")
 }
 
 func (v SlabIDStorable) HasPointer() bool {

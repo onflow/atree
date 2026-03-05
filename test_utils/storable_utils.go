@@ -43,7 +43,7 @@ func (s SomeStorable) CanCopy() bool {
 func (s SomeStorable) Copy() (atree.Storable, error) {
 	wrapped, err := s.UnwrapAtreeStorable().Copy()
 	if err != nil {
-		return nil, atree.NewCopyError("SomeStorable", err.Error())
+		return nil, fmt.Errorf("failed to copy SomeStorable: %w", err)
 	}
 
 	copiedStorable := s.WrapAtreeStorable(wrapped)

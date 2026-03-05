@@ -538,42 +538,42 @@ func (e *UnexpectedElementTypeError) Error() string {
 	return fmt.Sprintf("invalid element type: expected %s, got %s", e.expectedType.String(), e.actualType.String())
 }
 
-// CopyError is returned when failed to copy storable, array or map.
+// CopyError is returned when failed to copy array or map.
 type CopyError struct {
 	typ string
-	msg string
+	err error
 }
 
-// NewCopyError returns CopyError.
-func NewCopyError(typ string, msg string) error {
-	return NewFatalError(
-		&CopyError{
-			typ: typ,
-			msg: msg,
-		},
-	)
+func newCopyArrayErrorf(msg string, args ...any) error {
+	return newCopyArrayError(fmt.Errorf(msg, args...))
 }
 
-// NewCopyArrayError returns CopyError for array.
-func NewCopyArrayError(msg string) error {
+func newCopyArrayError(err error) error {
 	return NewFatalError(
 		&CopyError{
 			typ: "array",
-			msg: msg,
+			err: err,
 		},
 	)
 }
 
-// NewCopyMapError returns CopyError for map.
-func NewCopyMapError(msg string) error {
+func newCopyMapErrorf(msg string, args ...any) error {
+	return newCopyMapError(fmt.Errorf(msg, args...))
+}
+
+func newCopyMapError(err error) error {
 	return NewFatalError(
 		&CopyError{
 			typ: "map",
-			msg: msg,
+			err: err,
 		},
 	)
 }
 
+func (e *CopyError) Unwrap() error {
+	return e.err
+}
+
 func (e *CopyError) Error() string {
-	return fmt.Sprintf("failed to copy %s: %s", e.typ, e.msg)
+	return fmt.Sprintf("failed to copy %s: %s", e.typ, e.err.Error())
 }

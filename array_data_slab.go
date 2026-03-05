@@ -53,7 +53,7 @@ func (a *ArrayDataSlab) CanCopy() bool {
 }
 
 func (a *ArrayDataSlab) Copy() (Storable, error) {
-	return nil, NewCopyError("ArrayDataSlab", "can't copy ArrayDataSlab")
+	return nil, fmt.Errorf("failed to copy ArrayDataSlab: can't copy container")
 }
 
 // canCopyWithoutSlabID returns true if the ArrayDataSlab (except SlabID) can be copied.
@@ -77,7 +77,7 @@ func (a *ArrayDataSlab) canCopyWithoutSlabID() bool {
 // NOTE: Source ArrayDataSlab can be inlined, but copied ArrayDataSlab is never inlined.
 func (a *ArrayDataSlab) copyWithNewSlabID(newID SlabID) (ArraySlab, error) {
 	if a.next != SlabIDUndefined {
-		return nil, NewCopyArrayError("can't copy array data slab with next slab ID")
+		return nil, fmt.Errorf("failed to copy ArrayDataSlab: can't copy ArrayDataSlab with next slab ID")
 	}
 
 	var err error

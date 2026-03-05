@@ -1375,7 +1375,7 @@ func (a *Array) CanCopy() bool {
 // is feasible for the array before calling Copy().
 func (a *Array) Copy(address Address) (*Array, error) {
 	if !a.root.IsData() {
-		return nil, NewCopyArrayError("can't copy multi-slab array")
+		return nil, newCopyArrayErrorf("can't copy multi-slab array")
 	}
 
 	newID, err := a.Storage.GenerateSlabID(address)
@@ -1388,7 +1388,7 @@ func (a *Array) Copy(address Address) (*Array, error) {
 
 	copiedRootSlab, err := a.root.copyWithNewSlabID(newID)
 	if err != nil {
-		return nil, err
+		return nil, newCopyArrayError(err)
 	}
 
 	err = storeSlab(a.Storage, copiedRootSlab)

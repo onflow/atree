@@ -514,7 +514,7 @@ func (e *externalCollisionGroup) canCopy() bool {
 }
 
 func (e *externalCollisionGroup) copy() (element, error) {
-	return nil, NewCopyError("externalCollisionGroup", "can't copy external collision group")
+	return nil, fmt.Errorf("failed to copy externalCollisionGroup: can't copy slab reference")
 }
 
 func (e *externalCollisionGroup) getElementAndNextKey(

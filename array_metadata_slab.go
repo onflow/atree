@@ -55,7 +55,7 @@ func (a *ArrayMetaDataSlab) CanCopy() bool {
 }
 
 func (a *ArrayMetaDataSlab) Copy() (Storable, error) {
-	return nil, NewCopyError("ArrayMetaDataSlab", "can't copy ArrayMetaDataSlab")
+	return nil, fmt.Errorf("failed to copy ArrayMetaDataSlab: can't copy slab reference")
 }
 
 func (a *ArrayMetaDataSlab) canCopyWithoutSlabID() bool {
@@ -63,7 +63,7 @@ func (a *ArrayMetaDataSlab) canCopyWithoutSlabID() bool {
 }
 
 func (a *ArrayMetaDataSlab) copyWithNewSlabID(SlabID) (ArraySlab, error) {
-	return nil, NewCopyError("ArrayMetaDataSlab", "can't copy ArrayMetaDataSlab")
+	return nil, fmt.Errorf("failed to copy ArrayMetaDataSlab: can't copy slab reference")
 }
 
 // Array operations (get, set, insert, remove, and pop iterate)

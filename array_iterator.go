@@ -228,6 +228,8 @@ type ArrayLoadedValueIterator struct {
 	dataIterator *arrayLoadedElementIterator
 }
 
+var _ ArrayIterator = &ArrayLoadedValueIterator{}
+
 func (i *ArrayLoadedValueIterator) nextDataIterator() (*arrayLoadedElementIterator, error) {
 
 	// Iterate parents (LIFO) to find next loaded array data slab.
@@ -266,6 +268,11 @@ func (i *ArrayLoadedValueIterator) nextDataIterator() (*arrayLoadedElementIterat
 
 	// Reach end of parents stack.
 	return nil, nil
+}
+
+// CanMutate returns false.
+func (i *ArrayLoadedValueIterator) CanMutate() bool {
+	return false
 }
 
 // Next iterates and returns next loaded element.

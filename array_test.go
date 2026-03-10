@@ -6326,8 +6326,32 @@ func createArrayWithSimpleAndChildArrayValues(
 }
 
 func testArrayLoadedElements(t *testing.T, array *atree.Array, expectedValues testutils.ExpectedArrayValue) {
+	// Test Next
+
+	iter, err := array.ReadOnlyLoadedValueIterator()
+	require.NoError(t, err)
+	require.False(t, iter.CanMutate())
+
 	i := 0
-	err := array.IterateReadOnlyLoadedValues(func(v atree.Value) (bool, error) {
+	for {
+		v, err := iter.Next()
+		require.NoError(t, err)
+
+		if v == nil {
+			break
+		}
+
+		require.True(t, i < len(expectedValues))
+		testValueEqual(t, expectedValues[i], v)
+
+		i++
+	}
+	require.Equal(t, len(expectedValues), i)
+
+	// Test callback
+
+	i = 0
+	err = array.IterateReadOnlyLoadedValues(func(v atree.Value) (bool, error) {
 		require.True(t, i < len(expectedValues))
 		testValueEqual(t, expectedValues[i], v)
 		i++

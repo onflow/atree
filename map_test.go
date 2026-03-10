@@ -16668,8 +16668,74 @@ func createMapWithSimpleAndChildArrayValues(
 }
 
 func testMapLoadedElements(t *testing.T, m *atree.OrderedMap, expectedValues [][2]atree.Value) {
+	// Test NextKey
+	iter, err := m.ReadOnlyLoadedValueIterator()
+	require.NoError(t, err)
+	require.False(t, iter.CanMutate())
+
 	i := 0
-	err := m.IterateReadOnlyLoadedValues(func(k atree.Value, v atree.Value) (bool, error) {
+	for {
+		k, err := iter.NextKey()
+		require.NoError(t, err)
+
+		if k == nil {
+			break
+		}
+
+		require.True(t, i < len(expectedValues))
+		testValueEqual(t, expectedValues[i][0], k)
+
+		i++
+	}
+	require.Equal(t, len(expectedValues), i)
+
+	// Test NextValue
+
+	iter, err = m.ReadOnlyLoadedValueIterator()
+	require.NoError(t, err)
+
+	i = 0
+	for {
+		v, err := iter.NextValue()
+		require.NoError(t, err)
+
+		if v == nil {
+			break
+		}
+
+		require.True(t, i < len(expectedValues))
+		testValueEqual(t, expectedValues[i][1], v)
+
+		i++
+	}
+	require.Equal(t, len(expectedValues), i)
+
+	// Test Next
+
+	iter, err = m.ReadOnlyLoadedValueIterator()
+	require.NoError(t, err)
+
+	i = 0
+	for {
+		k, v, err := iter.Next()
+		require.NoError(t, err)
+
+		if v == nil {
+			break
+		}
+
+		require.True(t, i < len(expectedValues))
+		testValueEqual(t, expectedValues[i][0], k)
+		testValueEqual(t, expectedValues[i][1], v)
+
+		i++
+	}
+	require.Equal(t, len(expectedValues), i)
+
+	// Test callback
+
+	i = 0
+	err = m.IterateReadOnlyLoadedValues(func(k atree.Value, v atree.Value) (bool, error) {
 		require.True(t, i < len(expectedValues))
 		testValueEqual(t, expectedValues[i][0], k)
 		testValueEqual(t, expectedValues[i][1], v)

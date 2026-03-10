@@ -506,6 +506,8 @@ type MapLoadedValueIterator struct {
 	dataIterator *mapLoadedElementIterator
 }
 
+var _ MapIterator = &MapLoadedValueIterator{}
+
 func (i *MapLoadedValueIterator) nextDataIterator() (*mapLoadedElementIterator, error) {
 
 	// Iterate parents (LIFO) to find next loaded map data slab.
@@ -544,6 +546,25 @@ func (i *MapLoadedValueIterator) nextDataIterator() (*mapLoadedElementIterator, 
 
 	// Reach end of parents stack.
 	return nil, nil
+}
+
+// CanMutate returns false.
+func (i *MapLoadedValueIterator) CanMutate() bool {
+	return false
+}
+
+// NextKey iterates and returns next loaded key.
+// It returns nil key at end of loaded elements.
+func (i *MapLoadedValueIterator) NextKey() (Value, error) {
+	key, _, err := i.Next()
+	return key, err
+}
+
+// NextValue iterates and returns next loaded value.
+// It returns nil Value at end of loaded elements.
+func (i *MapLoadedValueIterator) NextValue() (Value, error) {
+	_, value, err := i.Next()
+	return value, err
 }
 
 // Next iterates and returns next loaded element.

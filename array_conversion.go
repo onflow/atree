@@ -155,5 +155,12 @@ func newArrayWithElements(
 	root.header.count = uint32(len(elements))
 	root.header.size += elementSize
 
+	// This isn't needed because slab is already stored in the storage by pointer in NewArray(),
+	// but it is added to be consistent with how other slab mutation functions are implemented.
+	err = storeSlab(storage, root)
+	if err != nil {
+		return nil, err
+	}
+
 	return array, nil
 }

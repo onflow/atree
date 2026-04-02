@@ -35,6 +35,7 @@ var (
 var (
 	TargetSlabSize        = targetSlabSize
 	MaxInlineMapValueSize = maxInlineMapValueSize
+	SetThreshold          = setThreshold
 )
 
 // Exported function of Array for testing.

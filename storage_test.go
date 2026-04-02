@@ -697,7 +697,7 @@ func TestPersistentStorage(t *testing.T) {
 		require.True(t, storage.HasUnsavedChanges(tempAddress))
 		require.True(t, storage.HasUnsavedChanges(permAddress))
 
-		err = storage.Commit()
+		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
 		require.Equal(t, uint(0), storage.DeltasWithoutTempAddresses())
@@ -742,7 +742,7 @@ func TestPersistentStorage(t *testing.T) {
 		require.True(t, storage.HasUnsavedChanges(tempAddress))
 		require.True(t, storage.HasUnsavedChanges(permAddress))
 
-		err = storage.Commit()
+		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
 		require.True(t, storage.HasUnsavedChanges(tempAddress))
@@ -815,7 +815,7 @@ func TestPersistentStorage(t *testing.T) {
 		require.True(t, storageWithFastCommit.DeltasSizeWithoutTempAddresses() > 0)
 		require.Equal(t, slabSize, storageWithFastCommit.DeltasSizeWithoutTempAddresses())
 
-		err = storage.Commit()
+		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 		require.Equal(t, uint64(0), storage.DeltasSizeWithoutTempAddresses())
 
@@ -856,7 +856,7 @@ func TestPersistentStorage(t *testing.T) {
 		require.Equal(t, uint(len(simpleMap)), storage.DeltasWithoutTempAddresses())
 		require.Equal(t, uint(len(simpleMap)), storageWithFastCommit.DeltasWithoutTempAddresses())
 
-		err = storage.Commit()
+		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
 		err = storageWithFastCommit.FastCommit(10)

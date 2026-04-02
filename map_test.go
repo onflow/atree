@@ -254,7 +254,7 @@ func _testMap(
 
 	if !hasNestedArrayMapElement {
 		// Need to call Commit before calling storage.Count() for atree.PersistentSlabStorage.
-		err = storage.Commit()
+		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
 		stats, err := atree.GetMapStats(m)
@@ -13503,7 +13503,7 @@ func TestMapPopIterate(t *testing.T) {
 		m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
 		require.NoError(t, err)
 
-		err = storage.Commit()
+		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
 		require.Equal(t, 1, storage.Count())
@@ -13545,7 +13545,7 @@ func TestMapPopIterate(t *testing.T) {
 
 		require.Equal(t, mapCount, m.Count())
 
-		err = storage.Commit()
+		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
 		require.Equal(t, 1, storage.Count())
@@ -13604,7 +13604,7 @@ func TestMapPopIterate(t *testing.T) {
 			require.Nil(t, existingStorable)
 		}
 
-		err = storage.Commit()
+		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
@@ -13675,7 +13675,7 @@ func TestMapPopIterate(t *testing.T) {
 
 		sort.Stable(keysByDigest{sortedKeys, digesterBuilder})
 
-		err = storage.Commit()
+		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
 		// Iterate key value pairs

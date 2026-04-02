@@ -501,14 +501,6 @@ func (s *PersistentSlabStorage) sortedOwnedDeltaKeys() []SlabID {
 	return keysWithOwners
 }
 
-func (s *PersistentSlabStorage) Commit() error {
-
-	// this part ensures the keys are sorted so commit operation is deterministic
-	keysWithOwners := s.sortedOwnedDeltaKeys()
-
-	return s.commit(keysWithOwners)
-}
-
 func (s *PersistentSlabStorage) commit(keys []SlabID) error {
 	var err error
 

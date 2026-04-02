@@ -19,6 +19,7 @@
 package atree_test
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -80,7 +81,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 		err = array.Append(v)
 		require.NoError(b, err)
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.FastCommit(runtime.NumCPU()))
 	b.ResetTimer()
 
 	arrayID := array.SlabID()
@@ -101,7 +102,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 		err = array.Append(v)
 		require.NoError(b, err)
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.FastCommit(runtime.NumCPU()))
 	totalAppendTime = time.Since(start)
 
 	// remove
@@ -116,7 +117,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 		require.NoError(b, err)
 		totalRawDataSize -= storable.ByteSize()
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.FastCommit(runtime.NumCPU()))
 	totalRemoveTime = time.Since(start)
 
 	// insert
@@ -137,7 +138,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 		err = array.Insert(ind, v)
 		require.NoError(b, err)
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.FastCommit(runtime.NumCPU()))
 	totalInsertTime = time.Since(start)
 
 	// lookup
@@ -151,7 +152,7 @@ func benchmarkArray(b *testing.B, initialArrayCount, numberOfElements int) {
 		_, err := array.Get(ind)
 		require.NoError(b, err)
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.FastCommit(runtime.NumCPU()))
 	totalLookupTime = time.Since(start)
 
 	baseStorage := atree.GetBaseStorage(storage)
@@ -211,7 +212,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 		err = array.Append(v)
 		require.NoError(b, err)
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.FastCommit(runtime.NumCPU()))
 	b.ResetTimer()
 
 	for range numberOfOps {
@@ -234,7 +235,7 @@ func benchmarkLongTermImpactOnMemory(b *testing.B, initialArrayCount, numberOfOp
 			require.NoError(b, err)
 		}
 	}
-	require.NoError(b, storage.Commit())
+	require.NoError(b, storage.FastCommit(runtime.NumCPU()))
 
 	baseStorage := atree.GetBaseStorage(storage)
 

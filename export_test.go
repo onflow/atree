@@ -206,3 +206,11 @@ func ComputeInlinedMapSlabByteSize(elementStorableByteSizes [][2]uint32) uint32 
 
 	return slabSize
 }
+
+func GetMaxCollisionLimitPerDigest() uint32 {
+	return maxCollisionLimitPerDigest
+}
+
+func SetMaxCollisionLimitPerDigest(limit uint32) {
+	maxCollisionLimitPerDigest = limit
+}

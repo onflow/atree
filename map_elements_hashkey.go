@@ -25,12 +25,12 @@ import (
 	"strings"
 )
 
-// MaxCollisionLimitPerDigest is the noncryptographic hash collision limit
+// maxCollisionLimitPerDigest is the noncryptographic hash collision limit
 // (per digest per map) we enforce in the first level. In the same map
 // for the same digest, having a non-intentional collision should be rare and
 // several collisions should be extremely rare.  The default limit should
 // be high enough to ignore accidental collisions while mitigating attacks.
-var MaxCollisionLimitPerDigest = uint32(255)
+var maxCollisionLimitPerDigest = uint32(255)
 
 // hkeyElements
 type hkeyElements struct {
@@ -304,7 +304,7 @@ func (e *hkeyElements) Set(
 			collisionCount := elementCount - 1
 
 			// Check if existing collision count reached MaxCollisionLimitPerDigest
-			if collisionCount >= MaxCollisionLimitPerDigest {
+			if collisionCount >= maxCollisionLimitPerDigest {
 				// Enforce collision limit on inserts and ignore updates.
 				_, _, err = elem.Get(storage, digester, level, hkey, comparator, key)
 				if err != nil {
@@ -312,7 +312,7 @@ func (e *hkeyElements) Set(
 					if errors.As(err, &knfe) {
 						// Don't allow any more collisions for a digest that
 						// already reached MaxCollisionLimitPerDigest.
-						return nil, nil, NewCollisionLimitError(MaxCollisionLimitPerDigest)
+						return nil, nil, NewCollisionLimitError(maxCollisionLimitPerDigest)
 					}
 				}
 			}

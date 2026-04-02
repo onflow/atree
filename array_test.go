@@ -179,7 +179,7 @@ func _testArray(
 
 	if !hasNestedArrayMapElement {
 		// Need to call Commit before calling storage.Count() for atree.PersistentSlabStorage.
-		err = storage.Commit()
+		err = storage.FastCommit(runtime.NumCPU())
 		require.NoError(t, err)
 
 		stats, err := atree.GetArrayStats(array)

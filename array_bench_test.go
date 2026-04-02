@@ -20,6 +20,7 @@ package atree_test
 
 import (
 	"math/rand"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -204,7 +205,7 @@ func setupArray(b *testing.B, r *rand.Rand, storage *atree.PersistentSlabStorage
 		require.NoError(b, err)
 	}
 
-	err = storage.Commit()
+	err = storage.FastCommit(runtime.NumCPU())
 	require.NoError(b, err)
 
 	arrayID := array.SlabID()

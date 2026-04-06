@@ -79,7 +79,11 @@ func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDec
 			}
 
 			elems[i] = elem
-			size += elem.Size()
+			newSize, safe := safeAdd2Uint32(size, elem.Size())
+			if !safe {
+				return nil, NewDecodingErrorf("data is too large for singleElements")
+			}
+			size = newSize
 		}
 
 		// Create singleElements
@@ -105,7 +109,12 @@ func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDec
 		}
 
 		elems[i] = elem
-		size += digestSize + elem.Size()
+
+		newSize, safe := safeAdd3Uint32(size, digestSize, elem.Size())
+		if !safe {
+			return nil, NewDecodingErrorf("data is too large for hkeyElements")
+		}
+		size = newSize
 	}
 
 	// Create hkeyElements

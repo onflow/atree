@@ -375,7 +375,12 @@ func DecodeInlinedCompactMapStorable(
 		elem := &singleElement{key, value, elemSize}
 
 		elems[i] = elem
-		elementsSize += digestSize + elem.Size()
+
+		newElementSize, safe := safeAdd3Uint32(elementsSize, digestSize, elem.Size())
+		if !safe {
+			return nil, NewDecodingErrorf("data is too large for inlined compact map")
+		}
+		elementsSize = newElementSize
 	}
 
 	// Create hkeyElements

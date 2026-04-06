@@ -43,10 +43,10 @@ var (
 )
 
 func init() {
-	SetThreshold(defaultSlabSize)
+	setThreshold(defaultSlabSize)
 }
 
-func SetThreshold(threshold uint32) (uint32, uint32, uint32, uint32) {
+func setThreshold(threshold uint32) (uint32, uint32, uint32, uint32) {
 	if threshold < minSlabSize {
 		panic(fmt.Sprintf("Slab size %d is smaller than minSlabSize %d", threshold, minSlabSize))
 	}

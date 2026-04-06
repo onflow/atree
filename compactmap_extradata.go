@@ -57,7 +57,7 @@ func newCompactMapExtraData(
 			fmt.Errorf(
 				"compact extra data has invalid length %d, want %d",
 				length,
-				arrayExtraDataLength,
+				compactMapExtraDataLength,
 			))
 	}
 

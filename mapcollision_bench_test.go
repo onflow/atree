@@ -114,9 +114,9 @@ var (
 
 func BenchmarkCollisionPerDigest(b *testing.B) {
 
-	savedMaxCollisionLimitPerDigest := atree.MaxCollisionLimitPerDigest
+	savedMaxCollisionLimitPerDigest := atree.GetMaxCollisionLimitPerDigest()
 	defer func() {
-		atree.MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
+		atree.SetMaxCollisionLimitPerDigest(savedMaxCollisionLimitPerDigest)
 	}()
 
 	const mapCount = 1_000_000
@@ -129,7 +129,7 @@ func BenchmarkCollisionPerDigest(b *testing.B) {
 
 		b.Run(name, func(b *testing.B) {
 
-			atree.MaxCollisionLimitPerDigest = collisionPerDigest
+			atree.SetMaxCollisionLimitPerDigest(collisionPerDigest)
 
 			digesterBuilder := NewCollisionDigesterBuilder(collisionPerDigest)
 			keyValues := make(map[atree.Value]atree.Value, mapCount)

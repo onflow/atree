@@ -93,7 +93,7 @@ func NewArrayElementCannotExceedMaxElementCountError(maxCount uint64) error {
 }
 
 func (e *ArrayElementCannotExceedMaxElementCountError) Error() string {
-	return fmt.Sprintf("new element cann't be inserted into an array: array already has max number of elements %d", e.maxCount)
+	return fmt.Sprintf("new element can't be inserted into an array: array already has max number of elements %d", e.maxCount)
 }
 
 // SliceOutOfBoundsError is returned when index for array slice is out of bounds.

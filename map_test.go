@@ -14134,11 +14134,11 @@ func TestMapFromBatchData(t *testing.T) {
 			maxCollisionLimitPerDigest = uint32(1024 / 2)
 		)
 
-		savedMaxCollisionLimitPerDigest := atree.MaxCollisionLimitPerDigest
+		savedMaxCollisionLimitPerDigest := atree.GetMaxCollisionLimitPerDigest()
 		defer func() {
-			atree.MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
+			atree.SetMaxCollisionLimitPerDigest(savedMaxCollisionLimitPerDigest)
 		}()
-		atree.MaxCollisionLimitPerDigest = maxCollisionLimitPerDigest
+		atree.SetMaxCollisionLimitPerDigest(maxCollisionLimitPerDigest)
 
 		typeInfo := testutils.NewSimpleTypeInfo(42)
 
@@ -14653,9 +14653,9 @@ func TestMapSlabDump(t *testing.T) {
 }
 
 func TestMaxCollisionLimitPerDigest(t *testing.T) {
-	savedMaxCollisionLimitPerDigest := atree.MaxCollisionLimitPerDigest
+	savedMaxCollisionLimitPerDigest := atree.GetMaxCollisionLimitPerDigest()
 	defer func() {
-		atree.MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
+		atree.SetMaxCollisionLimitPerDigest(savedMaxCollisionLimitPerDigest)
 	}()
 
 	t.Run("collision limit 0", func(t *testing.T) {
@@ -14666,7 +14666,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		// Set noncryptographic hash collision limit as 0,
 		// meaning no collision is allowed at first level.
-		atree.MaxCollisionLimitPerDigest = uint32(0)
+		atree.SetMaxCollisionLimitPerDigest(uint32(0))
 
 		digesterBuilder := &mockDigesterBuilder{}
 		keyValues := make(testutils.ExpectedMapValue, mapCount)
@@ -14740,7 +14740,7 @@ func TestMaxCollisionLimitPerDigest(t *testing.T) {
 
 		// Set noncryptographic hash collision limit as 7,
 		// meaning at most 8 elements in collision group per digest at first level.
-		atree.MaxCollisionLimitPerDigest = uint32(7)
+		atree.SetMaxCollisionLimitPerDigest(uint32(7))
 
 		digesterBuilder := &mockDigesterBuilder{}
 		keyValues := make(testutils.ExpectedMapValue, mapCount)
@@ -20489,12 +20489,12 @@ func TestMapSetAndGetWithHashCollision(t *testing.T) {
 
 	atree.SetThreshold(256)
 
-	savedMaxCollisionLimitPerDigest := atree.MaxCollisionLimitPerDigest
-	atree.MaxCollisionLimitPerDigest = uint32(math.Ceil(float64(mapCount) / 10))
+	savedMaxCollisionLimitPerDigest := atree.GetMaxCollisionLimitPerDigest()
+	atree.SetMaxCollisionLimitPerDigest(uint32(math.Ceil(float64(mapCount) / 10)))
 
 	t.Cleanup(func() {
 		atree.SetThreshold(1024)
-		atree.MaxCollisionLimitPerDigest = savedMaxCollisionLimitPerDigest
+		atree.SetMaxCollisionLimitPerDigest(savedMaxCollisionLimitPerDigest)
 	})
 
 	t.Run("unique keys with hash collision", func(t *testing.T) {

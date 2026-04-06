@@ -803,12 +803,18 @@ func (a ArrayMetaDataSlab) IsUnderflow() (uint32, bool) {
 
 func (a *ArrayMetaDataSlab) CanLendToLeft(size uint32) bool {
 	n := uint32(math.Ceil(float64(size) / arraySlabHeaderSize))
-	return a.header.size-arraySlabHeaderSize*n > minThreshold
+	if a.header.size >= arraySlabHeaderSize*n {
+		return a.header.size-arraySlabHeaderSize*n > minThreshold
+	}
+	return false
 }
 
 func (a *ArrayMetaDataSlab) CanLendToRight(size uint32) bool {
 	n := uint32(math.Ceil(float64(size) / arraySlabHeaderSize))
-	return a.header.size-arraySlabHeaderSize*n > minThreshold
+	if a.header.size >= arraySlabHeaderSize*n {
+		return a.header.size-arraySlabHeaderSize*n > minThreshold
+	}
+	return false
 }
 
 // Inline operations

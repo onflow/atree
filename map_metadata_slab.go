@@ -707,12 +707,18 @@ func (m MapMetaDataSlab) IsUnderflow() (uint32, bool) {
 
 func (m *MapMetaDataSlab) CanLendToLeft(size uint32) bool {
 	n := uint32(math.Ceil(float64(size) / mapSlabHeaderSize))
-	return m.header.size-mapSlabHeaderSize*n > minThreshold
+	if m.header.size >= mapSlabHeaderSize*n {
+		return m.header.size-mapSlabHeaderSize*n > minThreshold
+	}
+	return false
 }
 
 func (m *MapMetaDataSlab) CanLendToRight(size uint32) bool {
 	n := uint32(math.Ceil(float64(size) / mapSlabHeaderSize))
-	return m.header.size-mapSlabHeaderSize*n > minThreshold
+	if m.header.size >= mapSlabHeaderSize*n {
+		return m.header.size-mapSlabHeaderSize*n > minThreshold
+	}
+	return false
 }
 
 // Inline operations

@@ -378,11 +378,11 @@ func (s *PersistentSlabStorage) SlabIterator() (SlabIterator, error) {
 				var err error
 				// Don't cache retrieved child slabs during slab iteration to prevent changes to storage cache.
 				slab, ok, err = s.RetrieveIgnoringDeltas(id, false)
-				if !ok {
-					return NewSlabNotFoundErrorf(id, "slab not found during slab iteration")
-				}
 				if err != nil {
 					return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", id))
+				}
+				if !ok {
+					return NewSlabNotFoundErrorf(id, "slab not found during slab iteration")
 				}
 
 				slabs = append(slabs, struct {

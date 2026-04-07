@@ -21,6 +21,7 @@ package atree
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -83,6 +84,17 @@ func newCompactMapExtraData(
 	}
 
 	digestCount := len(digestBytes) / digestSize
+
+	// An inlined compact map is expected to have only a few elements,
+	// so checking the digest or key count against math.MaxUint32 is safe.
+	if digestCount > math.MaxUint32 {
+		return nil, NewDecodingError(
+			fmt.Errorf(
+				"compact map extra data has too many digests: got %d, max %d",
+				digestCount,
+				math.MaxUint32,
+			))
+	}
 
 	// element 2: keys
 	keyCount, err := dec.DecodeArrayHead()

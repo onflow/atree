@@ -145,9 +145,16 @@ func newMapDataSlabFromDataV0(
 	}
 
 	// Compute slab size for version 1.
-	slabSize := versionAndFlagSize + elements.Size()
+	slabSize, safe := safeAdd2Uint32(versionAndFlagSize, elements.Size())
+	if !safe {
+		return nil, NewDecodingErrorf("failed to decode map data slab: size exceeds MaxUint32")
+	}
+
 	if !h.isRoot() {
-		slabSize += SlabIDLength
+		slabSize, safe = safeAdd2Uint32(slabSize, SlabIDLength)
+		if !safe {
+			return nil, NewDecodingErrorf("failed to decode map data slab: size exceeds MaxUint32")
+		}
 	}
 
 	header := MapSlabHeader{
@@ -244,9 +251,16 @@ func newMapDataSlabFromDataV1(
 	}
 
 	// Compute slab size.
-	slabSize := versionAndFlagSize + elements.Size()
+	slabSize, safe := safeAdd2Uint32(versionAndFlagSize, elements.Size())
+	if !safe {
+		return nil, NewDecodingErrorf("failed to decode map data slab: size exceeds MaxUint32")
+	}
+
 	if !h.isRoot() {
-		slabSize += SlabIDLength
+		slabSize, safe = safeAdd2Uint32(slabSize, SlabIDLength)
+		if !safe {
+			return nil, NewDecodingErrorf("failed to decode map data slab: size exceeds MaxUint32")
+		}
 	}
 
 	header := MapSlabHeader{
@@ -371,7 +385,11 @@ func DecodeInlinedCompactMapStorable(
 			return nil, wrapErrorAsExternalErrorIfNeeded(err)
 		}
 
-		elemSize := singleElementPrefixSize + key.ByteSize() + value.ByteSize()
+		elemSize, safe := safeAdd3Uint32(singleElementPrefixSize, key.ByteSize(), value.ByteSize())
+		if !safe {
+			return nil, NewDecodingErrorf("failed to decode inlined compact map: element size exceeds MaxUint32")
+		}
+
 		elem := &singleElement{key, value, elemSize}
 
 		elems[i] = elem
@@ -391,9 +409,14 @@ func DecodeInlinedCompactMapStorable(
 		size:  elementsSize,
 	}
 
+	size, safe := safeAdd2Uint32(inlinedMapDataSlabPrefixSize, elements.Size())
+	if !safe {
+		return nil, NewDecodingErrorf("failed to decode inlined compact map: size exceeds MaxUint32")
+	}
+
 	header := MapSlabHeader{
 		slabID:   slabID,
-		size:     inlinedMapDataSlabPrefixSize + elements.Size(),
+		size:     size,
 		firstKey: elements.firstKey(),
 	}
 
@@ -492,9 +515,14 @@ func DecodeInlinedMapStorable(
 		return nil, err
 	}
 
+	size, safe := safeAdd2Uint32(inlinedMapDataSlabPrefixSize, elements.Size())
+	if !safe {
+		return nil, NewDecodingError(fmt.Errorf("failed to decode inlined compact map data: size exceeds MaxUint32"))
+	}
+
 	header := MapSlabHeader{
 		slabID:   slabID,
-		size:     inlinedMapDataSlabPrefixSize + elements.Size(),
+		size:     size,
 		firstKey: elements.firstKey(),
 	}
 

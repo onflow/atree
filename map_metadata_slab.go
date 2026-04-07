@@ -609,6 +609,8 @@ func (m *MapMetaDataSlab) Merge(slab Slab) error {
 	rightSlab := slab.(*MapMetaDataSlab)
 
 	m.childrenHeaders = merge(m.childrenHeaders, rightSlab.childrenHeaders)
+	// This computation is safe because header.size >= mapMetaDataSlabPrefixSize,
+	// as header.size = mapMetaDataSlabPrefixSize + len(childrenHeaders) * mapSlabHeaderSize.
 	m.header.size += rightSlab.header.size - mapMetaDataSlabPrefixSize
 
 	return nil

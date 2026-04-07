@@ -92,6 +92,10 @@ func MaxInlineMapKeySize() uint32 {
 }
 
 func maxInlineMapValueSize(keySize uint32) uint32 {
+	// This is safe from underflow because:
+	// - keySize is capped at maxInlineMapKeySize
+	// - maxInlineMapKeySize = (maxInlineMapElementSize - singleElementPrefixSize) / 2
+	// Therefore, maxInlineMapElementSize - keySize - singleElementPrefixSize >= 0.
 	return maxInlineMapElementSize - keySize - singleElementPrefixSize
 }
 

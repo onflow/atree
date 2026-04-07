@@ -650,6 +650,8 @@ func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
 
 	rightSlab := slab.(*ArrayMetaDataSlab)
 	a.childrenHeaders = merge(a.childrenHeaders, rightSlab.childrenHeaders)
+	// The computation is safe because header.size >= arrayMetaDataSlabPrefixSize,
+	// as header.size = arrayMetaDataSlabPrefixSize + len(childrenHeaders) * arraySlabHeaderSize.
 	a.header.size += rightSlab.header.size - arrayMetaDataSlabPrefixSize
 	a.header.count += rightSlab.header.count
 

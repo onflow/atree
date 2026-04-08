@@ -51,6 +51,10 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 	const cborByteStringHead = 0x59
 	enc.Scratch[2] = cborByteStringHead
 
+	// Cast len(e.hkeys)*8 to uint16 is safe because the number of
+	// hkeys per data slab is limited by slab size, which is at most
+	// maxThreshold (48KiB with maxSlabSize of 32KiB).  Even in the
+	// worst case, len(e.hkeys)*8 is well below math.MaxUint16 (65535).
 	binary.BigEndian.PutUint16(enc.Scratch[3:], uint16(len(e.hkeys)*8))
 
 	// Write scratch content to encoder
@@ -75,6 +79,10 @@ func (e *hkeyElements) Encode(enc *Encoder) error {
 	// TODO: maybe make this header dynamic to reduce size
 	// CBOR array head 0x99 indicating that the number of array elements are encoded in the next 2 bytes.
 	const cborArrayHead = 0x99
+	// Cast len(e.elems) to uint16 is safe because the number of
+	// elements per data slab is limited by slab size, which is at
+	// most maxThreshold (48KiB with maxSlabSize of 32KiB), well
+	// below math.MaxUint16 (65535).
 	enc.Scratch[0] = cborArrayHead
 	binary.BigEndian.PutUint16(enc.Scratch[1:], uint16(len(e.elems)))
 	err = enc.CBOR.EncodeRawBytes(enc.Scratch[:3])
@@ -126,6 +134,10 @@ func (e *singleElements) Encode(enc *Encoder) error {
 
 	// Encode elements array header manually for fix-sized encoding
 	// TODO: maybe make this header dynamic to reduce size
+	// Cast len(e.elems) to uint16 is safe because the number of
+	// elements per data slab is limited by slab size, which is at
+	// most maxThreshold (48KiB with maxSlabSize of 32KiB), well
+	// below math.MaxUint16 (65535).
 	enc.Scratch[3] = 0x99
 	binary.BigEndian.PutUint16(enc.Scratch[4:], uint16(len(e.elems)))
 

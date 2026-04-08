@@ -350,7 +350,9 @@ func (m *MapMetaDataSlab) SplitChildSlab(storage SlabStorage, child MapSlab, chi
 		right.Header(),
 	)
 
-	// Increase header size
+	// Increase header size.
+	// This addition is safe from overflow because metadata slab size
+	// is checked against maxThreshold and is split if it exceeds the limit.
 	m.header.size += mapSlabHeaderSize
 
 	// Store modified slabs
@@ -609,8 +611,10 @@ func (m *MapMetaDataSlab) Merge(slab Slab) error {
 	rightSlab := slab.(*MapMetaDataSlab)
 
 	m.childrenHeaders = merge(m.childrenHeaders, rightSlab.childrenHeaders)
-	// This computation is safe because header.size >= mapMetaDataSlabPrefixSize,
+	// The subtraction is safe because header.size >= mapMetaDataSlabPrefixSize,
 	// as header.size = mapMetaDataSlabPrefixSize + len(childrenHeaders) * mapSlabHeaderSize.
+	// The addition is safe from overflow because merge is only called when
+	// both slabs are underflowing, so their combined size fits in uint32.
 	m.header.size += rightSlab.header.size - mapMetaDataSlabPrefixSize
 
 	return nil

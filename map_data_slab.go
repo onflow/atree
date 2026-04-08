@@ -198,7 +198,9 @@ func (m *MapDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", m.SlabID().address))
 	}
 
-	// Create new right slab
+	// Create new right slab.
+	// These additions are safe from overflow because each split half's elements
+	// size is less than the original slab size, which is bounded by maxThreshold.
 	rightSlab := &MapDataSlab{
 		header: MapSlabHeader{
 			slabID:   sID,
@@ -252,7 +254,9 @@ func (m *MapDataSlab) LendToRight(slab Slab) error {
 		return err
 	}
 
-	// Update right slab
+	// Update right slab.
+	// These additions are safe from overflow because rebalancing redistributes
+	// elements between two slabs whose combined size fits in uint32.
 	rightSlab.elements = rightElements
 	rightSlab.header.size = mapDataSlabPrefixSize + rightElements.Size()
 	rightSlab.header.firstKey = rightElements.firstKey()
@@ -278,7 +282,9 @@ func (m *MapDataSlab) BorrowFromRight(slab Slab) error {
 		return err
 	}
 
-	// Update right slab
+	// Update right slab.
+	// These additions are safe from overflow because rebalancing redistributes
+	// elements between two slabs whose combined size fits in uint32.
 	rightSlab.elements = rightElements
 	rightSlab.header.size = mapDataSlabPrefixSize + rightElements.Size()
 	rightSlab.header.firstKey = rightElements.firstKey()
@@ -343,6 +349,8 @@ func (m *MapDataSlab) Inlinable(maxInlineSize uint32) bool {
 		return false
 	}
 
+	// This addition is safe from overflow because elements size
+	// is bounded by slab size limits, well within uint32.
 	inlinedSize := inlinedMapDataSlabPrefixSize + m.Size()
 
 	// Inlined byte size must be less than max inline size.
@@ -364,7 +372,9 @@ func (m *MapDataSlab) Inline(storage SlabStorage) error {
 		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to remove slab %s", id))
 	}
 
-	// Update data slab size from not inlined to inlined
+	// Update data slab size from not inlined to inlined.
+	// This addition is safe from overflow because elements size
+	// is bounded by slab size limits, well within uint32.
 	m.header.size = inlinedMapDataSlabPrefixSize + m.Size()
 
 	// Update data slab inlined status.
@@ -380,6 +390,8 @@ func (m *MapDataSlab) Uninline(storage SlabStorage) error {
 	}
 
 	// Update data slab size from inlined to not inlined.
+	// This addition is safe from overflow because elements size
+	// is bounded by slab size limits, well within uint32.
 	m.header.size = mapRootDataSlabPrefixSize + m.Size()
 
 	// Update data slab inlined status.

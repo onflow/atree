@@ -145,6 +145,8 @@ func (a *ArrayDataSlab) Set(storage SlabStorage, address Address, index uint64, 
 	// Given this, size diff of the old and new element can be 0 even when its actual size changed.
 	size := a.getPrefixSize()
 	for _, e := range a.elements {
+		// This addition is safe from overflow because slab size is limited by
+		// maxThreshold (48KiB with maxSlabSize of 32KiB), well within uint32.
 		size += e.ByteSize()
 	}
 
@@ -175,6 +177,8 @@ func (a *ArrayDataSlab) Insert(storage SlabStorage, address Address, index uint6
 	a.elements = slices.Insert(a.elements, int(index), storable)
 
 	a.header.count++
+	// This addition is safe from overflow because slab size is checked
+	// against maxThreshold and the slab is split if needed.
 	a.header.size += storable.ByteSize()
 
 	if !a.inlined {

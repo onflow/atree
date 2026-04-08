@@ -382,7 +382,9 @@ func (a *ArrayMetaDataSlab) SplitChildSlab(storage SlabStorage, child ArraySlab,
 		rightSlabCountSum,
 	)
 
-	// Increase header size
+	// Increase header size.
+	// This addition is safe from overflow because metadata slab size
+	// is checked against maxThreshold and is split if it exceeds the limit.
 	a.header.size += arraySlabHeaderSize
 
 	// Store modified slabs
@@ -650,8 +652,10 @@ func (a *ArrayMetaDataSlab) Merge(slab Slab) error {
 
 	rightSlab := slab.(*ArrayMetaDataSlab)
 	a.childrenHeaders = merge(a.childrenHeaders, rightSlab.childrenHeaders)
-	// The computation is safe because header.size >= arrayMetaDataSlabPrefixSize,
+	// The subtraction is safe because header.size >= arrayMetaDataSlabPrefixSize,
 	// as header.size = arrayMetaDataSlabPrefixSize + len(childrenHeaders) * arraySlabHeaderSize.
+	// The addition is safe from overflow because merge is only called when
+	// both slabs are underflowing, so their combined size fits in uint32.
 	a.header.size += rightSlab.header.size - arrayMetaDataSlabPrefixSize
 	a.header.count += rightSlab.header.count
 
@@ -678,6 +682,8 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 
 	leftCount := uint32(0)
 	for i := range leftChildrenCount {
+		// This addition is safe from overflow because the total count was
+		// already validated when the metadata slab was created or modified.
 		leftCount += a.childrenHeaders[i].count
 	}
 
@@ -706,6 +712,8 @@ func (a *ArrayMetaDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	rightSlab.childrenCountSum = make([]uint32, len(rightSlab.childrenHeaders))
 	countSum := uint32(0)
 	for i := range rightSlab.childrenCountSum {
+		// These additions are safe from overflow because the total count was
+		// already validated when the metadata slab was created or modified.
 		countSum += rightSlab.childrenHeaders[i].count
 		rightSlab.childrenCountSum[i] = countSum
 	}
@@ -729,10 +737,12 @@ func (a *ArrayMetaDataSlab) LendToRight(slab Slab) error {
 	moveCount := oldLeftChildrenHeaderCount - leftChildrenHeaderCount
 	a.childrenHeaders, rightSlab.childrenHeaders = lendToRight(a.childrenHeaders, rightSlab.childrenHeaders, moveCount)
 
-	// Rebuild right slab childrenCountSum
+	// Rebuild right slab childrenCountSum.
 	rightSlab.childrenCountSum = make([]uint32, len(rightSlab.childrenHeaders))
 	countSum := uint32(0)
 	for i := range rightSlab.childrenCountSum {
+		// These count additions are safe from overflow because the total count was
+		// already validated when the metadata slab was created or modified.
 		countSum += rightSlab.childrenHeaders[i].count
 		rightSlab.childrenCountSum[i] = countSum
 	}
@@ -769,9 +779,11 @@ func (a *ArrayMetaDataSlab) BorrowFromRight(slab Slab) error {
 	moveCount := leftChildrenHeaderCount - oldLeftChildrenHeaderCount
 	a.childrenHeaders, rightSlab.childrenHeaders = borrowFromRight(a.childrenHeaders, rightSlab.childrenHeaders, moveCount)
 
-	// Update left slab (original)
+	// Update left slab (original).
 	countSum := oldLeftSlabCountSum
 	for i := oldLeftChildrenHeaderCount; i < len(a.childrenHeaders); i++ {
+		// These count additions are safe from overflow because the total count was
+		// already validated when the metadata slab was created or modified.
 		countSum += a.childrenHeaders[i].count
 		a.childrenCountSum = append(a.childrenCountSum, countSum)
 	}

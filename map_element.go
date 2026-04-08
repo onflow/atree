@@ -122,6 +122,8 @@ func newSingleElement(storage SlabStorage, address Address, key Value, value Val
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to get value's storable")
 	}
 
+	// This addition is safe from overflow because key and value sizes
+	// are bounded by max inline size limits, well within uint32.
 	return &singleElement{
 		key:   ks,
 		value: vs,
@@ -212,6 +214,8 @@ func (e *singleElement) Set(
 		}
 
 		e.value = valueStorable
+		// This addition is safe from overflow because key and value sizes
+		// are bounded by max inline size limits, well within uint32.
 		e.size = singleElementPrefixSize + e.key.ByteSize() + e.value.ByteSize()
 		return e, e.key, existingMapValueStorable, nil
 	}
@@ -405,7 +409,9 @@ func (e *inlineCollisionGroup) Set(
 					fmt.Sprintf("failed to generate slab ID for address 0x%x", address))
 			}
 
-			// Create MapDataSlab
+			// Create MapDataSlab.
+			// This addition is safe from overflow because elements size
+			// is bounded by slab size limits, well within uint32.
 			slab := &MapDataSlab{
 				header: MapSlabHeader{
 					slabID:   id,
@@ -422,7 +428,8 @@ func (e *inlineCollisionGroup) Set(
 				return nil, nil, nil, err
 			}
 
-			// Create and return externalCollisionGroup (wrapper of newly created MapDataSlab)
+			// Create and return externalCollisionGroup (wrapper of newly created MapDataSlab).
+			// This addition is safe from overflow because both operands are small constants.
 			return &externalCollisionGroup{
 				slabID: id,
 				size:   externalCollisionGroupPrefixSize + SlabIDStorable(id).ByteSize(),
@@ -469,7 +476,10 @@ func (e *inlineCollisionGroup) hasPointer() bool {
 	return e.elements.hasPointer()
 }
 
+// Size returns the encoded size of the inline collision group.
 func (e *inlineCollisionGroup) Size() uint32 {
+	// This addition is safe from overflow because elements size
+	// is bounded by slab size limits, well within uint32.
 	return inlineCollisionGroupPrefixSize + e.elements.Size()
 }
 

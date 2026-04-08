@@ -110,6 +110,8 @@ func ByteSliceToByteArray[T ByteStorableValue](
 		for i, b := range data {
 			e := T(b)
 			elements[i] = e
+			// This addition is safe from overflow because total element size
+			// is checked against targetThreshold before use (see below).
 			elementSize += e.ByteSize()
 		}
 
@@ -153,6 +155,8 @@ func newArrayWithElements(
 	root := array.root.(*ArrayDataSlab)
 	root.elements = elements
 	root.header.count = uint32(len(elements))
+	// This addition is safe from overflow because elementSize was already
+	// checked to be less than targetThreshold - arrayRootDataSlabPrefixSize.
 	root.header.size += elementSize
 
 	// This isn't needed because slab is already stored in the storage by pointer in NewArray(),

@@ -35,6 +35,8 @@ type singleElements struct {
 var _ elements = &singleElements{}
 
 func newSingleElementsWithElement(level uint, elem *singleElement) *singleElements {
+	// This addition is safe from overflow because element size
+	// is bounded by max inline size limits and prefix is a small constant.
 	return &singleElements{
 		level: level,
 		size:  singleElementsPrefixSize + elem.size,
@@ -168,6 +170,8 @@ func (e *singleElements) Set(
 			}
 
 			elem.value = vs
+			// This addition is safe from overflow because key and value sizes
+			// are bounded by max inline size limits, well within uint32.
 			elem.size = singleElementPrefixSize + elem.key.ByteSize() + elem.value.ByteSize()
 
 			// Recompute slab size by adding all element sizes instead of using the size diff of old and new element because
@@ -175,6 +179,8 @@ func (e *singleElements) Set(
 			// Given this, size diff of the old and new element can be 0 even when its actual size changed.
 			size := uint32(singleElementsPrefixSize)
 			for _, element := range e.elems {
+				// This addition is safe from overflow because slab size is limited by
+				// maxThreshold (48KiB with maxSlabSize of 32KiB), well within uint32.
 				size += element.Size()
 			}
 			e.size = size
@@ -190,6 +196,8 @@ func (e *singleElements) Set(
 		return nil, nil, err
 	}
 	e.elems = append(e.elems, newElem)
+	// This addition is safe from overflow because slab size is checked
+	// against maxThreshold and the slab is split if needed.
 	e.size += newElem.size
 
 	return newElem.key, nil, nil

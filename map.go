@@ -244,6 +244,8 @@ func NewMapFromBatchData(
 			}
 
 			elements.elems[lastElementIndex] = elem
+			// This is safe from overflow because elements.size includes
+			// prevElemSize, and slab size is bounded by maxThreshold.
 			elements.size += elem.Size() - prevElemSize
 
 			putDigester(digester)
@@ -304,6 +306,9 @@ func NewMapFromBatchData(
 
 		elements.hkeys = append(elements.hkeys, hkey)
 		elements.elems = append(elements.elems, elem)
+		// This addition is safe from overflow because slab size is checked
+		// against targetThreshold/maxThreshold before each append,
+		// and a new data slab is created when the threshold is reached.
 		elements.size += digestSize + elem.Size()
 
 		prevHkey = hkey
@@ -462,6 +467,8 @@ func nextLevelMapSlabs(storage SlabStorage, address Address, slabs []MapSlab) ([
 			}
 		}
 
+		// This addition is safe from overflow because metadata slab size
+		// is checked against maxThreshold and is split if it exceeds the limit.
 		metaSlab.header.size += mapSlabHeaderSize
 
 		metaSlab.childrenHeaders = append(metaSlab.childrenHeaders, slab.Header())

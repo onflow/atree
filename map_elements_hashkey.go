@@ -50,6 +50,8 @@ func newHkeyElements(level uint) *hkeyElements {
 }
 
 func newHkeyElementsWithElement(level uint, hkey Digest, elem element) *hkeyElements {
+	// This addition is safe from overflow because element size
+	// is bounded by max inline size limits and prefix/digest are small constants.
 	return &hkeyElements{
 		hkeys: []Digest{hkey},
 		elems: []element{elem},
@@ -218,6 +220,8 @@ func (e *hkeyElements) Set(
 
 		e.elems = []element{newElem}
 
+		// This addition is safe from overflow because slab size is checked
+		// against maxThreshold and the slab is split if needed.
 		e.size += digestSize + newElem.Size()
 
 		return newElem.key, nil, nil
@@ -236,6 +240,8 @@ func (e *hkeyElements) Set(
 
 		e.elems = slices.Insert(e.elems, 0, element(newElem))
 
+		// This addition is safe from overflow because slab size is checked
+		// against maxThreshold and the slab is split if needed.
 		e.size += digestSize + newElem.Size()
 
 		return newElem.key, nil, nil
@@ -254,6 +260,8 @@ func (e *hkeyElements) Set(
 
 		e.elems = append(e.elems, newElem)
 
+		// This addition is safe from overflow because slab size is checked
+		// against maxThreshold and the slab is split if needed.
 		e.size += digestSize + newElem.Size()
 
 		return newElem.key, nil, nil
@@ -331,6 +339,8 @@ func (e *hkeyElements) Set(
 		// Given this, size diff of the old and new element can be 0 even when its actual size changed.
 		size := uint32(hkeyElementsPrefixSize)
 		for _, element := range e.elems {
+			// This addition is safe from overflow because slab size is limited by
+			// maxThreshold (48KiB with maxSlabSize of 32KiB), well within uint32.
 			size += element.Size() + digestSize
 		}
 		e.size = size
@@ -352,6 +362,8 @@ func (e *hkeyElements) Set(
 	// insert into sorted elements
 	e.elems = slices.Insert(e.elems, lessThanIndex, element(newElem))
 
+	// This addition is safe from overflow because slab size is checked
+	// against maxThreshold and the slab is split if needed.
 	e.size += digestSize + newElem.Size()
 
 	return newElem.key, nil, nil
@@ -470,6 +482,10 @@ func (e *hkeyElements) Merge(elems elements) error {
 
 	e.hkeys = merge(e.hkeys, rElems.hkeys)
 	e.elems = merge(e.elems, rElems.elems)
+	// The subtraction is safe because rElems.Size() >= hkeyElementsPrefixSize,
+	// as Size() = hkeyElementsPrefixSize + size of elements.
+	// The addition is safe from overflow because merge is only called when
+	// both slabs are underflowing, so their combined size fits in uint32.
 	e.size += rElems.Size() - hkeyElementsPrefixSize
 
 	return nil

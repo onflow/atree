@@ -191,6 +191,9 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 		// Append new element
 		dataSlab.elements = append(dataSlab.elements, storable)
 		dataSlab.header.count++
+		// This addition is safe from overflow because slab size is
+		// checked against targetThreshold before each batch append,
+		// and a new data slab is created when the threshold is reached.
 		dataSlab.header.size += storable.ByteSize()
 	}
 
@@ -329,6 +332,8 @@ func nextLevelArraySlabs(storage SlabStorage, address Address, slabs []ArraySlab
 			}
 		}
 
+		// These additions are safe from overflow because metadata slab size
+		// is checked against maxThreshold and is split if it exceeds the limit.
 		metaSlab.header.size += arraySlabHeaderSize
 		metaSlab.header.count += slab.Header().count
 
@@ -644,6 +649,8 @@ func (a *Array) splitRoot() error {
 	right := rightSlab.(ArraySlab)
 
 	// Create new ArrayMetaDataSlab with the old root's slab ID
+	// The count and size computations are safe from overflow because the
+	// total count was the root's count before splitting, which already fit in uint32.
 	newRoot := &ArrayMetaDataSlab{
 		header: ArraySlabHeader{
 			slabID: rootID,

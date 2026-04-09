@@ -478,6 +478,7 @@ func (e *hkeyElements) Merge(elems elements) error {
 func (e *hkeyElements) Split() (elements, elements, error) {
 
 	// This computes the ceil of split to give the first slab more elements.
+	// This computation is safe because e.Size() = hkeyElementsPrefixSize + size of elements.
 	dataSize := e.Size() - hkeyElementsPrefixSize
 	midPoint := (dataSize + 1) >> 1
 
@@ -507,11 +508,14 @@ func (e *hkeyElements) Split() (elements, elements, error) {
 	e.elems, rightElems = split(e.elems, leftCount)
 
 	// Create right slab
+	// This computation is safe because leftSize is the sum of a subset of element sizes, so leftSize <= dataSize.
+	size := dataSize - leftSize + hkeyElementsPrefixSize
+
 	rightElements := &hkeyElements{
 		level: e.level,
 		hkeys: rightKeys,
 		elems: rightElems,
-		size:  dataSize - leftSize + hkeyElementsPrefixSize,
+		size:  size,
 	}
 
 	// Update left slab
@@ -544,6 +548,9 @@ func (e *hkeyElements) LendToRight(re elements) error {
 	// Left elements size is as close to midPoint as possible while right elements size >= minThreshold
 	for i := len(e.elems) - 1; i >= 0; i-- {
 		elemSize := e.elems[i].Size() + digestSize
+		// This computation is safe because leftSize starts as the total data size of left elements and each
+		// elemSize subtracted was part of that total, so leftSize >= elemSize at every iteration.
+		// size >= leftSize because size includes both left and right element data.
 		if leftSize-elemSize < midPoint && size-leftSize >= minSize {
 			break
 		}

@@ -238,6 +238,8 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 	}
 
 	// This computes the ceil of split to give the first slab with more elements.
+	// This is safe because header.size >= arrayDataSlabPrefixSize,
+	// as header.size = arrayDataSlabPrefixSize + the sum of element sizes.
 	dataSize := a.header.size - arrayDataSlabPrefixSize
 	midPoint := (dataSize + 1) >> 1
 
@@ -277,10 +279,15 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 		)
 	}
 
+	// This computation is safe because leftSize is the cumulative size
+	// of a subset of elements, and it can't exceed dataSize, the
+	// cumulative size of all elements.
+	size := arrayDataSlabPrefixSize + dataSize - leftSize
+
 	rightSlab := &ArrayDataSlab{
 		header: ArraySlabHeader{
 			slabID: sID,
-			size:   arrayDataSlabPrefixSize + dataSize - leftSize,
+			size:   size,
 			count:  uint32(len(rightElements)),
 		},
 		next:     a.next,
@@ -298,6 +305,10 @@ func (a *ArrayDataSlab) Split(storage SlabStorage) (Slab, Slab, error) {
 func (a *ArrayDataSlab) Merge(slab Slab) error {
 	rightSlab := slab.(*ArrayDataSlab)
 	a.elements = merge(a.elements, rightSlab.elements)
+	// This computation is safe because merge is only called when the combined size of
+	// two slabs fits in a single slab, so the merged slab size <= maxThreshold.
+	// Also, rightSlab.header.size >= arrayDataSlabPrefixSize because
+	// header.size = arrayDataSlabPrefixSize + sum of element sizes.
 	a.header.size = a.header.size + rightSlab.header.size - arrayDataSlabPrefixSize
 	a.header.count += rightSlab.header.count
 	a.next = rightSlab.next
@@ -321,6 +332,9 @@ func (a *ArrayDataSlab) LendToRight(slab Slab) error {
 	// Left slab size is as close to midPoint as possible while right slab size >= minThreshold
 	for i := len(a.elements) - 1; i >= 0; i-- {
 		elemSize := a.elements[i].ByteSize()
+		// This computation is safe because leftSize starts at a.header.size
+		// (slab size including all elements) and each elemSize is one element's
+		// size, so leftSize >= elemSize at every iteration.
 		if leftSize-elemSize < midPoint && size-leftSize >= minThreshold {
 			break
 		}
@@ -359,6 +373,8 @@ func (a *ArrayDataSlab) BorrowFromRight(slab Slab) error {
 	for _, e := range rightSlab.elements {
 		elemSize := e.ByteSize()
 		if leftSize+elemSize > midPoint {
+			// This computation is safe because size - leftSize - elemSize >= 0 during iteration:
+			// size = leftSize + rightSize, and leftSize + elemSize never exceeds size.
 			if size-leftSize-elemSize >= minThreshold {
 				// Include this element in left slab
 				leftSize += elemSize
@@ -461,6 +477,9 @@ func (a *ArrayDataSlab) Inlinable(maxInlineSize uint32) bool {
 	// Compute inlined size from cached slab size
 	inlinedSize := a.header.size
 	if !a.inlined {
+		// This computation is safe because when not inlined,
+		// header.size >= arrayRootDataSlabPrefixSize, as
+		// header.size = arrayRootDataSlabPrefixSize + sum of element sizes.
 		inlinedSize = inlinedSize -
 			arrayRootDataSlabPrefixSize +
 			inlinedArrayDataSlabPrefixSize
@@ -486,6 +505,8 @@ func (a *ArrayDataSlab) Inline(storage SlabStorage) error {
 	}
 
 	// Update data slab size as inlined slab.
+	// This computation is safe because when not inlined header.size >= arrayRootDataSlabPrefixSize,
+	// as header.size = arrayRootDataSlabPrefixSize + sum of element sizes.
 	a.header.size = a.header.size -
 		arrayRootDataSlabPrefixSize +
 		inlinedArrayDataSlabPrefixSize
@@ -502,7 +523,9 @@ func (a *ArrayDataSlab) Uninline(storage SlabStorage) error {
 		return NewFatalError(fmt.Errorf("failed to un-inline ArrayDataSlab %s: it is not inlined", a.header.slabID))
 	}
 
-	// Update data slab size
+	// Update data slab size.
+	// This computation is safe because when inlined header.size >= inlinedArrayDataSlabPrefixSize,
+	// as header.size = inlinedArrayDataSlabPrefixSize + sum of element sizes.
 	a.header.size = a.header.size -
 		inlinedArrayDataSlabPrefixSize +
 		arrayRootDataSlabPrefixSize

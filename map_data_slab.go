@@ -228,6 +228,8 @@ func (m *MapDataSlab) Merge(slab Slab) error {
 		return err
 	}
 
+	// This computation is safe because Merge is only called when both slabs are underflowing (< minThreshold),
+	// so their combined elements size is at most 2*minThreshold = targetThreshold, well within uint32.
 	m.header.size = mapDataSlabPrefixSize + m.Size()
 	m.header.firstKey = m.firstKey()
 

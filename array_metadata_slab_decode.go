@@ -158,7 +158,11 @@ func newArrayMetaDataSlabFromDataV0(
 		sizeOffset := countOffset + 4
 		size := binary.BigEndian.Uint32(data[sizeOffset:])
 
-		totalCount += count
+		var safe bool
+		totalCount, safe = safeAdd2Uint32(totalCount, count)
+		if !safe {
+			return nil, NewDecodingErrorf("failed to decode array metadata slab: total count exceeds MaxUint32")
+		}
 
 		childrenHeaders[i] = ArraySlabHeader{
 			slabID: slabID,
@@ -281,7 +285,12 @@ func newArrayMetaDataSlabFromDataV1(
 			size:   uint32(size),
 		}
 
-		totalCount += count
+		var safe bool
+		totalCount, safe = safeAdd2Uint32(totalCount, count)
+		if !safe {
+			return nil, NewDecodingErrorf("failed to decode array metadata slab: total count exceeds MaxUint32")
+		}
+
 		childrenCountSum[i] = totalCount
 	}
 

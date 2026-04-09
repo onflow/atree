@@ -78,10 +78,15 @@ func newSingleElementFromData(cborDec *cbor.StreamDecoder, decodeStorable Storab
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode value's storable")
 	}
 
+	size, safe := safeAdd3Uint32(singleElementPrefixSize, key.ByteSize(), value.ByteSize())
+	if !safe {
+		return nil, NewDecodingErrorf("failed to decode single element: element size exceeds MaxUint32")
+	}
+
 	return &singleElement{
 		key:   key,
 		value: value,
-		size:  singleElementPrefixSize + key.ByteSize() + value.ByteSize(),
+		size:  size,
 	}, nil
 }
 
@@ -108,8 +113,13 @@ func newExternalCollisionGroupFromData(cborDec *cbor.StreamDecoder, decodeStorab
 		return nil, NewDecodingError(fmt.Errorf("failed to decode external collision group: expect slab ID, got %T", storable))
 	}
 
+	size, safe := safeAdd2Uint32(externalCollisionGroupPrefixSize, idStorable.ByteSize())
+	if !safe {
+		return nil, NewDecodingErrorf("failed to decode external collision group: size exceeds MaxUint32")
+	}
+
 	return &externalCollisionGroup{
 		slabID: SlabID(idStorable),
-		size:   externalCollisionGroupPrefixSize + idStorable.ByteSize(),
+		size:   size,
 	}, nil
 }

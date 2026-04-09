@@ -160,7 +160,12 @@ func newArrayDataSlabFromDataV0(
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode array element")
 		}
 		elements[i] = storable
-		slabSize += storable.ByteSize()
+
+		newSlabSize, safe := safeAdd2Uint32(slabSize, storable.ByteSize())
+		if !safe {
+			return nil, NewDecodingErrorf("data is too large for array data slab")
+		}
+		slabSize = newSlabSize
 	}
 
 	header := ArraySlabHeader{
@@ -267,7 +272,12 @@ func newArrayDataSlabFromDataV1(
 			return nil, wrapErrorfAsExternalErrorIfNeeded(err, "failed to decode array element")
 		}
 		elements[i] = storable
-		slabSize += storable.ByteSize()
+
+		newSlabSize, safe := safeAdd2Uint32(slabSize, storable.ByteSize())
+		if !safe {
+			return nil, NewDecodingErrorf("data is too large for array data slab")
+		}
+		slabSize = newSlabSize
 	}
 
 	// Check if data reached EOF
@@ -380,7 +390,11 @@ func DecodeInlinedArrayStorable(
 		}
 		elements[i] = storable
 
-		size += storable.ByteSize()
+		newSize, safe := safeAdd2Uint32(size, storable.ByteSize())
+		if !safe {
+			return nil, NewDecodingErrorf("failed to decode inlined array: size exceeds MaxUint32")
+		}
+		size = newSize
 	}
 
 	header := ArraySlabHeader{

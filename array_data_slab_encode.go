@@ -219,6 +219,9 @@ func (a *ArrayDataSlab) encodeElements(enc *Encoder) error {
 
 	countOffset := 1
 	const countSize = 2
+	// Cast len(a.elements) to uint16 is safe because the number of elements
+	// per data slab is limited by slab size, which is at most maxThreshold
+	// (48KiB with maxSlabSize of 32KiB), well below math.MaxUint16 (65535).
 	binary.BigEndian.PutUint16(
 		enc.Scratch[countOffset:],
 		uint16(len(a.elements)),

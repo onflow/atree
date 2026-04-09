@@ -73,7 +73,12 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 	// Encode shared address to scratch
 	copy(enc.Scratch[:], a.header.slabID.address[:])
 
-	// Encode child header count to scratch
+	// Encode child header count to scratch.
+	// Cast len(a.childrenHeaders) to uint16 is safe because
+	// the number of children per metadata slab is limited by
+	// slab size, which is at most maxThreshold (48KiB with maxSlabSize
+	// of 32KiB).  Each child header is arraySlabHeaderSize (14) bytes,
+	// so the maximum number of children is well below math.MaxUint16 (65535).
 	const childHeaderCountOffset = SlabAddressLength
 	binary.BigEndian.PutUint16(
 		enc.Scratch[childHeaderCountOffset:],
@@ -96,7 +101,9 @@ func (a *ArrayMetaDataSlab) Encode(enc *Encoder) error {
 		const countOffset = SlabIndexLength
 		binary.BigEndian.PutUint32(enc.Scratch[countOffset:], h.count)
 
-		// Encode size
+		// Encode size.
+		// Cast h.size to uint16 is safe because child slab size is limited by
+		// maxThreshold (48KiB with maxSlabSize of 32KiB), which fits in uint16.
 		const sizeOffset = countOffset + 4
 		binary.BigEndian.PutUint16(enc.Scratch[sizeOffset:], uint16(h.size))
 

@@ -33,6 +33,10 @@ const (
 	maxSlabSize     = uint32(32 * 1024)
 
 	minElementCountInSlab = 2
+
+	// maxStorableSizeInStorableSlab is the maximum storable byte size
+	// that can fit into a StorableSlab.
+	maxStorableSizeInStorableSlab = math.MaxUint32 - versionAndFlagSize
 )
 
 var (
@@ -107,4 +111,10 @@ func maxInlineMapValueSize(keySize uint32) uint32 {
 
 func targetSlabSize() uint32 {
 	return targetThreshold
+}
+
+// MaxStorableSizeInStorableSlab() returns the maximum storable byte size
+// that can fit into a StorableSlab.
+func MaxStorableSizeInStorableSlab() uint32 {
+	return maxStorableSizeInStorableSlab
 }

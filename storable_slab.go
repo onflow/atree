@@ -33,6 +33,13 @@ type StorableSlab struct {
 var _ Slab = &StorableSlab{}
 
 func NewStorableSlab(storage SlabStorage, address Address, storable Storable) (Storable, error) {
+	if storable.ByteSize() > maxStorableSizeInStorableSlab {
+		return nil, NewUserError(fmt.Errorf(
+			"failed to create StorableSlab due to size limit: got %d bytes, max %d bytes",
+			storable.ByteSize(),
+			maxStorableSizeInStorableSlab))
+	}
+
 	id, err := storage.GenerateSlabID(address)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
@@ -108,6 +115,8 @@ func (s *StorableSlab) Encode(enc *Encoder) error {
 }
 
 func (s *StorableSlab) ByteSize() uint32 {
+	// Note: maxStorableSizeInStorableSlab needs to be updated
+	// when this function is updated.
 	return versionAndFlagSize + s.storable.ByteSize()
 }
 

@@ -28,8 +28,10 @@ import (
 // - data slab must have at least 2 elements when slab size > maxThreshold
 
 const (
-	defaultSlabSize       = uint32(1024)
-	minSlabSize           = uint32(256)
+	defaultSlabSize = uint32(1024)
+	minSlabSize     = uint32(256)
+	maxSlabSize     = uint32(32 * 1024)
+
 	minElementCountInSlab = 2
 )
 
@@ -49,6 +51,10 @@ func init() {
 func setThreshold(threshold uint32) (uint32, uint32, uint32, uint32) {
 	if threshold < minSlabSize {
 		panic(fmt.Sprintf("Slab size %d is smaller than minSlabSize %d", threshold, minSlabSize))
+	}
+
+	if threshold > maxSlabSize {
+		panic(fmt.Sprintf("Slab size %d is larger than maxSlabSize %d", threshold, maxSlabSize))
 	}
 
 	targetThreshold = threshold

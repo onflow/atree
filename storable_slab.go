@@ -32,11 +32,16 @@ type StorableSlab struct {
 
 var _ Slab = &StorableSlab{}
 
-func NewStorableSlab(storage SlabStorage, address Address, storable Storable) (Storable, error) {
-	if storable.ByteSize() > maxStorableSizeInStorableSlab {
+func NewStorableSlab(
+	storage SlabStorage,
+	address Address,
+	storable Storable,
+	storableSize uint32,
+) (Storable, error) {
+	if storableSize > maxStorableSizeInStorableSlab {
 		return nil, NewUserError(fmt.Errorf(
 			"failed to create StorableSlab due to size limit: got %d bytes, max %d bytes",
-			storable.ByteSize(),
+			storableSize,
 			maxStorableSizeInStorableSlab))
 	}
 

@@ -37,7 +37,7 @@ func TestNewStorableSlab(t *testing.T) {
 		v := testutils.NewStringValue(strings.Repeat("a", 1_000))
 
 		// Create StorableSlab for a large string value.
-		s, err := atree.NewStorableSlab(storage, address, v)
+		s, err := atree.NewStorableSlab(storage, address, v, v.ByteSize())
 		require.NoError(t, err)
 
 		slabIDStorable, ok := s.(atree.SlabIDStorable)

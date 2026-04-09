@@ -424,8 +424,9 @@ func (v StringValue) ID() string {
 }
 
 func (v StringValue) Storable(storage atree.SlabStorage, address atree.Address, maxInlineSize uint32) (atree.Storable, error) {
-	if v.ByteSize() > maxInlineSize {
-		return atree.NewStorableSlab(storage, address, v)
+	size := v.ByteSize()
+	if size > maxInlineSize {
+		return atree.NewStorableSlab(storage, address, v, size)
 	}
 
 	return v, nil

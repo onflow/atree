@@ -73,7 +73,14 @@ func newInlinedExtraDataFromData(
 		return nil, nil, NewDecodingError(err)
 	}
 
-	inlinedTypeInfo := make([]TypeInfo, int(typeInfoCount))
+	// The numbers of type info can't exceed the length of the encoded data,
+	// so checking typeInfoCount against the length of the encoded data is safe.
+	if typeInfoCount > uint64(len(data)) {
+		return nil, nil, NewDecodingError(
+			fmt.Errorf("inlined extra data has too many type info: got %d, data length %d", typeInfoCount, len(data)))
+	}
+
+	inlinedTypeInfo := make([]TypeInfo, typeInfoCount)
 	for i := range inlinedTypeInfo {
 		inlinedTypeInfo[i], err = defaultDecodeTypeInfo(dec)
 		if err != nil {
@@ -91,6 +98,13 @@ func newInlinedExtraDataFromData(
 
 	if extraDataCount == 0 {
 		return nil, nil, NewDecodingError(fmt.Errorf("failed to decode inlined extra data: expect at least one inlined extra data"))
+	}
+
+	// The numbers of extra data info can't exceed the length of the encoded data,
+	// so checking extraDataCount against the length of the encoded data is safe.
+	if extraDataCount > uint64(len(data)) {
+		return nil, nil, NewDecodingError(
+			fmt.Errorf("inlined extra data has too many extra data: got %d, data length %d", extraDataCount, len(data)))
 	}
 
 	inlinedExtraData := make([]ExtraData, extraDataCount)

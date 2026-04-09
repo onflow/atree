@@ -20,6 +20,7 @@ package atree
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -146,6 +147,11 @@ func newArrayDataSlabFromDataV0(
 		return nil, NewDecodingError(err)
 	}
 
+	// Since ArraySlabHeader.count can't exceed uint32, checking elemCount against MaxUint32 is safe.
+	if elemCount > math.MaxUint32 {
+		return nil, NewDecodingErrorf("array data slab has too many elements: got %d, max %d", elemCount, math.MaxUint32)
+	}
+
 	// Compute slab size for version 1.
 	slabSize := uint32(arrayDataSlabPrefixSize)
 	if h.isRoot() {
@@ -257,6 +263,11 @@ func newArrayDataSlabFromDataV1(
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
 		return nil, NewDecodingError(err)
+	}
+
+	// Since ArraySlabHeader.count can't exceed uint32, checking elemCount against MaxUint32 is safe.
+	if elemCount > math.MaxUint32 {
+		return nil, NewDecodingErrorf("array data slab has too many elements: got %d, max %d", elemCount, math.MaxUint32)
 	}
 
 	slabSize := uint32(arrayDataSlabPrefixSize)
@@ -377,6 +388,11 @@ func DecodeInlinedArrayStorable(
 	elemCount, err := dec.DecodeArrayHead()
 	if err != nil {
 		return nil, NewDecodingError(err)
+	}
+
+	// Since ArraySlabHeader.count can't exceed uint32, checking elemCount against MaxUint32 is safe.
+	if elemCount > math.MaxUint32 {
+		return nil, NewDecodingErrorf("inlined array data slab has too many elements: got %d, max %d", elemCount, math.MaxUint32)
 	}
 
 	size := uint32(inlinedArrayDataSlabPrefixSize)

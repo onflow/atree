@@ -21,6 +21,7 @@ package atree
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -59,6 +60,12 @@ func newElementsFromData(cborDec *cbor.StreamDecoder, decodeStorable StorableDec
 	elemCount, err := cborDec.DecodeArrayHead()
 	if err != nil {
 		return nil, NewDecodingError(err)
+	}
+
+	// elemCount can't exceed element size, and singleElements.size and hkeyElements.size are uint32,
+	// so checking if elemCount exceeds math.MaxUint32 is safe.
+	if elemCount > math.MaxUint32 {
+		return nil, NewDecodingErrorf("map data slab has too many elements: got %d, max %d", elemCount, math.MaxUint32)
 	}
 
 	if digestCount != 0 && uint64(digestCount) != elemCount {

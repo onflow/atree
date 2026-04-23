@@ -98,8 +98,7 @@ BLAKE3 digests are computed lazily on collision, see the OMT description in `REA
   without maintainer guidance.
 - **Codecov excludes `cmd/**/*` and `logs/`** (`codecov.yml`). Coverage must not drop for
   the rest per `README.md` ("pull requests should not lower the code coverage percent").
-- **CODEOWNERS:** `@fxamacker @ramtinms @turbolent` — PRs require their review
-  (`CODEOWNERS`).
+- **CODEOWNERS:** PRs require review from the owners listed in `CODEOWNERS`.
 - **Tests are heavy.** `array_test.go` (~303 KB), `map_test.go` (~617 KB), and
   `storage_test.go` (~114 KB) are enormous; scope test runs with `-run` while iterating:
   e.g. `go test -run TestArrayAppend -race -v`.

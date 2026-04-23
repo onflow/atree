@@ -9,9 +9,25 @@
   <a href=https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml><img src=https://github.com/onflow/atree/actions/workflows/codeql-analysis.yml/badge.svg></a>
 </p>
 
-# Atree
+# atree — Scalable Persistent Data Structures for Cadence
 
-__Atree__ provides scalable arrays and scalable ordered maps. It segments, encodes, and stores data into relatively small, relatively fixed-size segments of bytes (aka payloads, registers, or slabs).  This enables blockchains to only hash and transmit modified segments instead of the entire array, map, or large element.
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/onflow/atree/blob/main/LICENSE)
+[![Release](https://img.shields.io/github/v/release/onflow/atree?sort=semver)](https://github.com/onflow/atree/releases)
+[![Discord](https://img.shields.io/discord/613813861610684416?label=Discord&logo=discord&logoColor=white)](https://discord.gg/flow)
+[![Built on Flow](https://img.shields.io/badge/Built%20on-Flow-00EF8B)](https://flow.com)
+[![Go Reference](https://pkg.go.dev/badge/github.com/onflow/atree.svg)](https://pkg.go.dev/github.com/onflow/atree)
+
+## TL;DR
+
+- **What:** A Go library of scalable, persistent arrays (Scalable Array Type) and ordered maps (Ordered Map Type) that store data in small, fixed-size slabs.
+- **Who it's for:** Runtime, storage, and protocol engineers who need content-addressed, segmented collections — in particular the Cadence runtime on the Flow network.
+- **Why use it:** Slab-based storage lets a system hash and transmit only modified segments instead of full collections, keeping costs low as data grows.
+- **Status:** see [Releases](https://github.com/onflow/atree/releases) for the latest version.
+- **License:** Apache-2.0.
+- **Related repos:** [onflow/cadence](https://github.com/onflow/cadence), [onflow/flow-go](https://github.com/onflow/flow-go), [onflow/flips](https://github.com/onflow/flips)
+- The reference atree storage engine for the Flow network, open-sourced since 2021.
+
+__atree__ provides scalable arrays and scalable ordered maps. It segments, encodes, and stores data into relatively small, relatively fixed-size segments of bytes (aka payloads, registers, or slabs).  This enables blockchains to only hash and transmit modified segments instead of the entire array, map, or large element.
 
 Atree is used by [Cadence](https://github.com/onflow/cadence) in the [Flow](https://github.com/onflow/flow-go) blockchain.
 
@@ -83,3 +99,35 @@ The Atree library is licensed under the terms of the Apache license. See [LICENS
 Logo is based on the artwork of Raisul Hadi licensed under Creative Commons.
 
 Copyright © 2021-2024 Flow Foundation
+
+## FAQ
+
+**What is atree?**
+atree is a Go library that provides scalable, persistent arrays (SAT) and ordered maps (OMT) stored as small, fixed-size byte segments called slabs.
+
+**Where is atree used?**
+atree is used by [Cadence](https://github.com/onflow/cadence) in the [Flow](https://github.com/onflow/flow-go) blockchain.
+
+**What data structures does atree provide?**
+Two: the Scalable Array Type (SAT), a heterogeneous variable-size array, and the Ordered Map Type (OMT), an ordered map of key-value pairs with deterministic operations.
+
+**How does atree minimize reads and writes?**
+It keeps data in fixed-size slabs forming a high-fanout B+ tree and uses a deterministic greedy approach ("Optimistic Encasing Algorithm") to postpone merging, splitting, and rebalancing so that only touched slabs change.
+
+**How does the Ordered Map handle hash collisions?**
+OMT combines the fast 64-bit non-cryptographic CircleHash64f with the 256-bit cryptographic BLAKE3 hash, computing BLAKE3 only when CircleHash64f collides and storing digests in segments to limit storage overhead.
+
+**Where are the API docs?**
+The API is documented with godoc at [pkg.go.dev/github.com/onflow/atree](https://pkg.go.dev/github.com/onflow/atree#section-documentation).
+
+**What license does atree use?**
+Apache License 2.0. See [LICENSE](LICENSE).
+
+## About Flow
+
+This repo is part of the [Flow network](https://flow.com), a Layer 1 blockchain built for consumer applications, AI Agents, and DeFi at scale.
+
+- Developer docs: https://developers.flow.com
+- Cadence language: https://cadence-lang.org
+- Community: [Flow Discord](https://discord.gg/flow) · [Flow Forum](https://forum.flow.com)
+- Governance: [Flow Improvement Proposals](https://github.com/onflow/flips)

@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use atree in your research or reference it, please cite it as below."
+title: "atree: Scalable persistent data structures for the Cadence runtime on Flow"
+authors:
+  - name: "Flow Foundation"
+    website: "https://flow.com"
+repository-code: "https://github.com/onflow/atree"
+url: "https://flow.com"
+license: Apache-2.0
+type: software
+keywords:
+  - flow
+  - flow-network
+  - atree
+  - cadence
+  - data-structures
+  - ordered-maps
+  - arrays
+  - go
+  - persistent-data-structures

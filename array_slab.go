@@ -22,6 +22,11 @@ type ArraySlabHeader struct {
 	slabID SlabID // id is used to retrieve slab from storage
 	size   uint32 // size is used to split and merge; leaf: size of all element; internal: size of all headers
 	count  uint32 // count is used to lookup element; leaf: number of elements; internal: number of elements in all its headers
+	// mutationCount is a per-slab counter that is bumped when this slab is detached as root.
+	// It enables callers to detect that their cached view of the root is stale.
+	// Element-level mutations and non-root structural changes do NOT bump the counter.
+	// In-memory only (NOT encoded).
+	mutationCount uint64
 }
 
 type ArraySlab interface {
@@ -42,6 +47,15 @@ type ArraySlab interface {
 	SetSlabID(SlabID)
 
 	Header() ArraySlabHeader
+
+	// MutationCount returns a per-slab counter that is bumped when this slab is detached as root.
+	// It enables callers to detect that their cached view of the root is stale.
+	// Element-level mutations and non-root structural changes do NOT bump the counter.
+	// In-memory only (NOT encoded).
+	MutationCount() uint64
+	// BumpMutationCount bumps the mutation count, which should be called when this slab is detached as root.
+	// See MutationCount() for details.
+	BumpMutationCount()
 
 	ExtraData() *ArrayExtraData
 	RemoveExtraData() *ArrayExtraData

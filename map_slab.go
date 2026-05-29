@@ -24,6 +24,11 @@ type MapSlabHeader struct {
 	slabID   SlabID // id is used to retrieve slab from storage
 	size     uint32 // size is used to split and merge; leaf: size of all element; internal: size of all headers
 	firstKey Digest // firstKey (first hashed key) is used to lookup value
+	// mutationCount is a per-slab counter that is bumped when this slab is detached as root.
+	// It enables callers to detect that their cached view of the root is stale.
+	// Element-level mutations and non-root structural changes do NOT bump the counter.
+	// In-memory only (NOT encoded).
+	mutationCount uint64
 }
 
 type MapSlab interface {
@@ -78,6 +83,14 @@ type MapSlab interface {
 	SetSlabID(SlabID)
 
 	Header() MapSlabHeader
+
+	// MutationCount returns a per-slab counter that is bumped when this slab is detached as root.
+	// It enables callers to detect that their cached view of the root is stale.
+	// Element-level mutations and non-root structural changes do NOT bump the counter.
+	MutationCount() uint64
+	// BumpMutationCount bumps the mutation count, which should be called when this slab is detached as root.
+	// See MutationCount() for details.
+	BumpMutationCount()
 
 	// canCopyWithoutSlabID returns true if
 	// - All elements can be copied, and

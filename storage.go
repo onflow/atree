@@ -241,8 +241,18 @@ func (s *BasicSlabStorage) Store(id SlabID, slab Slab) error {
 
 func (s *BasicSlabStorage) Remove(id SlabID) error {
 	delete(s.Slabs, id)
-	// Clean up any container shared state registered under this root slab ID.
-	s.RemoveStateForSlab(id)
+	// NOTE: do NOT drop the container shared state here.
+	// SlabStorage.Remove is called both when a container is destroyed
+	// AND when it is inlined into its parent (ArrayDataSlab.Inline / MapDataSlab.Inline).
+	// In the inline case the container continues to exist logically
+	// (embedded inside the parent),
+	// and its state must survive
+	// so future *Array / *OrderedMap instances for this container
+	// share the same canonical view as any pre-existing siblings.
+	//
+	// State entries therefore live for the lifetime of the storage.
+	// For per-transaction storage (the common case) this is fine.
+	// Callers that want explicit cleanup can use BaseStateRegistry.RemoveStateForSlab.
 	return nil
 }
 
@@ -977,8 +987,10 @@ func (s *PersistentSlabStorage) Remove(id SlabID) error {
 	}
 	// add to nil to deltas under that id
 	s.deltas[id] = nil
-	// Clean up any container shared state registered under this root slab ID.
-	s.RemoveStateForSlab(id)
+	// NOTE: do NOT drop the container shared state here.
+	// See BasicSlabStorage.Remove for the rationale:
+	// Remove is called both on destruction and on Inline,
+	// and state must survive the inline case.
 	return nil
 }
 

@@ -21,7 +21,20 @@ package atree
 // StateRegistry is the interface for managing shared state associated with slabs.
 // Implementations may embed *BaseStateRegistry to inherit working defaults;
 // atree's BasicSlabStorage and PersistentSlabStorage do so.
-// Remove(SlabID) is also expected to clear any state registered under that slab ID.
+//
+// NOTE: state must SURVIVE SlabStorage.Remove.
+// atree internally calls Remove not only on container destruction
+// but also when a child slab is inlined into its parent
+// (ArrayDataSlab.Inline / MapDataSlab.Inline).
+// In the inline case the container continues to exist logically (embedded in the parent),
+// and its state must remain
+// so future *Array / *OrderedMap instances for that container
+// share the same canonical view as any pre-existing siblings.
+// Implementations must NOT eagerly drop state in their Remove method.
+//
+// State entries therefore live for the lifetime of the storage.
+// For per-transaction storage (the common case) this is bounded.
+// Callers that want explicit cleanup can use RemoveStateForSlab on *BaseStateRegistry directly.
 type StateRegistry interface {
 	ArrayState(rootID SlabID) *ArrayState
 	SetArrayState(rootID SlabID, state *ArrayState)
@@ -96,9 +109,14 @@ func (r *BaseStateRegistry) SetOrderedMapState(rootID SlabID, state *OrderedMapS
 	r.orderedMapStates[rootID] = state
 }
 
-// RemoveStateForSlab clears any registered shared state under the given
-// root slab ID. SlabStorage implementations should call this from their
-// Remove(SlabID) method so state lifetime tracks slab lifetime.
+// RemoveStateForSlab clears any registered shared state under the given root slab ID.
+// This is an escape hatch for callers that want to bound memory growth for a long-lived storage.
+//
+// SlabStorage implementations should NOT call this from Remove(SlabID):
+// atree's Inline path uses storage.Remove for slabs whose containers remain logically alive
+// (just inlined),
+// so dropping their state there causes sibling-divergence bugs.
+// See the note on StateRegistry.
 func (r *BaseStateRegistry) RemoveStateForSlab(rootID SlabID) {
 	delete(r.arrayStates, rootID)
 	delete(r.orderedMapStates, rootID)

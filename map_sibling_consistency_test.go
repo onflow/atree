@@ -318,3 +318,89 @@ func TestMapSiblingTestStructuralAssertionsAreMeaningful(t *testing.T) {
 			"if this fails, our 'no-split' baseline doesn't hold and the "+
 			"meta-test can't distinguish the two configurations")
 }
+
+// TestMapSiblingConsistencyAcrossInlineTransition is the OrderedMap
+// counterpart to TestArraySiblingConsistencyAcrossInlineTransition.
+// It exercises the same state-lifetime hazard:
+// MapDataSlab.Inline internally calls storage.Remove(slabID) on the child,
+// and our shared-state registry must survive that call
+// so future *OrderedMap instances for the now-inlined container
+// share state with any existing siblings.
+func TestMapSiblingConsistencyAcrossInlineTransition(t *testing.T) {
+
+	atree.SetThreshold(256)
+	defer atree.SetThreshold(1024)
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	outer, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	inner, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	// Grow inner past the inline threshold before attaching it.
+	const growSize = 100
+	for i := uint64(0); i < growSize; i++ {
+		k := testutils.NewUint64ValueFromInteger(int(i))
+		v := testutils.NewUint64ValueFromInteger(int(i))
+		prev, err := inner.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+		require.NoError(t, err)
+		require.Nil(t, prev)
+	}
+
+	prev, err := outer.Set(testutils.CompareValue, testutils.GetHashInput,
+		testutils.NewUint64ValueFromInteger(0), inner)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+
+	// Two sibling instances while inner is uninlined.
+	innerVal, err := outer.Get(testutils.CompareValue, testutils.GetHashInput, testutils.NewUint64ValueFromInteger(0))
+	require.NoError(t, err)
+	sibling1 := innerVal.(*atree.OrderedMap)
+
+	innerVal, err = outer.Get(testutils.CompareValue, testutils.GetHashInput, testutils.NewUint64ValueFromInteger(0))
+	require.NoError(t, err)
+	sibling2 := innerVal.(*atree.OrderedMap)
+
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+	require.False(t, sibling1.Inlined())
+
+	// Shrink inner through sibling1 until atree re-inlines it.
+	// This triggers MapDataSlab.Inline → storage.Remove.
+	for i := uint64(0); sibling1.Count() > 0 && !sibling1.Inlined(); i++ {
+		k := testutils.NewUint64ValueFromInteger(int(i))
+		_, _, err := sibling1.Remove(testutils.CompareValue, testutils.GetHashInput, k)
+		require.NoError(t, err)
+	}
+	require.True(t, sibling1.Inlined(),
+		"inner must be inlined after the shrink so the test exercises the Inline path")
+
+	require.Equal(t, sibling1.Count(), sibling2.Count(),
+		"sibling2 must observe sibling1's removals across the inline transition")
+
+	// Critical: a fresh load after the inline transition must share the same state
+	// as the pre-inline siblings.
+	// Trigger a structural change through this fresh load
+	// and verify pre-existing siblings see it.
+	innerVal, err = outer.Get(testutils.CompareValue, testutils.GetHashInput, testutils.NewUint64ValueFromInteger(0))
+	require.NoError(t, err)
+	sibling3 := innerVal.(*atree.OrderedMap)
+
+	for i := uint64(0); i < 200; i++ {
+		k := testutils.NewUint64ValueFromInteger(int(i + 1000))
+		v := testutils.NewUint64ValueFromInteger(int(i + 1000))
+		prev, err := sibling3.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+		require.NoError(t, err)
+		require.Nil(t, prev)
+	}
+	require.False(t, sibling3.IsWithinSingleSlab(),
+		"sibling3 must have triggered splitRoot during the regrowth")
+	require.Equal(t, sibling3.Count(), sibling1.Count(),
+		"sibling1 must see sibling3's post-split count via shared state — "+
+			"if this fails, the inline transition dropped the registry "+
+			"entry and sibling3 got an independent state")
+	require.Equal(t, sibling1.ValueID(), sibling3.ValueID())
+}

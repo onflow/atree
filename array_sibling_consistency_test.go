@@ -299,3 +299,110 @@ func TestArraySiblingTestStructuralAssertionsAreMeaningful(t *testing.T) {
 			"if this fails, our 'no-split' baseline doesn't hold and the "+
 			"meta-test can't distinguish the two configurations")
 }
+
+// TestArraySiblingConsistencyAcrossInlineTransition guards against a subtle state-lifetime hazard:
+// when an uninlined child container shrinks enough to fit inside its parent slab,
+// atree calls ArrayDataSlab.Inline,
+// which internally calls storage.Remove(slabID) to remove the child slab from storage
+// (its data now lives embedded in the parent).
+//
+// The container itself is NOT destroyed —
+// it continues to exist inlined.
+// But if SlabStorage.Remove eagerly drops the shared state registry entry,
+// every live sibling *Array pointing at that state
+// would silently lose canonical state on the next structural change.
+//
+// The test forces the inline transition while holding sibling instances,
+// then verifies they continue to observe consistent state.
+func TestArraySiblingConsistencyAcrossInlineTransition(t *testing.T) {
+
+	atree.SetThreshold(256)
+	defer atree.SetThreshold(1024)
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	outer, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	inner, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	// Grow inner past the inline threshold BEFORE attaching to outer,
+	// so that when it's added to outer
+	// it remains uninlined.
+	const growSize = 100
+	for i := uint64(0); i < growSize; i++ {
+		require.NoError(t, inner.Append(testutils.NewUint64ValueFromInteger(int(i))))
+	}
+
+	require.NoError(t, outer.Append(inner))
+
+	// Two sibling instances of the inner, while it's uninlined.
+	a, err := outer.Get(0)
+	require.NoError(t, err)
+	sibling1 := a.(*atree.Array)
+
+	a, err = outer.Get(0)
+	require.NoError(t, err)
+	sibling2 := a.(*atree.Array)
+
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+	require.False(t, sibling1.Inlined())
+
+	// Shrink inner through sibling1 until atree re-inlines it.
+	// This triggers ArrayDataSlab.Inline which calls storage.Remove on the inner's slab ID —
+	// exactly the path that would drop our registry entry if we cleaned up state on Remove.
+	for sibling1.Count() > 0 && !sibling1.Inlined() {
+		_, err := sibling1.Remove(sibling1.Count() - 1)
+		require.NoError(t, err)
+	}
+	require.True(t, sibling1.Inlined(),
+		"inner must be inlined after the shrink so the test exercises the Inline path")
+
+	// Sibling2 must observe the post-inline state.
+	// If state was dropped,
+	// sibling2 still holds a pointer to the old state struct,
+	// and a fresh Get on outer would build a new state —
+	// siblings would diverge.
+	require.Equal(t, sibling1.Count(), sibling2.Count(),
+		"sibling2 must observe sibling1's removals across the inline transition")
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+	require.True(t, sibling2.Inlined(),
+		"sibling2 must see the inlined state through shared state")
+
+	// Cross-check: append through sibling2, observe through sibling1.
+	require.NoError(t, sibling2.Append(testutils.NewUint64ValueFromInteger(42)))
+	require.Equal(t, sibling2.Count(), sibling1.Count(),
+		"sibling1 must observe sibling2's append")
+
+	// Critical assertion:
+	// a FRESH load via outer.Get(0) after the inline transition
+	// must return a *Array sharing the SAME state as the pre-inline siblings —
+	// not a freshly-allocated state.
+	//
+	// If storage.Remove (triggered by Inline) dropped the registry entry,
+	// this Get would create a new *arrayState and register it.
+	// The fresh state would initially point at the same slab struct,
+	// but the moment a structural change happens through any instance,
+	// the two states diverge silently.
+	a, err = outer.Get(0)
+	require.NoError(t, err)
+	sibling3 := a.(*atree.Array)
+
+	// Trigger a structural change through sibling3:
+	// grow it back to multi-slab, forcing splitRoot.
+	// With a shared state, sibling1's view updates too.
+	// With dropped state, sibling1 keeps reading from a stale root.
+	for i := uint64(0); i < 200; i++ {
+		require.NoError(t, sibling3.Append(testutils.NewUint64ValueFromInteger(int(i))))
+	}
+	require.False(t, sibling3.IsWithinSingleSlab(),
+		"sibling3 must have triggered splitRoot during the regrowth")
+	require.Equal(t, sibling3.Count(), sibling1.Count(),
+		"sibling1 must see sibling3's post-split count via shared state — "+
+			"if this fails, the inline transition dropped the registry "+
+			"entry and sibling3 got an independent state")
+	require.Equal(t, sibling1.ValueID(), sibling3.ValueID())
+}

@@ -37,7 +37,7 @@ func ByteArrayToByteSlice[T ByteStorable](array *Array) ([]byte, error) {
 	}
 
 	// Get first array data slab for traversal.
-	slab, err := firstArrayDataSlab(array.Storage, array.root)
+	slab, err := firstArrayDataSlab(array.Storage, array.state.root)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by firstArrayDataSlab().
 		return nil, err
@@ -152,7 +152,7 @@ func newArrayWithElements(
 	}
 
 	// Modify array root slab to include elements.
-	root := array.root.(*ArrayDataSlab)
+	root := array.state.root.(*ArrayDataSlab)
 	root.elements = elements
 	root.header.count = uint32(len(elements))
 	// This addition is safe from overflow because elementSize was already

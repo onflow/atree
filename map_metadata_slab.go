@@ -753,12 +753,30 @@ func (m *MapMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	}
 
 	digestBuilder := NewDefaultDigesterBuilder()
-
 	digestBuilder.SetSeed(m.extraData.Seed, typicalRandomConstant)
 
+	rootID := m.SlabID()
+
+	// Share state with any existing *OrderedMap instance for this container.
+	// See map_state.go for rationale.
+	if existing := storage.OrderedMapState(rootID); existing != nil {
+		// Adopt the freshly-loaded slab into the shared state.
+		// atree wires the parentUpdater on the *atree.OrderedMap instance it just returned,
+		// so the state must point at this instance
+		// for parent notifications from any sibling to fire correctly.
+		existing.root = m
+		return &OrderedMap{
+			Storage:         storage,
+			state:           existing,
+			digesterBuilder: digestBuilder,
+		}, nil
+	}
+
+	state := newOrderedMapState(m)
+	storage.SetOrderedMapState(rootID, state)
 	return &OrderedMap{
 		Storage:         storage,
-		root:            m,
+		state:           state,
 		digesterBuilder: digestBuilder,
 	}, nil
 }

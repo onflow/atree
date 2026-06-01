@@ -173,6 +173,7 @@ func (s *LedgerBaseStorage) ResetReporter() {
 type SlabIterator func() (SlabID, Slab)
 
 type SlabStorage interface {
+	StateRegistry
 	Store(SlabID, Slab) error
 	Retrieve(SlabID) (Slab, bool, error)
 	RetrieveIfLoaded(SlabID) Slab
@@ -185,6 +186,10 @@ type SlabStorage interface {
 // BasicSlabStorage
 
 type BasicSlabStorage struct {
+	// Shared-state registry methods (ArrayState, SetArrayState,
+	// OrderedMapState, SetOrderedMapState) are inherited via embedding.
+	*BaseStateRegistry
+
 	Slabs          map[SlabID]Slab
 	slabIndex      map[Address]SlabIndex
 	DecodeStorable StorableDecoder
@@ -202,12 +207,13 @@ func NewBasicSlabStorage(
 	decodeTypeInfo TypeInfoDecoder,
 ) *BasicSlabStorage {
 	return &BasicSlabStorage{
-		Slabs:          make(map[SlabID]Slab),
-		slabIndex:      make(map[Address]SlabIndex),
-		cborEncMode:    cborEncMode,
-		cborDecMode:    cborDecMode,
-		DecodeStorable: decodeStorable,
-		DecodeTypeInfo: decodeTypeInfo,
+		BaseStateRegistry: NewBaseStateRegistry(),
+		Slabs:             make(map[SlabID]Slab),
+		slabIndex:         make(map[Address]SlabIndex),
+		cborEncMode:       cborEncMode,
+		cborDecMode:       cborDecMode,
+		DecodeStorable:    decodeStorable,
+		DecodeTypeInfo:    decodeTypeInfo,
 	}
 }
 
@@ -235,6 +241,8 @@ func (s *BasicSlabStorage) Store(id SlabID, slab Slab) error {
 
 func (s *BasicSlabStorage) Remove(id SlabID) error {
 	delete(s.Slabs, id)
+	// Clean up any container shared state registered under this root slab ID.
+	s.RemoveStateForSlab(id)
 	return nil
 }
 
@@ -299,6 +307,9 @@ func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
 // PersistentSlabStorage
 
 type PersistentSlabStorage struct {
+	// Shared-state registry methods inherited via embedding.
+	*BaseStateRegistry
+
 	baseStorage    BaseStorage
 	cache          map[SlabID]Slab
 	deltas         map[SlabID]Slab
@@ -322,13 +333,14 @@ func NewPersistentSlabStorage(
 	opts ...StorageOption,
 ) *PersistentSlabStorage {
 	storage := &PersistentSlabStorage{
-		baseStorage:    base,
-		cache:          make(map[SlabID]Slab),
-		deltas:         make(map[SlabID]Slab),
-		cborEncMode:    cborEncMode,
-		cborDecMode:    cborDecMode,
-		DecodeStorable: decodeStorable,
-		DecodeTypeInfo: decodeTypeInfo,
+		BaseStateRegistry: NewBaseStateRegistry(),
+		baseStorage:       base,
+		cache:             make(map[SlabID]Slab),
+		deltas:            make(map[SlabID]Slab),
+		cborEncMode:       cborEncMode,
+		cborDecMode:       cborDecMode,
+		DecodeStorable:    decodeStorable,
+		DecodeTypeInfo:    decodeTypeInfo,
 	}
 
 	for _, applyOption := range opts {
@@ -965,6 +977,8 @@ func (s *PersistentSlabStorage) Remove(id SlabID) error {
 	}
 	// add to nil to deltas under that id
 	s.deltas[id] = nil
+	// Clean up any container shared state registered under this root slab ID.
+	s.RemoveStateForSlab(id)
 	return nil
 }
 

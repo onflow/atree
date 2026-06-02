@@ -100,7 +100,7 @@ func (i *readOnlyArrayIterator) setMutationCallback(value Value) {
 	unwrappedChild, _ := unwrapValue(value)
 
 	if v, ok := unwrappedChild.(mutableValueNotifier); ok {
-		v.setParentUpdater(func() (found bool, err error) {
+		v.setReadOnlyMutationCallback(func() (found bool, err error) {
 			i.valueMutationCallback(value)
 			return true, NewReadOnlyIteratorElementMutationError(i.array.ValueID(), v.ValueID())
 		})

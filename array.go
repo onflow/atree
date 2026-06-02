@@ -60,9 +60,18 @@ type Array struct {
 	// when this *Array instance triggers a mutation.
 	// It is per-instance, not shared:
 	// a Get-loaded instance has a real parent updater,
-	// while a readonly-iterator-loaded instance has a trap callback.
+	// while a readonly-iterator-loaded instance has a trap callback
+	// (see parentUpdaterIsReadOnlyMutationCallback).
 	// A mutation through one instance must fire only its own callback.
 	parentUpdater parentUpdater
+
+	// parentUpdaterIsReadOnlyMutationCallback is true
+	// when parentUpdater is a trap callback set by a read-only iterator
+	// (rather than a real parent-notification callback set by setCallbackWithChild).
+	// Callers that cache or alias this *Array
+	// use this to avoid promoting a trap-bearing instance to a shared/canonical wrapper:
+	// mutations through such a wrapper would trip the trap.
+	parentUpdaterIsReadOnlyMutationCallback bool
 }
 
 var _ Value = &Array{}
@@ -775,6 +784,30 @@ func (a *Array) getIndexByValueID(id ValueID) (uint64, bool) {
 
 func (a *Array) setParentUpdater(f parentUpdater) {
 	a.parentUpdater = f
+	a.parentUpdaterIsReadOnlyMutationCallback = false
+}
+
+// setReadOnlyMutationCallback installs a trap callback that fires
+// when the *Array is mutated through this instance,
+// indicating the instance was loaded via a read-only iterator.
+func (a *Array) setReadOnlyMutationCallback(f parentUpdater) {
+	a.parentUpdater = f
+	a.parentUpdaterIsReadOnlyMutationCallback = true
+}
+
+// HasParentUpdater reports whether a parent-notification (or read-only trap) callback is installed.
+// Use HasReadOnlyMutationCallback to distinguish the two cases.
+func (a *Array) HasParentUpdater() bool {
+	return a.parentUpdater != nil
+}
+
+// HasReadOnlyMutationCallback reports whether the installed parentUpdater
+// is a trap callback set by a read-only iterator
+// (as opposed to a real parent-notification callback).
+// Callers that want to share or canonicalize the *Array should consult this
+// to avoid caching a trap-bearing instance.
+func (a *Array) HasReadOnlyMutationCallback() bool {
+	return a.parentUpdaterIsReadOnlyMutationCallback
 }
 
 // setCallbackWithChild sets up callback function with child value (child)
@@ -911,6 +944,7 @@ func (a *Array) notifyParentIfNeeded() error {
 	}
 	if !found {
 		a.parentUpdater = nil
+		a.parentUpdaterIsReadOnlyMutationCallback = false
 	}
 	return nil
 }

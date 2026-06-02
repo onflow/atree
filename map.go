@@ -67,6 +67,11 @@ type OrderedMap struct {
 	// parentUpdater is per-instance,
 	// see Array.parentUpdater for rationale.
 	parentUpdater parentUpdater
+
+	// parentUpdaterIsReadOnlyMutationCallback indicates parentUpdater is a
+	// read-only iterator's trap callback rather than a real parent-notification callback.
+	// See Array.parentUpdaterIsReadOnlyMutationCallback for rationale.
+	parentUpdaterIsReadOnlyMutationCallback bool
 }
 
 var _ Value = &OrderedMap{}
@@ -981,6 +986,30 @@ func (m *OrderedMap) Inlinable(maxInlineSize uint32) bool {
 
 func (m *OrderedMap) setParentUpdater(f parentUpdater) {
 	m.parentUpdater = f
+	m.parentUpdaterIsReadOnlyMutationCallback = false
+}
+
+// setReadOnlyMutationCallback installs a trap callback that fires
+// when the *OrderedMap is mutated through this instance,
+// indicating the instance was loaded via a read-only iterator.
+func (m *OrderedMap) setReadOnlyMutationCallback(f parentUpdater) {
+	m.parentUpdater = f
+	m.parentUpdaterIsReadOnlyMutationCallback = true
+}
+
+// HasParentUpdater reports whether a parent-notification (or read-only trap) callback is installed.
+// Use HasReadOnlyMutationCallback to distinguish the two cases.
+func (m *OrderedMap) HasParentUpdater() bool {
+	return m.parentUpdater != nil
+}
+
+// HasReadOnlyMutationCallback reports whether the installed parentUpdater
+// is a trap callback set by a read-only iterator
+// (as opposed to a real parent-notification callback).
+// Callers that want to share or canonicalize the *OrderedMap should consult this
+// to avoid caching a trap-bearing instance.
+func (m *OrderedMap) HasReadOnlyMutationCallback() bool {
+	return m.parentUpdaterIsReadOnlyMutationCallback
 }
 
 // setCallbackWithChild sets up callback function with child value (child)
@@ -1116,6 +1145,7 @@ func (m *OrderedMap) notifyParentIfNeeded() error {
 	}
 	if !found {
 		m.parentUpdater = nil
+		m.parentUpdaterIsReadOnlyMutationCallback = false
 	}
 	return nil
 }

@@ -438,11 +438,6 @@ func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	// Share state with any existing *OrderedMap instance for this container.
 	// See map_state.go for rationale.
 	if existing := storage.OrderedMapState(rootID); existing != nil {
-		// Adopt the freshly-loaded slab into the shared state.
-		// atree wires the parentUpdater on the *atree.OrderedMap instance it just returned,
-		// so the state must point at this instance
-		// for parent notifications from any sibling to fire correctly.
-		existing.root = m
 		return &OrderedMap{
 			Storage:         storage,
 			state:           existing,

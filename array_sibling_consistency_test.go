@@ -406,3 +406,87 @@ func TestArraySiblingConsistencyAcrossInlineTransition(t *testing.T) {
 			"entry and sibling3 got an independent state")
 	require.Equal(t, sibling1.ValueID(), sibling3.ValueID())
 }
+
+// TestArrayBatchBuildWithDistinctInlinedMaps verifies that constructing
+// an array from three distinct inlined OrderedMaps produces an array
+// whose elements retain their original distinguishing entries.
+//
+// Scenario (mirrors Cadence's `NewArrayValue([struct1, struct2, struct3])`
+// which Transfers each value via `CopyNonRefSimple` before adding to the array):
+//   - Construct three *OrderedMap values m1, m2, m3,
+//     each with a single distinguishing entry.
+//   - Copy each via CopyNonRefSimple to simulate Cadence's transfer step.
+//   - Build a new *Array via NewArrayFromBatchData,
+//     supplying the copies as its elements.
+//
+// All values must live in a single storage:
+// atree's shared-state design assumes SlabIDs are unique within a storage,
+// but each storage has its own monotonic SlabID counter starting from zero,
+// so mixing values across multiple storages can produce SlabID collisions
+// that the shared-state registry cannot disambiguate.
+func TestArrayBatchBuildWithDistinctInlinedMaps(t *testing.T) {
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestBasicStorage(t)
+	var address atree.Address
+
+	const mapCount = 3
+	copies := make([]*atree.OrderedMap, mapCount)
+	for i := range copies {
+		m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		prev, err := m.Set(
+			testutils.CompareValue, testutils.GetHashInput,
+			testutils.NewUint64ValueFromInteger(0),
+			testutils.NewUint64ValueFromInteger(i+1),
+		)
+		require.NoError(t, err)
+		require.Nil(t, prev)
+
+		copied, err := m.CopyNonRefSimple(address, atree.NewDefaultDigesterBuilder())
+		require.NoError(t, err)
+
+		copies[i] = copied
+	}
+
+	idx := 0
+	arr, err := atree.NewArrayFromBatchData(
+		storage,
+		address,
+		typeInfo,
+		func() (atree.Value, error) {
+			if idx >= mapCount {
+				return nil, nil
+			}
+			m := copies[idx]
+			idx++
+			return m, nil
+		},
+	)
+	require.NoError(t, err)
+	require.Equal(t, uint64(mapCount), arr.Count())
+
+	// Iterate the array and verify each element retained its distinct content.
+	iter, err := arr.ReadOnlyIterator()
+	require.NoError(t, err)
+
+	for i := 0; i < mapCount; i++ {
+		v, err := iter.Next()
+		require.NoError(t, err)
+		require.NotNil(t, v, "iterator must produce an element at index %d", i)
+
+		gotMap, ok := v.(*atree.OrderedMap)
+		require.True(t, ok, "element %d must be an *OrderedMap", i)
+
+		gotValue, err := gotMap.Get(
+			testutils.CompareValue, testutils.GetHashInput,
+			testutils.NewUint64ValueFromInteger(0),
+		)
+		require.NoError(t, err)
+
+		expected := testutils.NewUint64ValueFromInteger(i + 1)
+		require.Equal(t, expected, gotValue,
+			"element %d must retain its distinguishing entry", i)
+	}
+}

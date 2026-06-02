@@ -909,11 +909,6 @@ func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	// Share state with any existing *Array instance for this container.
 	// See array_state.go for rationale.
 	if existing := storage.ArrayState(rootID); existing != nil {
-		// Adopt the freshly-loaded slab into the shared state.
-		// atree wires the parentUpdater on the *atree.Array instance it just returned,
-		// so the state must point at this instance
-		// for parent notifications from any sibling to fire correctly.
-		existing.root = a
 		return &Array{
 			Storage: storage,
 			state:   existing,

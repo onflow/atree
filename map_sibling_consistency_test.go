@@ -404,3 +404,82 @@ func TestMapSiblingConsistencyAcrossInlineTransition(t *testing.T) {
 			"entry and sibling3 got an independent state")
 	require.Equal(t, sibling1.ValueID(), sibling3.ValueID())
 }
+
+// TestMapBuildWithDistinctInlinedMaps is the OrderedMap counterpart to
+// TestArrayBatchBuildWithDistinctInlinedMaps:
+// inserting three distinct inlined OrderedMap values into a parent OrderedMap
+// produces a parent whose entries retain their original distinguishing content.
+//
+// Scenario:
+//   - Construct three inner *OrderedMap values m1, m2, m3,
+//     each with a single distinguishing entry.
+//   - Copy each via CopyNonRefSimple to simulate a transfer.
+//   - Insert each copy as the value of an entry in a parent *OrderedMap.
+//
+// All values must live in a single storage:
+// atree's shared-state design assumes SlabIDs are unique within a storage,
+// but each storage has its own monotonic SlabID counter starting from zero,
+// so mixing values across multiple storages can produce SlabID collisions
+// that the shared-state registry cannot disambiguate.
+func TestMapBuildWithDistinctInlinedMaps(t *testing.T) {
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestBasicStorage(t)
+	var address atree.Address
+
+	const innerCount = 3
+	copies := make([]*atree.OrderedMap, innerCount)
+	for i := range copies {
+		m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+		require.NoError(t, err)
+
+		prev, err := m.Set(
+			testutils.CompareValue, testutils.GetHashInput,
+			testutils.NewUint64ValueFromInteger(0),
+			testutils.NewUint64ValueFromInteger(i+1),
+		)
+		require.NoError(t, err)
+		require.Nil(t, prev)
+
+		copied, err := m.CopyNonRefSimple(address, atree.NewDefaultDigesterBuilder())
+		require.NoError(t, err)
+
+		copies[i] = copied
+	}
+
+	outer, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	for i, copied := range copies {
+		prev, err := outer.Set(
+			testutils.CompareValue, testutils.GetHashInput,
+			testutils.NewUint64ValueFromInteger(i),
+			copied,
+		)
+		require.NoError(t, err)
+		require.Nil(t, prev)
+	}
+	require.Equal(t, uint64(innerCount), outer.Count())
+
+	// Look up each entry and verify the inner map retained its distinct content.
+	for i := 0; i < innerCount; i++ {
+		v, err := outer.Get(
+			testutils.CompareValue, testutils.GetHashInput,
+			testutils.NewUint64ValueFromInteger(i),
+		)
+		require.NoError(t, err)
+
+		gotMap, ok := v.(*atree.OrderedMap)
+		require.True(t, ok, "entry %d's value must be an *OrderedMap", i)
+
+		gotValue, err := gotMap.Get(
+			testutils.CompareValue, testutils.GetHashInput,
+			testutils.NewUint64ValueFromInteger(0),
+		)
+		require.NoError(t, err)
+
+		expected := testutils.NewUint64ValueFromInteger(i + 1)
+		require.Equal(t, expected, gotValue,
+			"entry %d's inner map must retain its distinguishing entry", i)
+	}
+}

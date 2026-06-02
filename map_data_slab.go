@@ -437,16 +437,11 @@ func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 
 	// Share state with any existing *OrderedMap instance for this container.
 	// See map_state.go for rationale.
-	if existing := storage.OrderedMapState(rootID); existing != nil {
-		return &OrderedMap{
-			Storage:         storage,
-			state:           existing,
-			digesterBuilder: digestBuilder,
-		}, nil
+	state := storage.OrderedMapState(rootID)
+	if state == nil {
+		state = newOrderedMapState(m)
+		storage.SetOrderedMapState(rootID, state)
 	}
-
-	state := newOrderedMapState(m)
-	storage.SetOrderedMapState(rootID, state)
 	return &OrderedMap{
 		Storage:         storage,
 		state:           state,

@@ -142,34 +142,23 @@ func NewMapWithRootID(storage SlabStorage, rootID SlabID, digestBuilder Digester
 
 	// If another *OrderedMap instance for this container already exists,
 	// reuse its shared state so structural changes propagate.
-	if existing := storage.OrderedMapState(rootID); existing != nil {
-		// Re-seed the caller's digester from the existing extra data so
-		// hkeys match the canonical map.
-		if extraData := existing.root.ExtraData(); extraData != nil {
-			digestBuilder.SetSeed(extraData.Seed, typicalRandomConstant)
+	state := storage.OrderedMapState(rootID)
+	if state == nil {
+		root, err := getMapSlab(storage, rootID)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by getMapSlab().
+			return nil, err
 		}
-		return &OrderedMap{
-			Storage:         storage,
-			state:           existing,
-			digesterBuilder: digestBuilder,
-		}, nil
+
+		state = newOrderedMapState(root)
+		storage.SetOrderedMapState(rootID, state)
 	}
 
-	root, err := getMapSlab(storage, rootID)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getMapSlab().
-		return nil, err
+	// Re-seed the caller's digester from the canonical extra data so
+	// hkeys match the canonical map.
+	if extraData := state.root.ExtraData(); extraData != nil {
+		digestBuilder.SetSeed(extraData.Seed, typicalRandomConstant)
 	}
-
-	extraData := root.ExtraData()
-	if extraData == nil {
-		return nil, NewNotValueError(rootID)
-	}
-
-	digestBuilder.SetSeed(extraData.Seed, typicalRandomConstant)
-
-	state := newOrderedMapState(root)
-	storage.SetOrderedMapState(rootID, state)
 
 	return &OrderedMap{
 		Storage:         storage,

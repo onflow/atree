@@ -120,26 +120,22 @@ func NewArrayWithRootID(storage SlabStorage, rootID SlabID) (*Array, error) {
 
 	// If another *Array instance for this container already exists, reuse
 	// its shared state so structural changes propagate.
-	if existing := storage.ArrayState(rootID); existing != nil {
-		return &Array{
-			Storage: storage,
-			state:   existing,
-		}, nil
-	}
+	state := storage.ArrayState(rootID)
+	if state == nil {
+		root, err := getArraySlab(storage, rootID)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by getArraySlab().
+			return nil, err
+		}
 
-	root, err := getArraySlab(storage, rootID)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getArraySlab().
-		return nil, err
-	}
+		extraData := root.ExtraData()
+		if extraData == nil {
+			return nil, NewNotValueError(rootID)
+		}
 
-	extraData := root.ExtraData()
-	if extraData == nil {
-		return nil, NewNotValueError(rootID)
+		state = newArrayState(root)
+		storage.SetArrayState(rootID, state)
 	}
-
-	state := newArrayState(root)
-	storage.SetArrayState(rootID, state)
 
 	return &Array{
 		Storage: storage,

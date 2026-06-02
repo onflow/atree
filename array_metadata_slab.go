@@ -908,15 +908,11 @@ func (a *ArrayMetaDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 
 	// Share state with any existing *Array instance for this container.
 	// See array_state.go for rationale.
-	if existing := storage.ArrayState(rootID); existing != nil {
-		return &Array{
-			Storage: storage,
-			state:   existing,
-		}, nil
+	state := storage.ArrayState(rootID)
+	if state == nil {
+		state = newArrayState(a)
+		storage.SetArrayState(rootID, state)
 	}
-
-	state := newArrayState(a)
-	storage.SetArrayState(rootID, state)
 	return &Array{
 		Storage: storage,
 		state:   state,

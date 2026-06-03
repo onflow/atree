@@ -10,11 +10,13 @@ on:
   push:
     branches:
       - main
+      - '*-rc'
       - 'feature/**'
       - 'release-**'
   pull_request:
     branches:
       - main
+      - '*-rc'
       - 'feature/**'
       - 'release-**'
 
@@ -24,7 +26,7 @@ concurrency:
 
 jobs:
 
-  # Test on various OS with default Go version. 
+  # Test on various OS with default Go version.
   tests:
     name: Test on ${{matrix.os}}
     runs-on: ${{ matrix.os }}

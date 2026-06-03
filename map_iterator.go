@@ -145,7 +145,7 @@ func (i *readOnlyMapIterator) setMutationCallback(key, value Value) {
 	unwrappedKey, _ := unwrapValue(key)
 
 	if k, ok := unwrappedKey.(mutableValueNotifier); ok {
-		k.setParentUpdater(func() (found bool, err error) {
+		k.setReadOnlyMutationCallback(func() (found bool, err error) {
 			i.keyMutationCallback(key)
 			return true, NewReadOnlyIteratorElementMutationError(i.m.ValueID(), k.ValueID())
 		})
@@ -154,7 +154,7 @@ func (i *readOnlyMapIterator) setMutationCallback(key, value Value) {
 	unwrappedValue, _ := unwrapValue(value)
 
 	if v, ok := unwrappedValue.(mutableValueNotifier); ok {
-		v.setParentUpdater(func() (found bool, err error) {
+		v.setReadOnlyMutationCallback(func() (found bool, err error) {
 			i.valueMutationCallback(value)
 			return true, NewReadOnlyIteratorElementMutationError(i.m.ValueID(), v.ValueID())
 		})

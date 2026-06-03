@@ -51,7 +51,7 @@ func VerifyMapSerialization(
 		decodeTypeInfo: decodeTypeInfo,
 		compare:        compare,
 	}
-	return v.verifyMapSlab(m.root)
+	return v.verifyMapSlab(m.state.root)
 }
 
 func (v *serializationVerifier) verifyMapSlab(slab MapSlab) error {

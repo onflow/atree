@@ -51,19 +51,27 @@ const (
 // parent container's element size limit.  Specifically, OrderedMap with one segment
 // which fits in size limit can be inlined, while OrderedMap with multiple segments
 // can't be inlined.
+//
+// Multiple *OrderedMap Go instances can exist for the same logical container;
+// they share an *orderedMapState via the SlabStorage-backed registry,
+// so structural mutations are observed by all siblings.
+// See map_state.go for rationale.
 type OrderedMap struct {
 	Storage         SlabStorage
-	root            MapSlab
 	digesterBuilder DigesterBuilder
 
-	// parentUpdater is a callback that notifies parent container when this map is modified.
-	// If this callback is nil, this map has no parent.  Otherwise, this map has parent
-	// and this callback must be used when this map is changed by Set and Remove.
-	//
-	// parentUpdater acts like "parent pointer".  It is not stored physically and is only in memory.
-	// It is setup when child map is returned from parent's Get.  It is also setup when
-	// new child is added to parent through Set or Insert.
+	// state holds the mutable per-logical-container state (root pointer).
+	// Shared across siblings.
+	state *orderedMapState
+
+	// parentUpdater is per-instance,
+	// see Array.parentUpdater for rationale.
 	parentUpdater parentUpdater
+
+	// parentUpdaterIsReadOnlyMutationCallback indicates parentUpdater is a
+	// read-only iterator's trap callback rather than a real parent-notification callback.
+	// See Array.parentUpdaterIsReadOnlyMutationCallback for rationale.
+	parentUpdaterIsReadOnlyMutationCallback bool
 }
 
 var _ Value = &OrderedMap{}
@@ -117,9 +125,12 @@ func NewMap(storage SlabStorage, address Address, digestBuilder DigesterBuilder,
 		return nil, err
 	}
 
+	state := newOrderedMapState(root)
+	storage.SetOrderedMapState(sID, state)
+
 	return &OrderedMap{
 		Storage:         storage,
-		root:            root,
+		state:           state,
 		digesterBuilder: digestBuilder,
 	}, nil
 }
@@ -129,22 +140,29 @@ func NewMapWithRootID(storage SlabStorage, rootID SlabID, digestBuilder Digester
 		return nil, NewSlabIDErrorf("cannot create OrderedMap from undefined slab ID")
 	}
 
-	root, err := getMapSlab(storage, rootID)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getMapSlab().
-		return nil, err
+	// If another *OrderedMap instance for this container already exists,
+	// reuse its shared state so structural changes propagate.
+	state := storage.OrderedMapState(rootID)
+	if state == nil {
+		root, err := getMapSlab(storage, rootID)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by getMapSlab().
+			return nil, err
+		}
+
+		state = newOrderedMapState(root)
+		storage.SetOrderedMapState(rootID, state)
 	}
 
-	extraData := root.ExtraData()
-	if extraData == nil {
-		return nil, NewNotValueError(rootID)
+	// Re-seed the caller's digester from the canonical extra data so
+	// hkeys match the canonical map.
+	if extraData := state.root.ExtraData(); extraData != nil {
+		digestBuilder.SetSeed(extraData.Seed, typicalRandomConstant)
 	}
-
-	digestBuilder.SetSeed(extraData.Seed, typicalRandomConstant)
 
 	return &OrderedMap{
 		Storage:         storage,
-		root:            root,
+		state:           state,
 		digesterBuilder: digestBuilder,
 	}, nil
 }
@@ -406,9 +424,12 @@ func NewMapFromBatchData(
 		return nil, err
 	}
 
+	state := newOrderedMapState(root)
+	storage.SetOrderedMapState(root.SlabID(), state)
+
 	return &OrderedMap{
 		Storage:         storage,
-		root:            root,
+		state:           state,
 		digesterBuilder: digesterBuilder,
 	}, nil
 }
@@ -536,7 +557,7 @@ func (m *OrderedMap) get(comparator ValueComparator, hip HashInputProvider, key 
 	}
 
 	// Don't need to wrap error as external error because err is already categorized by MapSlab.Get().
-	return m.root.Get(m.Storage, keyDigest, level, hkey, comparator, key)
+	return m.state.root.Get(m.Storage, keyDigest, level, hkey, comparator, key)
 }
 
 func (m *OrderedMap) getElementAndNextKey(comparator ValueComparator, hip HashInputProvider, key Value) (Value, Value, Value, error) {
@@ -556,7 +577,7 @@ func (m *OrderedMap) getElementAndNextKey(comparator ValueComparator, hip HashIn
 		return nil, nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to get map key digest at level %d", level))
 	}
 
-	keyStorable, valueStorable, nextKeyStorable, err := m.root.getElementAndNextKey(m.Storage, keyDigest, level, hkey, comparator, key)
+	keyStorable, valueStorable, nextKeyStorable, err := m.state.root.getElementAndNextKey(m.Storage, keyDigest, level, hkey, comparator, key)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -607,7 +628,7 @@ func (m *OrderedMap) getNextKey(comparator ValueComparator, hip HashInputProvide
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to get map key digest at level %d", level))
 	}
 
-	_, _, nextKeyStorable, err := m.root.getElementAndNextKey(m.Storage, keyDigest, level, hkey, comparator, key)
+	_, _, nextKeyStorable, err := m.state.root.getElementAndNextKey(m.Storage, keyDigest, level, hkey, comparator, key)
 	if err != nil {
 		return nil, err
 	}
@@ -660,19 +681,19 @@ func (m *OrderedMap) set(comparator ValueComparator, hip HashInputProvider, key 
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to get map key digest at level %d", level))
 	}
 
-	keyStorable, existingMapValueStorable, err := m.root.Set(m.Storage, m.digesterBuilder, keyDigest, level, hkey, comparator, hip, key, value)
+	keyStorable, existingMapValueStorable, err := m.state.root.Set(m.Storage, m.digesterBuilder, keyDigest, level, hkey, comparator, hip, key, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapSlab.Set().
 		return nil, err
 	}
 
 	if existingMapValueStorable == nil {
-		m.root.ExtraData().incrementCount()
+		m.state.root.ExtraData().incrementCount()
 	}
 
-	if !m.root.IsData() {
+	if !m.state.root.IsData() {
 		// Set root to its child slab if root has one child slab.
-		root := m.root.(*MapMetaDataSlab)
+		root := m.state.root.(*MapMetaDataSlab)
 		if len(root.childrenHeaders) == 1 {
 			err := m.promoteChildAsNewRoot(root.childrenHeaders[0].slabID)
 			if err != nil {
@@ -682,7 +703,7 @@ func (m *OrderedMap) set(comparator ValueComparator, hip HashInputProvider, key 
 		}
 	}
 
-	if m.root.IsFull() {
+	if m.state.root.IsFull() {
 		err := m.splitRoot()
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by OrderedMap.splitRoot().
@@ -758,17 +779,17 @@ func (m *OrderedMap) remove(comparator ValueComparator, hip HashInputProvider, k
 		return nil, nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to create map key digest at level %d", level))
 	}
 
-	k, v, err := m.root.Remove(m.Storage, keyDigest, level, hkey, comparator, key)
+	k, v, err := m.state.root.Remove(m.Storage, keyDigest, level, hkey, comparator, key)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapSlab.Remove().
 		return nil, nil, err
 	}
 
-	m.root.ExtraData().decrementCount()
+	m.state.root.ExtraData().decrementCount()
 
-	if !m.root.IsData() {
+	if !m.state.root.IsData() {
 		// Set root to its child slab if root has one child slab.
-		root := m.root.(*MapMetaDataSlab)
+		root := m.state.root.(*MapMetaDataSlab)
 		if len(root.childrenHeaders) == 1 {
 			err := m.promoteChildAsNewRoot(root.childrenHeaders[0].slabID)
 			if err != nil {
@@ -778,7 +799,7 @@ func (m *OrderedMap) remove(comparator ValueComparator, hip HashInputProvider, k
 		}
 	}
 
-	if m.root.IsFull() {
+	if m.state.root.IsFull() {
 		err := m.splitRoot()
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by OrderedMap.splitRoot().
@@ -802,19 +823,19 @@ type MapPopIterationFunc func(Storable, Storable)
 // Each element is passed to MapPopIterationFunc callback before removal.
 func (m *OrderedMap) PopIterate(fn MapPopIterationFunc) error {
 
-	err := m.root.PopIterate(m.Storage, fn)
+	err := m.state.root.PopIterate(m.Storage, fn)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapSlab.PopIterate().
 		return err
 	}
 
-	rootID := m.root.SlabID()
+	rootID := m.state.root.SlabID()
 
 	// Set map count to 0 in extraData
-	extraData := m.root.ExtraData()
+	extraData := m.state.root.ExtraData()
 	extraData.Count = 0
 
-	inlined := m.root.Inlined()
+	inlined := m.state.root.Inlined()
 
 	prefixSize := uint32(mapRootDataSlabPrefixSize)
 	if inlined {
@@ -825,10 +846,10 @@ func (m *OrderedMap) PopIterate(fn MapPopIterationFunc) error {
 	// so that sibling wrappers whose .root still points to this orphaned slab
 	// can detect the root swap.
 	// See MapSlab.MutationCount.
-	m.root.BumpMutationCount()
+	m.state.root.BumpMutationCount()
 
 	// Set root to empty data slab
-	m.root = &MapDataSlab{
+	m.state.root = &MapDataSlab{
 		header: MapSlabHeader{
 			slabID: rootID,
 			size:   prefixSize + hkeyElementsPrefixSize,
@@ -840,7 +861,7 @@ func (m *OrderedMap) PopIterate(fn MapPopIterationFunc) error {
 
 	if !m.Inlined() {
 		// Save root slab
-		err = storeSlab(m.Storage, m.root)
+		err = storeSlab(m.Storage, m.state.root)
 		if err != nil {
 			return err
 		}
@@ -853,17 +874,17 @@ func (m *OrderedMap) PopIterate(fn MapPopIterationFunc) error {
 
 func (m *OrderedMap) splitRoot() error {
 
-	if m.root.IsData() {
+	if m.state.root.IsData() {
 		// Adjust root data slab size before splitting
-		dataSlab := m.root.(*MapDataSlab)
+		dataSlab := m.state.root.(*MapDataSlab)
 		dataSlab.header.size = dataSlab.header.size - mapRootDataSlabPrefixSize + mapDataSlabPrefixSize
 	}
 
 	// Get old root's extra data and reset it to nil in old root
-	extraData := m.root.RemoveExtraData()
+	extraData := m.state.root.RemoveExtraData()
 
 	// Save root node id
-	rootID := m.root.SlabID()
+	rootID := m.state.root.SlabID()
 
 	// Assign a new slab ID to old root before splitting it.
 	sID, err := m.Storage.GenerateSlabID(m.Address())
@@ -872,7 +893,7 @@ func (m *OrderedMap) splitRoot() error {
 		return wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", m.Address()))
 	}
 
-	oldRoot := m.root
+	oldRoot := m.state.root
 	oldRoot.SetSlabID(sID)
 	// Intentionally NOT calling oldRoot.BumpMutationCount() here:
 	// MapSlab.Split reuses the receiver as the LEFT child
@@ -911,7 +932,7 @@ func (m *OrderedMap) splitRoot() error {
 		extraData:       extraData,
 	}
 
-	m.root = newRoot
+	m.state.root = newRoot
 
 	err = storeSlab(m.Storage, left)
 	if err != nil {
@@ -923,7 +944,7 @@ func (m *OrderedMap) splitRoot() error {
 		return err
 	}
 
-	return storeSlab(m.Storage, m.root)
+	return storeSlab(m.Storage, m.state.root)
 }
 
 func (m *OrderedMap) promoteChildAsNewRoot(childID SlabID) error {
@@ -940,9 +961,9 @@ func (m *OrderedMap) promoteChildAsNewRoot(childID SlabID) error {
 		dataSlab.header.size = dataSlab.header.size - mapDataSlabPrefixSize + mapRootDataSlabPrefixSize
 	}
 
-	extraData := m.root.RemoveExtraData()
+	extraData := m.state.root.RemoveExtraData()
 
-	rootID := m.root.SlabID()
+	rootID := m.state.root.SlabID()
 
 	// Bump the old root's mutation counter before swapping m.root
 	// so that sibling wrappers whose .root still points to this orphaned slab
@@ -950,15 +971,15 @@ func (m *OrderedMap) promoteChildAsNewRoot(childID SlabID) error {
 	// Promote does not perturb the orphaned old root's SlabID,
 	// so this counter is the only signal sibling wrappers have.
 	// See MapSlab.MutationCount.
-	m.root.BumpMutationCount()
+	m.state.root.BumpMutationCount()
 
-	m.root = child
+	m.state.root = child
 
-	m.root.SetSlabID(rootID)
+	m.state.root.SetSlabID(rootID)
 
-	m.root.SetExtraData(extraData)
+	m.state.root.SetExtraData(extraData)
 
-	err = storeSlab(m.Storage, m.root)
+	err = storeSlab(m.Storage, m.state.root)
 	if err != nil {
 		return err
 	}
@@ -974,15 +995,39 @@ func (m *OrderedMap) promoteChildAsNewRoot(childID SlabID) error {
 // mutableValue operations (parent updater callback, mutableElementIndex, etc)
 
 func (m *OrderedMap) Inlined() bool {
-	return m.root.Inlined()
+	return m.state.root.Inlined()
 }
 
 func (m *OrderedMap) Inlinable(maxInlineSize uint32) bool {
-	return m.root.Inlinable(maxInlineSize)
+	return m.state.root.Inlinable(maxInlineSize)
 }
 
 func (m *OrderedMap) setParentUpdater(f parentUpdater) {
 	m.parentUpdater = f
+	m.parentUpdaterIsReadOnlyMutationCallback = false
+}
+
+// setReadOnlyMutationCallback installs a trap callback that fires
+// when the *OrderedMap is mutated through this instance,
+// indicating the instance was loaded via a read-only iterator.
+func (m *OrderedMap) setReadOnlyMutationCallback(f parentUpdater) {
+	m.parentUpdater = f
+	m.parentUpdaterIsReadOnlyMutationCallback = true
+}
+
+// HasParentUpdater reports whether a parent-notification (or read-only trap) callback is installed.
+// Use HasReadOnlyMutationCallback to distinguish the two cases.
+func (m *OrderedMap) HasParentUpdater() bool {
+	return m.parentUpdater != nil
+}
+
+// HasReadOnlyMutationCallback reports whether the installed parentUpdater
+// is a trap callback set by a read-only iterator
+// (as opposed to a real parent-notification callback).
+// Callers that want to share or canonicalize the *OrderedMap should consult this
+// to avoid caching a trap-bearing instance.
+func (m *OrderedMap) HasReadOnlyMutationCallback() bool {
+	return m.parentUpdaterIsReadOnlyMutationCallback
 }
 
 // setCallbackWithChild sets up callback function with child value (child)
@@ -1118,6 +1163,7 @@ func (m *OrderedMap) notifyParentIfNeeded() error {
 	}
 	if !found {
 		m.parentUpdater = nil
+		m.parentUpdaterIsReadOnlyMutationCallback = false
 	}
 	return nil
 }
@@ -1129,15 +1175,15 @@ func (m *OrderedMap) notifyParentIfNeeded() error {
 // - inlined data slab storable
 func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint32) (Storable, error) {
 
-	inlined := m.root.Inlined()
-	inlinable := m.root.Inlinable(maxInlineSize)
+	inlined := m.state.root.Inlined()
+	inlinable := m.state.root.Inlinable(maxInlineSize)
 
 	switch {
 
 	case inlinable && inlined:
 		// Root slab is inlinable and was inlined.
 		// Return root slab as storable, no size adjustment and change to storage.
-		return m.root, nil
+		return m.state.root, nil
 
 	case !inlinable && !inlined:
 		// Root slab is not inlinable and was not inlined.
@@ -1148,18 +1194,18 @@ func (m *OrderedMap) Storable(_ SlabStorage, _ Address, maxInlineSize uint32) (S
 		// Root slab is inlinable and was NOT inlined.
 
 		// Inline root data slab.
-		err := m.root.Inline(m.Storage)
+		err := m.state.root.Inline(m.Storage)
 		if err != nil {
 			return nil, err
 		}
 
-		return m.root, nil
+		return m.state.root, nil
 
 	case !inlinable && inlined:
 		// Root slab is NOT inlinable and was inlined.
 
 		// Uninline root slab.
-		err := m.root.Uninline(m.Storage)
+		err := m.state.root.Uninline(m.Storage)
 		if err != nil {
 			return nil, err
 		}
@@ -1186,7 +1232,7 @@ func (m *OrderedMap) Iterator(comparator ValueComparator, hip HashInputProvider)
 		return emptyMutableMapIterator, nil
 	}
 
-	keyStorable, err := firstKeyInMapSlab(m.Storage, m.root)
+	keyStorable, err := firstKeyInMapSlab(m.Storage, m.state.root)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by firstKeyInMapSlab().
 		return nil, err
@@ -1240,7 +1286,7 @@ func (m *OrderedMap) ReadOnlyIteratorWithMutationCallback(
 		return emptyReadOnlyMapIterator, nil
 	}
 
-	dataSlab, err := firstMapDataSlab(m.Storage, m.root)
+	dataSlab, err := firstMapDataSlab(m.Storage, m.state.root)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by firstMapDataSlab().
 		return nil, err
@@ -1268,7 +1314,7 @@ func (m *OrderedMap) ReadOnlyIteratorWithMutationCallback(
 
 // ReadOnlyLoadedValueIterator returns iterator to iterate loaded map elements.
 func (m *OrderedMap) ReadOnlyLoadedValueIterator() (*MapLoadedValueIterator, error) {
-	switch slab := m.root.(type) {
+	switch slab := m.state.root.(type) {
 
 	case *MapDataSlab:
 		// Create a data iterator from root slab.
@@ -1475,29 +1521,29 @@ func (m *OrderedMap) IterateReadOnlyLoadedValues(fn MapEntryIterationFunc) error
 // Other operations
 
 func (m *OrderedMap) Seed() uint64 {
-	return m.root.ExtraData().Seed
+	return m.state.root.ExtraData().Seed
 }
 
 func (m *OrderedMap) Count() uint64 {
-	return m.root.ExtraData().Count
+	return m.state.root.ExtraData().Count
 }
 
 func (m *OrderedMap) Address() Address {
-	return m.root.SlabID().address
+	return m.state.root.SlabID().address
 }
 
 func (m *OrderedMap) Type() TypeInfo {
-	if extraData := m.root.ExtraData(); extraData != nil {
+	if extraData := m.state.root.ExtraData(); extraData != nil {
 		return extraData.TypeInfo
 	}
 	return nil
 }
 
 func (m *OrderedMap) SetType(typeInfo TypeInfo) error {
-	extraData := m.root.ExtraData()
+	extraData := m.state.root.ExtraData()
 	extraData.TypeInfo = typeInfo
 
-	m.root.SetExtraData(extraData)
+	m.state.root.SetExtraData(extraData)
 
 	if m.Inlined() {
 		// Map is inlined.
@@ -1509,7 +1555,7 @@ func (m *OrderedMap) SetType(typeInfo TypeInfo) error {
 	// Map is standalone.
 
 	// Store modified root slab in storage since typeInfo is part of extraData stored in root slab.
-	return storeSlab(m.Storage, m.root)
+	return storeSlab(m.Storage, m.state.root)
 }
 
 func (m *OrderedMap) String() string {
@@ -1541,7 +1587,7 @@ func (m *MapExtraData) decrementCount() {
 	m.Count--
 }
 func (m *OrderedMap) rootSlab() MapSlab {
-	return m.root
+	return m.state.root
 }
 
 func (m *OrderedMap) getDigesterBuilder() DigesterBuilder {
@@ -1549,14 +1595,14 @@ func (m *OrderedMap) getDigesterBuilder() DigesterBuilder {
 }
 
 func (m *OrderedMap) SlabID() SlabID {
-	if m.root.Inlined() {
+	if m.state.root.Inlined() {
 		return SlabIDUndefined
 	}
-	return m.root.SlabID()
+	return m.state.root.SlabID()
 }
 
 func (m *OrderedMap) ValueID() ValueID {
-	return slabIDToValueID(m.root.SlabID())
+	return slabIDToValueID(m.state.root.SlabID())
 }
 
 // MutationCount returns the root slab's mutation counter.
@@ -1565,13 +1611,13 @@ func (m *OrderedMap) ValueID() ValueID {
 // Callers cache the value to detect staleness later.
 // See MapSlab.MutationCount.
 func (m *OrderedMap) MutationCount() uint64 {
-	return m.root.MutationCount()
+	return m.state.root.MutationCount()
 }
 
 // CanCopyNonRefSimple returns true if the map can be copied
 // as a container with only non-reference and simple storables.
 func (m *OrderedMap) CanCopyNonRefSimple() bool {
-	return m.root.canCopyWithoutSlabID()
+	return m.state.root.canCopyWithoutSlabID()
 }
 
 // CopyNonRefSimple returns a copy of the map that only
@@ -1579,11 +1625,11 @@ func (m *OrderedMap) CanCopyNonRefSimple() bool {
 // NOTE: Please call CanCopyNonRefSimple() to confirm the copy operation
 // is feasible for the map before calling CopyNonRefSimple().
 func (m *OrderedMap) CopyNonRefSimple(address Address, digestBuilder DigesterBuilder) (*OrderedMap, error) {
-	if !m.root.IsData() {
+	if !m.state.root.IsData() {
 		return nil, newCopyMapErrorf("can't copy multi-slab map")
 	}
 
-	seed := m.root.ExtraData().Seed
+	seed := m.state.root.ExtraData().Seed
 
 	// Seed digester
 	digestBuilder.SetSeed(seed, typicalRandomConstant)
@@ -1595,7 +1641,7 @@ func (m *OrderedMap) CopyNonRefSimple(address Address, digestBuilder DigesterBui
 		return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to generate slab ID for address 0x%x", address))
 	}
 
-	copiedRoot, err := m.root.copyWithNewSlabID(newID)
+	copiedRoot, err := m.state.root.copyWithNewSlabID(newID)
 	if err != nil {
 		return nil, newCopyMapError(err)
 	}
@@ -1605,14 +1651,17 @@ func (m *OrderedMap) CopyNonRefSimple(address Address, digestBuilder DigesterBui
 		return nil, err
 	}
 
+	state := newOrderedMapState(copiedRoot)
+	m.Storage.SetOrderedMapState(copiedRoot.SlabID(), state)
+
 	return &OrderedMap{
 		Storage:         m.Storage,
 		digesterBuilder: digestBuilder,
-		root:            copiedRoot,
+		state:           state,
 	}, nil
 }
 
 // IsWithinSingleSlab returns true if the map is stored in a single slab.
 func (m *OrderedMap) IsWithinSingleSlab() bool {
-	return m.root.IsData()
+	return m.state.root.IsData()
 }

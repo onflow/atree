@@ -483,3 +483,288 @@ func TestMapBuildWithDistinctInlinedMaps(t *testing.T) {
 			"entry %d's inner map must retain its distinguishing entry", i)
 	}
 }
+
+// TestMapSiblingConsistencyAfterPopIterate is the OrderedMap counterpart
+// to TestArraySiblingConsistencyAfterPopIterate.
+// PopIterate replaces state.root with a freshly allocated empty *MapDataSlab
+// (map.go: `m.state.root = &MapDataSlab{...}`); the replacement must be
+// observed by every sibling Go handle through the shared state.
+func TestMapSiblingConsistencyAfterPopIterate(t *testing.T) {
+
+	atree.SetThreshold(256)
+	defer atree.SetThreshold(1024)
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	outer, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	inner, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	// Populate enough to force multi-slab so PopIterate exercises the
+	// non-trivial case.
+	const initialCount = 200
+	for i := uint64(0); i < initialCount; i++ {
+		k := testutils.NewUint64ValueFromInteger(int(i))
+		v := testutils.NewUint64ValueFromInteger(int(i))
+		prev, err := inner.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+		require.NoError(t, err)
+		require.Nil(t, prev)
+	}
+
+	prev, err := outer.Set(testutils.CompareValue, testutils.GetHashInput,
+		testutils.NewUint64ValueFromInteger(0), inner)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+
+	innerVal, err := outer.Get(testutils.CompareValue, testutils.GetHashInput, testutils.NewUint64ValueFromInteger(0))
+	require.NoError(t, err)
+	sibling1 := innerVal.(*atree.OrderedMap)
+
+	innerVal, err = outer.Get(testutils.CompareValue, testutils.GetHashInput, testutils.NewUint64ValueFromInteger(0))
+	require.NoError(t, err)
+	sibling2 := innerVal.(*atree.OrderedMap)
+
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+	require.False(t, sibling1.IsWithinSingleSlab(),
+		"populated inner map must span multiple slabs")
+
+	rootIDBeforePop := sibling1.SlabID()
+
+	// Pop through sibling1. State.root is replaced with a new empty *MapDataSlab
+	// carrying the original root SlabID.
+	require.NoError(t, sibling1.PopIterate(func(atree.Storable, atree.Storable) {}))
+
+	require.Equal(t, uint64(0), sibling1.Count(), "sibling1 must observe empty map post-pop")
+	require.Equal(t, uint64(0), sibling2.Count(),
+		"sibling2 must observe the new empty root through shared state")
+	require.Equal(t, rootIDBeforePop, sibling2.SlabID(),
+		"PopIterate must preserve the canonical root SlabID")
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+	require.True(t, sibling1.IsWithinSingleSlab(),
+		"post-pop root must be a single empty data slab")
+	require.True(t, sibling2.IsWithinSingleSlab())
+
+	// Mutate via sibling2; sibling1 must see it through shared state.
+	k7 := testutils.NewUint64ValueFromInteger(7)
+	v7 := testutils.NewUint64ValueFromInteger(7)
+	prev, err = sibling2.Set(testutils.CompareValue, testutils.GetHashInput, k7, v7)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+	require.Equal(t, uint64(1), sibling1.Count(),
+		"sibling1 must observe sibling2's post-pop insert")
+	got, err := sibling1.Get(testutils.CompareValue, testutils.GetHashInput, k7)
+	require.NoError(t, err)
+	require.Equal(t, v7, got)
+}
+
+// TestMapSiblingConsistencyAcrossUninlineTransition is the OrderedMap counterpart
+// to TestArraySiblingConsistencyAcrossUninlineTransition: start with an inlined
+// inner map, mutate enough through one sibling to force uninlining, and verify
+// every sibling observes the transition.
+func TestMapSiblingConsistencyAcrossUninlineTransition(t *testing.T) {
+
+	atree.SetThreshold(256)
+	defer atree.SetThreshold(1024)
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	outer, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	// An empty inner attached to outer is inlined by default.
+	inner, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	prev, err := outer.Set(testutils.CompareValue, testutils.GetHashInput,
+		testutils.NewUint64ValueFromInteger(0), inner)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+
+	innerVal, err := outer.Get(testutils.CompareValue, testutils.GetHashInput, testutils.NewUint64ValueFromInteger(0))
+	require.NoError(t, err)
+	sibling1 := innerVal.(*atree.OrderedMap)
+
+	innerVal, err = outer.Get(testutils.CompareValue, testutils.GetHashInput, testutils.NewUint64ValueFromInteger(0))
+	require.NoError(t, err)
+	sibling2 := innerVal.(*atree.OrderedMap)
+
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+	require.True(t, sibling1.Inlined(),
+		"freshly attached empty inner must be inlined")
+	require.True(t, sibling2.Inlined())
+
+	// Grow via sibling1 until the inner can no longer be inlined.
+	for i := uint64(0); sibling1.Inlined(); i++ {
+		k := testutils.NewUint64ValueFromInteger(int(i))
+		v := testutils.NewUint64ValueFromInteger(int(i))
+		prev, err := sibling1.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+		require.NoError(t, err)
+		require.Nil(t, prev)
+
+		require.Less(t, i, uint64(1000),
+			"sibling1 must transition to uninlined within a bounded number of inserts")
+	}
+
+	require.False(t, sibling1.Inlined(),
+		"sibling1 must observe the uninline transition")
+	require.False(t, sibling2.Inlined(),
+		"sibling2 must observe the uninline transition through shared state")
+	require.Equal(t, sibling1.Count(), sibling2.Count())
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+	require.NotEqual(t, atree.SlabIDUndefined, sibling2.SlabID(),
+		"uninlined sibling must expose a real SlabID")
+
+	// Cross-check: insert through sibling2; sibling1 must see it.
+	kX := testutils.NewUint64ValueFromInteger(99999)
+	vX := testutils.NewUint64ValueFromInteger(99999)
+	prev, err = sibling2.Set(testutils.CompareValue, testutils.GetHashInput, kX, vX)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+	require.Equal(t, sibling2.Count(), sibling1.Count())
+	got, err := sibling1.Get(testutils.CompareValue, testutils.GetHashInput, kX)
+	require.NoError(t, err)
+	require.Equal(t, vX, got)
+}
+
+// TestMapTrapCallbackDoesNotFireOnSiblingMutation is the OrderedMap counterpart
+// to TestArrayTrapCallbackDoesNotFireOnSiblingMutation. A trap callback on a
+// readonly-iterator-loaded sibling must not fire when a separate sibling
+// initiates a structural change, but must fire when the trap-bearing sibling
+// itself is mutated.
+func TestMapTrapCallbackDoesNotFireOnSiblingMutation(t *testing.T) {
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	outer, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	inner, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	k0 := testutils.NewUint64ValueFromInteger(0)
+	v0 := testutils.NewUint64ValueFromInteger(0)
+	prev, err := inner.Set(testutils.CompareValue, testutils.GetHashInput, k0, v0)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+
+	outerKey := testutils.NewUint64ValueFromInteger(0)
+	prev, err = outer.Set(testutils.CompareValue, testutils.GetHashInput, outerKey, inner)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+
+	// sibling1: real parent-notification callback.
+	v, err := outer.Get(testutils.CompareValue, testutils.GetHashInput, outerKey)
+	require.NoError(t, err)
+	sibling1 := v.(*atree.OrderedMap)
+	require.True(t, sibling1.HasParentUpdater())
+	require.False(t, sibling1.HasReadOnlyMutationCallback(),
+		"Get-loaded sibling must carry a real callback")
+
+	// sibling2: trap callback installed by the readonly iterator.
+	// Use a key-value iterator so the value (the inner *OrderedMap) carries the trap.
+	iter, err := outer.ReadOnlyIterator()
+	require.NoError(t, err)
+	_, v, err = iter.Next()
+	require.NoError(t, err)
+	sibling2 := v.(*atree.OrderedMap)
+	require.True(t, sibling2.HasParentUpdater())
+	require.True(t, sibling2.HasReadOnlyMutationCallback(),
+		"iterator-loaded sibling must carry a trap callback")
+
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+
+	// Mutate through sibling1 (real callback). Must succeed.
+	k1 := testutils.NewUint64ValueFromInteger(1)
+	v1 := testutils.NewUint64ValueFromInteger(1)
+	prev, err = sibling1.Set(testutils.CompareValue, testutils.GetHashInput, k1, v1)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+	require.Equal(t, uint64(2), sibling1.Count())
+	require.Equal(t, uint64(2), sibling2.Count(),
+		"sibling2 must observe sibling1's mutation through shared state")
+
+	// sibling2's trap must still be installed; sibling1's must still be real.
+	require.False(t, sibling1.HasReadOnlyMutationCallback(),
+		"sibling1's real callback must not be replaced by sibling2's trap")
+	require.True(t, sibling2.HasReadOnlyMutationCallback(),
+		"sibling2's trap must survive sibling1's mutation "+
+			"(state propagation must not invoke uninvolved siblings' updaters)")
+
+	// Mutate through sibling2 (trap callback). Must return the trap error.
+	k2 := testutils.NewUint64ValueFromInteger(2)
+	v2 := testutils.NewUint64ValueFromInteger(2)
+	_, err = sibling2.Set(testutils.CompareValue, testutils.GetHashInput, k2, v2)
+	var mutationError *atree.ReadOnlyIteratorElementMutationError
+	require.ErrorAs(t, err, &mutationError,
+		"mutating through a trap-bearing sibling must return ReadOnlyIteratorElementMutationError")
+}
+
+// TestNewMapWithRootIDReturnsSameState pins the idempotence contract for
+// OrderedMap analogous to TestNewArrayWithRootIDReturnsSameState:
+// two calls to NewMapWithRootID for the same rootID must return *OrderedMap
+// instances backed by the same shared state.root pointer, AND each call must
+// re-seed the caller's digester from the canonical extraData.Seed so all
+// siblings compute consistent hkeys.
+func TestNewMapWithRootIDReturnsSameState(t *testing.T) {
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	k0 := testutils.NewUint64ValueFromInteger(0)
+	v0 := testutils.NewUint64ValueFromInteger(0)
+	prev, err := m.Set(testutils.CompareValue, testutils.GetHashInput, k0, v0)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+
+	rootID := m.SlabID()
+	require.NotEqual(t, atree.SlabIDUndefined, rootID)
+	canonicalSeed := m.Seed()
+
+	// Each NewMapWithRootID call passes a fresh DigesterBuilder; the function
+	// must seed it from the canonical extra data so hkeys match.
+	db1 := atree.NewDefaultDigesterBuilder()
+	m1, err := atree.NewMapWithRootID(storage, rootID, db1)
+	require.NoError(t, err)
+
+	db2 := atree.NewDefaultDigesterBuilder()
+	m2, err := atree.NewMapWithRootID(storage, rootID, db2)
+	require.NoError(t, err)
+
+	require.NotSame(t, m1, m2,
+		"each NewMapWithRootID call must return a distinct *OrderedMap Go object")
+	require.Same(t, atree.GetMapRootSlab(m1), atree.GetMapRootSlab(m2),
+		"two NewMapWithRootID calls for the same rootID must back the "+
+			"*OrderedMap instances with the same shared state.root pointer")
+	require.Equal(t, m1.ValueID(), m2.ValueID())
+	require.Equal(t, canonicalSeed, m1.Seed(),
+		"NewMapWithRootID must report the canonical seed")
+	require.Equal(t, canonicalSeed, m2.Seed())
+
+	// Functional cross-check: insert with m1's digester, look up with m2's digester.
+	// If either digester wasn't re-seeded from the canonical extra data, the
+	// hkeys would diverge and the lookup would miss.
+	kX := testutils.NewUint64ValueFromInteger(123)
+	vX := testutils.NewUint64ValueFromInteger(456)
+	prev, err = m1.Set(testutils.CompareValue, testutils.GetHashInput, kX, vX)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+
+	got, err := m2.Get(testutils.CompareValue, testutils.GetHashInput, kX)
+	require.NoError(t, err)
+	require.Equal(t, vX, got,
+		"m2 must find the key inserted via m1 — proves both digesters "+
+			"were re-seeded with the canonical seed and the *OrderedMap instances "+
+			"share the same state.root")
+}

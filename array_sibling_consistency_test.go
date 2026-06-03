@@ -490,3 +490,249 @@ func TestArrayBatchBuildWithDistinctInlinedMaps(t *testing.T) {
 			"element %d must retain its distinguishing entry", i)
 	}
 }
+
+// TestArraySiblingConsistencyAfterPopIterate verifies that
+// PopIterate, which replaces state.root with a brand-new empty *ArrayDataSlab,
+// propagates that replacement to every sibling Go handle.
+//
+// PopIterate is the only operation that swaps state.root out for a freshly
+// allocated slab (array.go: `a.state.root = &ArrayDataSlab{...}`).
+// If state were not shared, the second sibling would keep pointing at the
+// pre-pop root and continue reporting the old count.
+// Mutating through sibling2 after the pop must also be observed by sibling1.
+func TestArraySiblingConsistencyAfterPopIterate(t *testing.T) {
+
+	atree.SetThreshold(256)
+	defer atree.SetThreshold(1024)
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	outer, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	inner, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	// Populate enough to force multi-slab so PopIterate exercises the
+	// non-trivial case (an inlined single-slab case wouldn't change state.root).
+	const initialCount = 200
+	for i := uint64(0); i < initialCount; i++ {
+		require.NoError(t, inner.Append(testutils.NewUint64ValueFromInteger(int(i))))
+	}
+
+	require.NoError(t, outer.Append(inner))
+
+	a, err := outer.Get(0)
+	require.NoError(t, err)
+	sibling1 := a.(*atree.Array)
+
+	a, err = outer.Get(0)
+	require.NoError(t, err)
+	sibling2 := a.(*atree.Array)
+
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+	require.False(t, sibling1.IsWithinSingleSlab(),
+		"populated inner array must span multiple slabs")
+
+	rootIDBeforePop := sibling1.SlabID()
+
+	// Pop through sibling1. After this, state.root has been replaced with
+	// a freshly allocated empty *ArrayDataSlab carrying the original root SlabID.
+	require.NoError(t, sibling1.PopIterate(func(atree.Storable) {}))
+
+	require.Equal(t, uint64(0), sibling1.Count(), "sibling1 must observe empty array post-pop")
+	require.Equal(t, uint64(0), sibling2.Count(),
+		"sibling2 must observe the new empty root through shared state")
+	require.Equal(t, rootIDBeforePop, sibling2.SlabID(),
+		"PopIterate must preserve the canonical root SlabID")
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+	require.True(t, sibling1.IsWithinSingleSlab(),
+		"post-pop root must be a single empty data slab")
+	require.True(t, sibling2.IsWithinSingleSlab())
+
+	// Mutate via sibling2; sibling1 must see it through shared state.
+	require.NoError(t, sibling2.Append(testutils.NewUint64ValueFromInteger(7)))
+	require.Equal(t, uint64(1), sibling1.Count(),
+		"sibling1 must observe sibling2's post-pop append")
+	v, err := sibling1.Get(0)
+	require.NoError(t, err)
+	require.Equal(t, testutils.NewUint64ValueFromInteger(7), v)
+}
+
+// TestArraySiblingConsistencyAcrossUninlineTransition is the reverse direction
+// of TestArraySiblingConsistencyAcrossInlineTransition:
+// start with an inlined inner, mutate enough through one sibling to force
+// the inner to be uninlined, and verify every sibling observes the transition.
+//
+// The uninline transition runs through *Array.Storable when the parent re-stores
+// the child: once the inner's root becomes too large to inline (or becomes a
+// MetaDataSlab, which is never inlinable), `state.root.Uninline` flips `inlined`
+// to false on the shared slab and stores it in storage. A second sibling holding
+// only its own root pointer (pre-PR) would still report Inlined() == true.
+func TestArraySiblingConsistencyAcrossUninlineTransition(t *testing.T) {
+
+	atree.SetThreshold(256)
+	defer atree.SetThreshold(1024)
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	outer, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	// Build an inlined inner: empty array attached to outer is inlined by default.
+	inner, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+	require.NoError(t, outer.Append(inner))
+
+	a, err := outer.Get(0)
+	require.NoError(t, err)
+	sibling1 := a.(*atree.Array)
+
+	a, err = outer.Get(0)
+	require.NoError(t, err)
+	sibling2 := a.(*atree.Array)
+
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+	require.True(t, sibling1.Inlined(),
+		"freshly attached empty inner must be inlined")
+	require.True(t, sibling2.Inlined())
+
+	// Grow via sibling1 until it can no longer be inlined.
+	// Each Append eventually triggers parent re-store → inner.Storable() →
+	// Uninline when the slab exceeds the inline size or becomes a meta slab.
+	for i := uint64(0); sibling1.Inlined(); i++ {
+		require.NoError(t, sibling1.Append(testutils.NewUint64ValueFromInteger(int(i))))
+
+		// Guard against an infinite loop if a future change quietly raises
+		// the inline threshold above what 1000 Appends can exceed.
+		require.Less(t, i, uint64(1000),
+			"sibling1 must transition to uninlined within a bounded number of appends")
+	}
+
+	require.False(t, sibling1.Inlined(),
+		"sibling1 must observe the uninline transition")
+	require.False(t, sibling2.Inlined(),
+		"sibling2 must observe the uninline transition through shared state")
+	require.Equal(t, sibling1.Count(), sibling2.Count())
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+	require.NotEqual(t, atree.SlabIDUndefined, sibling2.SlabID(),
+		"uninlined sibling must expose a real SlabID")
+
+	// Cross-check: append through sibling2; sibling1 must see it.
+	require.NoError(t, sibling2.Append(testutils.NewUint64ValueFromInteger(9999)))
+	require.Equal(t, sibling2.Count(), sibling1.Count())
+	last, err := sibling1.Get(sibling1.Count() - 1)
+	require.NoError(t, err)
+	require.Equal(t, testutils.NewUint64ValueFromInteger(9999), last)
+}
+
+// TestArrayTrapCallbackDoesNotFireOnSiblingMutation pins down the contract
+// introduced by HasReadOnlyMutationCallback / setReadOnlyMutationCallback:
+// a per-instance trap callback on one sibling must NOT fire when an
+// unrelated sibling triggers a structural change through the shared state.
+//
+// Two *Array Go handles for the same inner exist:
+//   - sibling1, obtained via outer.Get(0): real parent-notification callback.
+//   - sibling2, obtained via outer.ReadOnlyIterator().Next(): trap callback.
+//
+// Mutations through sibling1 must succeed and propagate state to sibling2
+// without firing sibling2's trap (state propagation does not invoke
+// sibling.parentUpdater on uninvolved siblings).
+// Mutations through sibling2 must trip the trap and return
+// ReadOnlyIteratorElementMutationError.
+func TestArrayTrapCallbackDoesNotFireOnSiblingMutation(t *testing.T) {
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	outer, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	inner, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+	require.NoError(t, inner.Append(testutils.NewUint64ValueFromInteger(0)))
+
+	require.NoError(t, outer.Append(inner))
+
+	// sibling1: real parent-notification callback.
+	a, err := outer.Get(0)
+	require.NoError(t, err)
+	sibling1 := a.(*atree.Array)
+	require.True(t, sibling1.HasParentUpdater())
+	require.False(t, sibling1.HasReadOnlyMutationCallback(),
+		"Get-loaded sibling must carry a real callback")
+
+	// sibling2: trap callback installed by the readonly iterator.
+	iter, err := outer.ReadOnlyIterator()
+	require.NoError(t, err)
+	v, err := iter.Next()
+	require.NoError(t, err)
+	sibling2 := v.(*atree.Array)
+	require.True(t, sibling2.HasParentUpdater())
+	require.True(t, sibling2.HasReadOnlyMutationCallback(),
+		"iterator-loaded sibling must carry a trap callback")
+
+	// Sanity: siblings share state.
+	require.Equal(t, sibling1.ValueID(), sibling2.ValueID())
+
+	// Mutate through sibling1 (real callback). Must succeed.
+	require.NoError(t, sibling1.Append(testutils.NewUint64ValueFromInteger(1)))
+	require.Equal(t, uint64(2), sibling1.Count())
+	require.Equal(t, uint64(2), sibling2.Count(),
+		"sibling2 must observe sibling1's mutation through shared state")
+
+	// sibling2's trap must still be installed; sibling1's must still be real.
+	require.False(t, sibling1.HasReadOnlyMutationCallback(),
+		"sibling1's real callback must not be replaced by sibling2's trap")
+	require.True(t, sibling2.HasReadOnlyMutationCallback(),
+		"sibling2's trap must survive sibling1's mutation "+
+			"(state propagation must not invoke uninvolved siblings' updaters)")
+
+	// Mutate through sibling2 (trap callback). Must return the trap error.
+	err = sibling2.Append(testutils.NewUint64ValueFromInteger(2))
+	var mutationError *atree.ReadOnlyIteratorElementMutationError
+	require.ErrorAs(t, err, &mutationError,
+		"mutating through a trap-bearing sibling must return ReadOnlyIteratorElementMutationError")
+}
+
+// TestNewArrayWithRootIDReturnsSameState verifies:
+// two calls to NewArrayWithRootID for the same rootID must return *Array
+// instances backed by the same shared state — i.e. the same Go pointer for
+// `state.root`. Tested indirectly via GetArrayRootSlab pointer equality.
+func TestNewArrayWithRootIDReturnsSameState(t *testing.T) {
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	arr, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+	require.NoError(t, arr.Append(testutils.NewUint64ValueFromInteger(0)))
+
+	rootID := arr.SlabID()
+	require.NotEqual(t, atree.SlabIDUndefined, rootID,
+		"standalone array must have a real SlabID for NewArrayWithRootID to succeed")
+
+	a1, err := atree.NewArrayWithRootID(storage, rootID)
+	require.NoError(t, err)
+
+	a2, err := atree.NewArrayWithRootID(storage, rootID)
+	require.NoError(t, err)
+
+	require.NotSame(t, a1, a2,
+		"each NewArrayWithRootID call must return a distinct *Array Go object")
+	require.Same(t, atree.GetArrayRootSlab(a1), atree.GetArrayRootSlab(a2),
+		"two NewArrayWithRootID calls for the same rootID must back the *Array "+
+			"instances with the same shared state.root pointer")
+	require.Equal(t, a1.ValueID(), a2.ValueID())
+
+	// Functional cross-check: mutate through a1, observe through a2.
+	require.NoError(t, a1.Append(testutils.NewUint64ValueFromInteger(42)))
+	require.Equal(t, a1.Count(), a2.Count(),
+		"a2 must observe a1's mutation through the shared state")
+}

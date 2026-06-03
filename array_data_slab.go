@@ -555,6 +555,14 @@ func (a *ArrayDataSlab) Header() ArraySlabHeader {
 	return a.header
 }
 
+func (a *ArrayDataSlab) MutationCount() uint64 {
+	return a.header.mutationCount
+}
+
+func (a *ArrayDataSlab) BumpMutationCount() {
+	a.header.mutationCount++
+}
+
 func (a *ArrayDataSlab) IsData() bool {
 	return true
 }

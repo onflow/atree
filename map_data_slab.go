@@ -449,6 +449,14 @@ func (m *MapDataSlab) Header() MapSlabHeader {
 	return m.header
 }
 
+func (m *MapDataSlab) MutationCount() uint64 {
+	return m.header.mutationCount
+}
+
+func (m *MapDataSlab) BumpMutationCount() {
+	m.header.mutationCount++
+}
+
 func (m *MapDataSlab) IsData() bool {
 	return true
 }

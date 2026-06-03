@@ -613,6 +613,11 @@ func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
 		size = inlinedArrayDataSlabPrefixSize
 	}
 
+	// Bump the old root's mutation counter before swapping a.root
+	// so that sibling wrappers whose .root still points to this orphaned slab
+	// can detect the root swap. See ArraySlab.MutationCount.
+	a.state.root.BumpMutationCount()
+
 	// Set root to empty data slab
 	a.state.root = &ArrayDataSlab{
 		header: ArraySlabHeader{
@@ -661,12 +666,27 @@ func (a *Array) splitRoot() error {
 
 	oldRoot := a.state.root
 	oldRoot.SetSlabID(sID)
+	// Intentionally NOT calling oldRoot.BumpMutationCount() here:
+	// ArraySlab.Split reuses the receiver as the LEFT child
+	// (see ArrayDataSlab.Split / ArrayMetaDataSlab.Split — both return (receiver, rightSlab)),
+	// so the "old root" is not orphaned — it stays in the tree as the left child.
+	// If a later promoteChildAsNewRoot picks this slab,
+	// MutationCount() on the live root would falsely report staleness for the initiating wrapper.
 
 	// Split old root
 	leftSlab, rightSlab, err := oldRoot.Split(a.Storage)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Split().
 		return err
+	}
+
+	// Invariant: ArraySlab.Split must return the receiver as the LEFT child.
+	// The decision to skip BumpMutationCount above relies on this —
+	// if Split ever returns a fresh struct for the left side,
+	// the receiver becomes orphaned and splitRoot must behave like
+	// promoteChildAsNewRoot (bump).
+	if Slab(oldRoot) != leftSlab {
+		panic(NewUnreachableError())
 	}
 
 	left := leftSlab.(ArraySlab)
@@ -718,6 +738,14 @@ func (a *Array) promoteChildAsNewRoot(childID SlabID) error {
 	extraData := a.state.root.RemoveExtraData()
 
 	rootID := a.state.root.SlabID()
+
+	// Bump the old root's mutation counter before swapping a.root
+	// so that sibling wrappers whose .root still points to this orphaned slab
+	// can detect the root swap.
+	// Promote does not perturb the orphaned old root's SlabID,
+	// so this counter is the only signal sibling wrappers have.
+	// See ArraySlab.MutationCount.
+	a.state.root.BumpMutationCount()
 
 	a.state.root = child
 
@@ -1372,6 +1400,15 @@ func (a *Array) SlabID() SlabID {
 
 func (a *Array) ValueID() ValueID {
 	return slabIDToValueID(a.state.root.SlabID())
+}
+
+// MutationCount returns the root slab's mutation counter.
+// It is bumped on root replacement,
+// and not on element-level or non-root structural changes.
+// Callers cache the value to detect staleness later.
+// See ArraySlab.MutationCount.
+func (a *Array) MutationCount() uint64 {
+	return a.state.root.MutationCount()
 }
 
 func (a *Array) Type() TypeInfo {

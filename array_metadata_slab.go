@@ -863,6 +863,14 @@ func (a *ArrayMetaDataSlab) Header() ArraySlabHeader {
 	return a.header
 }
 
+func (a *ArrayMetaDataSlab) MutationCount() uint64 {
+	return a.header.mutationCount
+}
+
+func (a *ArrayMetaDataSlab) BumpMutationCount() {
+	a.header.mutationCount++
+}
+
 func (a *ArrayMetaDataSlab) ByteSize() uint32 {
 	return a.header.size
 }

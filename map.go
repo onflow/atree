@@ -842,6 +842,12 @@ func (m *OrderedMap) PopIterate(fn MapPopIterationFunc) error {
 		prefixSize = uint32(inlinedMapDataSlabPrefixSize)
 	}
 
+	// Bump the old root's mutation counter before swapping m.root
+	// so that sibling wrappers whose .root still points to this orphaned slab
+	// can detect the root swap.
+	// See MapSlab.MutationCount.
+	m.state.root.BumpMutationCount()
+
 	// Set root to empty data slab
 	m.state.root = &MapDataSlab{
 		header: MapSlabHeader{
@@ -889,12 +895,27 @@ func (m *OrderedMap) splitRoot() error {
 
 	oldRoot := m.state.root
 	oldRoot.SetSlabID(sID)
+	// Intentionally NOT calling oldRoot.BumpMutationCount() here:
+	// MapSlab.Split reuses the receiver as the LEFT child
+	// (see MapDataSlab.Split / MapMetaDataSlab.Split — both return (receiver, rightSlab)),
+	// so the "old root" is not orphaned — it stays in the tree as the left child.
+	// If a later promoteChildAsNewRoot picks this slab,
+	// MutationCount() on the live root would falsely report staleness for the initiating wrapper.
 
 	// Split old root
 	leftSlab, rightSlab, err := oldRoot.Split(m.Storage)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapSlab.Split().
 		return err
+	}
+
+	// Invariant: MapSlab.Split must return the receiver as the LEFT child.
+	// The decision to skip BumpMutationCount above relies on this —
+	// if Split ever returns a fresh struct for the left side,
+	// the receiver becomes orphaned and splitRoot must behave like
+	// promoteChildAsNewRoot (bump).
+	if Slab(oldRoot) != leftSlab {
+		panic(NewUnreachableError())
 	}
 
 	left := leftSlab.(MapSlab)
@@ -943,6 +964,14 @@ func (m *OrderedMap) promoteChildAsNewRoot(childID SlabID) error {
 	extraData := m.state.root.RemoveExtraData()
 
 	rootID := m.state.root.SlabID()
+
+	// Bump the old root's mutation counter before swapping m.root
+	// so that sibling wrappers whose .root still points to this orphaned slab
+	// can detect the root swap.
+	// Promote does not perturb the orphaned old root's SlabID,
+	// so this counter is the only signal sibling wrappers have.
+	// See MapSlab.MutationCount.
+	m.state.root.BumpMutationCount()
 
 	m.state.root = child
 
@@ -1574,6 +1603,15 @@ func (m *OrderedMap) SlabID() SlabID {
 
 func (m *OrderedMap) ValueID() ValueID {
 	return slabIDToValueID(m.state.root.SlabID())
+}
+
+// MutationCount returns the root slab's mutation counter.
+// It is bumped on root replacement,
+// and not on element-level or non-root structural changes.
+// Callers cache the value to detect staleness later.
+// See MapSlab.MutationCount.
+func (m *OrderedMap) MutationCount() uint64 {
+	return m.state.root.MutationCount()
 }
 
 // CanCopyNonRefSimple returns true if the map can be copied

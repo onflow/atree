@@ -793,6 +793,14 @@ func (m *MapMetaDataSlab) Header() MapSlabHeader {
 	return m.header
 }
 
+func (m *MapMetaDataSlab) MutationCount() uint64 {
+	return m.header.mutationCount
+}
+
+func (m *MapMetaDataSlab) BumpMutationCount() {
+	m.header.mutationCount++
+}
+
 func (m *MapMetaDataSlab) ByteSize() uint32 {
 	return m.header.size
 }

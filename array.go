@@ -981,10 +981,6 @@ func (a *Array) Inlinable(maxInlineSize uint32) bool {
 	return a.state.root.Inlinable(maxInlineSize)
 }
 
-func (a *Array) hasParentUpdater() bool {
-	return a.parentUpdater != nil
-}
-
 func (a *Array) getMutableElementIndexCount() uint64 {
 	return uint64(len(a.state.mutableElementIndex))
 }

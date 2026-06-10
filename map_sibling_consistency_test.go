@@ -769,6 +769,79 @@ func TestNewMapWithRootIDReturnsSameState(t *testing.T) {
 			"share the same state.root")
 }
 
+// TestNewMapWithRootIDRejectsNonRootSlabID verifies that NewMapWithRootID
+// returns NotValueError when given the ID of an interior (non-root) slab.
+// Only root slabs carry extra data; interior slabs are not values.
+//
+// Regression test: when the shared-state registry was introduced,
+// the extra-data check was accidentally dropped from NewMapWithRootID
+// (its array counterpart kept it),
+// so a non-root slab ID silently produced a broken *OrderedMap
+// with an unseeded digester —
+// and registered that bogus state in the registry,
+// poisoning all later lookups for that slab ID.
+func TestNewMapWithRootIDRejectsNonRootSlabID(t *testing.T) {
+
+	atree.SetThreshold(256)
+	defer atree.SetThreshold(1024)
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+
+	// Grow the map until it spans multiple slabs,
+	// so interior slab IDs exist.
+	const count = 200
+	for i := 0; i < count; i++ {
+		prev, err := m.Set(
+			testutils.CompareValue, testutils.GetHashInput,
+			testutils.NewUint64ValueFromInteger(i),
+			testutils.NewUint64ValueFromInteger(i),
+		)
+		require.NoError(t, err)
+		require.Nil(t, prev)
+	}
+	require.False(t, m.IsWithinSingleSlab(),
+		"map must span multiple slabs so interior slab IDs exist")
+
+	rootID := m.SlabID()
+
+	iterator, err := storage.SlabIterator()
+	require.NoError(t, err)
+
+	interiorSlabCount := 0
+	for {
+		id, _ := iterator()
+		if id == atree.SlabIDUndefined {
+			break
+		}
+		if id == rootID {
+			continue
+		}
+		interiorSlabCount++
+
+		// Calling twice proves the failed call did not register
+		// a bogus state in the registry:
+		// a poisoned registry would make the second call succeed.
+		for i := 0; i < 2; i++ {
+			_, err := atree.NewMapWithRootID(storage, id, atree.NewDefaultDigesterBuilder())
+			var notValueError *atree.NotValueError
+			require.ErrorAs(t, err, &notValueError,
+				"NewMapWithRootID with interior slab ID %s must return NotValueError (call %d)", id, i+1)
+		}
+	}
+	require.Positive(t, interiorSlabCount,
+		"test must have exercised at least one interior slab")
+
+	// The real root must still work.
+	m2, err := atree.NewMapWithRootID(storage, rootID, atree.NewDefaultDigesterBuilder())
+	require.NoError(t, err)
+	require.Equal(t, uint64(count), m2.Count())
+}
+
 // TestNewMapWithRootIDAfterDestroy is the OrderedMap counterpart to
 // TestNewArrayWithRootIDAfterDestroy:
 // after the root slab is removed from storage,

@@ -737,6 +737,66 @@ func TestNewArrayWithRootIDReturnsSameState(t *testing.T) {
 		"a2 must observe a1's mutation through the shared state")
 }
 
+// TestNewArrayWithRootIDRejectsNonRootSlabID pins the array counterpart of
+// TestNewMapWithRootIDRejectsNonRootSlabID:
+// NewArrayWithRootID must return NotValueError for interior (non-root) slab IDs,
+// and the failed call must not register a bogus state in the registry.
+func TestNewArrayWithRootIDRejectsNonRootSlabID(t *testing.T) {
+
+	atree.SetThreshold(256)
+	defer atree.SetThreshold(1024)
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	arr, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	// Grow the array until it spans multiple slabs,
+	// so interior slab IDs exist.
+	const count = 200
+	for i := 0; i < count; i++ {
+		require.NoError(t, arr.Append(testutils.NewUint64ValueFromInteger(i)))
+	}
+	require.False(t, arr.IsWithinSingleSlab(),
+		"array must span multiple slabs so interior slab IDs exist")
+
+	rootID := arr.SlabID()
+
+	iterator, err := storage.SlabIterator()
+	require.NoError(t, err)
+
+	interiorSlabCount := 0
+	for {
+		id, _ := iterator()
+		if id == atree.SlabIDUndefined {
+			break
+		}
+		if id == rootID {
+			continue
+		}
+		interiorSlabCount++
+
+		// Calling twice proves the failed call did not register
+		// a bogus state in the registry:
+		// a poisoned registry would make the second call succeed.
+		for i := 0; i < 2; i++ {
+			_, err := atree.NewArrayWithRootID(storage, id)
+			var notValueError *atree.NotValueError
+			require.ErrorAs(t, err, &notValueError,
+				"NewArrayWithRootID with interior slab ID %s must return NotValueError (call %d)", id, i+1)
+		}
+	}
+	require.Positive(t, interiorSlabCount,
+		"test must have exercised at least one interior slab")
+
+	// The real root must still work.
+	arr2, err := atree.NewArrayWithRootID(storage, rootID)
+	require.NoError(t, err)
+	require.Equal(t, uint64(count), arr2.Count())
+}
+
 // TestNewArrayWithRootIDAfterDestroy verifies that a registered state
 // does not outlive its container's destruction:
 // after the root slab is removed from storage,

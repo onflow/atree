@@ -174,6 +174,14 @@ func NewMapWithRootID(storage SlabStorage, rootID SlabID, digestBuilder Digester
 			return nil, err
 		}
 
+		// Only root slabs carry extra data;
+		// a slab without it is an interior slab, not a value.
+		// Reject it before registering state,
+		// so the registry never holds a state for a non-root slab ID.
+		if root.ExtraData() == nil {
+			return nil, NewNotValueError(rootID)
+		}
+
 		state = newOrderedMapState(root)
 		storage.SetOrderedMapState(rootID, state)
 	}

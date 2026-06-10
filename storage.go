@@ -910,6 +910,13 @@ func (s *PersistentSlabStorage) NondeterministicFastCommit(numWorkers int) error
 
 func (s *PersistentSlabStorage) DropDeltas() {
 	s.deltas = make(map[SlabID]Slab)
+
+	// Dropping deltas rolls storage back to the last committed state,
+	// but registered container states point at in-memory root slabs
+	// that still reflect the discarded mutations.
+	// Clear the registry so container instances created after the rollback
+	// re-decode the committed slabs instead of resurrecting discarded writes.
+	s.RemoveAllStates()
 }
 
 func (s *PersistentSlabStorage) DropCache() {

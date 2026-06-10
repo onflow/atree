@@ -3353,3 +3353,69 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 		}
 	})
 }
+
+// TestPersistentStorageDropDeltasClearsContainerStates verifies that
+// DropDeltas (rollback to the last commit) clears the shared-state registry.
+//
+// Registered container states point at in-memory root slabs that reflect
+// uncommitted mutations. If the registry survived DropDeltas, any *Array /
+// *OrderedMap instance created after the rollback would observe the
+// discarded writes instead of the committed state.
+func TestPersistentStorageDropDeltasClearsContainerStates(t *testing.T) {
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	arr, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+	require.NoError(t, arr.Append(testutils.NewUint64ValueFromInteger(0)))
+	arrayRootID := arr.SlabID()
+
+	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+	prev, err := m.Set(
+		testutils.CompareValue, testutils.GetHashInput,
+		testutils.NewUint64ValueFromInteger(0),
+		testutils.NewUint64ValueFromInteger(0),
+	)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+	mapRootID := m.SlabID()
+
+	// Commit the one-element state of both containers.
+	require.NoError(t, storage.FastCommit(1))
+
+	// Mutate both containers without committing.
+	require.NoError(t, arr.Append(testutils.NewUint64ValueFromInteger(1)))
+	require.Equal(t, uint64(2), arr.Count())
+
+	prev, err = m.Set(
+		testutils.CompareValue, testutils.GetHashInput,
+		testutils.NewUint64ValueFromInteger(1),
+		testutils.NewUint64ValueFromInteger(1),
+	)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+	require.Equal(t, uint64(2), m.Count())
+
+	// Roll back to the last commit.
+	// DropCache is paired with DropDeltas to also discard committed-but-cached
+	// slab structs, matching the full reset pattern used by cmd/smoke.
+	storage.DropDeltas()
+	storage.DropCache()
+
+	// Fresh instances must observe the committed state,
+	// not the discarded in-memory mutations.
+	arr2, err := atree.NewArrayWithRootID(storage, arrayRootID)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), arr2.Count(),
+		"post-rollback array must observe the committed state — "+
+			"a stale registry entry would resurrect the discarded append")
+
+	m2, err := atree.NewMapWithRootID(storage, mapRootID, atree.NewDefaultDigesterBuilder())
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), m2.Count(),
+		"post-rollback map must observe the committed state — "+
+			"a stale registry entry would resurrect the discarded insert")
+}

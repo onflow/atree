@@ -736,3 +736,46 @@ func TestNewArrayWithRootIDReturnsSameState(t *testing.T) {
 	require.Equal(t, a1.Count(), a2.Count(),
 		"a2 must observe a1's mutation through the shared state")
 }
+
+// TestNewArrayWithRootIDAfterDestroy verifies that a registered state
+// does not outlive its container's destruction:
+// after the root slab is removed from storage,
+// NewArrayWithRootID must return SlabNotFoundError —
+// not a zombie *Array served from the leftover registry state —
+// and must clear the leftover state from the registry.
+//
+// (The registry deliberately survives storage.Remove
+// because Remove is also called when a container is inlined while still alive;
+// the constructors distinguish the two cases
+// by checking slab existence for non-inlined roots.)
+func TestNewArrayWithRootIDAfterDestroy(t *testing.T) {
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	arr, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+	require.NoError(t, arr.Append(testutils.NewUint64ValueFromInteger(0)))
+
+	rootID := arr.SlabID()
+	require.NotEqual(t, atree.SlabIDUndefined, rootID)
+	require.NotNil(t, storage.ArrayState(rootID),
+		"constructing the array must have registered its state")
+
+	// Destroy the standalone single-slab container
+	// by removing its root slab.
+	require.NoError(t, storage.Remove(rootID))
+
+	_, err = atree.NewArrayWithRootID(storage, rootID)
+	var slabNotFoundError *atree.SlabNotFoundError
+	require.ErrorAs(t, err, &slabNotFoundError,
+		"NewArrayWithRootID on a destroyed container must return SlabNotFoundError")
+
+	require.Nil(t, storage.ArrayState(rootID),
+		"detecting the destroyed container must clear the leftover registry state")
+
+	// A second call goes down the no-state path and must fail the same way.
+	_, err = atree.NewArrayWithRootID(storage, rootID)
+	require.ErrorAs(t, err, &slabNotFoundError)
+}

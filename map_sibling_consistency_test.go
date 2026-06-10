@@ -768,3 +768,47 @@ func TestNewMapWithRootIDReturnsSameState(t *testing.T) {
 			"were re-seeded with the canonical seed and the *OrderedMap instances "+
 			"share the same state.root")
 }
+
+// TestNewMapWithRootIDAfterDestroy is the OrderedMap counterpart to
+// TestNewArrayWithRootIDAfterDestroy:
+// after the root slab is removed from storage,
+// NewMapWithRootID must return SlabNotFoundError
+// instead of a zombie *OrderedMap served from the leftover registry state,
+// and must clear the leftover state from the registry.
+func TestNewMapWithRootIDAfterDestroy(t *testing.T) {
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+	prev, err := m.Set(
+		testutils.CompareValue, testutils.GetHashInput,
+		testutils.NewUint64ValueFromInteger(0),
+		testutils.NewUint64ValueFromInteger(0),
+	)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+
+	rootID := m.SlabID()
+	require.NotEqual(t, atree.SlabIDUndefined, rootID)
+	require.NotNil(t, storage.OrderedMapState(rootID),
+		"constructing the map must have registered its state")
+
+	// Destroy the standalone single-slab container
+	// by removing its root slab.
+	require.NoError(t, storage.Remove(rootID))
+
+	_, err = atree.NewMapWithRootID(storage, rootID, atree.NewDefaultDigesterBuilder())
+	var slabNotFoundError *atree.SlabNotFoundError
+	require.ErrorAs(t, err, &slabNotFoundError,
+		"NewMapWithRootID on a destroyed container must return SlabNotFoundError")
+
+	require.Nil(t, storage.OrderedMapState(rootID),
+		"detecting the destroyed container must clear the leftover registry state")
+
+	// A second call goes down the no-state path and must fail the same way.
+	_, err = atree.NewMapWithRootID(storage, rootID, atree.NewDefaultDigesterBuilder())
+	require.ErrorAs(t, err, &slabNotFoundError)
+}

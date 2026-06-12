@@ -3354,13 +3354,22 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 	})
 }
 
-// TestPersistentStorageDropDeltasClearsContainerStates verifies that
-// DropDeltas (rollback to the last commit) clears the shared-state registry.
+// TestPersistentStorageDropDeltasClearsContainerStates verifies
+// that DropDeltas ALONE is a complete rollback to the last commit
+// for everything storage serves afterwards.
 //
-// Registered container states point at in-memory root slabs that reflect
-// uncommitted mutations. If the registry survived DropDeltas, any *Array /
-// *OrderedMap instance created after the rollback would observe the
-// discarded writes instead of the committed state.
+// Two stale sources must both be invalidated:
+//   - the shared-state registry: registered states point at
+//     in-memory root slabs that reflect the discarded mutations;
+//   - the read cache: slabs are mutated in place,
+//     and commit places stored slab structs in the cache,
+//     so the cache holds the same mutated structs the deltas did.
+//
+// If either survived, a fresh container instance created after the rollback
+// would observe — and a later commit would re-persist — the discarded writes.
+//
+// (Container instances obtained BEFORE the rollback still hold their mutated
+// roots; discarding those is the caller's responsibility, see DropDeltas doc.)
 func TestPersistentStorageDropDeltasClearsContainerStates(t *testing.T) {
 
 	typeInfo := testutils.NewSimpleTypeInfo(42)
@@ -3400,10 +3409,17 @@ func TestPersistentStorageDropDeltasClearsContainerStates(t *testing.T) {
 	require.Equal(t, uint64(2), m.Count())
 
 	// Roll back to the last commit.
-	// DropCache is paired with DropDeltas to also discard committed-but-cached
-	// slab structs, matching the full reset pattern used by cmd/smoke.
+	// Deliberately NOT paired with DropCache:
+	// DropDeltas itself must invalidate the cache entries of mutated slabs,
+	// otherwise the state == nil load path below would read the in-place-mutated
+	// slab structs from the cache and observe the discarded mutations.
 	storage.DropDeltas()
-	storage.DropCache()
+
+	// The mutated root slabs must no longer be served from memory.
+	require.Nil(t, storage.RetrieveIfLoaded(arrayRootID),
+		"DropDeltas must invalidate the cache entry of a mutated slab")
+	require.Nil(t, storage.RetrieveIfLoaded(mapRootID),
+		"DropDeltas must invalidate the cache entry of a mutated slab")
 
 	// Fresh instances must observe the committed state,
 	// not the discarded in-memory mutations.
@@ -3411,11 +3427,11 @@ func TestPersistentStorageDropDeltasClearsContainerStates(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), arr2.Count(),
 		"post-rollback array must observe the committed state — "+
-			"a stale registry entry would resurrect the discarded append")
+			"a stale registry entry or cache entry would resurrect the discarded append")
 
 	m2, err := atree.NewMapWithRootID(storage, mapRootID, atree.NewDefaultDigesterBuilder())
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), m2.Count(),
 		"post-rollback map must observe the committed state — "+
-			"a stale registry entry would resurrect the discarded insert")
+			"a stale registry entry or cache entry would resurrect the discarded insert")
 }

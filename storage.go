@@ -908,14 +908,30 @@ func (s *PersistentSlabStorage) NondeterministicFastCommit(numWorkers int) error
 	return nil
 }
 
+// DropDeltas discards all uncommitted changes, rolling storage back to the last committed state.
+//
+// WARNING: the rollback only affects what storage serves from now on.
+// Container instances (*Array / *OrderedMap) obtained BEFORE the rollback still hold their mutated in-memory roots,
+// and using them can re-introduce the discarded writes.
+// Callers MUST discard all container references they hold across a rollback
+// (atree cannot invalidate handles it has already returned on its own).
 func (s *PersistentSlabStorage) DropDeltas() {
+
+	// Slabs are mutated in place, so a mutated slab struct can also sit in the read cache
+	// (commit places stored slabs in the cache, and Retrieve caches reads whose structs are mutated later).
+	// Dropping only the deltas would leave those mutated structs in the cache:
+	// subsequent reads would observe (and a later commit would re-persist) the supposedly discarded mutations.
+	// Every mutated slab has a delta entry, so invalidating the cache for all delta'd IDs
+	// makes subsequent reads decode the committed bytes again.
+	for id := range s.deltas {
+		delete(s.cache, id)
+	}
+
 	s.deltas = make(map[SlabID]Slab)
 
-	// Dropping deltas rolls storage back to the last committed state,
-	// but registered container states point at in-memory root slabs
-	// that still reflect the discarded mutations.
-	// Clear the registry so container instances created after the rollback
-	// re-decode the committed slabs instead of resurrecting discarded writes.
+	// Registered container states point at in-memory root slabs that still reflect the discarded mutations.
+	// Clear the registry so container instances created after the rollback re-decode the committed slabs
+	// instead of resurrecting discarded writes.
 	s.RemoveAllStates()
 }
 

@@ -41,7 +41,6 @@ var (
 // Exported function of Array for testing.
 var (
 	GetArrayRootSlab                 = (*Array).rootSlab
-	ArrayHasParentUpdater            = (*Array).hasParentUpdater
 	GetArrayMutableElementIndexCount = (*Array).getMutableElementIndexCount
 	GetArrayMutableElementIndex      = (*Array).getMutableElementIndex
 )

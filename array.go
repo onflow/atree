@@ -121,6 +121,30 @@ func NewArrayWithRootID(storage SlabStorage, rootID SlabID) (*Array, error) {
 	// If another *Array instance for this container already exists, reuse
 	// its shared state so structural changes propagate.
 	state := storage.ArrayState(rootID)
+
+	// A registered state can outlive its container:
+	// storage.Remove is called both when a container is inlined (still alive)
+	// and when it is destroyed,
+	// and the registry deliberately survives Remove for the inline case.
+	// A non-inlined root must still have its slab in storage —
+	// if it doesn't, the container was destroyed,
+	// and returning the leftover state would resurrect it as a zombie.
+	// An inlined root legitimately has no standalone slab, so it is not checked
+	// (a container destroyed WHILE inlined never had a slab to remove,
+	// so it cannot be detected here; its root slab ID is not referenced
+	// by any remaining storable, so nothing should dereference it).
+	if state != nil && !state.root.Inlined() {
+		_, found, err := storage.Retrieve(rootID)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", rootID))
+		}
+		if !found {
+			storage.RemoveStateForSlab(rootID)
+			return nil, NewSlabNotFoundErrorf(rootID, "array slab not found")
+		}
+	}
+
 	if state == nil {
 		root, err := getArraySlab(storage, rootID)
 		if err != nil {
@@ -979,10 +1003,6 @@ func (a *Array) Inlined() bool {
 
 func (a *Array) Inlinable(maxInlineSize uint32) bool {
 	return a.state.root.Inlinable(maxInlineSize)
-}
-
-func (a *Array) hasParentUpdater() bool {
-	return a.parentUpdater != nil
 }
 
 func (a *Array) getMutableElementIndexCount() uint64 {

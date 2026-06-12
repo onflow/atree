@@ -9039,14 +9039,14 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 		expectedValues[0] = testutils.Uint64Value(0)
 
 		// childArray.parentUpdater isn't nil before callback is invoked.
-		require.True(t, atree.ArrayHasParentUpdater(childArray))
+		require.True(t, childArray.HasParentUpdater())
 
 		// modify overwritten child array
 		err = childArray.Append(testutils.Uint64Value(0))
 		require.NoError(t, err)
 
 		// childArray.parentUpdater is nil after callback is invoked.
-		require.False(t, atree.ArrayHasParentUpdater(childArray))
+		require.False(t, childArray.HasParentUpdater())
 
 		// No-op on parent
 		testValueEqual(t, expectedValues, parentArray)
@@ -9094,14 +9094,14 @@ func TestArrayWithOutdatedCallback(t *testing.T) {
 		expectedValues = testutils.ExpectedArrayValue{}
 
 		// childArray.parentUpdater isn't nil before callback is invoked.
-		require.True(t, atree.ArrayHasParentUpdater(childArray))
+		require.True(t, childArray.HasParentUpdater())
 
 		// modify removed child array
 		err = childArray.Append(testutils.Uint64Value(0))
 		require.NoError(t, err)
 
 		// childArray.parentUpdater is nil after callback is invoked.
-		require.False(t, atree.ArrayHasParentUpdater(childArray))
+		require.False(t, childArray.HasParentUpdater())
 
 		// No-op on parent
 		testValueEqual(t, expectedValues, parentArray)

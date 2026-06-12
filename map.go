@@ -143,11 +143,43 @@ func NewMapWithRootID(storage SlabStorage, rootID SlabID, digestBuilder Digester
 	// If another *OrderedMap instance for this container already exists,
 	// reuse its shared state so structural changes propagate.
 	state := storage.OrderedMapState(rootID)
+
+	// A registered state can outlive its container:
+	// storage.Remove is called both when a container is inlined (still alive)
+	// and when it is destroyed,
+	// and the registry deliberately survives Remove for the inline case.
+	// A non-inlined root must still have its slab in storage —
+	// if it doesn't, the container was destroyed,
+	// and returning the leftover state would resurrect it as a zombie.
+	// An inlined root legitimately has no standalone slab, so it is not checked
+	// (a container destroyed WHILE inlined never had a slab to remove,
+	// so it cannot be detected here; its root slab ID is not referenced
+	// by any remaining storable, so nothing should dereference it).
+	if state != nil && !state.root.Inlined() {
+		_, found, err := storage.Retrieve(rootID)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", rootID))
+		}
+		if !found {
+			storage.RemoveStateForSlab(rootID)
+			return nil, NewSlabNotFoundErrorf(rootID, "map slab not found")
+		}
+	}
+
 	if state == nil {
 		root, err := getMapSlab(storage, rootID)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by getMapSlab().
 			return nil, err
+		}
+
+		// Only root slabs carry extra data;
+		// a slab without it is an interior slab, not a value.
+		// Reject it before registering state,
+		// so the registry never holds a state for a non-root slab ID.
+		if root.ExtraData() == nil {
+			return nil, NewNotValueError(rootID)
 		}
 
 		state = newOrderedMapState(root)

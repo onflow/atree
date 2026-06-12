@@ -40,6 +40,11 @@ type StateRegistry interface {
 	SetArrayState(rootID SlabID, state *ArrayState)
 	OrderedMapState(rootID SlabID) *OrderedMapState
 	SetOrderedMapState(rootID SlabID, state *OrderedMapState)
+	// RemoveStateForSlab clears any registered state under the given root slab ID.
+	// atree calls it when it detects that a registered state
+	// outlived its container's destruction
+	// (NewArrayWithRootID / NewMapWithRootID on a destroyed container's root slab ID).
+	RemoveStateForSlab(rootID SlabID)
 }
 
 // BaseStateRegistry is an embeddable helper
@@ -73,8 +78,13 @@ var _ StateRegistry = &BaseStateRegistry{}
 
 // NewBaseStateRegistry returns an empty registry.
 // Registry maps are lazily initialized on first use,
-// so a zero-valued *BaseStateRegistry also works;
-// this constructor is provided for explicitness.
+// so a zero-valued BaseStateRegistry struct (i.e. &BaseStateRegistry{}) also works.
+// A nil *BaseStateRegistry does NOT work:
+// the methods dereference the receiver and panic.
+// Embedders like BasicSlabStorage and PersistentSlabStorage embed the pointer,
+// so they must be created via their constructors
+// (or otherwise have the embedded pointer set) —
+// a struct-literal zero value panics on first container creation.
 func NewBaseStateRegistry() *BaseStateRegistry {
 	return &BaseStateRegistry{}
 }
@@ -120,4 +130,16 @@ func (r *BaseStateRegistry) SetOrderedMapState(rootID SlabID, state *OrderedMapS
 func (r *BaseStateRegistry) RemoveStateForSlab(rootID SlabID) {
 	delete(r.arrayStates, rootID)
 	delete(r.orderedMapStates, rootID)
+}
+
+// RemoveAllStates clears the entire registry.
+//
+// This must be called whenever in-memory container state is discarded wholesale,
+// e.g. PersistentSlabStorage.DropDeltas (rollback to last commit):
+// registered states point at in-memory root slabs that reflect uncommitted mutations,
+// so after a rollback they would resurrect the discarded writes
+// for any container instance created afterwards.
+func (r *BaseStateRegistry) RemoveAllStates() {
+	r.arrayStates = nil
+	r.orderedMapStates = nil
 }

@@ -72,6 +72,13 @@ type OrderedMap struct {
 	// read-only iterator's trap callback rather than a real parent-notification callback.
 	// See Array.parentUpdaterIsReadOnlyMutationCallback for rationale.
 	parentUpdaterIsReadOnlyMutationCallback bool
+
+	// loadedWithRootID is true when this wrapper was created by NewMapWithRootID.
+	// If such a wrapper later observes an inlined state,
+	// it cannot safely mutate without a parentUpdater:
+	// root-ID loading only proves access to a standalone root,
+	// while an inlined value needs a parent write-back path.
+	loadedWithRootID bool
 }
 
 var _ Value = &OrderedMap{}
@@ -144,6 +151,16 @@ func NewMapWithRootID(storage SlabStorage, rootID SlabID, digestBuilder Digester
 	// reuse its shared state so structural changes propagate.
 	state := storage.OrderedMapState(rootID)
 
+	// NewMapWithRootID only loads standalone roots.
+	// If the registry says this logical container is currently inlined,
+	// rootID is no longer a live standalone slab ID.
+	// Do not clear the state here:
+	// the inlined container may still be alive inside its parent,
+	// and dropping the registry would reintroduce sibling divergence.
+	if state != nil && state.root.Inlined() {
+		return nil, NewSlabNotFoundErrorf(rootID, "map slab is inlined")
+	}
+
 	// A registered state can outlive its container:
 	// storage.Remove is called both when a container is inlined (still alive)
 	// and when it is destroyed,
@@ -193,9 +210,10 @@ func NewMapWithRootID(storage SlabStorage, rootID SlabID, digestBuilder Digester
 	}
 
 	return &OrderedMap{
-		Storage:         storage,
-		state:           state,
-		digesterBuilder: digestBuilder,
+		Storage:          storage,
+		state:            state,
+		digesterBuilder:  digestBuilder,
+		loadedWithRootID: true,
 	}, nil
 }
 
@@ -698,6 +716,11 @@ func (m *OrderedMap) Set(comparator ValueComparator, hip HashInputProvider, key 
 
 func (m *OrderedMap) set(comparator ValueComparator, hip HashInputProvider, key Value, value Value) (Storable, error) {
 
+	err := m.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return nil, err
+	}
+
 	keyDigest, err := m.digesterBuilder.Digest(hip, key)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by DigesterBuilder interface.
@@ -796,6 +819,11 @@ func (m *OrderedMap) Remove(comparator ValueComparator, hip HashInputProvider, k
 
 func (m *OrderedMap) remove(comparator ValueComparator, hip HashInputProvider, key Value) (Storable, Storable, error) {
 
+	err := m.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	keyDigest, err := m.digesterBuilder.Digest(hip, key)
 	if err != nil {
 		// Wrap err as external error (if needed) because err is returned by DigesterBuilder interface.
@@ -855,7 +883,12 @@ type MapPopIterationFunc func(Storable, Storable)
 // Each element is passed to MapPopIterationFunc callback before removal.
 func (m *OrderedMap) PopIterate(fn MapPopIterationFunc) error {
 
-	err := m.state.root.PopIterate(m.Storage, fn)
+	err := m.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return err
+	}
+
+	err = m.state.root.PopIterate(m.Storage, fn)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by MapSlab.PopIterate().
 		return err
@@ -1198,6 +1231,19 @@ func (m *OrderedMap) notifyParentIfNeeded() error {
 		m.parentUpdaterIsReadOnlyMutationCallback = false
 	}
 	return nil
+}
+
+func (m *OrderedMap) ensureRootIDLoadedInlinedMutationAllowed() error {
+	if !m.loadedWithRootID || !m.state.root.Inlined() || m.parentUpdater != nil {
+		return nil
+	}
+
+	return NewFatalError(
+		fmt.Errorf(
+			"cannot mutate inlined map %s loaded by root ID without parent updater",
+			m.ValueID(),
+		),
+	)
 }
 
 // Value operations
@@ -1572,6 +1618,11 @@ func (m *OrderedMap) Type() TypeInfo {
 }
 
 func (m *OrderedMap) SetType(typeInfo TypeInfo) error {
+	err := m.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return err
+	}
+
 	extraData := m.state.root.ExtraData()
 	extraData.TypeInfo = typeInfo
 

@@ -839,3 +839,76 @@ func TestNewArrayWithRootIDAfterDestroy(t *testing.T) {
 	_, err = atree.NewArrayWithRootID(storage, rootID)
 	require.ErrorAs(t, err, &slabNotFoundError)
 }
+
+// TestNewArrayWithRootIDRejectsCurrentlyInlinedState verifies that
+// NewArrayWithRootID only serves standalone roots.
+//
+// Once a child array is inlined into its parent,
+// its old root slab ID no longer names a live standalone slab.
+// A root-ID load must fail instead of returning a no-parent handle
+// for an in-parent value.
+//
+// The registry entry must still survive:
+// the inlined child is alive inside its parent,
+// and parent-loaded siblings must keep sharing the same state.
+func TestNewArrayWithRootIDRejectsCurrentlyInlinedState(t *testing.T) {
+
+	atree.SetThreshold(256)
+	defer atree.SetThreshold(1024)
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	outer, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	inner, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+
+	for i := uint64(0); i < 100; i++ {
+		require.NoError(t, inner.Append(testutils.NewUint64ValueFromInteger(int(i))))
+	}
+	require.False(t, inner.Inlined(),
+		"inner must start as a standalone root")
+
+	rootID := inner.SlabID()
+	require.NotEqual(t, atree.SlabIDUndefined, rootID)
+
+	direct, err := atree.NewArrayWithRootID(storage, rootID)
+	require.NoError(t, err)
+	require.False(t, direct.HasParentUpdater())
+
+	require.NoError(t, outer.Append(inner))
+
+	v, err := outer.Get(0)
+	require.NoError(t, err)
+	fromParent := v.(*atree.Array)
+	require.True(t, fromParent.HasParentUpdater())
+
+	for fromParent.Count() > 0 && !fromParent.Inlined() {
+		_, err := fromParent.Remove(fromParent.Count() - 1)
+		require.NoError(t, err)
+	}
+	require.True(t, fromParent.Inlined(),
+		"inner must be inlined to exercise the root-ID rejection")
+	require.True(t, direct.Inlined(),
+		"root-ID-loaded sibling must observe the inline transition")
+
+	err = direct.Append(testutils.NewUint64ValueFromInteger(41))
+	var fatalError *atree.FatalError
+	require.ErrorAs(t, err, &fatalError,
+		"root-ID-loaded inlined sibling must not mutate without a parent updater")
+
+	_, err = atree.NewArrayWithRootID(storage, rootID)
+	var slabNotFoundError *atree.SlabNotFoundError
+	require.ErrorAs(t, err, &slabNotFoundError)
+
+	require.NotNil(t, storage.ArrayState(rootID),
+		"failed root-ID load must not clear live inlined state")
+
+	count := fromParent.Count()
+	require.NoError(t, fromParent.Append(testutils.NewUint64ValueFromInteger(42)))
+	require.Equal(t, uint64(1), outer.Count())
+	require.Equal(t, count+1, fromParent.Count())
+}

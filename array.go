@@ -1035,6 +1035,17 @@ func (a *Array) notifyParentIfNeeded() error {
 	return nil
 }
 
+// ensureRootIDLoadedInlinedMutationAllowed rejects mutations through a wrapper
+// that was created by NewArrayWithRootID but whose container has since been
+// inlined into a parent, when this wrapper has no parentUpdater to write the
+// change back. Such a mutation would only change in-memory state that can never
+// be persisted into the parent, silently diverging memory from storage.
+//
+// INVARIANT: every method that mutates the array's elements, structure, or
+// extra data (currently set, Insert, remove, PopIterate, and SetType) MUST call
+// this and return early on error before touching a.state.root. The protection
+// only holds if all mutation entry points are guarded; any new mutating method
+// that skips this check silently reopens the divergence hole described above.
 func (a *Array) ensureRootIDLoadedInlinedMutationAllowed() error {
 	if !a.loadedWithRootID || !a.state.root.Inlined() || a.parentUpdater != nil {
 		return nil

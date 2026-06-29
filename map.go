@@ -1233,6 +1233,18 @@ func (m *OrderedMap) notifyParentIfNeeded() error {
 	return nil
 }
 
+// ensureRootIDLoadedInlinedMutationAllowed rejects mutations through a wrapper
+// that was created by NewMapWithRootID but whose container has since been
+// inlined into a parent, when this wrapper has no parentUpdater to write the
+// change back. Such a mutation would only change in-memory state that can never
+// be persisted into the parent, silently diverging memory from storage.
+//
+// INVARIANT: every method that mutates the map's elements, structure, or extra
+// data (currently set, remove, PopIterate, and SetType) MUST call this and
+// return early on error before touching m.state.root. The protection only holds
+// if all mutation entry points are guarded; any new mutating method that skips
+// this check silently reopens the divergence hole described above.
+
 func (m *OrderedMap) ensureRootIDLoadedInlinedMutationAllowed() error {
 	if !m.loadedWithRootID || !m.state.root.Inlined() || m.parentUpdater != nil {
 		return nil

@@ -885,3 +885,113 @@ func TestNewMapWithRootIDAfterDestroy(t *testing.T) {
 	_, err = atree.NewMapWithRootID(storage, rootID, atree.NewDefaultDigesterBuilder())
 	require.ErrorAs(t, err, &slabNotFoundError)
 }
+
+// TestNewMapWithRootIDRejectsCurrentlyInlinedState verifies that
+// NewMapWithRootID only serves standalone roots.
+//
+// Once a child map is inlined into its parent,
+// its old root slab ID no longer names a live standalone slab.
+// A root-ID load must fail instead of returning a no-parent handle
+// for an in-parent value.
+//
+// The registry entry must still survive:
+// the inlined child is alive inside its parent,
+// and parent-loaded siblings must keep sharing the same state.
+func TestNewMapWithRootIDRejectsCurrentlyInlinedState(t *testing.T) {
+
+	atree.SetThreshold(256)
+	defer atree.SetThreshold(1024)
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	outer, err := atree.NewMap(
+		storage,
+		address,
+		atree.NewDefaultDigesterBuilder(),
+		typeInfo,
+	)
+	require.NoError(t, err)
+
+	inner, err := atree.NewMap(
+		storage,
+		address,
+		atree.NewDefaultDigesterBuilder(),
+		typeInfo,
+	)
+	require.NoError(t, err)
+
+	for i := uint64(0); i < 100; i++ {
+		k := testutils.NewUint64ValueFromInteger(int(i))
+		v := testutils.NewUint64ValueFromInteger(int(i))
+		prev, err := inner.Set(testutils.CompareValue, testutils.GetHashInput, k, v)
+		require.NoError(t, err)
+		require.Nil(t, prev)
+	}
+	require.False(t, inner.Inlined(),
+		"inner must start as a standalone root")
+
+	rootID := inner.SlabID()
+	require.NotEqual(t, atree.SlabIDUndefined, rootID)
+
+	direct, err := atree.NewMapWithRootID(
+		storage,
+		rootID,
+		atree.NewDefaultDigesterBuilder(),
+	)
+	require.NoError(t, err)
+	require.False(t, direct.HasParentUpdater())
+
+	outerKey := testutils.NewUint64ValueFromInteger(0)
+	prev, err := outer.Set(
+		testutils.CompareValue,
+		testutils.GetHashInput,
+		outerKey,
+		inner,
+	)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+
+	v, err := outer.Get(testutils.CompareValue, testutils.GetHashInput, outerKey)
+	require.NoError(t, err)
+	fromParent := v.(*atree.OrderedMap)
+	require.True(t, fromParent.HasParentUpdater())
+
+	for fromParent.Count() > 0 && !fromParent.Inlined() {
+		k := testutils.NewUint64ValueFromInteger(int(fromParent.Count() - 1))
+		_, _, err := fromParent.Remove(testutils.CompareValue, testutils.GetHashInput, k)
+		require.NoError(t, err)
+	}
+	require.True(t, fromParent.Inlined(),
+		"inner must be inlined to exercise the root-ID rejection")
+	require.True(t, direct.Inlined(),
+		"root-ID-loaded sibling must observe the inline transition")
+
+	k := testutils.NewUint64ValueFromInteger(999)
+	value := testutils.NewUint64ValueFromInteger(999)
+	prev, err = direct.Set(testutils.CompareValue, testutils.GetHashInput, k, value)
+	var fatalError *atree.FatalError
+	require.ErrorAs(t, err, &fatalError,
+		"root-ID-loaded inlined sibling must not mutate without a parent updater")
+	require.Nil(t, prev)
+
+	_, err = atree.NewMapWithRootID(
+		storage,
+		rootID,
+		atree.NewDefaultDigesterBuilder(),
+	)
+	var slabNotFoundError *atree.SlabNotFoundError
+	require.ErrorAs(t, err, &slabNotFoundError)
+
+	require.NotNil(t, storage.OrderedMapState(rootID),
+		"failed root-ID load must not clear live inlined state")
+
+	count := fromParent.Count()
+	k = testutils.NewUint64ValueFromInteger(1000)
+	value = testutils.NewUint64ValueFromInteger(1000)
+	prev, err = fromParent.Set(testutils.CompareValue, testutils.GetHashInput, k, value)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+	require.Equal(t, count+1, fromParent.Count())
+}

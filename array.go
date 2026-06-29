@@ -72,6 +72,13 @@ type Array struct {
 	// use this to avoid promoting a trap-bearing instance to a shared/canonical wrapper:
 	// mutations through such a wrapper would trip the trap.
 	parentUpdaterIsReadOnlyMutationCallback bool
+
+	// loadedWithRootID is true when this wrapper was created by NewArrayWithRootID.
+	// If such a wrapper later observes an inlined state,
+	// it cannot safely mutate without a parentUpdater:
+	// root-ID loading only proves access to a standalone root,
+	// while an inlined value needs a parent write-back path.
+	loadedWithRootID bool
 }
 
 var _ Value = &Array{}
@@ -122,6 +129,16 @@ func NewArrayWithRootID(storage SlabStorage, rootID SlabID) (*Array, error) {
 	// its shared state so structural changes propagate.
 	state := storage.ArrayState(rootID)
 
+	// NewArrayWithRootID only loads standalone roots.
+	// If the registry says this logical container is currently inlined,
+	// rootID is no longer a live standalone slab ID.
+	// Do not clear the state here:
+	// the inlined container may still be alive inside its parent,
+	// and dropping the registry would reintroduce sibling divergence.
+	if state != nil && state.root.Inlined() {
+		return nil, NewSlabNotFoundErrorf(rootID, "array slab is inlined")
+	}
+
 	// A registered state can outlive its container:
 	// storage.Remove is called both when a container is inlined (still alive)
 	// and when it is destroyed,
@@ -162,8 +179,9 @@ func NewArrayWithRootID(storage SlabStorage, rootID SlabID) (*Array, error) {
 	}
 
 	return &Array{
-		Storage: storage,
-		state:   state,
+		Storage:          storage,
+		state:            state,
+		loadedWithRootID: true,
 	}, nil
 }
 
@@ -449,6 +467,11 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 }
 
 func (a *Array) set(index uint64, value Value) (Storable, error) {
+	err := a.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return nil, err
+	}
+
 	existingStorable, err := a.state.root.Set(a.Storage, a.Address(), index, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Set().
@@ -512,7 +535,12 @@ func (a *Array) Insert(index uint64, value Value) error {
 		return NewArrayElementCannotExceedMaxElementCountError(maxArrayElementCount)
 	}
 
-	err := a.state.root.Insert(a.Storage, a.Address(), index, value)
+	err := a.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return err
+	}
+
+	err = a.state.root.Insert(a.Storage, a.Address(), index, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Insert().
 		return err
@@ -581,6 +609,11 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 }
 
 func (a *Array) remove(index uint64) (Storable, error) {
+	err := a.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return nil, err
+	}
+
 	storable, err := a.state.root.Remove(a.Storage, index)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Remove().
@@ -620,7 +653,12 @@ type ArrayPopIterationFunc func(Storable)
 // Each element is passed to ArrayPopIterationFunc callback before removal.
 func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
 
-	err := a.state.root.PopIterate(a.Storage, fn)
+	err := a.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return err
+	}
+
+	err = a.state.root.PopIterate(a.Storage, fn)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.PopIterate().
 		return err
@@ -995,6 +1033,30 @@ func (a *Array) notifyParentIfNeeded() error {
 		a.parentUpdaterIsReadOnlyMutationCallback = false
 	}
 	return nil
+}
+
+// ensureRootIDLoadedInlinedMutationAllowed rejects mutations through a wrapper
+// that was created by NewArrayWithRootID but whose container has since been
+// inlined into a parent, when this wrapper has no parentUpdater to write the
+// change back. Such a mutation would only change in-memory state that can never
+// be persisted into the parent, silently diverging memory from storage.
+//
+// INVARIANT: every method that mutates the array's elements, structure, or
+// extra data (currently set, Insert, remove, PopIterate, and SetType) MUST call
+// this and return early on error before touching a.state.root. The protection
+// only holds if all mutation entry points are guarded; any new mutating method
+// that skips this check silently reopens the divergence hole described above.
+func (a *Array) ensureRootIDLoadedInlinedMutationAllowed() error {
+	if !a.loadedWithRootID || !a.state.root.Inlined() || a.parentUpdater != nil {
+		return nil
+	}
+
+	return NewFatalError(
+		fmt.Errorf(
+			"cannot mutate inlined array %s loaded by root ID without parent updater",
+			a.ValueID(),
+		),
+	)
 }
 
 func (a *Array) Inlined() bool {
@@ -1439,6 +1501,11 @@ func (a *Array) Type() TypeInfo {
 }
 
 func (a *Array) SetType(typeInfo TypeInfo) error {
+	err := a.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return err
+	}
+
 	extraData := a.state.root.ExtraData()
 	extraData.TypeInfo = typeInfo
 

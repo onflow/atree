@@ -51,7 +51,7 @@ func VerifyArraySerialization(
 		decodeTypeInfo: decodeTypeInfo,
 		compare:        compare,
 	}
-	return v.verifyArraySlab(a.root)
+	return v.verifyArraySlab(a.state.root)
 }
 
 type serializationVerifier struct {
@@ -300,10 +300,10 @@ func (v *serializationVerifier) verifyValue(value Value) error {
 
 	switch value := value.(type) {
 	case *Array:
-		return v.verifyArraySlab(value.root)
+		return v.verifyArraySlab(value.state.root)
 
 	case *OrderedMap:
-		return v.verifyMapSlab(value.root)
+		return v.verifyMapSlab(value.state.root)
 	}
 	return nil
 }

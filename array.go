@@ -43,25 +43,42 @@ const (
 // parent container's element size limit.  Specifically, array with one segment
 // which fits in size limit can be inlined, while arrays with multiple segments
 // can't be inlined.
+//
+// Multiple *Array Go instances can exist for the same logical container;
+// they all share the same *arrayState via the SlabStorage-backed registry,
+// so structural mutations through any one of them are observed by all of them.
+// See array_state.go for the rationale.
 type Array struct {
 	Storage SlabStorage
-	root    ArraySlab
 
-	// parentUpdater is a callback that notifies parent container when this array is modified.
-	// If this callback is nil, this array has no parent.  Otherwise, this array has parent
-	// and this callback must be used when this array is changed by Append, Insert, Set, Remove, etc.
-	//
-	// parentUpdater acts like "parent pointer".  It is not stored physically and is only in memory.
-	// It is setup when child array is returned from parent's Get.  It is also setup when
-	// new child is added to parent through Set or Insert.
+	// state holds the mutable per-logical-container state
+	// (root pointer, mutableElementIndex).
+	// Shared across siblings so structural changes propagate.
+	state *arrayState
+
+	// parentUpdater is the callback notifying the parent container
+	// when this *Array instance triggers a mutation.
+	// It is per-instance, not shared:
+	// a Get-loaded instance has a real parent updater,
+	// while a readonly-iterator-loaded instance has a trap callback
+	// (see parentUpdaterIsReadOnlyMutationCallback).
+	// A mutation through one instance must fire only its own callback.
 	parentUpdater parentUpdater
 
-	// mutableElementIndex tracks index of mutable element, such as Array and OrderedMap.
-	// This is needed by mutable element to properly update itself through parentUpdater.
-	// WARNING: since mutableElementIndex is created lazily, we need to create mutableElementIndex
-	// if it is nil before adding/updating elements.  Range, delete, and read are no-ops on nil Go map.
-	// TODO: maybe optimize by replacing map to get faster updates.
-	mutableElementIndex map[ValueID]uint64
+	// parentUpdaterIsReadOnlyMutationCallback is true
+	// when parentUpdater is a trap callback set by a read-only iterator
+	// (rather than a real parent-notification callback set by setCallbackWithChild).
+	// Callers that cache or alias this *Array
+	// use this to avoid promoting a trap-bearing instance to a shared/canonical wrapper:
+	// mutations through such a wrapper would trip the trap.
+	parentUpdaterIsReadOnlyMutationCallback bool
+
+	// loadedWithRootID is true when this wrapper was created by NewArrayWithRootID.
+	// If such a wrapper later observes an inlined state,
+	// it cannot safely mutate without a parentUpdater:
+	// root-ID loading only proves access to a standalone root,
+	// while an inlined value needs a parent write-back path.
+	loadedWithRootID bool
 }
 
 var _ Value = &Array{}
@@ -94,9 +111,12 @@ func NewArray(storage SlabStorage, address Address, typeInfo TypeInfo) (*Array, 
 		return nil, err
 	}
 
+	state := newArrayState(root)
+	storage.SetArrayState(sID, state)
+
 	return &Array{
 		Storage: storage,
-		root:    root,
+		state:   state,
 	}, nil
 }
 
@@ -105,20 +125,63 @@ func NewArrayWithRootID(storage SlabStorage, rootID SlabID) (*Array, error) {
 		return nil, NewSlabIDErrorf("cannot create Array from undefined slab ID")
 	}
 
-	root, err := getArraySlab(storage, rootID)
-	if err != nil {
-		// Don't need to wrap error as external error because err is already categorized by getArraySlab().
-		return nil, err
+	// If another *Array instance for this container already exists, reuse
+	// its shared state so structural changes propagate.
+	state := storage.ArrayState(rootID)
+
+	// NewArrayWithRootID only loads standalone roots.
+	// If the registry says this logical container is currently inlined,
+	// rootID is no longer a live standalone slab ID.
+	// Do not clear the state here:
+	// the inlined container may still be alive inside its parent,
+	// and dropping the registry would reintroduce sibling divergence.
+	if state != nil && state.root.Inlined() {
+		return nil, NewSlabNotFoundErrorf(rootID, "array slab is inlined")
 	}
 
-	extraData := root.ExtraData()
-	if extraData == nil {
-		return nil, NewNotValueError(rootID)
+	// A registered state can outlive its container:
+	// storage.Remove is called both when a container is inlined (still alive)
+	// and when it is destroyed,
+	// and the registry deliberately survives Remove for the inline case.
+	// A non-inlined root must still have its slab in storage —
+	// if it doesn't, the container was destroyed,
+	// and returning the leftover state would resurrect it as a zombie.
+	// An inlined root legitimately has no standalone slab, so it is not checked
+	// (a container destroyed WHILE inlined never had a slab to remove,
+	// so it cannot be detected here; its root slab ID is not referenced
+	// by any remaining storable, so nothing should dereference it).
+	if state != nil && !state.root.Inlined() {
+		_, found, err := storage.Retrieve(rootID)
+		if err != nil {
+			// Wrap err as external error (if needed) because err is returned by SlabStorage interface.
+			return nil, wrapErrorfAsExternalErrorIfNeeded(err, fmt.Sprintf("failed to retrieve slab %s", rootID))
+		}
+		if !found {
+			storage.RemoveStateForSlab(rootID)
+			return nil, NewSlabNotFoundErrorf(rootID, "array slab not found")
+		}
+	}
+
+	if state == nil {
+		root, err := getArraySlab(storage, rootID)
+		if err != nil {
+			// Don't need to wrap error as external error because err is already categorized by getArraySlab().
+			return nil, err
+		}
+
+		extraData := root.ExtraData()
+		if extraData == nil {
+			return nil, NewNotValueError(rootID)
+		}
+
+		state = newArrayState(root)
+		storage.SetArrayState(rootID, state)
 	}
 
 	return &Array{
-		Storage: storage,
-		root:    root,
+		Storage:          storage,
+		state:            state,
+		loadedWithRootID: true,
 	}, nil
 }
 
@@ -277,9 +340,12 @@ func NewArrayFromBatchData(storage SlabStorage, address Address, typeInfo TypeIn
 		return nil, err
 	}
 
+	state := newArrayState(root)
+	storage.SetArrayState(root.SlabID(), state)
+
 	return &Array{
 		Storage: storage,
-		root:    root,
+		state:   state,
 	}, nil
 }
 
@@ -351,7 +417,7 @@ func nextLevelArraySlabs(storage SlabStorage, address Address, slabs []ArraySlab
 // Array operations (get, set, insert, remove, and pop iterate)
 
 func (a *Array) Get(i uint64) (Value, error) {
-	storable, err := a.root.Get(a.Storage, i)
+	storable, err := a.state.root.Get(a.Storage, i)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Get().
 		return nil, err
@@ -393,7 +459,7 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 		unwrappedValue, _ := unwrapValue(value)
 		newValue, ok := unwrappedValue.(mutableValueNotifier)
 		if !ok || existingValueID != newValue.ValueID() {
-			delete(a.mutableElementIndex, existingValueID)
+			delete(a.state.mutableElementIndex, existingValueID)
 		}
 	}
 
@@ -401,13 +467,18 @@ func (a *Array) Set(index uint64, value Value) (Storable, error) {
 }
 
 func (a *Array) set(index uint64, value Value) (Storable, error) {
-	existingStorable, err := a.root.Set(a.Storage, a.Address(), index, value)
+	err := a.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return nil, err
+	}
+
+	existingStorable, err := a.state.root.Set(a.Storage, a.Address(), index, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Set().
 		return nil, err
 	}
 
-	if a.root.IsFull() {
+	if a.state.root.IsFull() {
 		err = a.splitRoot()
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by Array.splitRoot().
@@ -415,8 +486,8 @@ func (a *Array) set(index uint64, value Value) (Storable, error) {
 		}
 	}
 
-	if !a.root.IsData() {
-		root := a.root.(*ArrayMetaDataSlab)
+	if !a.state.root.IsData() {
+		root := a.state.root.(*ArrayMetaDataSlab)
 		if len(root.childrenHeaders) == 1 {
 			err = a.promoteChildAsNewRoot(root.childrenHeaders[0].slabID)
 			if err != nil {
@@ -464,13 +535,18 @@ func (a *Array) Insert(index uint64, value Value) error {
 		return NewArrayElementCannotExceedMaxElementCountError(maxArrayElementCount)
 	}
 
-	err := a.root.Insert(a.Storage, a.Address(), index, value)
+	err := a.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return err
+	}
+
+	err = a.state.root.Insert(a.Storage, a.Address(), index, value)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Insert().
 		return err
 	}
 
-	if a.root.IsFull() {
+	if a.state.root.IsFull() {
 		err = a.splitRoot()
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by Array.splitRoot().
@@ -526,22 +602,27 @@ func (a *Array) Remove(index uint64) (Storable, error) {
 
 	// Delete removed element ValueID from mutableElementIndex
 	if removedValueID != emptyValueID {
-		delete(a.mutableElementIndex, removedValueID)
+		delete(a.state.mutableElementIndex, removedValueID)
 	}
 
 	return removedStorable, nil
 }
 
 func (a *Array) remove(index uint64) (Storable, error) {
-	storable, err := a.root.Remove(a.Storage, index)
+	err := a.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return nil, err
+	}
+
+	storable, err := a.state.root.Remove(a.Storage, index)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Remove().
 		return nil, err
 	}
 
-	if !a.root.IsData() {
+	if !a.state.root.IsData() {
 		// Set root to its child slab if root has one child slab.
-		root := a.root.(*ArrayMetaDataSlab)
+		root := a.state.root.(*ArrayMetaDataSlab)
 		if len(root.childrenHeaders) == 1 {
 			err = a.promoteChildAsNewRoot(root.childrenHeaders[0].slabID)
 			if err != nil {
@@ -572,25 +653,35 @@ type ArrayPopIterationFunc func(Storable)
 // Each element is passed to ArrayPopIterationFunc callback before removal.
 func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
 
-	err := a.root.PopIterate(a.Storage, fn)
+	err := a.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return err
+	}
+
+	err = a.state.root.PopIterate(a.Storage, fn)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.PopIterate().
 		return err
 	}
 
-	rootID := a.root.SlabID()
+	rootID := a.state.root.SlabID()
 
-	extraData := a.root.ExtraData()
+	extraData := a.state.root.ExtraData()
 
-	inlined := a.root.Inlined()
+	inlined := a.state.root.Inlined()
 
 	size := uint32(arrayRootDataSlabPrefixSize)
 	if inlined {
 		size = inlinedArrayDataSlabPrefixSize
 	}
 
+	// Bump the old root's mutation counter before swapping a.root
+	// so that sibling wrappers whose .root still points to this orphaned slab
+	// can detect the root swap. See ArraySlab.MutationCount.
+	a.state.root.BumpMutationCount()
+
 	// Set root to empty data slab
-	a.root = &ArrayDataSlab{
+	a.state.root = &ArrayDataSlab{
 		header: ArraySlabHeader{
 			slabID: rootID,
 			size:   size,
@@ -601,7 +692,7 @@ func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
 
 	// Save root slab
 	if !a.Inlined() {
-		err = storeSlab(a.Storage, a.root)
+		err = storeSlab(a.Storage, a.state.root)
 		if err != nil {
 			return err
 		}
@@ -614,17 +705,17 @@ func (a *Array) PopIterate(fn ArrayPopIterationFunc) error {
 
 func (a *Array) splitRoot() error {
 
-	if a.root.IsData() {
+	if a.state.root.IsData() {
 		// Adjust root data slab size before splitting
-		dataSlab := a.root.(*ArrayDataSlab)
+		dataSlab := a.state.root.(*ArrayDataSlab)
 		dataSlab.header.size = dataSlab.header.size - arrayRootDataSlabPrefixSize + arrayDataSlabPrefixSize
 	}
 
 	// Get old root's extra data and reset it to nil in old root
-	extraData := a.root.RemoveExtraData()
+	extraData := a.state.root.RemoveExtraData()
 
 	// Save root node id
-	rootID := a.root.SlabID()
+	rootID := a.state.root.SlabID()
 
 	// Assign a new slab ID to old root before splitting it.
 	sID, err := a.Storage.GenerateSlabID(a.Address())
@@ -635,14 +726,29 @@ func (a *Array) splitRoot() error {
 			fmt.Sprintf("failed to generate slab ID for address 0x%x", a.Address()))
 	}
 
-	oldRoot := a.root
+	oldRoot := a.state.root
 	oldRoot.SetSlabID(sID)
+	// Intentionally NOT calling oldRoot.BumpMutationCount() here:
+	// ArraySlab.Split reuses the receiver as the LEFT child
+	// (see ArrayDataSlab.Split / ArrayMetaDataSlab.Split — both return (receiver, rightSlab)),
+	// so the "old root" is not orphaned — it stays in the tree as the left child.
+	// If a later promoteChildAsNewRoot picks this slab,
+	// MutationCount() on the live root would falsely report staleness for the initiating wrapper.
 
 	// Split old root
 	leftSlab, rightSlab, err := oldRoot.Split(a.Storage)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by ArraySlab.Split().
 		return err
+	}
+
+	// Invariant: ArraySlab.Split must return the receiver as the LEFT child.
+	// The decision to skip BumpMutationCount above relies on this —
+	// if Split ever returns a fresh struct for the left side,
+	// the receiver becomes orphaned and splitRoot must behave like
+	// promoteChildAsNewRoot (bump).
+	if Slab(oldRoot) != leftSlab {
+		panic(NewUnreachableError())
 	}
 
 	left := leftSlab.(ArraySlab)
@@ -662,7 +768,7 @@ func (a *Array) splitRoot() error {
 		extraData:        extraData,
 	}
 
-	a.root = newRoot
+	a.state.root = newRoot
 
 	err = storeSlab(a.Storage, left)
 	if err != nil {
@@ -674,7 +780,7 @@ func (a *Array) splitRoot() error {
 		return err
 	}
 
-	return storeSlab(a.Storage, a.root)
+	return storeSlab(a.Storage, a.state.root)
 }
 
 func (a *Array) promoteChildAsNewRoot(childID SlabID) error {
@@ -691,17 +797,25 @@ func (a *Array) promoteChildAsNewRoot(childID SlabID) error {
 		dataSlab.header.size = dataSlab.header.size - arrayDataSlabPrefixSize + arrayRootDataSlabPrefixSize
 	}
 
-	extraData := a.root.RemoveExtraData()
+	extraData := a.state.root.RemoveExtraData()
 
-	rootID := a.root.SlabID()
+	rootID := a.state.root.SlabID()
 
-	a.root = child
+	// Bump the old root's mutation counter before swapping a.root
+	// so that sibling wrappers whose .root still points to this orphaned slab
+	// can detect the root swap.
+	// Promote does not perturb the orphaned old root's SlabID,
+	// so this counter is the only signal sibling wrappers have.
+	// See ArraySlab.MutationCount.
+	a.state.root.BumpMutationCount()
 
-	a.root.SetSlabID(rootID)
+	a.state.root = child
 
-	a.root.SetExtraData(extraData)
+	a.state.root.SetSlabID(rootID)
 
-	err = storeSlab(a.Storage, a.root)
+	a.state.root.SetExtraData(extraData)
+
+	err = storeSlab(a.Storage, a.state.root)
 	if err != nil {
 		return err
 	}
@@ -722,12 +836,12 @@ func (a *Array) incrementIndexFrom(index uint64) error {
 	// Although range loop over Go map is not deterministic, it is OK
 	// to use here because this operation is free of side-effect and
 	// leads to the same results independent of map order.
-	for id, i := range a.mutableElementIndex {
+	for id, i := range a.state.mutableElementIndex {
 		if i >= index {
-			if a.mutableElementIndex[id]+1 >= a.Count() {
+			if a.state.mutableElementIndex[id]+1 >= a.Count() {
 				return NewFatalError(fmt.Errorf("failed to increment index of ValueID %s in array %s: new index exceeds array count", id, a.ValueID()))
 			}
-			a.mutableElementIndex[id]++
+			a.state.mutableElementIndex[id]++
 		}
 	}
 	return nil
@@ -738,24 +852,48 @@ func (a *Array) decrementIndexFrom(index uint64) error {
 	// Although range loop over Go map is not deterministic, it is OK
 	// to use here because this operation is free of side-effect and
 	// leads to the same results independent of map order.
-	for id, i := range a.mutableElementIndex {
+	for id, i := range a.state.mutableElementIndex {
 		if i > index {
-			if a.mutableElementIndex[id] <= 0 {
+			if a.state.mutableElementIndex[id] <= 0 {
 				return NewFatalError(fmt.Errorf("failed to decrement index of ValueID %s in array %s: new index < 0", id, a.ValueID()))
 			}
-			a.mutableElementIndex[id]--
+			a.state.mutableElementIndex[id]--
 		}
 	}
 	return nil
 }
 
 func (a *Array) getIndexByValueID(id ValueID) (uint64, bool) {
-	index, exist := a.mutableElementIndex[id]
+	index, exist := a.state.mutableElementIndex[id]
 	return index, exist
 }
 
 func (a *Array) setParentUpdater(f parentUpdater) {
 	a.parentUpdater = f
+	a.parentUpdaterIsReadOnlyMutationCallback = false
+}
+
+// setReadOnlyMutationCallback installs a trap callback that fires
+// when the *Array is mutated through this instance,
+// indicating the instance was loaded via a read-only iterator.
+func (a *Array) setReadOnlyMutationCallback(f parentUpdater) {
+	a.parentUpdater = f
+	a.parentUpdaterIsReadOnlyMutationCallback = true
+}
+
+// HasParentUpdater reports whether a parent-notification (or read-only trap) callback is installed.
+// Use HasReadOnlyMutationCallback to distinguish the two cases.
+func (a *Array) HasParentUpdater() bool {
+	return a.parentUpdater != nil
+}
+
+// HasReadOnlyMutationCallback reports whether the installed parentUpdater
+// is a trap callback set by a read-only iterator
+// (as opposed to a real parent-notification callback).
+// Callers that want to share or canonicalize the *Array should consult this
+// to avoid caching a trap-bearing instance.
+func (a *Array) HasReadOnlyMutationCallback() bool {
+	return a.parentUpdaterIsReadOnlyMutationCallback
 }
 
 // setCallbackWithChild sets up callback function with child value (child)
@@ -778,12 +916,12 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint32
 	vid := c.ValueID()
 
 	// mutableElementIndex is lazily initialized.
-	if a.mutableElementIndex == nil {
-		a.mutableElementIndex = make(map[ValueID]uint64)
+	if a.state.mutableElementIndex == nil {
+		a.state.mutableElementIndex = make(map[ValueID]uint64)
 	}
 
 	// Index i will be updated with array operations, which affects element index.
-	a.mutableElementIndex[vid] = i
+	a.state.mutableElementIndex[vid] = i
 
 	c.setParentUpdater(func() (found bool, err error) {
 
@@ -801,7 +939,7 @@ func (a *Array) setCallbackWithChild(i uint64, child Value, maxInlineSize uint32
 			return false, nil
 		}
 
-		storable, err := a.root.Get(a.Storage, adjustedIndex)
+		storable, err := a.state.root.Get(a.Storage, adjustedIndex)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by ArraySlab.Get().
 			return false, err
@@ -892,28 +1030,49 @@ func (a *Array) notifyParentIfNeeded() error {
 	}
 	if !found {
 		a.parentUpdater = nil
+		a.parentUpdaterIsReadOnlyMutationCallback = false
 	}
 	return nil
 }
 
+// ensureRootIDLoadedInlinedMutationAllowed rejects mutations through a wrapper
+// that was created by NewArrayWithRootID but whose container has since been
+// inlined into a parent, when this wrapper has no parentUpdater to write the
+// change back. Such a mutation would only change in-memory state that can never
+// be persisted into the parent, silently diverging memory from storage.
+//
+// INVARIANT: every method that mutates the array's elements, structure, or
+// extra data (currently set, Insert, remove, PopIterate, and SetType) MUST call
+// this and return early on error before touching a.state.root. The protection
+// only holds if all mutation entry points are guarded; any new mutating method
+// that skips this check silently reopens the divergence hole described above.
+func (a *Array) ensureRootIDLoadedInlinedMutationAllowed() error {
+	if !a.loadedWithRootID || !a.state.root.Inlined() || a.parentUpdater != nil {
+		return nil
+	}
+
+	return NewFatalError(
+		fmt.Errorf(
+			"cannot mutate inlined array %s loaded by root ID without parent updater",
+			a.ValueID(),
+		),
+	)
+}
+
 func (a *Array) Inlined() bool {
-	return a.root.Inlined()
+	return a.state.root.Inlined()
 }
 
 func (a *Array) Inlinable(maxInlineSize uint32) bool {
-	return a.root.Inlinable(maxInlineSize)
-}
-
-func (a *Array) hasParentUpdater() bool {
-	return a.parentUpdater != nil
+	return a.state.root.Inlinable(maxInlineSize)
 }
 
 func (a *Array) getMutableElementIndexCount() uint64 {
-	return uint64(len(a.mutableElementIndex))
+	return uint64(len(a.state.mutableElementIndex))
 }
 
 func (a *Array) getMutableElementIndex() map[ValueID]uint64 {
-	return a.mutableElementIndex
+	return a.state.mutableElementIndex
 }
 
 // Value operations
@@ -923,14 +1082,14 @@ func (a *Array) getMutableElementIndex() map[ValueID]uint64 {
 // - inlined data slab storable
 func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint32) (Storable, error) {
 
-	inlined := a.root.Inlined()
-	inlinable := a.root.Inlinable(maxInlineSize)
+	inlined := a.state.root.Inlined()
+	inlinable := a.state.root.Inlinable(maxInlineSize)
 
 	switch {
 	case inlinable && inlined:
 		// Root slab is inlinable and was inlined.
 		// Return root slab as storable, no size adjustment and change to storage.
-		return a.root, nil
+		return a.state.root, nil
 
 	case !inlinable && !inlined:
 		// Root slab is not inlinable and was not inlined.
@@ -941,19 +1100,19 @@ func (a *Array) Storable(_ SlabStorage, _ Address, maxInlineSize uint32) (Storab
 		// Root slab is inlinable and was NOT inlined.
 
 		// Inline root data slab.
-		err := a.root.Inline(a.Storage)
+		err := a.state.root.Inline(a.Storage)
 		if err != nil {
 			return nil, err
 		}
 
-		return a.root, nil
+		return a.state.root, nil
 
 	case !inlinable && inlined:
 
 		// Root slab is NOT inlinable and was previously inlined.
 
 		// Uninline root slab.
-		err := a.root.Uninline(a.Storage)
+		err := a.state.root.Uninline(a.Storage)
 		if err != nil {
 			return nil, err
 		}
@@ -1014,7 +1173,7 @@ func (a *Array) ReadOnlyIteratorWithMutationCallback(
 		return emptyReadOnlyArrayIterator, nil
 	}
 
-	slab, err := firstArrayDataSlab(a.Storage, a.root)
+	slab, err := firstArrayDataSlab(a.Storage, a.state.root)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by firstArrayDataSlab().
 		return nil, err
@@ -1104,11 +1263,11 @@ func (a *Array) ReadOnlyRangeIteratorWithMutationCallback(
 	var dataSlab *ArrayDataSlab
 	index := startIndex
 
-	if a.root.IsData() {
-		dataSlab = a.root.(*ArrayDataSlab)
+	if a.state.root.IsData() {
+		dataSlab = a.state.root.(*ArrayDataSlab)
 	} else if startIndex == 0 {
 		var err error
-		dataSlab, err = firstArrayDataSlab(a.Storage, a.root)
+		dataSlab, err = firstArrayDataSlab(a.Storage, a.state.root)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by firstArrayDataSlab().
 			return nil, err
@@ -1118,7 +1277,7 @@ func (a *Array) ReadOnlyRangeIteratorWithMutationCallback(
 		// getArrayDataSlabWithIndex returns data slab containing element at startIndex,
 		// getArrayDataSlabWithIndex also returns adjusted index for this element at returned data slab.
 		// Adjusted index must be used as index when creating ArrayIterator.
-		dataSlab, index, err = getArrayDataSlabWithIndex(a.Storage, a.root, startIndex)
+		dataSlab, index, err = getArrayDataSlabWithIndex(a.Storage, a.state.root, startIndex)
 		if err != nil {
 			// Don't need to wrap error as external error because err is already categorized by getArrayDataSlabWithIndex().
 			return nil, err
@@ -1140,7 +1299,7 @@ func (a *Array) ReadOnlyRangeIteratorWithMutationCallback(
 
 // ReadOnlyLoadedValueIterator returns iterator to iterate loaded array elements.
 func (a *Array) ReadOnlyLoadedValueIterator() (*ArrayLoadedValueIterator, error) {
-	switch slab := a.root.(type) {
+	switch slab := a.state.root.(type) {
 
 	case *ArrayDataSlab:
 		// Create a data iterator from root slab.
@@ -1303,40 +1462,54 @@ func (a *Array) IterateReadOnlyLoadedValues(fn ArrayIterationFunc) error {
 // Other operations
 
 func (a *Array) rootSlab() ArraySlab {
-	return a.root
+	return a.state.root
 }
 
 func (a *Array) Address() Address {
-	return a.root.SlabID().address
+	return a.state.root.SlabID().address
 }
 
 func (a *Array) Count() uint64 {
-	return uint64(a.root.Header().count)
+	return uint64(a.state.root.Header().count)
 }
 
 func (a *Array) SlabID() SlabID {
-	if a.root.Inlined() {
+	if a.state.root.Inlined() {
 		return SlabIDUndefined
 	}
-	return a.root.SlabID()
+	return a.state.root.SlabID()
 }
 
 func (a *Array) ValueID() ValueID {
-	return slabIDToValueID(a.root.SlabID())
+	return slabIDToValueID(a.state.root.SlabID())
+}
+
+// MutationCount returns the root slab's mutation counter.
+// It is bumped on root replacement,
+// and not on element-level or non-root structural changes.
+// Callers cache the value to detect staleness later.
+// See ArraySlab.MutationCount.
+func (a *Array) MutationCount() uint64 {
+	return a.state.root.MutationCount()
 }
 
 func (a *Array) Type() TypeInfo {
-	if extraData := a.root.ExtraData(); extraData != nil {
+	if extraData := a.state.root.ExtraData(); extraData != nil {
 		return extraData.TypeInfo
 	}
 	return nil
 }
 
 func (a *Array) SetType(typeInfo TypeInfo) error {
-	extraData := a.root.ExtraData()
+	err := a.ensureRootIDLoadedInlinedMutationAllowed()
+	if err != nil {
+		return err
+	}
+
+	extraData := a.state.root.ExtraData()
 	extraData.TypeInfo = typeInfo
 
-	a.root.SetExtraData(extraData)
+	a.state.root.SetExtraData(extraData)
 
 	if a.Inlined() {
 		// Array is inlined.
@@ -1348,7 +1521,7 @@ func (a *Array) SetType(typeInfo TypeInfo) error {
 	// Array is standalone.
 
 	// Store modified root slab in storage since typeInfo is part of extraData stored in root slab.
-	return storeSlab(a.Storage, a.root)
+	return storeSlab(a.Storage, a.state.root)
 }
 
 func (a *Array) String() string {
@@ -1375,7 +1548,7 @@ func (a *Array) String() string {
 // CanCopyNonRefSimple returns true if the array can be copied
 // as a container with only non-reference and simple storables.
 func (a *Array) CanCopyNonRefSimple() bool {
-	return a.root.canCopyWithoutSlabID()
+	return a.state.root.canCopyWithoutSlabID()
 }
 
 // CopyNonRefSimple returns a copy of the array that only
@@ -1383,7 +1556,7 @@ func (a *Array) CanCopyNonRefSimple() bool {
 // NOTE: Please call CanCopyNonRefSimple() to confirm the copy operation
 // is feasible for the array before calling CopyNonRefSimple().
 func (a *Array) CopyNonRefSimple(address Address) (*Array, error) {
-	if !a.root.IsData() {
+	if !a.state.root.IsData() {
 		return nil, newCopyArrayErrorf("can't copy multi-slab array")
 	}
 
@@ -1395,7 +1568,7 @@ func (a *Array) CopyNonRefSimple(address Address) (*Array, error) {
 			fmt.Sprintf("failed to generate slab ID for address 0x%x", address))
 	}
 
-	copiedRootSlab, err := a.root.copyWithNewSlabID(newID)
+	copiedRootSlab, err := a.state.root.copyWithNewSlabID(newID)
 	if err != nil {
 		return nil, newCopyArrayError(err)
 	}
@@ -1405,13 +1578,16 @@ func (a *Array) CopyNonRefSimple(address Address) (*Array, error) {
 		return nil, err
 	}
 
+	state := newArrayState(copiedRootSlab)
+	a.Storage.SetArrayState(copiedRootSlab.SlabID(), state)
+
 	return &Array{
 		Storage: a.Storage,
-		root:    copiedRootSlab,
+		state:   state,
 	}, nil
 }
 
 // IsWithinSingleSlab returns true if the array is stored in a single slab.
 func (a *Array) IsWithinSingleSlab() bool {
-	return a.root.IsData()
+	return a.state.root.IsData()
 }

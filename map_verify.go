@@ -65,9 +65,9 @@ func verifyMap(
 	}
 
 	// Verify map extra data
-	extraData := m.root.ExtraData()
+	extraData := m.state.root.ExtraData()
 	if extraData == nil {
-		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", m.root.SlabID()))
+		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", m.state.root.SlabID()))
 	}
 
 	// Verify that extra data has correct type information
@@ -75,7 +75,7 @@ func verifyMap(
 		return NewFatalError(
 			fmt.Errorf(
 				"root slab %d type information %v, want %v",
-				m.root.SlabID(),
+				m.state.root.SlabID(),
 				extraData.TypeInfo,
 				typeInfo,
 			))
@@ -83,7 +83,7 @@ func verifyMap(
 
 	// Verify that extra data has seed
 	if extraData.Seed == 0 {
-		return NewFatalError(fmt.Errorf("root slab %d seed is uninitialized", m.root.SlabID()))
+		return NewFatalError(fmt.Errorf("root slab %d seed is uninitialized", m.state.root.SlabID()))
 	}
 
 	v := &mapVerifier{
@@ -96,7 +96,7 @@ func verifyMap(
 	}
 
 	computedCount, dataSlabIDs, nextDataSlabIDs, firstKeys, err := v.verifySlab(
-		m.root, 0, nil, []SlabID{}, []SlabID{}, []Digest{}, slabIDs)
+		m.state.root, 0, nil, []SlabID{}, []SlabID{}, []Digest{}, slabIDs)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by verifySlab().
 		return err
@@ -107,7 +107,7 @@ func verifyMap(
 		return NewFatalError(
 			fmt.Errorf(
 				"root slab %d count %d is wrong, want %d",
-				m.root.SlabID(),
+				m.state.root.SlabID(),
 				extraData.Count,
 				computedCount,
 			))
@@ -728,7 +728,7 @@ func verifyValue(value Value, address Address, typeInfo TypeInfo, tic TypeInfoCo
 // verifyMapValueID verifies map ValueID is always the same as
 // root slab's SlabID indepedent of map's inlined status.
 func verifyMapValueID(m *OrderedMap) error {
-	rootSlabID := m.root.Header().slabID
+	rootSlabID := m.state.root.Header().slabID
 
 	vid := m.ValueID()
 
@@ -768,7 +768,7 @@ func verifyMapSlabID(m *OrderedMap) error {
 		return nil
 	}
 
-	rootSlabID := m.root.Header().slabID
+	rootSlabID := m.state.root.Header().slabID
 
 	if sid == SlabIDUndefined {
 		return NewFatalError(

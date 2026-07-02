@@ -3353,3 +3353,85 @@ func TestStorageBatchPreloadNotFoundSlabs(t *testing.T) {
 		}
 	})
 }
+
+// TestPersistentStorageDropDeltasClearsContainerStates verifies
+// that DropDeltas ALONE is a complete rollback to the last commit
+// for everything storage serves afterwards.
+//
+// Two stale sources must both be invalidated:
+//   - the shared-state registry: registered states point at
+//     in-memory root slabs that reflect the discarded mutations;
+//   - the read cache: slabs are mutated in place,
+//     and commit places stored slab structs in the cache,
+//     so the cache holds the same mutated structs the deltas did.
+//
+// If either survived, a fresh container instance created after the rollback
+// would observe — and a later commit would re-persist — the discarded writes.
+//
+// (Container instances obtained BEFORE the rollback still hold their mutated
+// roots; discarding those is the caller's responsibility, see DropDeltas doc.)
+func TestPersistentStorageDropDeltasClearsContainerStates(t *testing.T) {
+
+	typeInfo := testutils.NewSimpleTypeInfo(42)
+	storage := newTestPersistentStorage(t)
+	address := atree.Address{1, 2, 3, 4, 5, 6, 7, 8}
+
+	arr, err := atree.NewArray(storage, address, typeInfo)
+	require.NoError(t, err)
+	require.NoError(t, arr.Append(testutils.NewUint64ValueFromInteger(0)))
+	arrayRootID := arr.SlabID()
+
+	m, err := atree.NewMap(storage, address, atree.NewDefaultDigesterBuilder(), typeInfo)
+	require.NoError(t, err)
+	prev, err := m.Set(
+		testutils.CompareValue, testutils.GetHashInput,
+		testutils.NewUint64ValueFromInteger(0),
+		testutils.NewUint64ValueFromInteger(0),
+	)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+	mapRootID := m.SlabID()
+
+	// Commit the one-element state of both containers.
+	require.NoError(t, storage.FastCommit(1))
+
+	// Mutate both containers without committing.
+	require.NoError(t, arr.Append(testutils.NewUint64ValueFromInteger(1)))
+	require.Equal(t, uint64(2), arr.Count())
+
+	prev, err = m.Set(
+		testutils.CompareValue, testutils.GetHashInput,
+		testutils.NewUint64ValueFromInteger(1),
+		testutils.NewUint64ValueFromInteger(1),
+	)
+	require.NoError(t, err)
+	require.Nil(t, prev)
+	require.Equal(t, uint64(2), m.Count())
+
+	// Roll back to the last commit.
+	// Deliberately NOT paired with DropCache:
+	// DropDeltas itself must invalidate the cache entries of mutated slabs,
+	// otherwise the state == nil load path below would read the in-place-mutated
+	// slab structs from the cache and observe the discarded mutations.
+	storage.DropDeltas()
+
+	// The mutated root slabs must no longer be served from memory.
+	require.Nil(t, storage.RetrieveIfLoaded(arrayRootID),
+		"DropDeltas must invalidate the cache entry of a mutated slab")
+	require.Nil(t, storage.RetrieveIfLoaded(mapRootID),
+		"DropDeltas must invalidate the cache entry of a mutated slab")
+
+	// Fresh instances must observe the committed state,
+	// not the discarded in-memory mutations.
+	arr2, err := atree.NewArrayWithRootID(storage, arrayRootID)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), arr2.Count(),
+		"post-rollback array must observe the committed state — "+
+			"a stale registry entry or cache entry would resurrect the discarded append")
+
+	m2, err := atree.NewMapWithRootID(storage, mapRootID, atree.NewDefaultDigesterBuilder())
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), m2.Count(),
+		"post-rollback map must observe the committed state — "+
+			"a stale registry entry or cache entry would resurrect the discarded insert")
+}

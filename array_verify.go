@@ -71,16 +71,16 @@ func verifyArray(
 	}
 
 	// Verify array extra data
-	extraData := a.root.ExtraData()
+	extraData := a.state.root.ExtraData()
 	if extraData == nil {
-		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", a.root.SlabID()))
+		return NewFatalError(fmt.Errorf("root slab %d doesn't have extra data", a.state.root.SlabID()))
 	}
 
 	// Verify that extra data has correct type information
 	if typeInfo != nil && !tic(extraData.TypeInfo, typeInfo) {
 		return NewFatalError(fmt.Errorf(
 			"root slab %d type information %v is wrong, want %v",
-			a.root.SlabID(),
+			a.state.root.SlabID(),
 			extraData.TypeInfo,
 			typeInfo,
 		))
@@ -95,7 +95,7 @@ func verifyArray(
 	}
 
 	// Verify array slabs
-	computedCount, dataSlabIDs, nextDataSlabIDs, err := v.verifySlab(a.root, 0, nil, []SlabID{}, []SlabID{}, slabIDs)
+	computedCount, dataSlabIDs, nextDataSlabIDs, err := v.verifySlab(a.state.root, 0, nil, []SlabID{}, []SlabID{}, slabIDs)
 	if err != nil {
 		// Don't need to wrap error as external error because err is already categorized by verifySlab().
 		return err
@@ -103,7 +103,7 @@ func verifyArray(
 
 	// Verify array count
 	if computedCount != uint32(a.Count()) {
-		return NewFatalError(fmt.Errorf("root slab %d count %d is wrong, want %d", a.root.SlabID(), a.Count(), computedCount))
+		return NewFatalError(fmt.Errorf("root slab %d count %d is wrong, want %d", a.state.root.SlabID(), a.Count(), computedCount))
 	}
 
 	// Verify next data slab ids
@@ -404,7 +404,7 @@ func (v *arrayVerifier) verifyMetaDataSlab(
 // verifyArrayValueID verifies array ValueID is always the same as
 // root slab's SlabID indepedent of array's inlined status.
 func verifyArrayValueID(a *Array) error {
-	rootSlabID := a.root.Header().slabID
+	rootSlabID := a.state.root.Header().slabID
 
 	vid := a.ValueID()
 
@@ -444,7 +444,7 @@ func verifyArraySlabID(a *Array) error {
 		return nil
 	}
 
-	rootSlabID := a.root.Header().slabID
+	rootSlabID := a.state.root.Header().slabID
 
 	if sid == SlabIDUndefined {
 		return NewFatalError(
@@ -469,20 +469,20 @@ func verifyNotInlinedValueStatusAndSize(v Value, maxInlineSize uint32) error {
 	switch v := v.(type) {
 	case *Array:
 		// Verify not-inlined array's inlined status
-		if v.root.Inlined() {
+		if v.state.root.Inlined() {
 			return NewFatalError(
 				fmt.Errorf(
 					"not-inlined array %s has inlined status",
-					v.root.Header().slabID))
+					v.state.root.Header().slabID))
 		}
 
 		// Verify not-inlined array size.
-		if v.root.IsData() {
-			inlinableSize := v.root.ByteSize() - arrayRootDataSlabPrefixSize + inlinedArrayDataSlabPrefixSize
+		if v.state.root.IsData() {
+			inlinableSize := v.state.root.ByteSize() - arrayRootDataSlabPrefixSize + inlinedArrayDataSlabPrefixSize
 			if inlinableSize <= maxInlineSize {
 				return NewFatalError(
 					fmt.Errorf("not-inlined array root slab %s can be inlined, inlinable size %d <= max inline size %d",
-						v.root.Header().slabID,
+						v.state.root.Header().slabID,
 						inlinableSize,
 						maxInlineSize))
 			}
@@ -494,16 +494,16 @@ func verifyNotInlinedValueStatusAndSize(v Value, maxInlineSize uint32) error {
 			return NewFatalError(
 				fmt.Errorf(
 					"not-inlined map %s has inlined status",
-					v.root.Header().slabID))
+					v.state.root.Header().slabID))
 		}
 
 		// Verify not-inlined map size.
-		if v.root.IsData() {
-			inlinableSize := v.root.ByteSize() - mapRootDataSlabPrefixSize + inlinedMapDataSlabPrefixSize
+		if v.state.root.IsData() {
+			inlinableSize := v.state.root.ByteSize() - mapRootDataSlabPrefixSize + inlinedMapDataSlabPrefixSize
 			if inlinableSize <= maxInlineSize {
 				return NewFatalError(
 					fmt.Errorf("not-inlined map root slab %s can be inlined, inlinable size %d <= max inline size %d",
-						v.root.Header().slabID,
+						v.state.root.Header().slabID,
 						inlinableSize,
 						maxInlineSize))
 			}

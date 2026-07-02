@@ -431,12 +431,20 @@ func (m *MapDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	}
 
 	digestBuilder := NewDefaultDigesterBuilder()
-
 	digestBuilder.SetSeed(m.extraData.Seed, typicalRandomConstant)
 
+	rootID := m.SlabID()
+
+	// Share state with any existing *OrderedMap instance for this container.
+	// See map_state.go for rationale.
+	state := storage.OrderedMapState(rootID)
+	if state == nil {
+		state = newOrderedMapState(m)
+		storage.SetOrderedMapState(rootID, state)
+	}
 	return &OrderedMap{
 		Storage:         storage,
-		root:            m,
+		state:           state,
 		digesterBuilder: digestBuilder,
 	}, nil
 }
@@ -447,6 +455,14 @@ func (m *MapDataSlab) SetSlabID(id SlabID) {
 
 func (m *MapDataSlab) Header() MapSlabHeader {
 	return m.header
+}
+
+func (m *MapDataSlab) MutationCount() uint64 {
+	return m.header.mutationCount
+}
+
+func (m *MapDataSlab) BumpMutationCount() {
+	m.header.mutationCount++
 }
 
 func (m *MapDataSlab) IsData() bool {

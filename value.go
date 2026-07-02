@@ -45,6 +45,11 @@ type mutableValueNotifier interface {
 	Value
 	ValueID() ValueID
 	setParentUpdater(parentUpdater)
+	// setReadOnlyMutationCallback installs a trap callback used by read-only iterators.
+	// Distinct from setParentUpdater
+	// so callers (and HasReadOnlyMutationCallback on *Array / *OrderedMap)
+	// can tell a trap apart from a real parent-notification callback.
+	setReadOnlyMutationCallback(parentUpdater)
 	Inlined() bool
 	// Inlinable returns true if a mutable value can be inlined by fitting within the given maxInlineSize.
 	Inlinable(maxInlineSize uint32) bool

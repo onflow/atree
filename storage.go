@@ -173,6 +173,7 @@ func (s *LedgerBaseStorage) ResetReporter() {
 type SlabIterator func() (SlabID, Slab)
 
 type SlabStorage interface {
+	StateRegistry
 	Store(SlabID, Slab) error
 	Retrieve(SlabID) (Slab, bool, error)
 	RetrieveIfLoaded(SlabID) Slab
@@ -185,6 +186,10 @@ type SlabStorage interface {
 // BasicSlabStorage
 
 type BasicSlabStorage struct {
+	// Shared-state registry methods (ArrayState, SetArrayState,
+	// OrderedMapState, SetOrderedMapState) are inherited via embedding.
+	*BaseStateRegistry
+
 	Slabs          map[SlabID]Slab
 	slabIndex      map[Address]SlabIndex
 	DecodeStorable StorableDecoder
@@ -202,12 +207,13 @@ func NewBasicSlabStorage(
 	decodeTypeInfo TypeInfoDecoder,
 ) *BasicSlabStorage {
 	return &BasicSlabStorage{
-		Slabs:          make(map[SlabID]Slab),
-		slabIndex:      make(map[Address]SlabIndex),
-		cborEncMode:    cborEncMode,
-		cborDecMode:    cborDecMode,
-		DecodeStorable: decodeStorable,
-		DecodeTypeInfo: decodeTypeInfo,
+		BaseStateRegistry: NewBaseStateRegistry(),
+		Slabs:             make(map[SlabID]Slab),
+		slabIndex:         make(map[Address]SlabIndex),
+		cborEncMode:       cborEncMode,
+		cborDecMode:       cborDecMode,
+		DecodeStorable:    decodeStorable,
+		DecodeTypeInfo:    decodeTypeInfo,
 	}
 }
 
@@ -235,6 +241,18 @@ func (s *BasicSlabStorage) Store(id SlabID, slab Slab) error {
 
 func (s *BasicSlabStorage) Remove(id SlabID) error {
 	delete(s.Slabs, id)
+	// NOTE: do NOT drop the container shared state here.
+	// SlabStorage.Remove is called both when a container is destroyed
+	// AND when it is inlined into its parent (ArrayDataSlab.Inline / MapDataSlab.Inline).
+	// In the inline case the container continues to exist logically
+	// (embedded inside the parent),
+	// and its state must survive
+	// so future *Array / *OrderedMap instances for this container
+	// share the same canonical view as any pre-existing siblings.
+	//
+	// State entries therefore live for the lifetime of the storage.
+	// For per-transaction storage (the common case) this is fine.
+	// Callers that want explicit cleanup can use BaseStateRegistry.RemoveStateForSlab.
 	return nil
 }
 
@@ -299,6 +317,9 @@ func (s *BasicSlabStorage) SlabIterator() (SlabIterator, error) {
 // PersistentSlabStorage
 
 type PersistentSlabStorage struct {
+	// Shared-state registry methods inherited via embedding.
+	*BaseStateRegistry
+
 	baseStorage    BaseStorage
 	cache          map[SlabID]Slab
 	deltas         map[SlabID]Slab
@@ -322,13 +343,14 @@ func NewPersistentSlabStorage(
 	opts ...StorageOption,
 ) *PersistentSlabStorage {
 	storage := &PersistentSlabStorage{
-		baseStorage:    base,
-		cache:          make(map[SlabID]Slab),
-		deltas:         make(map[SlabID]Slab),
-		cborEncMode:    cborEncMode,
-		cborDecMode:    cborDecMode,
-		DecodeStorable: decodeStorable,
-		DecodeTypeInfo: decodeTypeInfo,
+		BaseStateRegistry: NewBaseStateRegistry(),
+		baseStorage:       base,
+		cache:             make(map[SlabID]Slab),
+		deltas:            make(map[SlabID]Slab),
+		cborEncMode:       cborEncMode,
+		cborDecMode:       cborDecMode,
+		DecodeStorable:    decodeStorable,
+		DecodeTypeInfo:    decodeTypeInfo,
 	}
 
 	for _, applyOption := range opts {
@@ -886,8 +908,31 @@ func (s *PersistentSlabStorage) NondeterministicFastCommit(numWorkers int) error
 	return nil
 }
 
+// DropDeltas discards all uncommitted changes, rolling storage back to the last committed state.
+//
+// WARNING: the rollback only affects what storage serves from now on.
+// Container instances (*Array / *OrderedMap) obtained BEFORE the rollback still hold their mutated in-memory roots,
+// and using them can re-introduce the discarded writes.
+// Callers MUST discard all container references they hold across a rollback
+// (atree cannot invalidate handles it has already returned on its own).
 func (s *PersistentSlabStorage) DropDeltas() {
+
+	// Slabs are mutated in place, so a mutated slab struct can also sit in the read cache
+	// (commit places stored slabs in the cache, and Retrieve caches reads whose structs are mutated later).
+	// Dropping only the deltas would leave those mutated structs in the cache:
+	// subsequent reads would observe (and a later commit would re-persist) the supposedly discarded mutations.
+	// Every mutated slab has a delta entry, so invalidating the cache for all delta'd IDs
+	// makes subsequent reads decode the committed bytes again.
+	for id := range s.deltas {
+		delete(s.cache, id)
+	}
+
 	s.deltas = make(map[SlabID]Slab)
+
+	// Registered container states point at in-memory root slabs that still reflect the discarded mutations.
+	// Clear the registry so container instances created after the rollback re-decode the committed slabs
+	// instead of resurrecting discarded writes.
+	s.RemoveAllStates()
 }
 
 func (s *PersistentSlabStorage) DropCache() {
@@ -965,6 +1010,10 @@ func (s *PersistentSlabStorage) Remove(id SlabID) error {
 	}
 	// add to nil to deltas under that id
 	s.deltas[id] = nil
+	// NOTE: do NOT drop the container shared state here.
+	// See BasicSlabStorage.Remove for the rationale:
+	// Remove is called both on destruction and on Inline,
+	// and state must survive the inline case.
 	return nil
 }
 

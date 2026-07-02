@@ -555,6 +555,14 @@ func (a *ArrayDataSlab) Header() ArraySlabHeader {
 	return a.header
 }
 
+func (a *ArrayDataSlab) MutationCount() uint64 {
+	return a.header.mutationCount
+}
+
+func (a *ArrayDataSlab) BumpMutationCount() {
+	a.header.mutationCount++
+}
+
 func (a *ArrayDataSlab) IsData() bool {
 	return true
 }
@@ -599,9 +607,19 @@ func (a *ArrayDataSlab) StoredValue(storage SlabStorage) (Value, error) {
 	if a.extraData == nil {
 		return nil, NewNotValueError(a.SlabID())
 	}
+
+	rootID := a.SlabID()
+
+	// Share state with any existing *Array instance for this container.
+	// See array_state.go for rationale.
+	state := storage.ArrayState(rootID)
+	if state == nil {
+		state = newArrayState(a)
+		storage.SetArrayState(rootID, state)
+	}
 	return &Array{
 		Storage: storage,
-		root:    a,
+		state:   state,
 	}, nil
 }
 
